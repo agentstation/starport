@@ -90,6 +90,27 @@ It excludes TLS, DNS, active maintenance loops, retries, and shared backends.
 It does not establish production percentiles, cold-start performance, or performance under saturation.
 The production qualification must exercise those conditions separately.
 
+## Catalog selection
+
+Starport builds static route candidates and definition/offering indexes before snapshot publication.
+Exact-model selection copies matching candidates and applies current provider availability, latency, and caller policy.
+Discovery checks disclosure policy before it copies each definition or offering.
+Neither path fetches provider inventories or external secrets.
+
+The registry reserves capacity before durable catalog acceptance.
+At most four current, retained, or prepared runtime generations can occupy that capacity.
+Starport refuses an update at capacity without terminating admitted requests.
+Current authority permission still controls new attempts.
+
+Run the synthetic and embedded catalog benchmarks:
+
+```bash
+go test -run '^$' -bench 'Benchmark(CatalogExactModel|EmbeddedCatalogSelection)$' -benchmem ./internal/router
+```
+
+These component benchmarks measure selection allocations and duration.
+They do not qualify complete HTTP request overhead.
+
 ## Production engineering targets
 
 The versioned [performance profile](performance-targets-v1.json) defines targets for the planned production release.

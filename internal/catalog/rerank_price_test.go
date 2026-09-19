@@ -269,7 +269,7 @@ func searchUnitSnapshot(t *testing.T, prices map[string]rerankPrice) *RoutableSn
 	}
 	catalog, err := builder.Build()
 	require.NoError(t, err)
-	return newRoutableSnapshot(starmap.CatalogState{Catalog: catalog}, 0, routes, nil)
+	return mustRoutableSnapshot(t, starmap.CatalogState{Catalog: catalog}, 0, routes, nil)
 }
 
 // TestTheLowestSearchUnitPriceIsTheCheapestOfferingOfThatModel is the bound a

@@ -123,7 +123,7 @@ func TestAuthorityColdStartupRefusesWithoutAcceptedOwner(t *testing.T) {
 	g := source.generation
 	state := runtimeTestState(t, g)
 	state.AuthorityHead = g.Manifest.AuthorityHead
-	orphan := newRoutableSnapshot(state, 0, nil, nil)
+	orphan := mustRoutableSnapshot(t, state, 0, nil, nil)
 	require.False(t, orphan.AllowsNewAttempt())
 }
 

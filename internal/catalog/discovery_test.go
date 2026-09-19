@@ -127,3 +127,19 @@ func TestDiscoveryRejectsKnownAuthorityWithdrawal(t *testing.T) {
 	require.Equal(t, Discovery{}, after)
 	require.Equal(t, before.GenerationID, snapshot.GenerationID(), "withdrawal does not require metadata activation")
 }
+
+func TestDiscoveryDoesNotCopyUndisclosedDefinitions(t *testing.T) {
+	client, err := starmap.New()
+	require.NoError(t, err)
+	plane, err := Open(client)
+	require.NoError(t, err)
+	snapshot := plane.Current()
+	allocations := testing.AllocsPerRun(10, func() {
+		result, err := snapshot.Discover(discoveryPolicy{})
+		if err != nil || len(result.Models) != 0 {
+			t.Fatalf("discovery returned %d models: %v", len(result.Models), err)
+		}
+	})
+	t.Logf("denied embedded discovery allocations: %.0f", allocations)
+	require.LessOrEqual(t, allocations, float64(8), "undisclosed definitions must not be copied per request")
+}

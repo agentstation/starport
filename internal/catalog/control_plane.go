@@ -425,7 +425,7 @@ func deriveRoutableSnapshot(
 		return routes[left].ProviderModelID < routes[right].ProviderModelID
 	})
 
-	return newRoutableSnapshot(state, availabilityRevision, routes, routability), nil
+	return newRoutableSnapshot(state, availabilityRevision, routes, routability)
 }
 
 // compatibleOfferingService names the operations one offering and one adapter

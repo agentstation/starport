@@ -111,6 +111,7 @@ type RoutableSnapshot struct {
 	authorityHead        catalogs.CatalogAuthorityHead
 	permission           catalogAttemptPermission
 	availabilityRevision uint64
+	discoveryIndex       []discoveryEntry
 	planningCandidates   []routing.Candidate
 	planningByModel      map[string][]int
 	routes               []Route
@@ -122,9 +123,14 @@ func newRoutableSnapshot(
 	availabilityRevision uint64,
 	routes []Route,
 	routability []OfferingRoutability,
-) *RoutableSnapshot {
+) (*RoutableSnapshot, error) {
+	index, err := buildDiscoveryIndex(state.Catalog)
+	if err != nil {
+		return nil, err
+	}
 	snapshot := &RoutableSnapshot{
 		catalog:              state.Catalog,
+		discoveryIndex:       index,
 		generationID:         state.GenerationID,
 		payloadChecksum:      state.PayloadChecksum,
 		generatedAt:          state.GeneratedAt,
@@ -135,7 +141,7 @@ func newRoutableSnapshot(
 		routability:          append([]OfferingRoutability(nil), routability...),
 	}
 	snapshot.buildPlanningCandidates()
-	return snapshot
+	return snapshot, nil
 }
 
 // OfferingRoutability returns the planning verdict for every offering in the

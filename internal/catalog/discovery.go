@@ -47,25 +47,55 @@ func (s *RoutableSnapshot) Discover(policy DisclosurePolicy) (Discovery, error) 
 		PayloadChecksum: s.payloadChecksum,
 		Models:          make([]DiscoveredModel, 0),
 	}
-	for _, definition := range s.catalog.Definitions() {
-		if !policy.AllowsDefinition(definition.ID) {
+	for _, entry := range s.discoveryIndex {
+		if !policy.AllowsDefinition(entry.definition) {
 			continue
 		}
-		offerings, err := s.catalog.DefinitionOfferings(definition.ID)
+		definition, err := s.catalog.Definition(entry.definition)
 		if err != nil {
 			return Discovery{}, err
 		}
-		model := DiscoveredModel{Definition: definition, Offerings: make([]catalogs.ProviderOffering, 0, len(offerings))}
-		for _, offering := range offerings {
-			key := catalogs.OfferingKey{ProviderID: offering.ProviderID, ProviderModelID: offering.ProviderModelID}
-			if policy.AllowsOffering(key) {
-				model.Offerings = append(model.Offerings, offering)
+		model := DiscoveredModel{Definition: definition, Offerings: make([]catalogs.ProviderOffering, 0)}
+		for _, key := range entry.offerings {
+			if !policy.AllowsOffering(key) {
+				continue
 			}
+			offering, err := s.catalog.Offering(key.ProviderID, key.ProviderModelID)
+			if err != nil {
+				return Discovery{}, err
+			}
+			model.Offerings = append(model.Offerings, offering)
 		}
 		result.Models = append(result.Models, model)
 	}
+
 	if refusal := s.CheckNewAttempt(); refusal != nil {
 		return Discovery{}, refusal
 	}
 	return result, nil
+}
+
+type discoveryEntry struct {
+	definition catalogs.ModelDefinitionID
+	offerings  []catalogs.OfferingKey
+}
+
+func buildDiscoveryIndex(source *catalogs.Catalog) ([]discoveryEntry, error) {
+	if source == nil {
+		return nil, nil
+	}
+	definitions := source.Definitions()
+	entries := make([]discoveryEntry, 0, len(definitions))
+	for _, definition := range definitions {
+		offerings, err := source.DefinitionOfferings(definition.ID)
+		if err != nil {
+			return nil, err
+		}
+		entry := discoveryEntry{definition: definition.ID, offerings: make([]catalogs.OfferingKey, len(offerings))}
+		for i, offering := range offerings {
+			entry.offerings[i] = offering.Key()
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
 }
