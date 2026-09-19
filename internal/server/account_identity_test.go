@@ -73,7 +73,7 @@ func TestTwoKeysInOneAccountShareARequestAccount(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, first.APIKey.ID, second.APIKey.ID, "the two keys must be distinct API keys")
 
-	middleware := NewAuthMiddleware(apiKeys)
+	middleware := NewAuthMiddleware(apiKeys, accounts)
 
 	firstRequest, status := authenticate(t, middleware, first.Secret)
 	require.Equal(t, http.StatusOK, status)
@@ -112,7 +112,7 @@ func TestKeyWithNoAccountResolvesToDefault(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolved, status := authenticate(t, NewAuthMiddleware(apiKeys), secret)
+	resolved, status := authenticate(t, NewAuthMiddleware(apiKeys, defaultAuthAccounts(t)), secret)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, account.DefaultID, resolved.accountID)
 	assert.Equal(t, "STARPORT_unaccounted", resolved.keyID)

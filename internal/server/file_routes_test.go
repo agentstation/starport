@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/limits"
@@ -351,6 +352,14 @@ func storeFileTestKeyWithLimits(
 // single-account deployment puts every key.
 func storeFileTestKeyForAccount(t *testing.T, server *Server, id, accountID string, scopes ...string) string {
 	t.Helper()
+	if accountID != "" {
+		exists, err := server.accounts.Exists(t.Context(), accountID)
+		require.NoError(t, err)
+		if !exists {
+			_, err = server.accounts.Create(t.Context(), account.Account{ID: accountID, Name: accountID, Active: true})
+			require.NoError(t, err)
+		}
+	}
 	secret := "sk-starport-" + id
 	hash := sha256.Sum256([]byte(secret))
 	_, err := server.apiKeys.Create(t.Context(), apikey.APIKey{

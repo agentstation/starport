@@ -82,3 +82,12 @@ func TestAuthorizationUnknownAccountRefusesAdmission(t *testing.T) {
 		}
 	})
 }
+
+func defaultAuthAccounts(t *testing.T) account.Repository {
+	t.Helper()
+	accounts, err := account.Open(storage.NewMockStore())
+	require.NoError(t, err)
+	_, err = accounts.EnsureDefault(t.Context())
+	require.NoError(t, err)
+	return accounts
+}
