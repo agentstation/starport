@@ -155,21 +155,37 @@ func TestCacheBoundsTenantLoadsWithoutBlockingOtherTenants(t *testing.T) {
 func TestCacheMutationRejectsInFlightPublication(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		release := make(chan struct{})
+		var calls atomic.Int64
 		cache := newTestCache(t, sourceFunc(func(ctx context.Context, id Identity) (Candidate, error) {
+			call := calls.Add(1)
 			select {
 			case <-ctx.Done():
 				return Candidate{}, ctx.Err()
 			case <-release:
-				return cacheCandidate(id, time.Now()), nil
+				candidate := cacheCandidate(id, time.Now())
+				if call > 1 {
+					candidate.Key.APIKey.Scopes = []string{"models:read"}
+				}
+				return candidate, nil
 			}
 		}), cacheTestLimits(), func() (time.Time, bool) { return time.Now(), true })
-		done := make(chan error, 1)
-		go func() { _, err := cache.Resolve(t.Context(), Identity{Subject: "hash"}); done <- err }()
+		done := make(chan *Bundle, 1)
+		go func() {
+			bundle, err := cache.Resolve(t.Context(), Identity{Subject: "hash"})
+			if err != nil {
+				t.Error(err)
+			}
+			done <- bundle
+		}()
 		synctest.Wait()
 		cache.authorities.beginMutation()()
 		close(release)
-		if err := <-done; !errors.Is(err, ErrWithdrawn) {
-			t.Fatalf("stale publication = %v", err)
+		bundle := <-done
+		if bundle == nil || len(bundle.Key().APIKey.Scopes) != 1 || bundle.Key().APIKey.Scopes[0] != "models:read" {
+			t.Fatal("published policy from before the mutation")
+		}
+		if calls.Load() != 2 {
+			t.Fatalf("full source reads = %d", calls.Load())
 		}
 	})
 }

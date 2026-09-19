@@ -151,24 +151,7 @@ func (c *Cache) load(identity Identity, entry *cacheEntry, pending *flight, tick
 	defer c.work.Done()
 	ctx, cancel := context.WithTimeout(c.ctx, c.limits.LoadTimeout)
 	defer cancel()
-	candidate, err := c.source.Load(ctx, identity)
-	if err == nil {
-		err = ctx.Err()
-	}
-	var bundle *Bundle
-	if err == nil {
-		now, healthy := c.clock()
-		var receipt Permit
-		receipt, err = ticket.accept(candidate.Evidence, now, c.limits.PermissionLifetime, c.limits.ClockUncertainty, healthy)
-		if err == nil && candidate.Key.APIKey.ExpiresAt != nil {
-			deadline := candidate.Key.APIKey.ExpiresAt.Add(-c.limits.ClockUncertainty)
-			receipt.clamp(deadline)
-			err = receipt.Check(now, healthy)
-		}
-		if err == nil {
-			bundle, err = freeze(candidate, identity, receipt, c.limits.BundleBytes)
-		}
-	}
+	bundle, err := c.loadBundle(ctx, identity, ticket)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.active--
@@ -202,6 +185,50 @@ func (c *Cache) load(identity Identity, entry *cacheEntry, pending *flight, tick
 		pending.err = err
 	}
 	close(pending.done)
+}
+
+// loadBundle retries a changed authority at most twice within the original deadline.
+// Every retry captures new tickets before rereading every source dependency.
+func (c *Cache) loadBundle(ctx context.Context, identity Identity, ticket tickets) (*Bundle, error) {
+	for attempt := range 3 {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if attempt > 0 {
+			var err error
+			ticket, err = c.authorities.start()
+			if err != nil {
+				return nil, err
+			}
+		}
+		bundle, err := c.loadOnce(ctx, identity, ticket)
+		if !errors.Is(err, ErrWithdrawn) {
+			return bundle, err
+		}
+	}
+	return nil, ErrWithdrawn
+}
+
+func (c *Cache) loadOnce(ctx context.Context, identity Identity, ticket tickets) (*Bundle, error) {
+	candidate, err := c.source.Load(ctx, identity)
+	if err == nil {
+		err = ctx.Err()
+	}
+	var bundle *Bundle
+	if err == nil {
+		now, healthy := c.clock()
+		var receipt Permit
+		receipt, err = ticket.accept(candidate.Evidence, now, c.limits.PermissionLifetime, c.limits.ClockUncertainty, healthy)
+		if err == nil && candidate.Key.APIKey.ExpiresAt != nil {
+			deadline := candidate.Key.APIKey.ExpiresAt.Add(-c.limits.ClockUncertainty)
+			receipt.clamp(deadline)
+			err = receipt.Check(now, healthy)
+		}
+		if err == nil {
+			bundle, err = freeze(candidate, identity, receipt, c.limits.BundleBytes)
+		}
+	}
+	return bundle, err
 }
 
 func (c *Cache) remove(identity Identity, entry *cacheEntry) {
