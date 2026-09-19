@@ -104,7 +104,7 @@ func TestFileManifestSharedBackendsOmitCredentialsAndLocalSelection(t *testing.T
 			require.NoError(t, err)
 			report, err := cfg.FileManifest("test")
 			require.NoError(t, err)
-			for _, role := range []string{"badger", "sqlite", "sqlite-wal", "files"} {
+			for _, role := range []string{"badger", "sqlite", "sqlite-wal", "files", "setup-transaction", "setup-storage-guard", "setup-database-stage", "setup-config-publications"} {
 				require.Equal(t, fileDisabled, manifestEntry(t, report, role).Availability)
 			}
 			external := make(map[string]string)
@@ -129,7 +129,7 @@ func TestFileManifestDevelopmentDisablesPersistentStores(t *testing.T) {
 	require.NoError(t, err)
 	report, err := cfg.FileManifest("test")
 	require.NoError(t, err)
-	for _, role := range []string{"configuration", "badger", "sqlite", "baseline", "runtime-evidence", "welcome-stamp"} {
+	for _, role := range []string{"configuration", "badger", "sqlite", "baseline", "runtime-evidence", "welcome-stamp", "setup-transaction", "setup-storage-guard", "setup-database-stage", "setup-config-publications", "local-token-lock"} {
 		require.Equal(t, fileDisabled, manifestEntry(t, report, role).Availability)
 	}
 	for _, entry := range report.External {
@@ -169,4 +169,33 @@ func TestFileManifestSourceCachesFollowCanonicalSelection(t *testing.T) {
 			require.NoDirExists(t, paths.CacheDir)
 		})
 	}
+}
+
+func TestFileManifestIncludesSetupArtifactsAtSelectedLeaves(t *testing.T) {
+	root := t.TempDir()
+	configuration := filepath.Join(root, "custom-config", "selected.env")
+	database := filepath.Join(root, "custom-data", "records[local]")
+	require.NoError(t, os.MkdirAll(filepath.Dir(configuration), 0700))
+	require.NoError(t, os.WriteFile(configuration, []byte("STARPORT_STORAGE_BADGER_PATH="+database+"\n"), 0600))
+	cfg, err := NewLoader().WithPaths(PathsForConfigDir(filepath.Join(root, "defaults"))).WithEnvironment(map[string]string{"STARPORT_CONFIG_FILE": configuration}).Load(t.Context())
+	require.NoError(t, err)
+	report, err := cfg.FileManifest("test")
+	require.NoError(t, err)
+	for id, path := range map[string]string{
+		"setup-transaction":         filepath.Join(filepath.Dir(configuration), ".starport-setup"),
+		"setup-storage-guard":       filepath.Join(filepath.Dir(database), ".starport-setup-"+filepath.Base(database)),
+		"setup-database-stage":      filepath.Dir(database),
+		"setup-config-publications": filepath.Join(filepath.Dir(configuration), ".record-publications"),
+		"local-token-lock":          cfg.EffectivePaths().LocalTokenFile + ".lock",
+	} {
+		entry := manifestEntry(t, report, id)
+		require.Equal(t, path, entry.Location.Path)
+		require.Equal(t, policy.OwnerOnly, entry.Policy.Access)
+		require.Equal(t, fileAvailable, entry.Availability)
+	}
+	require.Equal(t, []string{".starport-init-*/**"}, manifestEntry(t, report, "setup-database-stage").Patterns)
+	require.Equal(t, "environment", manifestEntry(t, report, "setup-transaction").Location.Origin)
+	require.Equal(t, "file:"+configuration, manifestEntry(t, report, "setup-storage-guard").Location.Origin)
+	require.NoDirExists(t, filepath.Dir(database))
+	require.NoDirExists(t, filepath.Join(filepath.Dir(configuration), ".starport-setup"))
 }

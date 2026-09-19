@@ -75,6 +75,20 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 	badger := selectedAvailability(c.Storage.Mode == storageModeBadger && !c.Storage.Badger.inMemory)
 	add(pathRoleBadger, p.BadgerDir, fileKindTree, badger, policy.OwnerOnly,
 		"The local KV backend opens this directory.", "Back up durable KV records and accepted catalog generations consistently. Do not share this directory between processes.", badgerPathEnvironment)
+	for _, item := range []struct{ id, path, kind, origin, creation string }{
+		{"setup-transaction", siblingPath(p.ConfigFile, ".starport-setup"), fileKindTree, "configuration", "Local setup retains its transaction and stable lock."},
+		{"setup-config-publications", siblingPath(p.ConfigFile, ".record-publications"), fileKindTree, "configuration", "Local setup publishes configuration through private records."},
+		{"setup-storage-guard", siblingPath(p.BadgerDir, ".starport-setup-"+filepath.Base(p.BadgerDir)), fileKindTree, pathRoleBadger, "Local setup and gateway startup coordinate database ownership."},
+		{"setup-database-stage", siblingPath(p.BadgerDir, ""), "patterns", pathRoleBadger, "Local setup stages databases and retains interrupted rollback state."},
+	} {
+		add(item.id, item.path, item.kind, badger, policy.OwnerOnly, item.creation,
+			"Preserve stable locks and pending records. Recovery must verify ownership before removal.", "STARPORT_CONFIG_FILE", badgerPathEnvironment)
+		entry := &report.Files[len(report.Files)-1]
+		entry.Location = manifestPath(p, item.origin, item.path)
+		if item.kind == "patterns" {
+			entry.Patterns = []string{".starport-init-*/**"}
+		}
+	}
 	sqlite := selectedAvailability(c.Storage.SQL.Mode == sqlModeSQLite && !c.Storage.Badger.inMemory)
 	add(pathRoleSQLite, p.SQLiteFile, "file", sqlite, policy.OwnerOnly,
 		"The local SQL backend opens this database.", "Use a consistent SQLite backup with the matching KV records and encryption key access.", sqlitePathEnvironment)
@@ -90,6 +104,13 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 		"The filesystem blob backend stores uploaded bytes.", "Restore file records and bytes together. File retention controls normal removal.", filesPathEnvironment)
 	add("local-token", p.LocalTokenFile, "file", selectedAvailability(p.LocalTokenFile != ""), policy.OwnerOnly,
 		"Persistent startup creates the local administrator token. Development only reads an existing token.", "Treat this file as an administrator credential.")
+	localLock := ""
+	if p.LocalTokenFile != "" {
+		localLock = p.LocalTokenFile + ".lock"
+	}
+	add("local-token-lock", localLock, "file", selectedAvailability(localLock != "" && !c.Storage.Badger.inMemory), policy.OwnerOnly,
+		"Persistent token reads and writes acquire this stable lock.", "Preserve the lock while token operations can run.")
+	report.Files[len(report.Files)-1].Location = manifestPath(p, "local-token", localLock)
 	add("welcome-stamp", p.WelcomeStampFile, "file", selectedAvailability(!c.Catalog.StateDirectoryIsScratch()), policy.OwnerOnly,
 		"Persistent onboarding records completion.", "Removal repeats the first-use notice.")
 	for _, item := range []struct{ id, path, kind, creation, recovery string }{
@@ -215,4 +236,11 @@ func manifestPath(paths Paths, role, path string) productpaths.Path {
 	}
 	selected.Path = path
 	return selected
+}
+
+func siblingPath(selected, name string) string {
+	if selected == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(selected), name)
 }
