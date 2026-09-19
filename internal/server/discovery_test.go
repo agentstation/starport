@@ -117,3 +117,50 @@ func TestDiscoveryViewerRevalidatesConsoleSession(t *testing.T) {
 	_, err = middleware.discoveryViewer(captured)
 	require.Error(t, err)
 }
+
+func TestCompatibilityAuthorsApplyCurrentDisclosure(t *testing.T) {
+	s := newTestServer(t, &Config{MaxRequestSize: 1 << 20}, withRoutableCatalog())
+	secret := createServerAPIKey(t, s, "compatibility-reader", []string{"models:read"})
+	record, err := s.accounts.GetByID(t.Context(), account.DefaultID)
+	require.NoError(t, err)
+	record.Account.Access = []account.ProviderAccess{{Provider: "not-in-this-catalog"}}
+	_, err = s.accounts.Update(t.Context(), record.Account, record.Revision)
+	require.NoError(t, err)
+	response := serveAuthorized(s, http.MethodGet, "/api/v1/authors", secret, t.Context())
+	require.Equal(t, http.StatusOK, response.Code)
+	var body struct {
+		Authors []any `json:"authors"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+	require.Empty(t, body.Authors)
+}
+
+func TestCompatibilityDisclosureRefusesPolicyChangeBeforeDelivery(t *testing.T) {
+	s := newTestServer(t, &Config{MaxRequestSize: 1 << 20}, withRoutableCatalog())
+	secret := createServerAPIKey(t, s, "compatibility-reader", []string{"models:read"})
+	handler := s.auth.RequireAPIKey(s.requireCatalogDisclosure(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"private":"must-not-escape"}`))
+		record, err := s.accounts.GetByID(r.Context(), account.DefaultID)
+		require.NoError(t, err)
+		record.Account.Access = []account.ProviderAccess{{Provider: "not-in-this-catalog"}}
+		_, err = s.accounts.Update(r.Context(), record.Account, record.Revision)
+		require.NoError(t, err)
+	})))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, discoveryRequest(secret))
+	require.Equal(t, http.StatusServiceUnavailable, response.Code)
+	require.NotContains(t, response.Body.String(), "must-not-escape")
+	require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
+}
+
+func TestCompatibilityRoutesRequireCurrentCatalog(t *testing.T) {
+	s := newTestServer(t, &Config{MaxRequestSize: 1 << 20})
+	secret := createServerAPIKey(t, s, "compatibility-reader", []string{"models:read"})
+	for _, path := range []string{"/v1/models", "/v1/models/unknown", "/api/v1/models", "/api/v1/models/unknown", "/api/v1/models/unknown/endpoints", "/api/v1/providers", "/api/v1/authors", "/api/v1/authors/unknown"} {
+		t.Run(path, func(t *testing.T) {
+			response := serveAuthorized(s, http.MethodGet, path, secret, t.Context())
+			require.Equal(t, http.StatusServiceUnavailable, response.Code)
+			require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
+		})
+	}
+}

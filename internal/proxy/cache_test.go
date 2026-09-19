@@ -255,7 +255,7 @@ func TestCachedServiceRetainsOneRuntimeGeneration(t *testing.T) {
 		_, err := service.ListModels(t.Context())
 		require.NoError(t, err)
 		require.True(t, source.lastLease(t).released.Load())
-		_, found := manager.storage["models:list:"+generationID]
+		_, found := manager.storage["models:list:"+generationID+":internal"]
 		require.True(t, found)
 	})
 }

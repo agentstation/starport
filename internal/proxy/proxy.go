@@ -10,6 +10,7 @@ import (
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/disclosure"
 	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/inference"
@@ -585,6 +586,9 @@ func (p *proxy) ListModels(ctx context.Context) (response *ModelsResponse, err e
 			response, err = nil, refusal
 		}
 	}()
+	if policy, ok := disclosure.FromContext(ctx); ok {
+		return &ModelsResponse{Object: "list", Data: view.ModelsForViewer(snapshot, policy)}, nil
+	}
 	return modelsResponseFromSnapshot(snapshot), nil
 }
 
@@ -610,6 +614,9 @@ func (p *proxy) ListProviders(ctx context.Context) (response *ProvidersResponse,
 			response, err = nil, refusal
 		}
 	}()
+	if policy, ok := disclosure.FromContext(ctx); ok {
+		return &ProvidersResponse{Providers: view.ProvidersForViewer(snapshot, runtime.RequiresAuthentication, policy)}, nil
+	}
 	return &ProvidersResponse{Providers: view.Providers(snapshot, runtime.RequiresAuthentication)}, nil
 }
 
@@ -625,6 +632,9 @@ func (p *proxy) ListAuthors(ctx context.Context) (response *AuthorsResponse, err
 			response, err = nil, refusal
 		}
 	}()
+	if policy, ok := disclosure.FromContext(ctx); ok {
+		return &AuthorsResponse{Authors: view.AuthorsForViewer(snapshot, policy)}, nil
+	}
 	return &AuthorsResponse{Authors: view.Authors(snapshot)}, nil
 }
 
@@ -641,6 +651,9 @@ func (p *proxy) GetAuthor(ctx context.Context, authorID string) (response *Autho
 		}
 	}()
 	author, ok := view.AuthorByID(snapshot, authorID)
+	if policy, scoped := disclosure.FromContext(ctx); scoped {
+		author, ok = view.AuthorByIDForViewer(snapshot, authorID, policy)
+	}
 	if !ok {
 		return nil, &ProviderError{Code: "not_found", Message: "Author not found"}
 	}
@@ -744,6 +757,9 @@ func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (response
 			response, err = nil, refusal
 		}
 	}()
+	if policy, ok := disclosure.FromContext(ctx); ok {
+		return &ModelEndpointsResponse{Model: modelID, Endpoints: view.EndpointsForViewer(snapshot, modelID, policy)}, nil
+	}
 	return &ModelEndpointsResponse{
 		Model:     modelID,
 		Endpoints: view.Endpoints(snapshot, modelID),

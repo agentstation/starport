@@ -6,6 +6,7 @@ import (
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/disclosure"
 )
 
 // Providers projects every provider with a routable offering in the
@@ -16,12 +17,21 @@ func Providers(
 	snapshot *runtimecatalog.RoutableSnapshot,
 	requiresAuth func(providerID string) bool,
 ) []ProviderInfo {
+	return providers(snapshot, requiresAuth, nil)
+}
+
+// ProvidersForViewer projects providers with permitted routable offerings.
+func ProvidersForViewer(snapshot *runtimecatalog.RoutableSnapshot, requiresAuth func(string) bool, policy disclosure.Policy) []ProviderInfo {
+	return providers(snapshot, requiresAuth, policy)
+}
+
+func providers(snapshot *runtimecatalog.RoutableSnapshot, requiresAuth func(string) bool, policy runtimecatalog.DisclosurePolicy) []ProviderInfo {
 	if snapshot == nil {
 		return nil
 	}
 	seen := make(map[starmapcatalogs.ProviderID]struct{})
 	providers := make([]ProviderInfo, 0)
-	for _, route := range snapshot.Routes() {
+	for _, route := range permittedRoutes(snapshot.Routes(), policy) {
 		if _, exists := seen[route.ProviderID]; exists {
 			continue
 		}
@@ -53,7 +63,7 @@ func Providers(
 		}
 		info.Policies = providerPolicies(provider)
 		capabilities := make(map[string]struct{})
-		for _, providerRoute := range snapshot.RoutesForProvider(route.ProviderID) {
+		for _, providerRoute := range permittedRoutes(snapshot.RoutesForProvider(route.ProviderID), policy) {
 			info.Models = append(info.Models, providerRoute.ID())
 			for _, operation := range providerRoute.Operations {
 				capabilities[string(operation)] = struct{}{}

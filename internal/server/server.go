@@ -72,7 +72,8 @@ type Server struct {
 	controllers *controllers.Controllers
 
 	// Middleware
-	auth *AuthMiddleware
+	auth              *AuthMiddleware
+	discoveryRegistry connectors.LeasingRegistry
 
 	// authPolicy is the running authentication mode. It is the server's copy
 	// of one shared value: the middleware reads it per request and the console
@@ -188,6 +189,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 	}
 
 	s := &Server{
+		discoveryRegistry:  dependencies.DiscoveryRegistry,
 		router:             chi.NewRouter(),
 		cfg:                config,
 		service:            dependencies.Service,

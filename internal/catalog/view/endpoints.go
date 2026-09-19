@@ -4,6 +4,7 @@ import (
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/disclosure"
 )
 
 // Endpoints projects every chat-completions endpoint that can serve the
@@ -13,11 +14,20 @@ func Endpoints(
 	snapshot *runtimecatalog.RoutableSnapshot,
 	modelID string,
 ) []EndpointInfo {
+	return endpoints(snapshot, modelID, nil)
+}
+
+// EndpointsForViewer projects permitted endpoints for a model.
+func EndpointsForViewer(snapshot *runtimecatalog.RoutableSnapshot, modelID string, policy disclosure.Policy) []EndpointInfo {
+	return endpoints(snapshot, modelID, policy)
+}
+
+func endpoints(snapshot *runtimecatalog.RoutableSnapshot, modelID string, policy runtimecatalog.DisclosurePolicy) []EndpointInfo {
 	endpoints := make([]EndpointInfo, 0)
 	if snapshot == nil {
 		return endpoints
 	}
-	for _, route := range snapshot.Routes() {
+	for _, route := range permittedRoutes(snapshot.Routes(), policy) {
 		if route.ID() != modelID && string(route.DefinitionID) != modelID {
 			continue
 		}

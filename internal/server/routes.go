@@ -113,8 +113,8 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		})
 
 		// Models
-		r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.Models.List)
-		r.With(s.requireAnyScope("models:read")).Get("/models/{model}", s.controllers.Models.Get)
+		r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/models", s.controllers.Models.List)
+		r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/models/{model}", s.controllers.Models.Get)
 	})
 
 	// OpenRouter-compatible API (api/v1)
@@ -166,16 +166,16 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			})
 
 			// Models with enhanced metadata
-			r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.OpenRouterModels.List)
-			r.With(s.requireAnyScope("models:read")).Get("/models/{model}", s.controllers.OpenRouterModels.Get)
-			r.With(s.requireAnyScope("models:read")).Get("/models/{model}/endpoints", s.controllers.OpenRouterModels.GetEndpoints)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/models", s.controllers.OpenRouterModels.List)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/models/{model}", s.controllers.OpenRouterModels.Get)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/models/{model}/endpoints", s.controllers.OpenRouterModels.GetEndpoints)
 
 			// Providers metadata
-			r.With(s.requireAnyScope("models:read")).Get("/providers", s.controllers.Providers.List)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/providers", s.controllers.Providers.List)
 
 			// Catalog authors
-			r.With(s.requireAnyScope("models:read")).Get("/authors", s.controllers.Authors.List)
-			r.With(s.requireAnyScope("models:read")).Get("/authors/{author}", s.controllers.Authors.Get)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/authors", s.controllers.Authors.List)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/authors/{author}", s.controllers.Authors.Get)
 
 			// The safe catalog surface. It serves the allowlisted summary
 			// alone: no source address, no publication chain, no lease, and

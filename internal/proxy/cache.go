@@ -11,6 +11,7 @@ import (
 	"time"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/disclosure"
 	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
@@ -514,7 +515,7 @@ func (s *cachedService) readCachedCatalogList(ctx context.Context, kind string, 
 			response, err = nil, refusal
 		}
 	}()
-	key := kind + ":list:" + s.catalogGeneration(ctx)
+	key := kind + ":list:" + s.catalogGeneration(ctx) + ":" + disclosure.CacheScope(ctx)
 	return s.cacheListResponse(ctx, key, kind, func() (any, error) { return fetch(ctx) })
 }
 
@@ -580,7 +581,7 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 		}
 	}()
 
-	cacheKey := fmt.Sprintf("model:endpoints:%s:%s", s.catalogGeneration(ctx), modelID)
+	cacheKey := fmt.Sprintf("model:endpoints:%s:%s:%s", s.catalogGeneration(ctx), disclosure.CacheScope(ctx), modelID)
 
 	// Try to get from cache using GetModel
 	cached, found, err := s.cacheManager.GetModel(ctx, cacheKey)

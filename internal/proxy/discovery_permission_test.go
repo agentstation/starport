@@ -2,6 +2,9 @@ package proxy
 
 import (
 	"context"
+	"github.com/agentstation/starport/internal/account"
+	"github.com/agentstation/starport/internal/apikey"
+	"github.com/agentstation/starport/internal/catalog/disclosure"
 	"testing"
 
 	"github.com/agentstation/starmap"
@@ -129,4 +132,48 @@ func TestCompatibilityProjectionRechecksAuthorityAtDelivery(t *testing.T) {
 	require.True(t, projected)
 	require.Nil(t, response)
 	requireCatalogPermissionRefusal(t, err)
+}
+
+func TestDiscoveryCacheSeparatesDisclosureMembership(t *testing.T) {
+	client, err := starmap.New()
+	require.NoError(t, err)
+	plane, err := runtimecatalog.Open(client)
+	require.NoError(t, err)
+	provider, offering := firstDiscoveryOffering(t, client.Catalog())
+	var endpointTypes []catalogs.EndpointType
+	for _, endpoint := range offering.Endpoints {
+		endpointTypes = append(endpointTypes, endpoint.Type)
+	}
+	require.NoError(t, plane.SetAdapter(runtimecatalog.AdapterAvailability{ProviderID: provider, Registered: true, Operations: offering.Service.Operations, EndpointTypes: endpointTypes}))
+	snapshot := plane.Current()
+	allowed := disclosure.New(snapshot, apikey.APIKey{}, account.Account{})
+	denied := disclosure.Policy{}
+	for _, kind := range []string{"models", "providers"} {
+		t.Run(kind, func(t *testing.T) {
+			manager := newMockCacheManager()
+			upstream := &proxy{registry: catalogDiscoveryRegistry{runtime: &catalogDiscoveryRuntime{snapshot: snapshot}}}
+			service := &cachedService{service: upstream, runtime: &cacheRuntimeSource{snapshot: snapshot}, cacheManager: manager, cacheConfig: CacheConfig{EnableModelCache: true, EnableProviderCache: true}}
+			read := func(policy disclosure.Policy, visible bool) {
+				ctx := disclosure.WithPolicy(t.Context(), policy)
+				if kind == "models" {
+					response, readErr := service.ListModels(ctx)
+					require.NoError(t, readErr)
+					require.Equal(t, visible, len(response.Data) > 0)
+				} else {
+					response, readErr := service.ListProviders(ctx)
+					require.NoError(t, readErr)
+					require.Equal(t, visible, len(response.Providers) > 0)
+				}
+				require.NoError(t, err)
+			}
+			read(allowed, true)
+			require.Equal(t, 1, manager.calls["SetModel"])
+			read(allowed, true)
+			require.Equal(t, 1, manager.calls["SetModel"], "same membership must hit the serialized cache")
+			read(denied, false)
+			require.Equal(t, 2, manager.calls["SetModel"], "different membership must not reuse the first response")
+			read(denied, false)
+			require.Equal(t, 2, manager.calls["SetModel"])
+		})
+	}
 }

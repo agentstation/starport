@@ -57,7 +57,8 @@ type discoveryResponse struct {
 	Models       []discoveryModel `json:"models"`
 }
 
-func validDiscoveryViewer(viewer DiscoveryViewer) bool {
+// Valid reports whether current identity permits catalog reads.
+func (viewer DiscoveryViewer) Valid() bool {
 	return viewer.Key.Active && !viewer.Key.IsExpired() && viewer.Account.Active &&
 		viewer.Key.EffectiveAccountID() == viewer.Account.ID && (viewer.Key.HasScope("models:read") || viewer.Key.HasScope("admin"))
 }
@@ -70,7 +71,7 @@ func (h *DiscoveryController) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	viewer, err := h.viewer(r)
-	if err != nil || !validDiscoveryViewer(viewer) {
+	if err != nil || !viewer.Valid() {
 		writeCatalogUnavailable(w)
 		return
 	}
@@ -116,7 +117,7 @@ func (h *DiscoveryController) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	current, err := h.viewer(r)
-	if err != nil || !validDiscoveryViewer(current) || !reflect.DeepEqual(viewer, current) || snapshot.CheckNewAttempt() != nil {
+	if err != nil || !current.Valid() || !reflect.DeepEqual(viewer, current) || snapshot.CheckNewAttempt() != nil {
 		writeCatalogUnavailable(w)
 		return
 	}
