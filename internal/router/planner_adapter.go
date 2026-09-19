@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"time"
 
@@ -50,6 +51,15 @@ func (r *modelRouter) planOperation(
 	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
 		return nil, refusal
 	}
+	var err error
+	request.Models, err = resolveModelAliases(snapshot, request.Models)
+	if err != nil {
+		return nil, err
+	}
+	request.ZeroPriceModels, err = resolveModelAliases(snapshot, request.ZeroPriceModels)
+	if err != nil {
+		return nil, err
+	}
 	request.Operation = operation
 	request.Models, request.AllowAnyModelFallback = splitAutoModel(request.Models)
 	request.AllowModelFallbacks = len(request.Models) > 1
@@ -59,6 +69,26 @@ func (r *modelRouter) planOperation(
 		Candidates:           r.toPlanningCandidates(snapshot, runtime),
 	}
 	return r.routePlanner.Plan(request, input)
+}
+
+func resolveModelAliases(snapshot *runtimecatalog.RoutableSnapshot, names []string) ([]string, error) {
+	result := names
+	copied := false
+	for index, name := range names {
+		resolved, valid := snapshot.ResolveAlias(name)
+		if !valid {
+			return nil, fmt.Errorf("%w: %s", runtimecatalog.ErrModelNotCatalogued, name)
+		}
+		if resolved == name {
+			continue
+		}
+		if !copied {
+			result = slices.Clone(names)
+			copied = true
+		}
+		result[index] = resolved
+	}
+	return result, nil
 }
 
 func splitAutoModel(models []string) ([]string, bool) {

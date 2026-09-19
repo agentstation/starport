@@ -6,6 +6,8 @@ import (
 )
 
 // Common proxy errors
+const resourceNotFoundCode = "not_found"
+
 var (
 	// ErrNoValidModel indicates no valid model was specified
 	ErrNoValidModel = errors.New("no valid model specified")

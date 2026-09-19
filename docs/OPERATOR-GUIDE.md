@@ -1075,6 +1075,18 @@ Use the discovery snapshot to reconcile current membership.
 The reader feed's `semantically_equal` field reports whether its listed changes are empty.
 A generation mismatch produces a sanitized `503` with `Retry-After: 30`.
 
+Canonical aliases use the retained request generation.
+An active alias resolves to its current canonical target, and model details return that target ID.
+The caller still needs permission for the target. Permission for an alias spelling alone does not grant target access.
+An explicitly removed alias returns `404` with `not_found_error` for model details in both API families.
+
+OpenAI places the reason in `error.type`.
+OpenRouter uses `error.metadata.error_type` and numeric `error.code`.
+
+Alias removal affects new requests. A retained request snapshot keeps its earlier mapping, subject to current authority checks.
+Aliases do not expire with time.
+Starport refuses activation when a canonical alias conflicts with an exact provider route.
+
 ### Freshness alert rules
 
 The server evaluates freshness and serves the verdict. An alert reads that

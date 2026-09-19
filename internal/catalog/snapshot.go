@@ -269,6 +269,12 @@ func (s *RoutableSnapshot) Names(modelID string) bool {
 	if s == nil || strings.TrimSpace(modelID) == "" {
 		return false
 	}
+	var valid bool
+	modelID, valid = s.ResolveAlias(modelID)
+	if !valid {
+		return false
+	}
+
 	for _, offering := range s.routability {
 		if string(offering.ProviderID)+"/"+string(offering.ProviderModelID) == modelID {
 			return true
@@ -287,6 +293,12 @@ func (s *RoutableSnapshot) ResolveRoute(modelID string) (Route, bool) {
 	if s == nil || strings.TrimSpace(modelID) == "" {
 		return Route{}, false
 	}
+	var valid bool
+	modelID, valid = s.ResolveAlias(modelID)
+	if !valid {
+		return Route{}, false
+	}
+
 	for _, route := range s.routes {
 		if route.ID() == modelID {
 			return cloneRoute(route), true
@@ -308,6 +320,12 @@ func (s *RoutableSnapshot) ResolveOperation(
 	if s == nil || strings.TrimSpace(modelID) == "" {
 		return Route{}, false
 	}
+	var valid bool
+	modelID, valid = s.ResolveAlias(modelID)
+	if !valid {
+		return Route{}, false
+	}
+
 	for _, route := range s.routes {
 		if route.ID() == modelID && route.Supports(operation) {
 			return cloneRoute(route), true

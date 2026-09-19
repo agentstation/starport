@@ -655,7 +655,7 @@ func (p *proxy) GetAuthor(ctx context.Context, authorID string) (response *Autho
 		author, ok = view.AuthorByIDForViewer(snapshot, authorID, policy)
 	}
 	if !ok {
-		return nil, &ProviderError{Code: "not_found", Message: "Author not found"}
+		return nil, &ProviderError{Code: resourceNotFoundCode, Message: "Author not found"}
 	}
 	return &author, nil
 }
@@ -674,7 +674,7 @@ func (p *proxy) GetLogo(ctx context.Context, kind view.LogoKind, id string) (res
 	}()
 	svg, ok := view.Logo(snapshot, kind, id)
 	if !ok {
-		return nil, &ProviderError{Code: "not_found", Message: "Logo not found"}
+		return nil, &ProviderError{Code: resourceNotFoundCode, Message: "Logo not found"}
 	}
 	return svg, nil
 }
@@ -757,6 +757,9 @@ func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (response
 			response, err = nil, refusal
 		}
 	}()
+	if !snapshot.Names(modelID) {
+		return nil, &ProviderError{Code: resourceNotFoundCode, Message: "Model not found"}
+	}
 	if policy, ok := disclosure.FromContext(ctx); ok {
 		return &ModelEndpointsResponse{Model: modelID, Endpoints: view.EndpointsForViewer(snapshot, modelID, policy)}, nil
 	}
