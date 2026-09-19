@@ -50,3 +50,32 @@ func TestReconcilerTerminalFailureRemovesPriorProvider(t *testing.T) {
 		})
 	}
 }
+
+func TestTerminalRefreshFailureRemainsVisibleWhenPublicationFails(t *testing.T) {
+	provider := reconcilerTestProvider("provider")
+	failed := false
+	resolver := &reconcilerTestResolver{resolve: func(context.Context, catalogs.Provider) (config.ProviderConfig, bool, error) {
+		if failed {
+			return config.ProviderConfig{}, false, credentials.NewSourceError(credentials.SourceErrorDenied, "test")
+		}
+		return reconcilerProviderConfig(provider), true, nil
+	}}
+	states := &credentialStateCapture{}
+	view := reconcilerTestView(provider)
+	reconciler, err := NewReconciler(func() (CatalogView, error) { return view, nil }, resolver, nil, func(context.Context, CatalogView, config.ProvidersConfig) error {
+		if failed {
+			return context.DeadlineExceeded
+		}
+		return nil
+	}, time.Second, states)
+	require.NoError(t, err)
+	_, err = reconciler.Reconcile(t.Context(), false)
+	require.NoError(t, err)
+	failed = true
+	_, err = reconciler.Reconcile(t.Context(), true)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	generations := states.snapshot()
+	last := generations[len(generations)-1].Observations[0]
+	require.False(t, last.Usable)
+	require.Equal(t, providerstate.CredentialDenied, last.State)
+}

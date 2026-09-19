@@ -290,7 +290,7 @@ func (r *Reconciler) reconcile(
 		return reportFor(priorRevision, false, next, failures), nil
 	}
 	if err := r.publish(ctx, view, next); err != nil {
-		r.publishCredentialState(view, prior, nil, false)
+		r.publishCredentialState(view, prior, failures, false)
 		return ReconcileReport{}, err
 	}
 
@@ -341,7 +341,7 @@ func (r *Reconciler) publishCredentialState(
 			continue
 		}
 		if resolveErr, failed := failuresByProvider[provider.ID]; failed {
-			if hasConfigured {
+			if hasConfigured && credentials.MayRetainMaterial(resolveErr) {
 				observations = append(observations, providerstate.CredentialObservation{
 					ProviderID:      provider.ID,
 					State:           providerstate.CredentialReady,
