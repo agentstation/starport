@@ -112,6 +112,7 @@ type App struct {
 	incidentTransitions providerstate.TransitionRepository
 	availability        *availability.Tracker
 	advisory            *advisoryWorkers
+	authorization       *authorizationOwner
 	// build is the provenance the admin and health surfaces report, with
 	// the start time New recorded.
 	build controllers.BuildInfo
@@ -231,6 +232,7 @@ func (b *runtimeBuilder) compose() error {
 		b.openStorage,
 		b.prepareInferencePolicy,
 		b.openSQLStore,
+		b.openAuthorization,
 		b.openBlob,
 		b.openEvents,
 		b.openConcepts,
@@ -507,7 +509,7 @@ func (b *runtimeBuilder) openConcepts() error {
 // mode decides whether a deployment is allowed to hold no key at all.
 func (b *runtimeBuilder) openAccountAccess() error {
 	var err error
-	b.accounts, err = account.Open(b.application.store)
+	b.accounts, err = account.Open(b.application.store, account.WithAuthorizationFence(b.application.authorization.kv.BeginMutation))
 	if err != nil {
 		return fmt.Errorf("open account repository: %w", err)
 	}
@@ -517,7 +519,7 @@ func (b *runtimeBuilder) openAccountAccess() error {
 	if _, err := b.accounts.EnsureDefault(context.Background()); err != nil {
 		return fmt.Errorf("ensure the default account: %w", err)
 	}
-	b.apiKeys, err = apikey.Open(b.application.store)
+	b.apiKeys, err = apikey.Open(b.application.store, apikey.WithAuthorizationFence(b.application.authorization.kv.BeginMutation))
 	if err != nil {
 		return fmt.Errorf("open API key repository: %w", err)
 	}
@@ -869,7 +871,7 @@ func (b *runtimeBuilder) openIdentity() error {
 	if !b.config.Identity.Enabled() {
 		return nil
 	}
-	repositories, err := identity.Open(b.sqlDB)
+	repositories, err := identity.Open(b.sqlDB, identity.WithAuthorizationFence(b.application.authorization.sql.BeginMutation))
 	if err != nil {
 		return fmt.Errorf("open identity repositories: %w", err)
 	}
@@ -1227,6 +1229,10 @@ func (a *App) Run(ctx context.Context) error {
 			defer a.runtimeWG.Done()
 			a.catalogCandidateLoop(runCtx)
 		}()
+	}
+
+	if a.authorization != nil {
+		a.authorization.monitor.Start(runCtx)
 	}
 
 	if a.advisory != nil {
