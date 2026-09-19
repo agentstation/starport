@@ -87,6 +87,14 @@ func (r *Registry) Apply(material credentials.Material, request *http.Request) e
 	if err := material.CheckValidity(time.Now()); err != nil {
 		return err
 	}
+	var destination credentials.DestinationAuthorization
+	if material.HasDestinationGrant() {
+		approved, err := material.AuthorizeDestination(request)
+		if err != nil {
+			return err
+		}
+		destination = approved
+	}
 	profile := material.Profile()
 	applicator, exists := r.applicators[profile.Primitive]
 	if !exists {
@@ -95,9 +103,16 @@ func (r *Registry) Apply(material credentials.Material, request *http.Request) e
 	if err := applicator(material, request); err != nil {
 		return err
 	}
+	if material.HasDestinationGrant() {
+		final, err := destination.AfterPlacement(request)
+		if err != nil {
+			return err
+		}
+		destination = final
+	}
 	expiry, expiring := material.ExpiresAt()
-	if expiring || material.Validity() != nil {
-		bound := requestValidity{expiry: expiry, validity: material.Validity()}
+	if expiring || material.Validity() != nil || material.HasDestinationGrant() {
+		bound := requestValidity{expiry: expiry, validity: material.Validity(), destination: destination, approved: material.HasDestinationGrant()}
 		*request = *request.WithContext(context.WithValue(request.Context(), requestValidityKey{}, bound))
 	}
 	return nil
@@ -170,8 +185,10 @@ func applyScheme(scheme catalogs.ProviderCredentialScheme, value string) (string
 
 type requestValidityKey struct{}
 type requestValidity struct {
-	expiry   time.Time
-	validity *credentials.MaterialValidity
+	expiry      time.Time
+	validity    *credentials.MaterialValidity
+	destination credentials.DestinationAuthorization
+	approved    bool
 }
 
 // CheckRequestValidity rechecks a bound credential before the HTTP attempt.
@@ -179,6 +196,11 @@ func CheckRequestValidity(request *http.Request) error {
 	bound, ok := request.Context().Value(requestValidityKey{}).(requestValidity)
 	if !ok {
 		return nil
+	}
+	if bound.approved {
+		if err := bound.destination.Check(request); err != nil {
+			return err
+		}
 	}
 	now := time.Now()
 	if !bound.expiry.IsZero() && !now.Before(bound.expiry) {

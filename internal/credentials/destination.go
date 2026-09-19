@@ -89,7 +89,7 @@ func (g *DestinationGrant) Authorize(identity DestinationIdentity, material Mate
 	for index := range g.targets {
 		target := &g.targets[index]
 		if target.operation == operation && target.matches(request) {
-			return DestinationAuthorization{grant: g, target: target}, nil
+			return DestinationAuthorization{grant: g, target: *target}, nil
 		}
 	}
 	return DestinationAuthorization{}, ErrDestinationUnapproved
@@ -99,16 +99,83 @@ func (g *DestinationGrant) Authorize(identity DestinationIdentity, material Mate
 // Revocation invalidates all authorizations from the grant.
 type DestinationAuthorization struct {
 	grant  *DestinationGrant
-	target *destinationTarget
+	target destinationTarget
 }
 
 // Check refuses revocation or a changed HTTP request target.
 func (a *DestinationAuthorization) Check(request *http.Request) error {
-	if a == nil || a.grant == nil || a.target == nil || a.grant.revoked.Load() ||
+	if a == nil || a.grant == nil || a.grant.revoked.Load() ||
 		request == nil || !validDestinationURL(request.URL) || !a.target.matches(request) {
 		return ErrDestinationUnapproved
 	}
 	return nil
+}
+
+// AfterPlacement binds the final query after approved credential placement.
+// Other target fields must remain unchanged.
+func (a DestinationAuthorization) AfterPlacement(request *http.Request) (DestinationAuthorization, error) {
+	if a.grant == nil || a.grant.revoked.Load() || request == nil || !validDestinationURL(request.URL) {
+		return DestinationAuthorization{}, ErrDestinationUnapproved
+	}
+	final := a
+	final.target.query = request.URL.RawQuery
+	if !final.target.matches(request) || !approvedQueryChange(a.target.query, final.target.query, a.grant.profile.Placements) {
+		return DestinationAuthorization{}, ErrDestinationUnapproved
+	}
+	return final, nil
+}
+
+func approvedQueryChange(before, after string, placements []catalogs.ProviderCredentialPlacement) bool {
+	if before == after {
+		return true
+	}
+	original, err := url.ParseQuery(before)
+	if err != nil {
+		return false
+	}
+	final, err := url.ParseQuery(after)
+	if err != nil {
+		return false
+	}
+	for _, placement := range placements {
+		if placement.Kind == catalogs.ProviderCredentialPlacementQuery {
+			delete(original, placement.Name)
+			delete(final, placement.Name)
+		}
+	}
+	if len(original) != len(final) {
+		return false
+	}
+	for name, values := range original {
+		if !slices.Equal(values, final[name]) {
+			return false
+		}
+	}
+	return true
+}
+
+// WithDestinationGrant binds material to its selected approval and operation.
+// A nil grant remains a bound refusal rather than unrestricted material.
+func (m Material) WithDestinationGrant(grant *DestinationGrant, identity DestinationIdentity, operation catalogs.ProviderOperation) Material {
+	m.destination = &materialDestination{grant: grant, identity: identity, operation: operation}
+	return m
+}
+
+type materialDestination struct {
+	grant     *DestinationGrant
+	identity  DestinationIdentity
+	operation catalogs.ProviderOperation
+}
+
+// HasDestinationGrant reports whether selection supplied a grant binding.
+func (m Material) HasDestinationGrant() bool { return m.destination != nil }
+
+// AuthorizeDestination refuses absent or mismatched destination approval.
+func (m Material) AuthorizeDestination(request *http.Request) (DestinationAuthorization, error) {
+	if m.destination == nil {
+		return DestinationAuthorization{}, ErrDestinationUnapproved
+	}
+	return m.destination.grant.Authorize(m.destination.identity, m, m.destination.operation, request)
 }
 
 func (t *destinationTarget) matches(request *http.Request) bool {
