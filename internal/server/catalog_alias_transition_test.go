@@ -175,27 +175,34 @@ func TestInferenceErrorsDoNotDiscloseDeniedCatalogMembership(t *testing.T) {
 		route, body        string
 		status             int
 		errorType          string
+		operation          catalogs.ProviderOperation
 	}{
-		{"unavailable", false, false, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}]}`, 503, "service_unavailable"},
-		{"unsupported", true, false, "/embeddings", `{"model":"author/current","input":"hello"}`, 400, "invalid_request_error"},
-		{"denied chat", true, true, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}]}`, 404, "not_found_error"},
-		{"denied unsupported", true, true, "/embeddings", `{"model":"author/current","input":"hello"}`, 404, "not_found_error"},
-		{"denied unavailable", false, true, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}]}`, 404, "not_found_error"},
+		{"unavailable", false, false, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}]}`, 503, "service_unavailable", catalogs.ProviderOperationChatCompletions},
+		{"unsupported", true, false, "/embeddings", `{"model":"author/current","input":"hello"}`, 400, "invalid_request_error", catalogs.ProviderOperationChatCompletions},
+		{"denied chat", true, true, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}]}`, 404, "not_found_error", catalogs.ProviderOperationChatCompletions},
+		{"denied unsupported", true, true, "/embeddings", `{"model":"author/current","input":"hello"}`, 404, "not_found_error", catalogs.ProviderOperationChatCompletions},
+		{"denied unavailable", false, true, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}]}`, 404, "not_found_error", catalogs.ProviderOperationChatCompletions},
+		{"unsupported chat", true, false, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}]}`, 400, "invalid_request_error", catalogs.ProviderOperationEmbeddings},
+		{"unsupported stream", true, false, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}],"stream":true}`, 400, "invalid_request_error", catalogs.ProviderOperationEmbeddings},
+		{"denied unsupported chat", true, true, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}]}`, 404, "not_found_error", catalogs.ProviderOperationEmbeddings},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := catalogs.NewEmpty()
 			author := catalogs.Author{ID: "author", Name: "Author"}
 			require.NoError(t, builder.SetAuthor(author))
 			features := &catalogs.ModelFeatures{Modalities: catalogs.ModelModalities{Input: []catalogs.ModelModality{catalogs.ModelModalityText}, Output: []catalogs.ModelModality{catalogs.ModelModalityText}}}
+			if tc.operation == catalogs.ProviderOperationEmbeddings {
+				features.Modalities.Output = []catalogs.ModelModality{catalogs.ModelModalityEmbedding}
+			}
 			require.NoError(t, builder.SetAuthorModel("author", catalogs.Model{ID: "current", Name: "Current", Authors: []catalogs.Author{author}, Features: features}))
-			require.NoError(t, builder.SetProvider(catalogs.Provider{ID: "acme", Name: "Acme", Inference: &catalogs.ProviderInference{BaseURL: "https://provider.test/v1", Endpoints: []catalogs.ProviderInferenceEndpoint{{Operation: catalogs.ProviderOperationChatCompletions, Type: catalogs.EndpointTypeOpenAI, Path: "/chat/completions"}}}, Models: map[string]*catalogs.Model{"private/opaque@001": {ID: "private/opaque@001", ModelRef: "author/current", Name: "Private offering", Status: catalogs.ModelStatusActive, Features: features}}}))
+			require.NoError(t, builder.SetProvider(catalogs.Provider{ID: "acme", Name: "Acme", Inference: &catalogs.ProviderInference{BaseURL: "https://provider.test/v1", Endpoints: []catalogs.ProviderInferenceEndpoint{{Operation: tc.operation, Type: catalogs.EndpointTypeOpenAI, Path: "/chat/completions"}}}, Models: map[string]*catalogs.Model{"private/opaque@001": {ID: "private/opaque@001", ModelRef: "author/current", Name: "Private offering", Status: catalogs.ModelStatusActive, Features: features}}}))
 			accepted, err := builder.Build()
 			require.NoError(t, err)
 			plane, err := runtimecatalog.Open(aliasHTTPSource{state: starmap.CatalogState{Catalog: accepted, GenerationID: "error-policy"}})
 			require.NoError(t, err)
 			var registrations []registry.Registration
 			if tc.registered {
-				registrations = []registry.Registration{{Provider: "acme", Connector: connectors.NewMockConnector(connectors.ProviderConfig{}), Operations: []catalogs.ProviderOperation{catalogs.ProviderOperationChatCompletions}, EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}}}
+				registrations = []registry.Registration{{Provider: "acme", Connector: connectors.NewMockConnector(connectors.ProviderConfig{}), Operations: []catalogs.ProviderOperation{tc.operation}, EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}}}
 			}
 			reg, err := registry.Open(plane, registrations)
 			require.NoError(t, err)

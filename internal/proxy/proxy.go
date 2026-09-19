@@ -283,12 +283,11 @@ func requiredFeatures(req *ChatCompletionRequest, modalities []string) []string 
 	return features
 }
 
-// modalityRefusal converts a planner modality refusal into a caller-facing
-// validation error. Every other routing failure is a gateway or provider
-// condition and answers 503, but a model that cannot read the media the
-// caller sent is a caller mistake, and a retry against the same model will
-// fail the same way.
-func modalityRefusal(err error) error {
+// planningRefusal maps unsupported operations and modalities to caller errors.
+func planningRefusal(err error) error {
+	if errors.Is(err, routing.ErrOperationUnsupported) {
+		return &ValidationError{Field: fieldModel, Message: err.Error()}
+	}
 	if !errors.Is(err, routing.ErrModalityUnsupported) {
 		return nil
 	}
@@ -387,7 +386,7 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 		if errors.Is(err, router.ErrNoModelsAvailable) {
 			return nil, &RoutingError{Model: req.Request.Model, Reason: "no models available for routing", Err: err}
 		}
-		if refusal := modalityRefusal(err); refusal != nil {
+		if refusal := planningRefusal(err); refusal != nil {
 			return nil, refusal
 		}
 		return nil, &RoutingError{
@@ -503,7 +502,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 
 	stream, err := p.router.RouteStream(ctx, routingReq)
 	if err != nil {
-		if refusal := modalityRefusal(err); refusal != nil {
+		if refusal := planningRefusal(err); refusal != nil {
 			return nil, refusal
 		}
 		return nil, &RoutingError{
