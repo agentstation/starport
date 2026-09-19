@@ -24,6 +24,8 @@ type configurationFile struct {
 	location productpaths.Path
 	primary  bool
 	access   string
+	digest   [32]byte
+	loaded   bool
 }
 
 // FileManifest describes selected storage without opening databases or reading credentials.

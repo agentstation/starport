@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -310,6 +311,8 @@ func (l *Loader) sourceLookuper(ctx context.Context, paths Paths) (envconfig.Loo
 			}
 			return nil, fmt.Errorf("read configuration file %q: %w", selected.Path, err)
 		}
+		inputs[len(inputs)-1].digest = sha256.Sum256(data)
+		inputs[len(inputs)-1].loaded = true
 		values, err := godotenv.Unmarshal(string(data))
 		if err != nil {
 			return nil, fmt.Errorf("parse configuration file %q: %w", selected.Path, err)
