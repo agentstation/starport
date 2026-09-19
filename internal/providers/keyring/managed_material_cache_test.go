@@ -2,6 +2,7 @@ package keyring
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -115,8 +116,7 @@ func TestManagedMaterialCapacityDoesNotReadSource(t *testing.T) {
 	provider := syntheticCredentialProvider()
 	cache.active = cache.limits.ConcurrentLoads
 	_, err := cache.resolve(t.Context(), materialIdentity{scope: "account:a", provider: string(provider.ID)}, provider, false, func(context.Context) (credentials.Material, error) {
-		t.Fatal("capacity refusal read credential source")
-		return credentials.Material{}, nil
+		return credentials.Material{}, errors.New("capacity refusal read credential source")
 	})
 	require.ErrorIs(t, err, ErrMaterialCapacity)
 }
