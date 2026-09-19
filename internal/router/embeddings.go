@@ -24,6 +24,9 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 		return nil, ErrNoModelsAvailable
 	}
 	if owned {
+		ctx = connectors.ContextWithRuntimeLease(ctx, runtime)
+	}
+	if owned {
 		defer runtime.Release()
 	}
 

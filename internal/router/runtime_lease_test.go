@@ -26,6 +26,7 @@ func TestRouterRetainsRuntimeLeaseThroughRequestAndStream(t *testing.T) {
 		<-connector.entered
 		lease := registry.currentLease()
 		require.NotNil(t, lease)
+		require.Same(t, lease, connector.requestLease)
 		require.False(t, lease.released.Load())
 		close(connector.continueRequest)
 		require.NoError(t, <-result)
@@ -136,6 +137,7 @@ type blockingLeaseConnector struct {
 	connectors.Connector
 	entered         chan struct{}
 	continueRequest chan struct{}
+	requestLease    connectors.RuntimeLease
 }
 
 func newBlockingLeaseConnector() *blockingLeaseConnector {
@@ -150,6 +152,7 @@ func (c *blockingLeaseConnector) Chat(
 	ctx context.Context,
 	request *connectors.ChatRequest,
 ) (*connectors.ChatResponse, error) {
+	c.requestLease = connectors.RuntimeLeaseFromContext(ctx)
 	close(c.entered)
 	select {
 	case <-ctx.Done():

@@ -107,6 +107,9 @@ func routeOperation[Response any](
 		return nil, ErrNoModelsAvailable
 	}
 	if owned {
+		ctx = connectors.ContextWithRuntimeLease(ctx, runtime)
+	}
+	if owned {
 		defer runtime.Release()
 	}
 

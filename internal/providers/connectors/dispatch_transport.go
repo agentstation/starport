@@ -11,7 +11,7 @@ import (
 	providerauth "github.com/agentstation/starport/internal/providers/auth"
 )
 
-// dispatchTransport reserves protocol capacity before credential validation.
+// dispatchTransport reserves protocol capacity before permission and credential checks.
 // Execution owns retries. Connections never retry a transmitted request here.
 type dispatchTransport struct {
 	base           *http.Transport
@@ -41,7 +41,7 @@ func newDispatchTransport(base *http.Transport) *dispatchTransport {
 func (t *dispatchTransport) signal() { t.wake.signal() }
 
 func (t *dispatchTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	if err := providerauth.CheckRequestValidity(request); err != nil {
+	if err := checkDispatchPermission(request); err != nil {
 		closeRequestBody(request)
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (t *dispatchTransport) RoundTrip(request *http.Request) (*http.Response, er
 		return nil, err
 	}
 	if err = request.Context().Err(); err == nil {
-		err = providerauth.CheckRequestValidity(request)
+		err = checkDispatchPermission(request)
 	}
 	if err != nil {
 		conn.Release()
@@ -86,7 +86,7 @@ func (t *dispatchTransport) reserve(request *http.Request) (*http.ClientConn, er
 		if err := request.Context().Err(); err != nil {
 			return nil, err
 		}
-		if err := providerauth.CheckRequestValidity(request); err != nil {
+		if err := checkDispatchPermission(request); err != nil {
 			return nil, err
 		}
 		t.mu.Lock()
@@ -177,3 +177,14 @@ func (t *dispatchTransport) CloseIdleConnections() {
 }
 
 var _ http.RoundTripper = (*dispatchTransport)(nil)
+
+func checkDispatchPermission(request *http.Request) error {
+	if runtime := RuntimeLeaseFromContext(request.Context()); runtime != nil {
+		if snapshot := runtime.Snapshot(); snapshot != nil {
+			if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+				return refusal
+			}
+		}
+	}
+	return providerauth.CheckRequestValidity(request)
+}

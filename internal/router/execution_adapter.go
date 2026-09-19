@@ -31,6 +31,9 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 	if err != nil {
 		return nil, ErrNoModelsAvailable
 	}
+	if owned {
+		ctx = connectors.ContextWithRuntimeLease(ctx, runtime)
+	}
 	plan, err := r.planRoute(ctx, req, runtime)
 	if err != nil {
 		if owned {

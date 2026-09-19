@@ -229,6 +229,9 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		return nil, ErrNoModelsAvailable
 	}
 	if owned {
+		ctx = connectors.ContextWithRuntimeLease(ctx, runtime)
+	}
+	if owned {
 		defer runtime.Release()
 	}
 	plan, err := r.planRoute(ctx, req, runtime)

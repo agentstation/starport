@@ -4,6 +4,7 @@ import (
 	"context"
 	"io/fs"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,6 +44,11 @@ func authorityAcceptanceSource(t *testing.T) *permissionTestSource {
 // The test supplies a deterministic qualified clock. Native clock qualification is separate.
 func openAuthorityAcceptance(t *testing.T, kv storage.KVStore, directory string, source *permissionTestSource, authority, policy string) *Runtime {
 	t.Helper()
+	return openAuthorityAcceptanceWithClock(t, kv, directory, source, authority, policy, func() time.Time { return time.Date(2026, 9, 11, 0, 0, 1, 0, time.UTC) })
+}
+
+func openAuthorityAcceptanceWithClock(t *testing.T, kv storage.KVStore, directory string, source *permissionTestSource, authority, policy string, clock func() time.Time) *Runtime {
+	t.Helper()
 	accepted, err := NewGenerationStore(kv)
 	require.NoError(t, err)
 	candidates, err := newCandidateGenerationStore(kv)
@@ -57,7 +63,7 @@ func openAuthorityAcceptance(t *testing.T, kv storage.KVStore, directory string,
 	require.NoError(t, err)
 	options = append(options, starmapruntime.WithSource(source), starmapruntime.WithLeaseStore(leases),
 		starmapruntime.WithClientOptions(starmap.WithCatalogStore(candidates)),
-		starmapruntime.WithClock(func() time.Time { return time.Date(2026, 9, 11, 0, 0, 1, 0, time.UTC) }),
+		starmapruntime.WithClock(clock),
 		starmapruntime.WithPermissionClockUncertainty(func() (time.Duration, bool) { return time.Millisecond, true }))
 	connected, err := starmapruntime.Open(t.Context(), options...)
 	require.NoError(t, err)
@@ -186,4 +192,54 @@ func TestAuthorityFutureSchemaPermissionEnvelope(t *testing.T) {
 			require.NotNil(t, retained.Catalog())
 		})
 	}
+}
+
+func TestAuthorityPartitionRefusesAtPermissionExpiry(t *testing.T) {
+	source := authorityAcceptanceSource(t)
+	var now atomic.Int64
+	now.Store(source.receipt.IssuedAt.Add(time.Second).UnixNano())
+	r := openAuthorityAcceptanceWithClock(t, authoritySnapshotBadger(t, t.TempDir()), filepath.Join(t.TempDir(), "runtime"), source, "enterprise", "production", func() time.Time { return time.Unix(0, now.Load()) })
+	acceptAuthorityGeneration(t, r)
+	retained := r.ControlPlane().Current()
+	source.mu.Lock()
+	source.failure, source.permissionFailure = fs.ErrNotExist, fs.ErrNotExist
+	source.mu.Unlock()
+	require.Error(t, r.runtime.RefreshPermission(t.Context()))
+	require.True(t, retained.AllowsNewAttempt())
+	now.Store(source.receipt.ValidUntil.Add(-2 * time.Millisecond).UnixNano())
+	require.True(t, retained.AllowsNewAttempt())
+	now.Store(source.receipt.ValidUntil.UnixNano())
+	require.False(t, retained.AllowsNewAttempt())
+	require.NotNil(t, retained.CheckNewAttempt())
+	require.Same(t, retained, r.ControlPlane().Current())
+	require.Len(t, retained.Catalog().Definitions(), 1)
+}
+
+func TestAuthorityWithdrawalPersistsAcrossOfflineRestart(t *testing.T) {
+	kvPath, directory := t.TempDir(), filepath.Join(t.TempDir(), "runtime")
+	kv := authoritySnapshotBadger(t, kvPath)
+	source := authorityAcceptanceSource(t)
+	r := openAuthorityAcceptance(t, kv, directory, source, "enterprise", "production")
+	acceptAuthorityGeneration(t, r)
+	retained := r.ControlPlane().Current()
+	next := authorityAcceptanceGeneration(t, 2, "replacement")
+	source.mu.Lock()
+	source.receipt.Head = next.Manifest.AuthorityHead
+	source.failure = fs.ErrNotExist
+	source.mu.Unlock()
+	_, err := r.RefreshCandidate(t.Context(), 0)
+	require.Error(t, err)
+	require.False(t, retained.AllowsNewAttempt())
+	require.NoError(t, r.Close(t.Context()))
+	require.NoError(t, kv.Close())
+	source.mu.Lock()
+	source.permissionFailure = fs.ErrNotExist
+	source.mu.Unlock()
+	reopened := authoritySnapshotBadger(t, kvPath)
+	warm := openAuthorityAcceptance(t, reopened, directory, source, "enterprise", "production")
+	current := warm.ControlPlane().Current()
+	require.Equal(t, retained.GenerationID(), current.GenerationID())
+	require.Len(t, current.Catalog().Definitions(), 1)
+	require.False(t, current.AllowsNewAttempt())
+	require.NotNil(t, current.CheckNewAttempt())
 }
