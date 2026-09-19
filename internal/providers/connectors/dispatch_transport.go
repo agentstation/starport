@@ -19,7 +19,7 @@ type dispatchTransport struct {
 	mu             sync.Mutex
 	connections    []*dispatchConnection
 	dialing        map[string]int
-	changed        chan struct{}
+	wake           dispatchWake
 }
 
 type dispatchConnection struct {
@@ -35,15 +35,10 @@ func newDispatchTransport(base *http.Transport) *dispatchTransport {
 	base = base.Clone()
 	// ClientConn capacity belongs to this pool, not Transport.RoundTrip.
 	base.MaxConnsPerHost = 0
-	return &dispatchTransport{maxConnections: limit, base: base, dialing: make(map[string]int), changed: make(chan struct{}, 1)}
+	return &dispatchTransport{maxConnections: limit, base: base, dialing: make(map[string]int)}
 }
 
-func (t *dispatchTransport) signal() {
-	select {
-	case t.changed <- struct{}{}:
-	default:
-	}
-}
+func (t *dispatchTransport) signal() { t.wake.signal() }
 
 func (t *dispatchTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if err := providerauth.CheckRequestValidity(request); err != nil {
@@ -87,6 +82,7 @@ func (t *dispatchTransport) reserve(request *http.Request) (*http.ClientConn, er
 		trace.GetConn(address)
 	}
 	for {
+		revision := t.wake.revision.Load()
 		if err := request.Context().Err(); err != nil {
 			return nil, err
 		}
@@ -135,10 +131,14 @@ func (t *dispatchTransport) reserve(request *http.Request) (*http.ClientConn, er
 			continue
 		}
 		t.mu.Unlock()
+		changed := t.wake.subscribe(revision)
+		if changed == nil {
+			continue
+		}
 		select {
 		case <-request.Context().Done():
 			return nil, request.Context().Err()
-		case <-t.changed:
+		case <-changed:
 		}
 	}
 }
@@ -150,25 +150,14 @@ func (t *dispatchTransport) addConnection(conn *http.ClientConn, origin string) 
 		idle = providerIdleConnectionTimeout
 	}
 	entry.idleSince.Store(time.Now().UnixNano())
-	entry.timer = time.AfterFunc(idle, func() {
-		t.mu.Lock()
-		defer t.mu.Unlock()
-		if conn.InFlight() == 0 && (entry.retired.Load() || time.Since(time.Unix(0, entry.idleSince.Load())) >= idle) {
-			_ = conn.Close()
-			t.signal()
-		}
-	})
+	entry.timer = time.AfterFunc(idle, t.maintainIdle)
 	t.connections = append(t.connections, entry)
 	conn.SetStateHook(func(conn *http.ClientConn) {
 		if conn.Err() != nil {
-			entry.timer.Stop()
+			entry.timer.Reset(0)
 		} else if conn.InFlight() == 0 {
 			entry.idleSince.Store(time.Now().UnixNano())
-			if entry.retired.Load() {
-				entry.timer.Reset(0)
-			} else {
-				entry.timer.Reset(idle)
-			}
+			entry.timer.Reset(0)
 		}
 		t.signal()
 	})
