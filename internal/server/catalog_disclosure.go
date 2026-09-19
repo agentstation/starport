@@ -14,7 +14,8 @@ func (s *Server) requireCatalogDisclosure(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		refuse := func() {
-			writeProtocolError(w, r, http.StatusServiceUnavailable, "server_error", "Catalog is unavailable")
+			w.Header().Set("Retry-After", "30")
+			writeProtocolError(w, r, http.StatusServiceUnavailable, "server_error", "The catalog is not available.")
 		}
 		if s.discoveryRegistry == nil {
 			refuse()

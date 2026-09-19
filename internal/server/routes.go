@@ -181,9 +181,9 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			// alone: no source address, no publication chain, no lease, and
 			// no failure reason. The operational view sits behind the admin
 			// scope at /api/v1/admin/catalog/status.
-			r.With(s.requireAnyScope("models:read")).Get("/catalog", s.controllers.Catalog.Summary)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/catalog", s.controllers.Catalog.Summary)
 			r.With(s.requireAnyScope("models:read")).Get("/catalog/discovery", s.controllers.Discovery.List)
-			r.With(s.requireAnyScope("models:read")).Get("/catalog/changes", s.controllers.Catalog.Changes)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/catalog/changes", s.controllers.Catalog.Changes)
 
 			// Shared credentials: the operator shares provider credentials
 			// with the deployment's accounts. This needs the admin scope and

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/account"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 )
 
@@ -153,8 +154,14 @@ func operatorStatus() runtimecatalog.AdminStatus {
 func TestSafeCatalogRouteProjectsAllowlistedSummaryOnly(t *testing.T) {
 	operations := &catalogOperationsStub{status: operatorStatus()}
 	server := newTestServer(
-		t, &Config{MaxRequestSize: 1 << 20}, withTestCatalogOperations(operations),
+		t, &Config{MaxRequestSize: 1 << 20}, withRoutableCatalog(), withTestCatalogOperations(operations),
 	)
+	generation := bindTestCatalogGeneration(t, server, operations)
+	record, err := server.accounts.GetByID(t.Context(), account.DefaultID)
+	require.NoError(t, err)
+	record.Account.Access = []account.ProviderAccess{{Provider: "anthropic"}}
+	_, err = server.accounts.Update(t.Context(), record.Account, record.Revision)
+	require.NoError(t, err)
 	secret := createServerAPIKey(t, server, "catalog-reader", []string{"models:read"})
 
 	recorder := serveAuthorized(
@@ -173,11 +180,12 @@ func TestSafeCatalogRouteProjectsAllowlistedSummaryOnly(t *testing.T) {
 	for name := range body {
 		assert.Contains(t, allowed, name, "the reader view serves an allowlist")
 	}
-	assert.Equal(t, "gen-2", body["generation_id"])
+	assert.Equal(t, generation, body["generation_id"])
 	assert.Equal(t, float64(42), body["age_seconds"])
 	assert.Equal(t, "current", body["freshness"])
 	assert.Equal(t, "starmap", body["source_kind"])
-	assert.Equal(t, float64(4), body["providers"])
+	assert.Equal(t, float64(1), body["providers"])
+	assert.Equal(t, float64(0), body["models"])
 
 	for _, sentinel := range []string{
 		sentinelLease, sentinelIdentity, sentinelRunID, sentinelReason,
@@ -212,7 +220,7 @@ func TestSafeCatalogRouteAnswersMissingCatalogWithSanitized503(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			options := []testServerOption{}
+			options := []testServerOption{withRoutableCatalog()}
 			if test.compose {
 				options = append(options, withTestCatalogOperations(test.operations))
 			}
@@ -397,8 +405,9 @@ func TestAdminCatalogStatusReportsRouteValidationState(t *testing.T) {
 			operations := &catalogOperationsStub{status: status}
 			server := newTestServer(
 				t, &Config{MaxRequestSize: 1 << 20},
-				withTestCatalogOperations(operations),
+				withRoutableCatalog(), withTestCatalogOperations(operations),
 			)
+			bindTestCatalogGeneration(t, server, operations)
 			secret := createServerAPIKey(
 				t, server, "catalog-admin", []string{"admin"},
 			)
@@ -427,4 +436,14 @@ func TestAdminCatalogStatusReportsRouteValidationState(t *testing.T) {
 		})
 	}
 	assert.Len(t, seen, 4, "four distinct route-validation states")
+}
+
+func bindTestCatalogGeneration(t *testing.T, server *Server, operations *catalogOperationsStub) string {
+	t.Helper()
+	lease, err := server.discoveryRegistry.AcquireRuntime()
+	require.NoError(t, err)
+	defer lease.Release()
+	generation := lease.Snapshot().GenerationID()
+	operations.status.Provenance.Effective.GenerationID = generation
+	return generation
 }

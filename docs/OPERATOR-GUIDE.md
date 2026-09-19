@@ -1044,7 +1044,7 @@ generation with no source request.
 | --- | --- | --- |
 | `GET /api/v1/catalog` | `models:read` | The allowlisted reader summary. |
 | `GET /api/v1/catalog/discovery` | `models:read` | Permitted model and offering membership, including entries without ready adapters. |
-| `GET /api/v1/catalog/changes` | `models:read` | What the last accepted generation changed. |
+| `GET /api/v1/catalog/changes` | `models:read` | Permitted changes between accepted generations. |
 | `GET /api/v1/admin/catalog/status` | `admin` | The complete operator view. |
 | `POST /api/v1/admin/catalog/refresh` | `admin` | Start one refresh run. |
 | `GET /api/v1/admin/catalog/refreshes/{run_id}` | `admin` | Read one run. |
@@ -1067,6 +1067,13 @@ Routable operations do not establish permission or usable credentials for the ca
 Discovery does not contact providers or secret managers. It reloads identity records before projection and before delivery.
 A policy change, unreadable identity record, or authority withdrawal causes a sanitized `503` response without catalog facts.
 Responses use `Cache-Control: no-store`. Existing compatibility model lists retain their membership contract.
+
+Reader summaries count permitted providers with accepted offerings and permitted routable model definitions.
+The change feed filters model IDs, offerings, and prices through current caller permissions.
+The feed omits historical records outside current permitted membership, including removed private records.
+Use the discovery snapshot to reconcile current membership.
+The reader feed's `semantically_equal` field reports whether its listed changes are empty.
+A generation mismatch produces a sanitized `503` with `Retry-After: 30`.
 
 ### Freshness alert rules
 
