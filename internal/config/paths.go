@@ -14,6 +14,8 @@ import (
 
 const pathOriginGoOption = "go-option"
 const pathOriginDefault = "default"
+const pathRoleConfiguration = "configuration"
+
 const pathRoleSQLite = "sqlite"
 const pathRoleBadger = "badger"
 const pathRoleFiles = "files"
@@ -139,7 +141,7 @@ func (l *Loader) bootstrapPaths() (Paths, error) {
 			return Paths{}, fmt.Errorf("STARPORT_CONFIG_FILE: %w", err)
 		}
 		paths.ConfigFile, paths.configExplicit = path.Path, true
-		paths.Origins["configuration"] = path
+		paths.Origins[pathRoleConfiguration] = path
 	}
 	return paths, nil
 }
@@ -162,8 +164,8 @@ func (l *Loader) managedPaths(bootstrap Paths, source envconfig.Lookuper, layers
 	}
 	paths := pathsFromRoots(roots)
 	paths.ConfigFile, paths.configExplicit = bootstrap.ConfigFile, bootstrap.configExplicit
-	if origin, ok := bootstrap.Origins["configuration"]; ok {
-		paths.Origins["configuration"] = origin
+	if origin, ok := bootstrap.Origins[pathRoleConfiguration]; ok {
+		paths.Origins[pathRoleConfiguration] = origin
 	}
 	if l.resolvePaths != nil {
 		paths.BadgerDir, paths.SQLiteFile, paths.FilesDir = bootstrap.BadgerDir, bootstrap.SQLiteFile, bootstrap.FilesDir

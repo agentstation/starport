@@ -49,7 +49,7 @@ func (p Paths) legacyCandidates() ([]LegacyPath, error) {
 		}
 		legacyConfig = filepath.Join(root, "starport")
 		if !p.configExplicit {
-			add("configuration", filepath.Join(legacyConfig, "config.env"), p.ConfigFile, "STARPORT_CONFIG_FILE", "")
+			add(pathRoleConfiguration, filepath.Join(legacyConfig, "config.env"), p.ConfigFile, "STARPORT_CONFIG_FILE", "")
 		}
 	}
 	previous := PathsForConfigDir(legacyConfig)
@@ -151,7 +151,7 @@ func (c *Config) LegacyPaths(ctx context.Context) ([]LegacyPath, error) {
 	selected := make([]LegacyPath, 0, len(candidates))
 	for _, candidate := range candidates {
 		switch candidate.Role {
-		case "configuration":
+		case pathRoleConfiguration:
 			if !primary {
 				continue
 			}

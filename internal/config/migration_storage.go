@@ -21,7 +21,7 @@ func (c StorageConfig) MigrationStorageSelection() (string, error) {
 		selection = "badger\x00" + filepath.Clean(c.Badger.Path)
 	case storageModeValkey:
 		endpoint, err := url.Parse(c.Valkey.URL)
-		if err != nil || endpoint.Host == "" || (endpoint.Scheme != "valkey" && endpoint.Scheme != "redis") {
+		if err != nil || endpoint.Host == "" || (endpoint.Scheme != storageModeValkey && endpoint.Scheme != "redis") {
 			return "", fmt.Errorf("migration requires a valid Valkey endpoint")
 		}
 		// The adapter selects the address and database independently of credentials.

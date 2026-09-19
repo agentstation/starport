@@ -59,7 +59,7 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 		}
 		report.Files = append(report.Files, entry)
 	}
-	add("configuration", p.ConfigFile, "file", fileDisabled, policy.OwnerOnly,
+	add(pathRoleConfiguration, p.ConfigFile, "file", fileDisabled, policy.OwnerOnly,
 		"The loader reads the selected primary file.", "Preserve configuration and required secret access.", "STARPORT_CONFIG_FILE", "STARPORT_CONFIG_DIR", "STARPORT_CONFIG_ACCESS")
 	for index, input := range c.fileInputs {
 		if input.primary {
@@ -76,8 +76,8 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 	add(pathRoleBadger, p.BadgerDir, fileKindTree, badger, policy.OwnerOnly,
 		"The local KV backend opens this directory.", "Back up durable KV records and accepted catalog generations consistently. Do not share this directory between processes.", badgerPathEnvironment)
 	for _, item := range []struct{ id, path, kind, origin, creation string }{
-		{"setup-transaction", siblingPath(p.ConfigFile, ".starport-setup"), fileKindTree, "configuration", "Local setup retains its transaction and stable lock."},
-		{"setup-config-publications", siblingPath(p.ConfigFile, ".record-publications"), fileKindTree, "configuration", "Local setup publishes configuration through private records."},
+		{"setup-transaction", siblingPath(p.ConfigFile, ".starport-setup"), fileKindTree, pathRoleConfiguration, "Local setup retains its transaction and stable lock."},
+		{"setup-config-publications", siblingPath(p.ConfigFile, ".record-publications"), fileKindTree, pathRoleConfiguration, "Local setup publishes configuration through private records."},
 		{"setup-storage-guard", siblingPath(p.BadgerDir, ".starport-setup-"+filepath.Base(p.BadgerDir)), fileKindTree, pathRoleBadger, "Local setup and gateway startup coordinate database ownership."},
 		{"setup-database-stage", siblingPath(p.BadgerDir, ""), "patterns", pathRoleBadger, "Local setup stages databases and retains interrupted rollback state."},
 	} {
@@ -185,7 +185,7 @@ func (c *Config) addExternalStorage(report *productpaths.FileManifest) {
 		})
 	}
 	if c.Storage.Mode == storageModeValkey {
-		add("kv", "valkey", "Preserve durable records and accepted catalog generations. Do not fall back to local Badger on an outage.")
+		add("kv", storageModeValkey, "Preserve durable records and accepted catalog generations. Do not fall back to local Badger on an outage.")
 	} else if c.Storage.Badger.inMemory {
 		add("kv", "process-memory", "Development records expire with the process.")
 	}
