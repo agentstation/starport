@@ -43,7 +43,10 @@ func (k *KV) read(ctx context.Context) (Stamp, []byte, error) {
 	if err := ctx.Err(); err != nil {
 		return Stamp{}, nil, err
 	}
-	data, err := k.store.Get(ctx, key)
+	data, err := k.store.GetBounded(ctx, key, 1024)
+	if errors.Is(err, storage.ErrValueTooLarge) {
+		return Stamp{}, nil, ErrCorrupt
+	}
 	if err != nil {
 		return Stamp{}, nil, err
 	}

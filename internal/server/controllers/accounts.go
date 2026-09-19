@@ -193,6 +193,9 @@ func (h *AccountsController) Create(w http.ResponseWriter, r *http.Request) {
 	record, err := h.accounts.Create(r.Context(), candidate)
 	writeAudit(r.Context(), h.audit, "account.create", candidate.ID, err)
 	if err != nil {
+		if writePolicySizeRefusal(w, err) {
+			return
+		}
 		if errors.Is(err, account.ErrConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest,
 				"An account with this id already exists")
@@ -248,6 +251,9 @@ func (h *AccountsController) Update(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.accounts.Update(r.Context(), edited, record.Revision)
 	writeAudit(r.Context(), h.audit, "account.update", edited.ID, err)
 	if err != nil {
+		if writePolicySizeRefusal(w, err) {
+			return
+		}
 		if errors.Is(err, account.ErrConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest,
 				"Account changed during update")

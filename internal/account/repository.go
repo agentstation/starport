@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/agentstation/starport/internal/policyrecord"
 	"sort"
 	"strings"
 	"time"
@@ -93,7 +94,7 @@ func (r *repository) Create(ctx context.Context, value Account) (Record, error) 
 	if err := stored.Account.Validate(); err != nil {
 		return Record{}, err
 	}
-	data, err := json.Marshal(stored)
+	data, err := policyrecord.Marshal(stored)
 	if err != nil {
 		return Record{}, fmt.Errorf("encode account record: %w", err)
 	}
@@ -137,7 +138,7 @@ func (r *repository) GetByID(ctx context.Context, id string) (Record, error) {
 	if strings.TrimSpace(id) == "" {
 		return Record{}, ErrMissingID
 	}
-	data, err := r.store.Get(ctx, accountStorageKey(id))
+	data, err := r.store.GetBounded(ctx, accountStorageKey(id), policyrecord.MaxBytes)
 	if err != nil {
 		return Record{}, mapReadError("get account", err)
 	}
@@ -228,7 +229,7 @@ func (r *repository) Update(ctx context.Context, value Account, expectedRevision
 		Revision:      current.Revision + 1,
 		Account:       updatedAccount,
 	}
-	updatedData, err := json.Marshal(updated)
+	updatedData, err := policyrecord.Marshal(updated)
 	if err != nil {
 		return Record{}, fmt.Errorf("encode account update: %w", err)
 	}
@@ -247,7 +248,7 @@ func (r *repository) Delete(ctx context.Context, id string, expectedRevision uin
 	if id == DefaultID {
 		return ErrDefaultImmutable
 	}
-	data, err := r.store.Get(ctx, accountStorageKey(id))
+	data, err := r.store.GetBounded(ctx, accountStorageKey(id), policyrecord.MaxBytes)
 	if err != nil {
 		return mapReadError("get account for delete", err)
 	}

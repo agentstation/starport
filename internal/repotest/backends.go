@@ -75,6 +75,10 @@ func (s *namespacedStore) logicalKey(key string) string {
 	return strings.TrimPrefix(key, s.prefix)
 }
 
+func (s *namespacedStore) GetBounded(ctx context.Context, key string, limit int) ([]byte, error) {
+	return s.KVStore.GetBounded(ctx, s.key(key), limit)
+}
+
 func (s *namespacedStore) Get(ctx context.Context, key string) ([]byte, error) {
 	return s.KVStore.Get(ctx, s.key(key))
 }

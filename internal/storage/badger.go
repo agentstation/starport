@@ -129,7 +129,22 @@ func badgerOpenError(readOnly bool, err error) error {
 // Basic operations
 
 // Get retrieves a value by key
-func (s *BadgerStore) Get(_ context.Context, key string) ([]byte, error) {
+func (s *BadgerStore) Get(ctx context.Context, key string) ([]byte, error) {
+	return s.getBounded(ctx, key, 0)
+}
+
+// GetBounded checks the stored size before copying the value.
+func (s *BadgerStore) GetBounded(ctx context.Context, key string, maxBytes int) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, ErrInvalidReadLimit
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return s.getBounded(ctx, key, maxBytes)
+}
+
+func (s *BadgerStore) getBounded(_ context.Context, key string, maxBytes int) ([]byte, error) {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
@@ -156,6 +171,9 @@ func (s *BadgerStore) Get(_ context.Context, key string) ([]byte, error) {
 			return ErrNotFound
 		}
 
+		if maxBytes > 0 && item.ValueSize() > int64(maxBytes) {
+			return ErrValueTooLarge
+		}
 		value, err = item.ValueCopy(nil)
 		return err
 	})

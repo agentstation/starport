@@ -29,6 +29,21 @@ type MockStore struct {
 
 // Get retrieves a value by key
 func (m *MockStore) Get(ctx context.Context, key string) ([]byte, error) {
+	return m.getBounded(ctx, key, 0)
+}
+
+// GetBounded checks the stored size before copying the value.
+func (m *MockStore) GetBounded(ctx context.Context, key string, maxBytes int) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, ErrInvalidReadLimit
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return m.getBounded(ctx, key, maxBytes)
+}
+
+func (m *MockStore) getBounded(ctx context.Context, key string, maxBytes int) ([]byte, error) {
 	if err := m.checkContext(ctx); err != nil {
 		return nil, err
 	}
@@ -49,6 +64,9 @@ func (m *MockStore) Get(ctx context.Context, key string) ([]byte, error) {
 		return nil, ErrNotFound
 	}
 
+	if maxBytes > 0 && len(value) > maxBytes {
+		return nil, ErrValueTooLarge
+	}
 	// Return a copy to prevent external modification
 	result := make([]byte, len(value))
 	copy(result, value)

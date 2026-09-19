@@ -2,8 +2,10 @@ package identity
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/agentstation/starport/internal/sqlstore"
 )
 
 // ErrAccountSelectionRequired reports more than one granted account without a selection.
@@ -14,7 +16,11 @@ func (r *accountGrantRepository) ResolveAccount(ctx context.Context, userID, sel
 	if !validID(userID) || (selected != "" && !validID(selected)) {
 		return "", ErrMissingID
 	}
-	rows, err := r.db.QueryContext(ctx, r.db.Bind(`SELECT account_id FROM (
+	size := "OCTET_LENGTH(account_id)"
+	if r.db.Dialect() == sqlstore.TypeSQLite {
+		size = "LENGTH(CAST(account_id AS BLOB))"
+	}
+	rows, err := r.db.QueryContext(ctx, r.db.Bind(`SELECT CASE WHEN `+size+` > 191 THEN NULL ELSE account_id END FROM (
  SELECT account_id FROM account_grants WHERE user_id = ?
  UNION
  SELECT g.account_id FROM account_grants g JOIN team_memberships m ON m.team_id = g.team_id WHERE m.user_id = ?
@@ -26,8 +32,13 @@ func (r *accountGrantRepository) ResolveAccount(ctx context.Context, userID, sel
 	var account string
 	count := 0
 	for rows.Next() {
-		if err := rows.Scan(&account); err != nil {
+		var value sql.NullString
+		if err := rows.Scan(&value); err != nil {
 			return "", fmt.Errorf("read selected account: %w", err)
+		}
+		account = value.String
+		if !value.Valid || !validID(account) {
+			return "", ErrMissingID
 		}
 		count++
 	}

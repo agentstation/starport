@@ -334,6 +334,19 @@ An authorization cache deadline cannot replace that catalog contract.
 Budget windows use the admission authority's time. Strict budgets still refuse unknown capacity.
 A clock-dependent lease protocol must separately establish its required clock bounds.
 
+### Authorization record limits
+
+Each encoded key, account, user, and team record has a 64 KiB limit.
+Key and account reads check stored size before copying the value from Badger or returning it from Valkey.
+SQL user and team reads suppress oversized payloads before the driver receives them.
+An oversized record is an error. It never means that a policy or budget is absent.
+
+Repositories refuse policy writes above the limit. Administrative key, account, and team writes return HTTP 413 with a size diagnostic.
+Reduce record size without removing required access restrictions. The encoded size includes metadata.
+
+The combined cached authorization bundle also has a 64 KiB limit.
+The cache holds at most 1,024 bundles and 16 MiB of encoded policy. These limits do not measure total Go heap usage.
+
 ### Authorization recovery diagnostics
 
 Read `GET /api/v1/admin/info` for this replica's `authorization` report.

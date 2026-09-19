@@ -281,6 +281,9 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	if err != nil {
+		if writePolicySizeRefusal(w, err) {
+			return
+		}
 		if isKeyValidationError(err) {
 			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 			return
@@ -504,6 +507,9 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.apiKeys.Update(ctx, apiKey, record.Revision)
 	writeAudit(ctx, h.audit, "key.update", keyID, err)
 	if err != nil {
+		if writePolicySizeRefusal(w, err) {
+			return
+		}
 		if errors.Is(err, apikey.ErrConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest, "API key changed during update")
 			return

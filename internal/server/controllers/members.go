@@ -172,6 +172,9 @@ func (h *MembersController) CreateTeam(w http.ResponseWriter, r *http.Request) {
 	record, err := h.identity.Teams.Create(r.Context(), candidate)
 	writeAudit(r.Context(), h.audit, "team.create", candidate.ID, err)
 	if err != nil {
+		if writePolicySizeRefusal(w, err) {
+			return
+		}
 		log.Error().Err(err).Str(fieldTeamID, candidate.ID).Msg("Failed to create team")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to create team")
 		return
@@ -224,6 +227,9 @@ func (h *MembersController) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.identity.Teams.Update(r.Context(), candidate, record.Revision)
 	writeAudit(r.Context(), h.audit, "team.update", candidate.ID, err)
 	if err != nil {
+		if writePolicySizeRefusal(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, identity.ErrTeamNotFound):
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Team not found")

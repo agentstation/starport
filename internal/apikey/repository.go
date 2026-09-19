@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/agentstation/starport/internal/policyrecord"
 	"sort"
 	"strings"
 
@@ -124,7 +125,7 @@ func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (R
 		return Record{}, err
 	}
 	stored := apiKeyRecord{SchemaVersion: StorageSchemaVersion, Revision: 1, APIKey: cloneAPIKey(apiKey)}
-	data, err := json.Marshal(stored)
+	data, err := policyrecord.Marshal(stored)
 	if err != nil {
 		return Record{}, fmt.Errorf("encode API key record: %w", err)
 	}
@@ -317,7 +318,7 @@ func (r *repository) GetByID(ctx context.Context, id string) (Record, error) {
 	if strings.TrimSpace(id) == "" {
 		return Record{}, ErrMissingID
 	}
-	data, err := r.store.Get(ctx, apiKeyStorageKey(id))
+	data, err := r.store.GetBounded(ctx, apiKeyStorageKey(id), policyrecord.MaxBytes)
 	if err != nil {
 		return Record{}, mapReadError("get API key", err)
 	}
@@ -335,7 +336,7 @@ func (r *repository) GetByHash(ctx context.Context, hash string) (Record, error)
 	if strings.TrimSpace(hash) == "" {
 		return Record{}, ErrMissingHash
 	}
-	data, err := r.store.Get(ctx, hashStorageKey(hash))
+	data, err := r.store.GetBounded(ctx, hashStorageKey(hash), policyrecord.MaxBytes)
 	if err != nil {
 		return Record{}, mapReadError("get API key hash", err)
 	}
@@ -412,7 +413,7 @@ func (r *repository) Update(ctx context.Context, apiKey APIKey, expectedRevision
 		Revision:      current.Revision + 1,
 		APIKey:        cloneAPIKey(apiKey),
 	}
-	updatedData, err := json.Marshal(updated)
+	updatedData, err := policyrecord.Marshal(updated)
 	if err != nil {
 		return Record{}, fmt.Errorf("encode API key update: %w", err)
 	}
@@ -426,7 +427,7 @@ func (r *repository) Delete(ctx context.Context, id string, expectedRevision uin
 	if strings.TrimSpace(id) == "" {
 		return ErrMissingID
 	}
-	data, err := r.store.Get(ctx, apiKeyStorageKey(id))
+	data, err := r.store.GetBounded(ctx, apiKeyStorageKey(id), policyrecord.MaxBytes)
 	if err != nil {
 		return mapReadError("get API key for delete", err)
 	}

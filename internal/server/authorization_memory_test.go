@@ -26,6 +26,11 @@ func (s *authorizationReadStore) Get(ctx context.Context, key string) ([]byte, e
 	return s.KVStore.Get(ctx, key)
 }
 
+func (s *authorizationReadStore) GetBounded(ctx context.Context, key string, limit int) ([]byte, error) {
+	s.reads.Add(1)
+	return s.KVStore.GetBounded(ctx, key, limit)
+}
+
 func authorizationFixture(t *testing.T, store storage.KVStore) (apikey.Repository, account.Repository, string) {
 	t.Helper()
 	keys, err := apikey.Open(store)

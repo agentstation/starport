@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/agentstation/starport/internal/policyrecord"
 	"time"
 
 	"github.com/agentstation/starport/internal/authorization/revision"
@@ -134,7 +135,7 @@ func (r *userRepository) Create(ctx context.Context, value User) (UserRecord, er
 	if err := stored.User.Validate(); err != nil {
 		return UserRecord{}, err
 	}
-	data, err := json.Marshal(stored)
+	data, err := policyrecord.Marshal(stored)
 	if err != nil {
 		return UserRecord{}, fmt.Errorf("encode user record: %w", err)
 	}
@@ -174,17 +175,20 @@ func (r *userRepository) GetBySubject(ctx context.Context, subject string) (User
 // string in this file is a compile-time constant; the argument only ever
 // rides a placeholder.
 func (r *userRepository) getWhere(ctx context.Context, query, argument string) (UserRecord, error) {
-	var data string
+	var data sql.NullString
 	// #nosec G701 -- Both callers pass a compile-time constant query; the
 	// argument only ever rides the placeholder.
-	err := r.db.QueryRowContext(ctx, r.db.Bind(query), argument).Scan(&data)
+	err := r.db.QueryRowContext(ctx, r.db.Bind(boundedIdentityQuery(r.db.Dialect(), query)), policyrecord.MaxBytes, argument).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return UserRecord{}, ErrUserNotFound
 	}
 	if err != nil {
 		return UserRecord{}, fmt.Errorf("get user: %w", err)
 	}
-	stored, err := decodeUser(data)
+	if !data.Valid {
+		return UserRecord{}, policyrecord.ErrTooLarge
+	}
+	stored, err := decodeUser(data.String)
 	if err != nil {
 		return UserRecord{}, err
 	}
@@ -224,7 +228,7 @@ func (r *userRepository) Update(ctx context.Context, value User, expectedRevisio
 	if err := updated.User.Validate(); err != nil {
 		return UserRecord{}, err
 	}
-	data, err := json.Marshal(updated)
+	data, err := policyrecord.Marshal(updated)
 	if err != nil {
 		return UserRecord{}, fmt.Errorf("encode user update: %w", err)
 	}
@@ -306,7 +310,7 @@ func (r *teamRepository) Create(ctx context.Context, value Team) (TeamRecord, er
 	if err := stored.Team.Validate(); err != nil {
 		return TeamRecord{}, err
 	}
-	data, err := json.Marshal(stored)
+	data, err := policyrecord.Marshal(stored)
 	if err != nil {
 		return TeamRecord{}, fmt.Errorf("encode team record: %w", err)
 	}
@@ -327,9 +331,9 @@ func (r *teamRepository) GetByID(ctx context.Context, id string) (TeamRecord, er
 	if id == "" {
 		return TeamRecord{}, ErrMissingID
 	}
-	var data string
+	var data sql.NullString
 	err := r.db.QueryRowContext(ctx,
-		r.db.Bind(`SELECT record FROM teams WHERE id = ?`), id,
+		r.db.Bind(boundedIdentityQuery(r.db.Dialect(), `SELECT record FROM teams WHERE id = ?`)), policyrecord.MaxBytes, id,
 	).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return TeamRecord{}, ErrTeamNotFound
@@ -337,7 +341,10 @@ func (r *teamRepository) GetByID(ctx context.Context, id string) (TeamRecord, er
 	if err != nil {
 		return TeamRecord{}, fmt.Errorf("get team: %w", err)
 	}
-	stored, err := decodeTeam(data)
+	if !data.Valid {
+		return TeamRecord{}, policyrecord.ErrTooLarge
+	}
+	stored, err := decodeTeam(data.String)
 	if err != nil {
 		return TeamRecord{}, err
 	}
@@ -374,7 +381,7 @@ func (r *teamRepository) Update(ctx context.Context, value Team, expectedRevisio
 	if err := updated.Team.Validate(); err != nil {
 		return TeamRecord{}, err
 	}
-	data, err := json.Marshal(updated)
+	data, err := policyrecord.Marshal(updated)
 	if err != nil {
 		return TeamRecord{}, fmt.Errorf("encode team update: %w", err)
 	}
