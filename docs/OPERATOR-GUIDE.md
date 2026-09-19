@@ -726,6 +726,32 @@ after five minutes refreshes direct-source material. Set
 `STARPORT_CREDENTIAL_SOURCES_REMOTE_REFRESH_INTERVAL` to a different positive
 duration. Starport never logs or serializes the returned material.
 
+Stored account and shared credentials use a separate managed memory cache.
+Warm reads do not fetch encrypted records or derive encryption keys.
+Background refresh checks record revisions and shared grants. Unchanged records reuse decrypted material.
+
+Local changes revoke existing handles. Each handle keeps its original validity deadline after refresh.
+The gateway checks validity before applying credentials and before the HTTP attempt.
+
+Configure these limits with the `STARPORT_CREDENTIAL_SOURCES_MANAGED_` prefix:
+
+| Suffix | Default | Purpose |
+| --- | --- | --- |
+| `ENTRIES` | `1024` | Maximum resident selections |
+| `SECRET_BYTES` | `16777216` | Maximum retained credential field bytes |
+| `CONCURRENT_LOADS` | `4` | Maximum simultaneous source loads |
+| `TENANT_CONCURRENT_LOADS` | `2` | Maximum simultaneous loads per account scope |
+| `VALIDITY` | `5s` | Maximum age of a validated record snapshot |
+| `LOAD_TIMEOUT` | `1s` | Deadline for one source load |
+| `IDLE` | `1m` | Retention limit for unused selections |
+| `REFRESH_INTERVAL` | `1s` | Background refresh scan period |
+
+Validity cannot exceed five minutes. Load timeout and refresh interval must be shorter than validity.
+Idle retention must cover validity. Tenant concurrency cannot exceed global concurrency.
+
+All limits must be positive. Capacity refusals are retryable and do not select another credential role.
+A disconnected replica refuses expired selections. It must read current storage before using them again.
+
 Vertex AI needs a project ID, one location, and Google Application Default
 Credentials:
 

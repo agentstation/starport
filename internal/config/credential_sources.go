@@ -9,6 +9,7 @@ import (
 // source. It owns inference credentials alone. The catalog settings in
 // catalog.go own catalog acquisition, and the two never share a variable.
 type CredentialSourcesConfig struct {
+	Managed ManagedMaterialConfig `env:",prefix=MANAGED_"`
 	// AllowStarmapFallback permits acquisition-prefixed keys as the last inference fallback.
 	AllowStarmapFallback bool `env:"ALLOW_STARMAP_FALLBACK,default=false"`
 
@@ -26,6 +27,9 @@ type CredentialSourcesConfig struct {
 
 // Validate validates the direct inference secret-source lifecycle.
 func (c *CredentialSourcesConfig) Validate() error {
+	if err := c.Managed.Limits().Validate(); err != nil {
+		return err
+	}
 	if c.RemoteRefreshInterval < 0 {
 		return fmt.Errorf("credential source remote refresh interval cannot be negative")
 	}

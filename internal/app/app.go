@@ -475,7 +475,7 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err != nil {
 		return fmt.Errorf("open provider credential validator: %w", err)
 	}
-	managedKeys, err := keyring.NewProviderKeys(credentialRepository, masterKey, credentialValidator)
+	managedKeys, err := keyring.NewProviderKeys(credentialRepository, masterKey, credentialValidator, b.config.CredentialSources.Managed.Limits())
 	if err != nil {
 		return fmt.Errorf("open provider key service: %w", err)
 	}

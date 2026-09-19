@@ -176,12 +176,10 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 	if development {
 		cfg.Storage.Badger.Path, cfg.Storage.SQL.SQLite.Path, cfg.Files.Path = "", "", ""
 	}
-	if err := envconfig.ProcessWith(ctx, &envconfig.Config{
-		Target:   cfg,
-		Lookuper: envconfig.PrefixLookuper(l.prefix, lookuper),
-	}); err != nil {
-		return nil, newLoadFailure("configuration values could not be decoded", err)
+	if err := l.decode(ctx, cfg, lookuper); err != nil {
+		return nil, err
 	}
+
 	if selected, ok := lookuper.(catalogSettingsLookuper); ok {
 		cfg.Catalog.canonicalValues = maps.Clone(selected.values)
 	}
@@ -365,4 +363,14 @@ func LoadWithDefaults(ctx context.Context, overrides ...Override) (*Config, erro
 // file and applies the guarded development runtime contract.
 func LoadDevelopment(ctx context.Context, overrides ...Override) (*Config, error) {
 	return NewLoader().WithEnvFiles().LoadDevelopment(ctx, overrides...)
+}
+
+func (l *Loader) decode(ctx context.Context, cfg *Config, lookuper envconfig.Lookuper) error {
+	if err := envconfig.ProcessWith(ctx, &envconfig.Config{Target: cfg, Lookuper: envconfig.PrefixLookuper(l.prefix, lookuper)}); err != nil {
+		return newLoadFailure("configuration values could not be decoded", err)
+	}
+	if cfg.CredentialSources.Managed == (ManagedMaterialConfig{}) {
+		return newLoadFailure("managed credential limits are invalid", errors.New("managed credential limits must be positive"))
+	}
+	return nil
 }

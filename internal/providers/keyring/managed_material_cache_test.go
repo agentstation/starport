@@ -52,7 +52,7 @@ func TestManagedMaterialExpiryAndContractChangeRequireReload(t *testing.T) {
 	_, err = cache.resolve(t.Context(), key, provider, false, load)
 	require.NoError(t, err)
 	require.Equal(t, 1, calls)
-	now = now.Add(managedMaterialValidity)
+	now = now.Add(credentials.DefaultMaterialLimits().Validity)
 	_, err = cache.resolve(t.Context(), key, provider, false, load)
 	require.NoError(t, err)
 	require.Equal(t, 2, calls)
@@ -85,7 +85,7 @@ func TestManagedMaterialRefreshRejectsExternalGrantWithdrawal(t *testing.T) {
 	record.Key.Shared[0].Grants = []string{"b"}
 	_, err = manager.repository.Update(t.Context(), record.Key, record.Revision)
 	require.NoError(t, err)
-	now = now.Add(managedMaterialValidity / 2)
+	now = now.Add(credentials.DefaultMaterialLimits().Validity / 2)
 	manager.refreshMaterials(t.Context())
 	_, err = manager.ResolveSharedMaterial(t.Context(), "a", provider)
 	require.ErrorIs(t, err, ErrKeyNotFound)
@@ -113,7 +113,7 @@ func TestManagedMaterialRefreshCannotRestoreInvalidatedEntry(t *testing.T) {
 func TestManagedMaterialCapacityDoesNotReadSource(t *testing.T) {
 	cache := newManagedMaterials()
 	provider := syntheticCredentialProvider()
-	cache.active = managedMaterialLoads
+	cache.active = cache.limits.ConcurrentLoads
 	_, err := cache.resolve(t.Context(), materialIdentity{scope: "account:a", provider: string(provider.ID)}, provider, false, func(context.Context) (credentials.Material, error) {
 		t.Fatal("capacity refusal read credential source")
 		return credentials.Material{}, nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -19,15 +20,6 @@ var ErrMaterialClosed = errors.New("managed credential material stopped")
 
 // ErrMaterialChanged rejects a load invalidated by a concurrent mutation.
 var ErrMaterialChanged = errors.New("managed credential changed during resolution")
-
-const (
-	managedMaterialEntries     = 1024
-	managedMaterialBytes       = 16 << 20
-	managedMaterialLoads       = 4
-	managedMaterialTenantLoads = 2
-	managedMaterialValidity    = 5 * time.Second
-	managedMaterialLoadTimeout = time.Second
-)
 
 type materialIdentity struct{ scope, provider, account string }
 
@@ -49,10 +41,11 @@ type managedMaterials struct {
 	active  int
 	bytes   int
 	now     func() time.Time
+	limits  credentials.MaterialLimits
 }
 
 func newManagedMaterials() *managedMaterials {
-	return &managedMaterials{entries: make(map[materialIdentity]*managedEntry), tenants: make(map[string]int), now: time.Now}
+	return &managedMaterials{entries: make(map[materialIdentity]*managedEntry), tenants: make(map[string]int), now: time.Now, limits: credentials.DefaultMaterialLimits()}
 }
 
 func (c *managedMaterials) invalidate(scope, provider string) {
@@ -106,19 +99,19 @@ func (c *managedMaterials) resolve(ctx context.Context, key materialIdentity, pr
 				continue
 			}
 		}
-		if c.active >= managedMaterialLoads || c.tenants[key.scope+"\x00"+key.account] >= managedMaterialTenantLoads {
+		if c.active >= c.limits.ConcurrentLoads || c.tenants[key.scope+"\x00"+key.account] >= c.limits.TenantConcurrentLoads {
 			c.mu.Unlock()
 			return credentials.Material{}, ErrMaterialCapacity
 		}
 		if entry == nil {
-			if len(c.entries) >= managedMaterialEntries {
+			if len(c.entries) >= c.limits.Entries {
 				for oldKey, oldEntry := range c.entries {
 					if oldEntry.busy == nil && !c.now().Before(oldEntry.deadline) {
 						c.remove(oldKey, oldEntry)
 					}
 				}
 			}
-			if len(c.entries) >= managedMaterialEntries {
+			if len(c.entries) >= c.limits.Entries {
 				c.mu.Unlock()
 				return credentials.Material{}, ErrMaterialCapacity
 			}
@@ -131,7 +124,7 @@ func (c *managedMaterials) resolve(ctx context.Context, key materialIdentity, pr
 		c.tenants[key.scope+"\x00"+key.account]++
 		started := c.now()
 		c.mu.Unlock()
-		loadCtx, cancel := context.WithTimeout(ctx, managedMaterialLoadTimeout)
+		loadCtx, cancel := context.WithTimeout(ctx, c.limits.LoadTimeout)
 		material, err := load(loadCtx)
 		if err == nil {
 			err = loadCtx.Err()
@@ -168,13 +161,13 @@ func (c *managedMaterials) publishLoaded(key materialIdentity, entry *managedEnt
 		}
 		if err != nil {
 			c.remove(key, entry)
-		} else if c.bytes-entry.bytes+size > managedMaterialBytes || !c.now().Before(started.Add(managedMaterialValidity)) {
+		} else if c.bytes-entry.bytes+size > c.limits.SecretBytes || !c.now().Before(started.Add(c.limits.Validity)) {
 			c.remove(key, entry)
 			err = ErrMaterialCapacity
 		} else {
 			c.bytes += size - entry.bytes
 			entry.bytes = size
-			entry.deadline = started.Add(managedMaterialValidity)
+			entry.deadline = started.Add(c.limits.Validity)
 			if expiry, ok := material.ExpiresAt(); ok && expiry.Before(entry.deadline) {
 				entry.deadline = expiry
 			}
@@ -186,7 +179,7 @@ func (c *managedMaterials) publishLoaded(key materialIdentity, entry *managedEnt
 				validity = validity.Renew(entry.deadline)
 			}
 			entry.material = material.WithValidity(validity)
-			entry.refreshAt = started.Add(managedMaterialValidity / 2)
+			entry.refreshAt = started.Add(c.limits.Validity / 2)
 		}
 	}
 	return err
@@ -200,7 +193,7 @@ type ManagedProviderKeys interface {
 
 // RunMaterialRefresh renews active entries until the application stops it.
 func (m *keyManager) RunMaterialRefresh(ctx context.Context) error {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(m.materials.limits.RefreshInterval)
 	defer ticker.Stop()
 	defer m.materials.close()
 	for {
@@ -217,23 +210,23 @@ func (m *keyManager) refreshMaterials(ctx context.Context) {
 	type refresh struct {
 		key      materialIdentity
 		provider catalogs.Provider
+		due      time.Time
 	}
 	c := m.materials
 	c.mu.Lock()
-	pending := make([]refresh, 0, managedMaterialLoads)
+	pending := make([]refresh, 0, len(c.entries))
 	for key, entry := range c.entries {
-		if entry.busy == nil && c.now().Sub(entry.lastUsed) >= time.Minute {
+		if entry.busy == nil && c.now().Sub(entry.lastUsed) >= c.limits.Idle {
 			c.remove(key, entry)
 			continue
 		}
 		if entry.busy == nil && !c.now().Before(entry.refreshAt) {
-			pending = append(pending, refresh{key: key, provider: entry.provider})
-			if len(pending) == managedMaterialLoads {
-				break
-			}
+			pending = append(pending, refresh{key: key, provider: entry.provider, due: entry.refreshAt})
 		}
 	}
 	c.mu.Unlock()
+	slices.SortFunc(pending, func(a, b refresh) int { return a.due.Compare(b.due) })
+	pending = pending[:min(len(pending), c.limits.ConcurrentLoads)]
 	var wait sync.WaitGroup
 	for _, item := range pending {
 		wait.Go(func() {

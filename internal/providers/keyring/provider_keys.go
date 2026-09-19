@@ -32,6 +32,7 @@ func NewProviderKeys(
 	repository credentials.Repository,
 	masterKey []byte,
 	validator CredentialValidator,
+	limits ...credentials.MaterialLimits,
 ) (ManagedProviderKeys, error) {
 	if repository == nil {
 		return nil, ErrRepositoryRequired
@@ -40,6 +41,16 @@ func NewProviderKeys(
 		return nil, ErrCredentialValidatorRequired
 	}
 
+	materials := newManagedMaterials()
+	if len(limits) > 1 {
+		return nil, fmt.Errorf("one managed credential limit profile is required")
+	}
+	if len(limits) == 1 {
+		materials.limits = limits[0]
+	}
+	if err := materials.limits.Validate(); err != nil {
+		return nil, err
+	}
 	encryption, err := credentials.NewEncryptionService(masterKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create encryption service: %w", err)
@@ -49,7 +60,7 @@ func NewProviderKeys(
 		repository: repository,
 		encryption: encryption,
 		validator:  validator,
-		materials:  newManagedMaterials(),
+		materials:  materials,
 	}, nil
 }
 
