@@ -29,6 +29,8 @@ func TestSDKCanonicalRemovalAfterSuccessfulInference(t *testing.T) {
 	if python == "" {
 		t.Skip("SDK qualification requires STARPORT_CATALOG_SDK_PYTHON")
 	}
+	require.NotEmpty(t, os.Getenv("STARPORT_CATALOG_SDK_NODE_SCRIPT"))
+	require.NotEmpty(t, os.Getenv("STARPORT_CATALOG_SDK_GO"))
 	testHTTPCanonicalRemoval(t, python)
 }
 
@@ -40,6 +42,8 @@ func testHTTPCanonicalRemoval(t *testing.T, python string) {
 	features := &catalogs.ModelFeatures{Modalities: catalogs.ModelModalities{Input: []catalogs.ModelModality{catalogs.ModelModalityText}, Output: []catalogs.ModelModality{catalogs.ModelModalityText}}}
 	require.NoError(t, builder.SetAuthorModel("author", catalogs.Model{ID: "current", Name: "Current", Authors: []catalogs.Author{author}, Features: features}))
 	require.NoError(t, builder.SetProvider(catalogs.Provider{ID: "acme", Name: "Acme", Inference: &catalogs.ProviderInference{BaseURL: "https://provider.test/v1", Endpoints: []catalogs.ProviderInferenceEndpoint{{Operation: catalogs.ProviderOperationChatCompletions, Type: catalogs.EndpointTypeOpenAI, Path: "/chat/completions"}}}, Models: map[string]*catalogs.Model{"opaque/model@002": {ID: "opaque/model@002", ModelRef: "author/current", Limits: &catalogs.ModelLimits{ContextWindow: 4096}, Status: catalogs.ModelStatusActive, Features: features}}}))
+	alias := catalogs.CanonicalAlias{ID: "author/old", TargetID: "author/current", PublisherID: "publisher", State: catalogs.CanonicalAliasActive}
+	require.NoError(t, builder.SetCanonicalAliasRecords([]catalogs.CanonicalAlias{alias}))
 	accepted, err := builder.Build()
 	require.NoError(t, err)
 	plane, err := runtimecatalog.Open(aliasHTTPSource{state: starmap.CatalogState{Catalog: accepted, GenerationID: "canonical-present", Sequence: 1}})
@@ -80,20 +84,38 @@ func testHTTPCanonicalRemoval(t *testing.T, python string) {
 		if python == "" {
 			return
 		}
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-		command := exec.CommandContext(ctx, python, "../../scripts/smoke_catalog_transition.py", state)
-		command.Env = append(os.Environ(), "STARPORT_CATALOG_URL="+server.URL, "STARPORT_CATALOG_KEY="+secret)
-		output, err := command.CombinedOutput()
-		require.NoError(t, err, "%s", output)
+		for _, args := range [][]string{
+			{python, "../../scripts/smoke_catalog_transition.py", state},
+			{"node", os.Getenv("STARPORT_CATALOG_SDK_NODE_SCRIPT"), state},
+			{os.Getenv("STARPORT_CATALOG_SDK_GO"), state},
+		} {
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			command := exec.CommandContext(ctx, args[0], args[1:]...)
+			command.Env = append(os.Environ(), "STARPORT_CATALOG_URL="+server.URL, "STARPORT_CATALOG_KEY="+secret)
+			output, err := command.CombinedOutput()
+			cancel()
+			require.NoError(t, err, "%s", output)
+			t.Log(strings.TrimSpace(string(output)))
+		}
 	}
 	runSDK("present")
+	alias.State = catalogs.CanonicalAliasRemoved
+	require.NoError(t, builder.SetCanonicalAliasRecords([]catalogs.CanonicalAlias{alias}))
+	aliasRemoved, err := builder.Build()
+	require.NoError(t, err)
+	aliasCandidate, err := reg.Prepare([]registry.Registration{registration()})
+	require.NoError(t, err)
+	defer func() { require.NoError(t, aliasCandidate.Close()) }()
+	aliasSnapshot, err := plane.ReplaceRuntime(starmap.CatalogState{Catalog: aliasRemoved, GenerationID: "alias-removed", Sequence: 2}, aliasCandidate.Availability())
+	require.NoError(t, err)
+	require.NoError(t, reg.Publish(aliasCandidate, aliasSnapshot))
+	runSDK("alias-removed")
 	empty, err := catalogs.NewEmpty().Build()
 	require.NoError(t, err)
 	candidate, err := reg.Prepare([]registry.Registration{registration()})
 	require.NoError(t, err)
 	defer func() { require.NoError(t, candidate.Close()) }()
-	snapshot, err := plane.ReplaceRuntime(starmap.CatalogState{Catalog: empty, GenerationID: "canonical-removed", Sequence: 2}, candidate.Availability())
+	snapshot, err := plane.ReplaceRuntime(starmap.CatalogState{Catalog: empty, GenerationID: "canonical-removed", Sequence: 3}, candidate.Availability())
 	require.NoError(t, err)
 	require.NoError(t, reg.Publish(candidate, snapshot))
 	for _, prefix := range []string{"/v1", "/api/v1"} {

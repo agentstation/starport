@@ -129,8 +129,6 @@ python3 -m venv "$python_environment"
 	'openai==3.6.0'
 "$python_environment/bin/python" "$repository_root/scripts/smoke_openrouter_python.py"
 "$python_environment/bin/python" "$repository_root/scripts/smoke_openai_responses.py"
-(cd "$repository_root" && STARPORT_CATALOG_SDK_PYTHON="$python_environment/bin/python" \
- go test -race -count=1 -timeout 2m ./internal/server -run '^TestSDKCanonicalRemovalAfterSuccessfulInference$')
 
 typescript_environment="$temporary_directory/typescript"
 mkdir -p "$typescript_environment"
@@ -146,3 +144,11 @@ cp "$repository_root/scripts/smoke_openrouter_typescript.mjs" \
 node "$typescript_environment/smoke_openrouter_typescript.mjs"
 
 (cd "$repository_root/scripts/smoke_openrouter_go" && GOWORK=off go run .)
+
+cp "$repository_root/scripts/smoke_catalog_transition.mjs" "$typescript_environment/smoke_catalog_transition.mjs"
+(cd "$repository_root/scripts/smoke_openrouter_go" && GOWORK=off go build -o "$temporary_directory/catalog-sdk-go" ./catalog)
+(cd "$repository_root" && \
+ STARPORT_CATALOG_SDK_PYTHON="$python_environment/bin/python" \
+ STARPORT_CATALOG_SDK_NODE_SCRIPT="$typescript_environment/smoke_catalog_transition.mjs" \
+ STARPORT_CATALOG_SDK_GO="$temporary_directory/catalog-sdk-go" \
+ go test -race -v -count=1 -timeout 3m ./internal/server -run '^TestSDKCanonicalRemovalAfterSuccessfulInference$')
