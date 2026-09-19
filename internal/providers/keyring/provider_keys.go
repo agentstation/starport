@@ -188,7 +188,7 @@ func (m *keyManager) loadStoredMaterial(
 	if prior, ok := m.materials.previous(materialIdentity{scope: scope, provider: string(provider.ID)}, provider, version); ok {
 		return prior, nil
 	}
-	return m.decryptMaterial(provider, record.Key.EncryptedCredential, record.Key.Config, version)
+	return m.decryptMaterial(provider, record.Key.EncryptedCredential, record.Key.Config, version, storedMaterialHandle(scope, string(provider.ID), ""))
 }
 
 // loadSharedMaterial decrypts the first shared credential the named
@@ -221,7 +221,7 @@ func (m *keyManager) loadSharedMaterial(
 		if prior, ok := m.materials.previous(materialIdentity{scope: SharedScope, provider: string(provider.ID), account: accountID}, provider, version); ok {
 			return prior, nil
 		}
-		return m.decryptMaterial(provider, credential.EncryptedCredential, credential.Config, version)
+		return m.decryptMaterial(provider, credential.EncryptedCredential, credential.Config, version, storedMaterialHandle(SharedScope, string(provider.ID), credential.ID))
 	}
 	return credentials.Material{}, ErrKeyNotFound
 }
@@ -233,6 +233,7 @@ func (m *keyManager) decryptMaterial(
 	encryptedCredential string,
 	config map[string]any,
 	version string,
+	handle string,
 ) (credentials.Material, error) {
 	decrypted, err := m.encryption.DecryptCredential(encryptedCredential)
 	if err != nil {
@@ -249,7 +250,7 @@ func (m *keyManager) decryptMaterial(
 	return credentials.NewMaterial(
 		material.Profile(),
 		materialValues(material),
-		credentials.MaterialMetadata{Version: version},
+		credentials.MaterialMetadata{Version: version, Handle: handle},
 	), nil
 }
 
@@ -727,4 +728,9 @@ func storedReadFailure(err error) error {
 		return credentials.NewSourceError(credentials.SourceErrorInvalid, "stored")
 	}
 	return credentials.NewSourceError(credentials.SourceErrorUnavailable, "stored")
+}
+
+// storedMaterialHandle identifies a logical credential independently of secret rotation.
+func storedMaterialHandle(scope, provider, id string) string {
+	return fmt.Sprintf("%x", sha256.Sum256(fmt.Appendf(nil, "%q/%q/%q", scope, provider, id)))
 }

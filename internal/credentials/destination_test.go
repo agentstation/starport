@@ -17,7 +17,7 @@ func destinationFixture(t *testing.T) (DestinationIdentity, Material, *Destinati
 		Fields:     []catalogs.ProviderCredentialFieldID{"api-key"},
 		Placements: []catalogs.ProviderCredentialPlacement{{Field: "api-key", Kind: catalogs.ProviderCredentialPlacementHeader, Name: "Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer}},
 	}
-	material := NewMaterial(profile, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, MaterialMetadata{})
+	material := NewMaterial(profile, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, MaterialMetadata{Handle: identity.Handle})
 	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://provider.example/v1/chat?version=1", nil)
 	require.NoError(t, err)
 	grant, err := NewDestinationGrant(identity, profile, []Destination{{Operation: catalogs.ProviderOperationChatCompletions, Method: request.Method, URL: request.URL.String()}})
@@ -67,7 +67,7 @@ func TestDestinationGrantRefusesChangedContract(t *testing.T) {
 			case "fragment":
 				request.URL.Fragment = "other"
 			}
-			material = NewMaterial(profile, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, MaterialMetadata{})
+			material = NewMaterial(profile, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, MaterialMetadata{Handle: identity.Handle})
 			authorization, err := grant.Authorize(identity, material, operation, request)
 			require.ErrorIs(t, err, ErrDestinationUnapproved)
 			require.ErrorIs(t, authorization.Check(request), ErrDestinationUnapproved)
@@ -145,7 +145,7 @@ func TestDestinationGrantRequiresApprovalForNewPlacement(t *testing.T) {
 	profile.Placements[0].Kind = catalogs.ProviderCredentialPlacementQuery
 	profile.Placements[0].Name = "key"
 	profile.Placements[0].Scheme = catalogs.ProviderCredentialSchemeDirect
-	changed := NewMaterial(profile, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, MaterialMetadata{})
+	changed := NewMaterial(profile, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, MaterialMetadata{Handle: identity.Handle})
 	_, err := grant.Authorize(identity, changed, catalogs.ProviderOperationChatCompletions, request)
 	require.ErrorIs(t, err, ErrDestinationUnapproved)
 	approved, err := NewDestinationGrant(identity, profile, []Destination{{Operation: catalogs.ProviderOperationChatCompletions, Method: request.Method, URL: request.URL.String()}})
@@ -154,5 +154,15 @@ func TestDestinationGrantRequiresApprovalForNewPlacement(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, authorization.Check(request))
 	_, err = approved.Authorize(identity, material, catalogs.ProviderOperationChatCompletions, request)
+	require.ErrorIs(t, err, ErrDestinationUnapproved)
+}
+
+func TestDestinationGrantRefusesAnotherMaterialHandle(t *testing.T) {
+	identity, material, grant, request := destinationFixture(t)
+	foreign := NewMaterial(material.Profile(), map[catalogs.ProviderCredentialFieldID]string{"api-key": "foreign-secret"}, MaterialMetadata{Handle: "another-handle"})
+	_, err := grant.Authorize(identity, foreign, catalogs.ProviderOperationChatCompletions, request)
+	require.ErrorIs(t, err, ErrDestinationUnapproved)
+	bound := foreign.WithDestinationGrant(grant, identity, catalogs.ProviderOperationChatCompletions)
+	_, err = bound.AuthorizeDestination(request)
 	require.ErrorIs(t, err, ErrDestinationUnapproved)
 }

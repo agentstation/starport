@@ -506,7 +506,7 @@ func (r *Resolver) resolveProfiles(
 		if !complete || !observedProfile {
 			continue
 		}
-		return builder.build(r, profile), true, nil
+		return builder.build(r, handle.provider.ID, profile), true, nil
 	}
 	return Material{}, false, nil
 }
@@ -745,7 +745,7 @@ func (b *materialBuilder) add(fieldID catalogs.ProviderCredentialFieldID, resolv
 	}
 }
 
-func (b *materialBuilder) build(resolver *Resolver, profile catalogs.ProviderCredentialProfile) Material {
+func (b *materialBuilder) build(resolver *Resolver, provider catalogs.ProviderID, profile catalogs.ProviderCredentialProfile) Material {
 	fieldIDs := make([]string, 0, len(b.values))
 	for fieldID := range b.values {
 		fieldIDs = append(fieldIDs, string(fieldID))
@@ -758,7 +758,7 @@ func (b *materialBuilder) build(resolver *Resolver, profile catalogs.ProviderCre
 		versionParts = append(versionParts, fieldValue, b.versions[fieldID], b.values[fieldID])
 	}
 	return NewMaterial(profile, b.values, MaterialMetadata{
-		Version: resolver.opaqueVersion(versionParts...), ExpiresAt: b.expires, Lease: b.lease,
+		Version: resolver.opaqueVersion(versionParts...), Handle: string(provider), ExpiresAt: b.expires, Lease: b.lease,
 	})
 }
 

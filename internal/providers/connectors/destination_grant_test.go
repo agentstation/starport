@@ -88,7 +88,7 @@ func TestGrantedQueryAuthenticationChecksFinalTarget(t *testing.T) {
 	profile := testGoogleMaterial("fixture-secret").Profile()
 	profile.Placements[0].Kind = catalogs.ProviderCredentialPlacementQuery
 	profile.Placements[0].Name = "key"
-	raw := credentials.NewMaterial(profile, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, credentials.MaterialMetadata{})
+	raw := credentials.NewMaterial(profile, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, credentials.MaterialMetadata{Handle: "opaque-handle"})
 	material, grant := approvedDestinationMaterial(t, raw, http.MethodPost, server.URL+"/inference?version=1")
 	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, server.URL+"/inference?version=1", nil)
 	require.NoError(t, err)

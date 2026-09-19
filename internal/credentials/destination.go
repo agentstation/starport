@@ -82,7 +82,7 @@ func (g *DestinationGrant) Revoke() {
 // Authorize binds material to an approved operation and request target.
 // It compares the complete profile before credential placement can occur.
 func (g *DestinationGrant) Authorize(identity DestinationIdentity, material Material, operation catalogs.ProviderOperation, request *http.Request) (DestinationAuthorization, error) {
-	if g == nil || g.revoked.Load() || identity != g.identity || request == nil || !validDestinationURL(request.URL) ||
+	if g == nil || g.revoked.Load() || identity != g.identity || material.Handle() != identity.Handle || request == nil || !validDestinationURL(request.URL) ||
 		!sameDestinationProfile(g.profile, material.profile) {
 		return DestinationAuthorization{}, ErrDestinationUnapproved
 	}

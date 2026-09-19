@@ -60,7 +60,7 @@ func testPlacedMaterial(
 	return credentials.NewMaterial(
 		profile,
 		map[catalogs.ProviderCredentialFieldID]string{"api-key": value},
-		credentials.MaterialMetadata{Version: "test"},
+		credentials.MaterialMetadata{Version: "test", Handle: "opaque-handle"},
 	)
 }
 
@@ -76,7 +76,7 @@ func testGoogleDefaultMaterial(value string) credentials.Material {
 	return credentials.NewMaterial(
 		profile,
 		map[catalogs.ProviderCredentialFieldID]string{"access-token": value},
-		credentials.MaterialMetadata{Version: "test"},
+		credentials.MaterialMetadata{Version: "test", Handle: "opaque-handle"},
 	)
 }
 
@@ -86,7 +86,7 @@ func testNoAuthenticationMaterial() credentials.Material {
 			ID: "public", Primitive: catalogs.ProviderAuthenticationNone,
 		},
 		nil,
-		credentials.MaterialMetadata{Version: "test"},
+		credentials.MaterialMetadata{Version: "test", Handle: "opaque-handle"},
 	)
 }
 

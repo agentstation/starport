@@ -23,6 +23,7 @@ type Material struct {
 // opaque and contains no source path or credential value.
 type MaterialMetadata struct {
 	Version   string
+	Handle    string
 	ExpiresAt time.Time
 	Lease     *Lease
 }
@@ -68,6 +69,9 @@ func (m Material) Value(fieldID catalogs.ProviderCredentialFieldID) (string, boo
 	value, exists := m.values[fieldID]
 	return value, exists
 }
+
+// Handle returns the source-owned credential identity without its value.
+func (m Material) Handle() string { return m.metadata.Handle }
 
 // Version returns the resolver-owned opaque material version.
 func (m Material) Version() string { return m.metadata.Version }
