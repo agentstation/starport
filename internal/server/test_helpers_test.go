@@ -274,9 +274,10 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		Service: service, APIKeys: apiKeys, Accounts: accounts,
 		ProviderKeys: providerKeys, RateLimits: rateLimits,
 		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
-		Catalog:   testConfig.catalogOperations,
-		Templates: templates,
-		Files:     fileService, Jobs: jobService, Batches: batchService,
+		Catalog:           testConfig.catalogOperations,
+		DiscoveryRegistry: reg,
+		Templates:         templates,
+		Files:             fileService, Jobs: jobService, Batches: batchService,
 		// Production composes the metric surface for every mode but "off",
 		// so a route test that skipped it would serve a routing table no
 		// deployment runs.

@@ -19,6 +19,7 @@ import (
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
@@ -94,6 +95,8 @@ type Dependencies struct {
 	// Catalog serves snapshot freshness, diffs, and forced acquisition. A
 	// nil port degrades the catalog endpoints to 503, loudly.
 	Catalog controllers.CatalogOperations
+	// DiscoveryRegistry retains the accepted generation for catalog discovery.
+	DiscoveryRegistry connectors.LeasingRegistry
 	// Presets serves stored preset management. A nil repository degrades
 	// the preset endpoints to 503, loudly.
 	Presets presets.Repository
@@ -229,6 +232,8 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Usage:              dependencies.Usage,
 		ProviderOperations: s.providerOperations,
 		Catalog:            dependencies.Catalog,
+		DiscoveryRegistry:  dependencies.DiscoveryRegistry,
+		DiscoveryViewer:    s.auth.discoveryViewer,
 		Presets:            dependencies.Presets,
 		Templates:          dependencies.Templates,
 		Files:              dependencies.Files,

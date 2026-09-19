@@ -1043,6 +1043,7 @@ generation with no source request.
 | Route | Scope | Meaning |
 | --- | --- | --- |
 | `GET /api/v1/catalog` | `models:read` | The allowlisted reader summary. |
+| `GET /api/v1/catalog/discovery` | `models:read` | Permitted model and offering membership, including entries without ready adapters. |
 | `GET /api/v1/catalog/changes` | `models:read` | What the last accepted generation changed. |
 | `GET /api/v1/admin/catalog/status` | `admin` | The complete operator view. |
 | `POST /api/v1/admin/catalog/refresh` | `admin` | Start one refresh run. |
@@ -1057,6 +1058,15 @@ It carries no source address, no source identity, no publication chain, no
 lease, no run identifier, and no failure reason. Those values reach the admin
 status route alone. A gateway with no catalog answers the safe route with a
 sanitized `503`.
+
+The discovery route uses one accepted generation and the current key and account policy.
+Missing provider credentials do not remove permitted entries.
+It returns model names and descriptions, offering identities, declared operations, lifecycle, availability, and current routable operations.
+Routable operations do not establish permission or usable credentials for the caller. Credential readiness remains `unknown`.
+
+Discovery does not contact providers or secret managers. It reloads identity records before projection and before delivery.
+A policy change, unreadable identity record, or authority withdrawal causes a sanitized `503` response without catalog facts.
+Responses use `Cache-Control: no-store`. Existing compatibility model lists retain their membership contract.
 
 ### Freshness alert rules
 
