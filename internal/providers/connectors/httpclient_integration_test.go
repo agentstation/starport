@@ -15,14 +15,15 @@ import (
 func TestProviderHTTPTransportContract(t *testing.T) {
 	config := ProviderConfig{Timeout: 17 * time.Second, MaxConnections: 23}
 	client := newProviderHTTPClient(config)
-	transport, ok := client.Transport.(*http.Transport)
+	dispatch, ok := client.Transport.(*dispatchTransport)
 	if !ok {
-		t.Fatalf("client transport = %T, want *http.Transport", client.Transport)
+		t.Fatalf("client transport = %T, want *dispatchTransport", client.Transport)
 	}
 
+	transport := dispatch.base
 	if transport.MaxIdleConns != config.MaxConnections ||
 		transport.MaxIdleConnsPerHost != config.MaxConnections ||
-		transport.MaxConnsPerHost != config.MaxConnections {
+		dispatch.maxConnections != config.MaxConnections || transport.MaxConnsPerHost != 0 {
 		t.Fatalf(
 			"connection limits = (%d, %d, %d), want %d",
 			transport.MaxIdleConns,
