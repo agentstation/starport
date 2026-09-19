@@ -52,6 +52,10 @@ type Registry struct {
 	started     bool
 	closed      bool
 
+	capacityMu          sync.Mutex
+	preparedGenerations int
+	drainingGenerations map[*runtimeGeneration]struct{}
+
 	drainMu     sync.Mutex
 	drainErrors []error
 }

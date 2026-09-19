@@ -917,6 +917,11 @@ Its `admitted_streams_may_finish` field reports that catalog withdrawal does not
 These fields also appear after a failed replacement that retains catalog metadata.
 They describe the completed operation. Read current catalog status for current permission.
 
+Starport permits at most four current, retained, or prepared runtime generations.
+An update that reaches this limit reports `runtime_generation_capacity` before durable catalog acceptance.
+Retained requests can finish. Retry the update after a retained request releases its generation.
+A permission withdrawal still blocks new inference while replacement waits for capacity.
+
 Authority mode needs current permission and qualified clock evidence before it permits inference.
 The permission clock defaults to disabled. Select `native` only after qualifying the host time service and its error bounds.
 Starmap validates those bounds and owns the background monitor. Startup and shutdown manage that monitor with the catalog runtime.

@@ -33,6 +33,7 @@ type runtimeGeneration struct {
 // Candidate owns a complete runtime generation until publication or close.
 type Candidate struct {
 	generation *runtimeGeneration
+	owner      *Registry
 
 	mu       sync.Mutex
 	consumed bool
@@ -44,12 +45,20 @@ func (r *Registry) Prepare(registrations []Registration) (*Candidate, error) {
 		return nil, ErrRegistryClosed
 	}
 	r.lifecycleMu.Lock()
-	closed := r.closed
-	r.lifecycleMu.Unlock()
-	if closed {
-		return nil, ErrRegistryClosed
+	defer r.lifecycleMu.Unlock()
+	if r.closed {
+		return nil, closeUnownedRegistrations(ErrRegistryClosed, registrations, 0)
 	}
-	return prepareCandidate(registrations)
+	if err := r.reserveGeneration(); err != nil {
+		return nil, closeUnownedRegistrations(err, registrations, 0)
+	}
+	candidate, err := prepareCandidate(registrations)
+	if err != nil {
+		r.releaseReservation()
+		return nil, err
+	}
+	candidate.owner = r
+	return candidate, nil
 }
 
 func prepareCandidate(registrations []Registration) (*Candidate, error) {
@@ -137,7 +146,11 @@ func (c *Candidate) Close() error {
 	if generation == nil {
 		return nil
 	}
-	return generation.closeProviders()
+	err := generation.closeProviders()
+	if c.owner != nil {
+		c.owner.releaseReservation()
+	}
+	return err
 }
 
 func (c *Candidate) consume() (*runtimeGeneration, error) {
@@ -166,6 +179,9 @@ func (r *Registry) Publish(
 	if r.closed {
 		return ErrRegistryClosed
 	}
+	if err := candidate.reserveFor(r); err != nil {
+		return err
+	}
 	generation, err := candidate.consume()
 	if err != nil {
 		return err
@@ -173,8 +189,18 @@ func (r *Registry) Publish(
 	generation.catalog = r.catalog
 	generation.snapshot = snapshot
 	generation.catalogGenerationID = snapshot.GenerationID()
-	generation.onClose = r.recordDrainError
+	generation.onClose = func(err error) { r.generationClosed(generation, err) }
+	r.capacityMu.Lock()
 	previous := r.current.Swap(generation)
+	r.preparedGenerations--
+	if previous != nil {
+		if r.drainingGenerations == nil {
+			r.drainingGenerations = make(map[*runtimeGeneration]struct{})
+		}
+		r.drainingGenerations[previous] = struct{}{}
+		previous.onClose = func(err error) { r.generationClosed(previous, err) }
+	}
+	r.capacityMu.Unlock()
 	if previous != nil {
 		previous.drain()
 	}
@@ -318,7 +344,7 @@ func (g *runtimeGeneration) drain() {
 }
 
 func (g *runtimeGeneration) reportClose(err error) {
-	if err != nil && g.onClose != nil {
+	if g.onClose != nil {
 		g.onClose(err)
 	}
 }

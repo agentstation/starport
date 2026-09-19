@@ -67,6 +67,8 @@ const (
 	ReasonAcceptedHeadConflict OperationReason = "accepted_head_conflict"
 	// ReasonCatalogUnavailable means no catalog generation is present.
 	ReasonCatalogUnavailable OperationReason = "catalog_unavailable"
+	// ReasonRuntimeGenerationCapacity means retained requests delay activation.
+	ReasonRuntimeGenerationCapacity OperationReason = "runtime_generation_capacity"
 	// ReasonInternalError is the reason of a failure with no safe cause of
 	// its own. It never carries the failure text.
 	ReasonInternalError OperationReason = "internal_error"
@@ -424,6 +426,8 @@ func ClassifyOperationFailure(err error) OperationReason {
 		return ReasonCanceled
 	case errors.Is(err, ErrStaleLeaseEpoch):
 		return ReasonStaleLeaseEpoch
+	case errors.Is(err, ErrRuntimeGenerationCapacity):
+		return ReasonRuntimeGenerationCapacity
 	case errors.Is(err, ErrRouteValidationFailed):
 		return ReasonRouteValidationFailed
 	case errors.Is(err, ErrCatalogRequired), errors.Is(err, ErrCatalogSourceRequired):
