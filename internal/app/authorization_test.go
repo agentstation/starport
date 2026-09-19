@@ -2,6 +2,10 @@ package app
 
 import (
 	"context"
+	"github.com/agentstation/starmap/pkg/catalogs/permission"
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/storage"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -124,4 +128,61 @@ func TestApplicationOwnsAuthorizationFencesAndCatchup(t *testing.T) {
 	require.Equal(t, attempts, owner.monitor.Status()[0].Attempts)
 	_, err = owner.kv.Start()
 	require.ErrorIs(t, err, authorization.ErrUnavailable)
+}
+
+type sampledCatalogRuntime struct {
+	catalogRuntime
+	sample atomic.Pointer[permission.ClockReading]
+}
+
+func (r *sampledCatalogRuntime) PermissionClock() permission.ClockReading {
+	if sample := r.sample.Load(); sample != nil {
+		return *sample
+	}
+	return permission.ClockReading{}
+}
+
+func TestApplicationAuthorizationUsesQualifiedCatalogClock(t *testing.T) {
+	factories := explicitTestFactories()
+	openCatalog := factories.openCatalog
+	sampled := &sampledCatalogRuntime{}
+	factories.openCatalog = func(ctx context.Context, store storage.KVStore, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
+		runtime, err := openCatalog(ctx, store, settings, lookup)
+		sampled.catalogRuntime = runtime
+		return sampled, err
+	}
+	var dependencies server.Dependencies
+	factories.newServer = func(_ *server.Config, value server.Dependencies) (httpRuntime, error) {
+		dependencies = value
+		return newBlockingHTTPRuntime(), nil
+	}
+	application, err := New(validProductionConfig(t), withRuntimeFactories(factories))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
+	require.NotNil(t, dependencies.Authorization)
+	require.NotNil(t, dependencies.PermissionClock)
+	identity := authorization.Identity{Subject: testAPIKey().Hash}
+	_, err = dependencies.Authorization.Resolve(t.Context(), identity)
+	require.ErrorIs(t, err, authorization.ErrUnavailable)
+	now := time.Now()
+	sampled.sample.Store(&permission.ClockReading{Time: now, Known: true, Uncertainty: time.Second})
+	bundle, err := dependencies.Authorization.Resolve(t.Context(), identity)
+	require.NoError(t, err)
+	current, healthy := dependencies.PermissionClock()
+	require.Equal(t, now, current)
+	require.True(t, healthy)
+	require.NoError(t, bundle.Permit().Check(current, healthy))
+	for _, sample := range []permission.ClockReading{
+		{Time: now, Known: false},
+		{Time: now, Known: true, Uncertainty: 31 * time.Second},
+		{Time: now, Known: true, Uncertainty: -time.Second},
+		{Known: true},
+	} {
+		sampled.sample.Store(&sample)
+		current, healthy = dependencies.PermissionClock()
+		require.False(t, healthy)
+		require.Error(t, bundle.Permit().Check(current, healthy))
+		_, err = dependencies.Authorization.Resolve(t.Context(), identity)
+		require.ErrorIs(t, err, authorization.ErrUnavailable)
+	}
 }

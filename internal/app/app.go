@@ -241,6 +241,7 @@ func (b *runtimeBuilder) compose() error {
 		b.buildGateway,
 		b.openConsole,
 		b.openIdentity,
+		b.openAuthorizationCache,
 		b.openHTTPServer,
 	}
 	for _, step := range steps {
@@ -959,8 +960,10 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	serverCfg.Build = b.application.build
 	httpServer, err := b.factories.newServer(serverCfg, server.Dependencies{
 		Service: b.gateway, APIKeys: b.apiKeys, Accounts: b.accounts,
-		ProviderKeys: b.providerKeys,
-		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
+		Authorization:   b.application.authorization.cache,
+		PermissionClock: b.application.authorization.clock,
+		ProviderKeys:    b.providerKeys,
+		RateLimits:      b.rateLimits, ProviderOperations: b.application, Console: b.console,
 		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
 		DiscoveryRegistry: b.application.registry,
 		Templates:         b.templates,

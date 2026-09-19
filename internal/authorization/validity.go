@@ -9,6 +9,8 @@ import (
 )
 
 var (
+	// ErrDenied reports an explicitly inactive key or account.
+	ErrDenied = errors.New("authorization denied")
 	// ErrUnavailable reports an authority or clock that cannot establish permission.
 	ErrUnavailable = errors.New("authorization authority unavailable")
 	// ErrWithdrawn reports a fence change after a load or receipt.

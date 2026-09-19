@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/agentstation/starport/internal/failure"
 
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/ratelimit"
@@ -26,7 +26,7 @@ type batchGovernor struct {
 	usage          usage.Repository
 	rateLimits     ratelimit.Repository
 	deploymentRule func() *limits.RequestLimit
-	teamBudget     func(ctx context.Context, teamID string) *limits.TeamBudget
+	teamBudget     func(ctx context.Context, teamID string) (*limits.TeamBudget, error)
 }
 
 // batchGovernor builds the line governor over this server's meters.
@@ -48,31 +48,33 @@ func (g *batchGovernor) AdmitLine(ctx context.Context, admission controllers.Bat
 }
 
 // admitBudget refuses the line when a budget for the current window is
-// exhausted, in the same words the online 402 uses. A read failure allows
-// the line and logs loudly, exactly as the middleware fails open (D6).
+// exhausted. Unknown required policy or usage refuses the line.
 func (g *batchGovernor) admitBudget(ctx context.Context, admission controllers.BatchAdmission) error {
-	if g.usage == nil {
-		return nil
-	}
 	now := time.Now().UTC()
 	for _, dimension := range budgetDimensions {
 		rules := limits.BudgetRules(admission.AccountLimits, admission.KeyLimits, dimension.name)
-		if dimension.name == limits.DimensionSpend && g.teamBudget != nil {
-			if rule, ok := limits.TeamBudgetRule(g.teamBudget(ctx, admission.TeamID)); ok {
+		if dimension.name == limits.DimensionSpend && admission.TeamID != "" {
+			if g.teamBudget == nil {
+				return unavailableBatchBudget()
+			}
+			budget, err := g.teamBudget(ctx, admission.TeamID)
+			if err != nil {
+				return unavailableBatchBudget()
+			}
+			if rule, ok := limits.TeamBudgetRule(budget); ok {
 				rules = append(rules, rule)
 			}
 		}
 		for _, rule := range rules {
 			scope := budgetScope(rule.Scope, admission.AccountID, admission.KeyID, admission.TeamID)
+			if g.usage == nil {
+				return unavailableBatchBudget()
+			}
 			totals, err := g.usage.Totals(ctx, scope, rule.Budget.Interval, now)
 			if err != nil {
-				log.Error().Err(err).
-					Str("usage_scope", scope.String()).
-					Str("budget", string(dimension.name)).
-					Str("interval", rule.Budget.Interval).
-					Msg("batch budget read failed; allowing line")
-				continue
+				return unavailableBatchBudget()
 			}
+
 			if dimension.used(totals) >= rule.Budget.Limit {
 				return &controllers.BatchBudgetError{
 					Message: "Insufficient quota: " + string(rule.Scope) + " " +
@@ -129,4 +131,8 @@ func sleepUntil(ctx context.Context, reset time.Time) error {
 	case <-timer.C:
 		return nil
 	}
+}
+
+func unavailableBatchBudget() error {
+	return failure.New(failure.GatewayUnavailable, "Required budget state is unavailable.", true, failure.ProviderDetails{}, nil)
 }

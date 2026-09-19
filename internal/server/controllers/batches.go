@@ -367,8 +367,8 @@ func (r *batchLineRunner) RunLine(ctx context.Context, _ int, line []byte) ([]by
 				return r.failureLine(decoded.CustomID, requestID,
 					http.StatusPaymentRequired, errorTypePermission, budget.Message, nil), true
 			}
-			return r.failureLine(decoded.CustomID, requestID,
-				http.StatusInternalServerError, errorTypeServer, err.Error(), nil), true
+			status, kind, message, param := errorShape(err)
+			return r.failureLine(decoded.CustomID, requestID, status, kind, message, param), true
 		}
 	}
 

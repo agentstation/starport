@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starmap/pkg/catalogs/permission"
 	"github.com/agentstation/starmap/runtime"
 
 	"github.com/agentstation/starport/internal/blob"
@@ -27,6 +28,7 @@ type httpRuntime interface {
 // One source, one runtime: the composition root names no local-or-remote
 // choice, and every source kind reaches the same contract.
 type catalogRuntime interface {
+	PermissionClock() permission.ClockReading
 	ControlPlane() *runtimecatalog.ControlPlane
 	RefreshCandidate(context.Context, time.Duration) (runtimecatalog.Candidate, error)
 	CurrentCandidate(context.Context) (runtimecatalog.Candidate, error)

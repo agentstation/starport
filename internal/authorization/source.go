@@ -11,6 +11,35 @@ import (
 	"github.com/agentstation/starport/internal/identity"
 )
 
+const (
+	// AnonymousSubject identifies host-selected anonymous policy, never a bearer hash.
+	AnonymousSubject = "local:anonymous"
+	// OperatorSubject identifies verified machine-local operator policy.
+	OperatorSubject = "local:operator"
+)
+
+// LocalKeys resolves host policy without storing synthetic credentials.
+// Only authentication middleware can select these non-hash subjects.
+type LocalKeys struct {
+	Keys      KeyReader
+	Anonymous apikey.APIKey
+}
+
+// GetByHash delegates bearer hashes and supplies the host's fixed local identities.
+func (s LocalKeys) GetByHash(ctx context.Context, hash string) (apikey.Record, error) {
+	var key apikey.APIKey
+	switch hash {
+	case AnonymousSubject:
+		key = s.Anonymous
+	case OperatorSubject:
+		key = apikey.LocalOperator()
+	default:
+		return s.Keys.GetByHash(ctx, hash)
+	}
+	key.Hash = hash
+	return apikey.Record{Revision: 1, APIKey: key}, nil
+}
+
 // RevisionReader reads the current marker from the authoritative store.
 // Replicas and caches without a linearizable read contract cannot supply it.
 type RevisionReader interface {

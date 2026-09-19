@@ -118,7 +118,7 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 		}
 		resp.CacheStatus = CacheStatusHit
 		resp.CacheAge = cacheAge(cachedAt)
-		if refusal := cachePermissionFailure(runtime); refusal != nil {
+		if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 			return nil, refusal
 		}
 		return resp, nil
@@ -139,7 +139,7 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 				resp.CacheStatus = CacheStatusHit
 				resp.CacheAge = cacheAge(cachedAt)
 				resp.CacheSimilarity = similarity
-				if refusal := cachePermissionFailure(runtime); refusal != nil {
+				if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 					return nil, refusal
 				}
 				return resp, nil
@@ -248,10 +248,10 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 		if err != nil {
 			return finish(s.service.ProcessChatCompletionStream(ctx, req))
 		}
-		if refusal := cachePermissionFailure(runtime); refusal != nil {
+		if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 			return finish(nil, refusal)
 		}
-		return finish(newCachedEventStream(events, cachedAt, runtime), nil)
+		return finish(newCachedEventStream(ctx, events, cachedAt, runtime), nil)
 	}
 
 	log.Info().
@@ -266,10 +266,10 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 		if cached, cachedAt, similarity, ok := probe.lookup(ctx, repository); ok {
 			events, err := responsecache.StreamEvents(cached, canonicalRequest.StreamOptions)
 			if err == nil {
-				if refusal := cachePermissionFailure(runtime); refusal != nil {
+				if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 					return finish(nil, refusal)
 				}
-				replay := newCachedEventStream(events, cachedAt, runtime)
+				replay := newCachedEventStream(ctx, events, cachedAt, runtime)
 				replay.similarity = similarity
 				return finish(replay, nil)
 			}
@@ -329,7 +329,7 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 		resp := embeddingResponseFromCanonical(cachedResp)
 		resp.CacheStatus = CacheStatusHit
 		resp.CacheAge = cacheAge(cachedAt)
-		if refusal := cachePermissionFailure(runtime); refusal != nil {
+		if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 			return nil, refusal
 		}
 		return resp, nil
@@ -507,11 +507,11 @@ func (s *cachedService) readCachedCatalogList(ctx context.Context, kind string, 
 	if s.runtime != nil && runtime == nil {
 		return fetch(ctx)
 	}
-	if refusal := cachePermissionFailure(runtime); refusal != nil {
+	if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 		return nil, refusal
 	}
 	defer func() {
-		if refusal := cachePermissionFailure(runtime); refusal != nil {
+		if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 			response, err = nil, refusal
 		}
 	}()
@@ -572,11 +572,11 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 	if s.runtime != nil && runtime == nil {
 		return s.service.GetModelEndpoints(ctx, modelID)
 	}
-	if refusal := cachePermissionFailure(runtime); refusal != nil {
+	if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 		return nil, refusal
 	}
 	defer func() {
-		if refusal := cachePermissionFailure(runtime); refusal != nil {
+		if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 			response, err = nil, refusal
 		}
 	}()
@@ -766,7 +766,10 @@ func cacheAge(cachedAt time.Time) int {
 	return int(age / time.Second)
 }
 
-func cachePermissionFailure(runtime connectors.RuntimeLease) *failure.Failure {
+func cachePermissionFailure(ctx context.Context, runtime connectors.RuntimeLease) *failure.Failure {
+	if err := inference.CheckPermission(ctx); err != nil {
+		return failure.New(failure.GatewayUnavailable, "Authorization is unavailable.", true, failure.ProviderDetails{}, nil)
+	}
 	if runtime == nil {
 		return nil
 	}
@@ -775,6 +778,7 @@ func cachePermissionFailure(runtime connectors.RuntimeLease) *failure.Failure {
 
 // cachedEventStream replays canonical events from one completed result.
 type cachedEventStream struct {
+	permission        inference.Permission
 	snapshot          *runtimecatalog.RoutableSnapshot
 	permissionFailure *failure.Failure
 	events            []inference.StreamEvent
@@ -785,7 +789,7 @@ type cachedEventStream struct {
 	similarity float64
 }
 
-func newCachedEventStream(events []inference.StreamEvent, cachedAt time.Time, runtime connectors.RuntimeLease) *cachedEventStream {
+func newCachedEventStream(ctx context.Context, events []inference.StreamEvent, cachedAt time.Time, runtime connectors.RuntimeLease) *cachedEventStream {
 	clones := make([]inference.StreamEvent, len(events))
 	for index, event := range events {
 		clones[index] = event.Clone()
@@ -794,12 +798,18 @@ func newCachedEventStream(events []inference.StreamEvent, cachedAt time.Time, ru
 	if runtime != nil {
 		snapshot = runtime.Snapshot()
 	}
-	return &cachedEventStream{events: clones, cachedAt: cachedAt, snapshot: snapshot}
+	return &cachedEventStream{permission: inference.RequestPermission(ctx), events: clones, cachedAt: cachedAt, snapshot: snapshot}
 }
 
 func (s *cachedEventStream) Read() (*inference.StreamEvent, error) {
 	if s.permissionFailure != nil {
 		return nil, s.permissionFailure
+	}
+	if s.position == 0 && s.permission != nil {
+		if err := s.permission.Check(); err != nil {
+			s.permissionFailure = failure.New(failure.GatewayUnavailable, "Authorization is unavailable.", true, failure.ProviderDetails{}, nil)
+			return nil, s.permissionFailure
+		}
 	}
 	if s.position == 0 && s.snapshot != nil {
 		s.permissionFailure = s.snapshot.CheckNewAttempt()

@@ -18,6 +18,7 @@ import (
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
+	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/server/requestctx"
 )
@@ -172,8 +173,10 @@ type AccountReader interface {
 
 // AuthMiddleware provides authentication functionality
 type AuthMiddleware struct {
-	apiKeys  apikey.Repository
-	accounts AccountReader
+	authorization   *authorization.Cache
+	permissionClock authorization.Clock
+	apiKeys         apikey.Repository
+	accounts        AccountReader
 	// policy is the live authentication mode. It is read once per request, not
 	// once per router build, because the console can change the mode without a
 	// restart and "disabled" must not come to mean "disabled at boot". A nil
@@ -262,6 +265,16 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 		hash := sha256.Sum256([]byte(apiKey))
 		hashStr := hex.EncodeToString(hash[:])
 
+		if m.authorization != nil {
+			ctx, err := m.cachedBearer(r.Context(), apiKey, hashStr)
+			if err != nil {
+				writeAuthorizationRefusal(w, r, err)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
 		record, err := m.apiKeys.GetByHash(r.Context(), hashStr)
 		if err != nil {
 			if errors.Is(err, apikey.ErrNotFound) {
@@ -318,6 +331,15 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 // making it optional, so a stale or mistyped key cannot quietly move a caller
 // onto another account's limits and credentials.
 func (m *AuthMiddleware) anonymousContext(ctx context.Context) (context.Context, error) {
+	if m.authorization != nil {
+		return m.cachedLocal(ctx, authorization.AnonymousSubject, func() error {
+			if !m.policy.Disabled() {
+				return authorization.ErrWithdrawn
+			}
+			return nil
+		})
+	}
+
 	anonymous := m.anonymous
 	ctx = requestctx.WithAPIKeyID(ctx, anonymous.ID)
 	ctx = requestctx.WithAPIKeyModel(ctx, &anonymous)
@@ -364,6 +386,25 @@ func (m *AuthMiddleware) sessionContext(r *http.Request) (context.Context, error
 	if err != nil {
 		return nil, err
 	}
+	if m.authorization != nil {
+		// Identity sessions need their user and grant projection, never operator policy.
+		if session.Grant == localauth.GrantIdentity {
+			return nil, errAccountUnavailable
+		}
+		ctx := requestctx.WithConsoleSession(r.Context(), string(session.Grant), session.Subject)
+		result, err := m.cachedLocal(ctx, authorization.OperatorSubject, func() error {
+			now, healthy := m.permissionClock()
+			if !healthy {
+				return authorization.ErrUnavailable
+			}
+			_, err := m.sessions.Verify(cookie.Value, now)
+			return err
+		})
+		if err != nil {
+			return nil, errAccountUnavailable
+		}
+		return result, nil
+	}
 	operator := apikey.LocalOperator()
 	// The grant kind and identity subject ride the context so the audit
 	// trail can name the actor behind a console mutation.
@@ -408,7 +449,7 @@ func (m *AuthMiddleware) readAccount(ctx context.Context, accountID string) (*ac
 }
 
 func writeAccountRefusal(w http.ResponseWriter, r *http.Request, err error) {
-	if errors.Is(err, errAccountDenied) {
+	if errors.Is(err, errAccountDenied) || errors.Is(err, authorization.ErrDenied) || errors.Is(err, account.ErrNotFound) {
 		writeProtocolError(w, r, http.StatusForbidden, "permission_error", "Account access denied")
 		return
 	}

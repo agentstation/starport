@@ -14,6 +14,14 @@ var errDiscoveryIdentity = errors.New("catalog discovery identity is unavailable
 // discoveryViewer reloads the authenticated identity and its governing account.
 // Missing records and storage errors cannot expand disclosure permission.
 func (m *AuthMiddleware) discoveryViewer(r *http.Request) (controllers.DiscoveryViewer, error) {
+	if m.authorization != nil {
+		bundle, err := requestctx.Authorization(r.Context())
+		if err != nil {
+			return controllers.DiscoveryViewer{}, errDiscoveryIdentity
+		}
+		key, owner := bundle.Key(), bundle.Account()
+		return controllers.DiscoveryViewer{Key: key.APIKey, Account: owner.Account, KeyRevision: key.Revision, AccountRevision: owner.Revision}, nil
+	}
 	original, ok := requestctx.GetAPIKeyModel(r.Context())
 	if !ok || original == nil || m.accounts == nil {
 		return controllers.DiscoveryViewer{}, errDiscoveryIdentity

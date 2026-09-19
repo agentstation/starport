@@ -13,6 +13,7 @@ import (
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starmap/pkg/catalogs/evidence"
+	"github.com/agentstation/starmap/pkg/catalogs/permission"
 	protocol "github.com/agentstation/starmap/pkg/catalogs/remote"
 	"github.com/agentstation/starmap/remote"
 	"github.com/agentstation/starmap/runtime"
@@ -348,4 +349,8 @@ func remoteAppTestGeneration(
 	}
 	require.NoError(t, generation.Validate())
 	return generation
+}
+
+func (*recordingCatalogRuntime) PermissionClock() permission.ClockReading {
+	return permission.ClockReading{}
 }

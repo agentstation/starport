@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -48,8 +49,8 @@ func authorizationFixture(t *testing.T, store storage.KVStore) (apikey.Repositor
 func TestAuthorizationWarmRequestsAvoidStableReads(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, backend storage.KVStore) {
 		store := &authorizationReadStore{KVStore: backend}
-		keys, accounts, secret := authorizationFixture(t, store)
-		middleware := NewAuthMiddleware(keys, accounts)
+		_, _, secret := authorizationFixture(t, store)
+		middleware, _, _ := cachedAuthFixture(t, store, func() (time.Time, bool) { return time.Now(), true })
 		strategy, status := resolveStrategy(t, middleware, secret)
 		require.Equal(t, http.StatusOK, status)
 		require.Equal(t, account.StrategyBYOKOnly, strategy)

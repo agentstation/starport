@@ -38,10 +38,10 @@ type Bundle struct {
 
 func freeze(candidate Candidate, identity Identity, receipt Permit, limit int) (*Bundle, error) {
 	key := candidate.Key.APIKey
-	if key.Hash != identity.Subject || candidate.Key.Revision == 0 || key.ID == "" || !key.Active {
+	if key.Hash != identity.Subject || candidate.Key.Revision == 0 || key.ID == "" {
 		return nil, ErrEvidence
 	}
-	if candidate.Account.Revision == 0 || candidate.Account.Account.ID != key.EffectiveAccountID() || !candidate.Account.Account.Active {
+	if candidate.Account.Revision == 0 || candidate.Account.Account.ID != key.EffectiveAccountID() {
 		return nil, ErrEvidence
 	}
 	if identity.Tenant != "" && identity.Tenant != candidate.Account.Account.ID {
@@ -53,6 +53,9 @@ func freeze(candidate Candidate, identity Identity, receipt Permit, limit int) (
 		}
 	} else if candidate.Team == nil || candidate.Team.Revision == 0 || candidate.Team.Team.ID != key.TeamID {
 		return nil, ErrEvidence
+	}
+	if !key.Active || !candidate.Account.Account.Active {
+		return nil, ErrDenied
 	}
 	// The cold path detaches every source-owned collection, including nested metadata.
 	buffer := policyBuffer{limit: limit}

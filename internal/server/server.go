@@ -12,6 +12,7 @@ import (
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
+	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
@@ -83,6 +84,8 @@ type Server struct {
 
 // Dependencies contains ready application ports for the HTTP adapter.
 type Dependencies struct {
+	Authorization      *authorization.Cache
+	PermissionClock    authorization.Clock
 	Service            proxy.Proxy
 	APIKeys            apikey.Repository
 	Accounts           account.Repository
@@ -204,14 +207,8 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		events:             dependencies.Events,
 	}
 	if teams := dependencies.Identity.Teams; teams != nil {
-		// A key attributed to a team that no longer exists meters nothing:
-		// the attribution outlived the team, and refusing such a key would
-		// let a team deletion take its keys' traffic down.
 		s.teamBudgets = func(ctx context.Context, teamID string) (*limits.TeamBudget, error) {
 			record, err := teams.GetByID(ctx, teamID)
-			if errors.Is(err, identity.ErrTeamNotFound) {
-				return nil, nil
-			}
 			if err != nil {
 				return nil, err
 			}
@@ -223,6 +220,12 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Source: config.AuthModeSource,
 	})
 	s.auth = NewAuthMiddleware(s.apiKeys, s.accounts)
+	if dependencies.Authorization != nil {
+		if dependencies.PermissionClock == nil {
+			return nil, authorization.ErrUnavailable
+		}
+		s.auth.UseAuthorization(dependencies.Authorization, dependencies.PermissionClock)
+	}
 	s.auth.Govern(s.authPolicy, config.UnauthenticatedScopes)
 	s.auth.AcceptSessions(dependencies.LocalGate)
 
