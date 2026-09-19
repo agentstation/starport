@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -24,15 +25,19 @@ type DestinationIdentity struct {
 	Handle   string
 }
 
-// Destination names one approved operation and exact HTTP request target.
+// Destination names one approved operation and HTTP request target.
 // URL contains no credential value. Streaming targets require their own entries.
 type Destination struct {
 	Operation catalogs.ProviderOperation
 	Method    string
 	URL       string
+	// PathTemplate permits named path variables in URL, such as {model}.
+	// {name} matches one segment. {name...} also permits namespace segments.
+	// Both forms reject traversal and URL delimiters.
+	PathTemplate bool
 }
 
-// DestinationGrant retains an approved profile and exact request targets.
+// DestinationGrant retains an approved profile and request target rules.
 // Catalog refresh cannot extend this immutable grant.
 type DestinationGrant struct {
 	identity DestinationIdentity
@@ -49,6 +54,7 @@ type destinationTarget struct {
 	port      string
 	path      string
 	query     string
+	template  *regexp.Regexp
 }
 
 // NewDestinationGrant validates an explicit approval without network access.
@@ -63,10 +69,17 @@ func NewDestinationGrant(identity DestinationIdentity, profile catalogs.Provider
 		if err != nil || !validDestinationURL(parsed) || destination.Operation == "" || !validDestinationMethod(destination.Method) {
 			return nil, ErrDestinationUnapproved
 		}
+		var template *regexp.Regexp
+		if destination.PathTemplate {
+			template, err = compileDestinationPath(parsed)
+			if err != nil {
+				return nil, err
+			}
+		}
 		grant.targets = append(grant.targets, destinationTarget{
 			operation: destination.Operation, method: destination.Method,
 			scheme: parsed.Scheme, host: parsed.Hostname(), port: destinationPort(parsed),
-			path: parsed.EscapedPath(), query: parsed.RawQuery,
+			path: parsed.EscapedPath(), query: parsed.RawQuery, template: template,
 		})
 	}
 	return grant, nil
@@ -89,7 +102,10 @@ func (g *DestinationGrant) Authorize(identity DestinationIdentity, material Mate
 	for index := range g.targets {
 		target := &g.targets[index]
 		if target.operation == operation && target.matches(request) {
-			return DestinationAuthorization{grant: g, target: *target}, nil
+			exact := *target
+			exact.template = nil
+			exact.path = request.URL.EscapedPath()
+			return DestinationAuthorization{grant: g, target: exact}, nil
 		}
 	}
 	return DestinationAuthorization{}, ErrDestinationUnapproved
@@ -182,7 +198,7 @@ func (m Material) AuthorizeDestination(request *http.Request) (DestinationAuthor
 func (t *destinationTarget) matches(request *http.Request) bool {
 	u := request.URL
 	return request.Method == t.method && u.Scheme == t.scheme && strings.EqualFold(u.Hostname(), t.host) &&
-		destinationPort(u) == t.port && u.EscapedPath() == t.path && u.RawQuery == t.query &&
+		destinationPort(u) == t.port && t.matchesPath(u) && u.RawQuery == t.query &&
 		(request.Host == "" || strings.EqualFold(request.Host, u.Host))
 }
 
