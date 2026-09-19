@@ -130,6 +130,10 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.Get("/auth/mode", s.controllers.Auth.Mode)
 		})
 
+		// Operator diagnostics do not dispatch inference or consume account budgets.
+		r.With(s.requireAPIKey, s.requireAdmin).Get("/admin/info", s.controllers.Admin.SystemInfo)
+		r.With(s.requireAPIKey, s.requireAdmin).Get("/admin/catalog/status", s.controllers.Catalog.Status)
+
 		// Every other route requires an API key.
 		r.Group(func(r chi.Router) {
 			// Apply authentication middleware
@@ -321,7 +325,6 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					})
 
 					// System information
-					r.Get("/info", s.controllers.Admin.SystemInfo)
 					r.Get("/metrics", s.controllers.Admin.Metrics)
 					// The webhook summary: where deliveries go, what they
 					// carry, and what never delivered.
@@ -337,7 +340,6 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					// The catalog operations surface. The refresh accepts
 					// work and answers with the run that carries it, so a
 					// long acquisition never rides one request.
-					r.Get("/catalog/status", s.controllers.Catalog.Status)
 					r.Post("/catalog/refresh", s.controllers.Catalog.Refresh)
 					r.Get("/catalog/refreshes/{run_id}", s.controllers.Catalog.RefreshStatus)
 					r.Delete("/catalog/refreshes/{run_id}", s.controllers.Catalog.CancelRefresh)

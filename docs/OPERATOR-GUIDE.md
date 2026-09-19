@@ -334,6 +334,30 @@ An authorization cache deadline cannot replace that catalog contract.
 Budget windows use the admission authority's time. Strict budgets still refuse unknown capacity.
 A clock-dependent lease protocol must separately establish its required clock bounds.
 
+### Authorization recovery diagnostics
+
+Read `GET /api/v1/admin/info` for this replica's `authorization` report.
+It identifies the gateway-policy and identity-policy fences, observed revisions, refresh failures, and recovery codes.
+Valid and invalid bundle counts cover cached callers only. The latest deadline is not permission for a particular caller.
+The report reads bounded memory and cannot renew permission.
+
+Use `GET /api/v1/admin/catalog/status` for catalog-authority diagnostics.
+A verified local-operator console session can read these two endpoints while gateway policy is unavailable.
+This access requires an unexpired session under the current local token. Token rotation ends access.
+
+It permits no inference or mutation. Identity sessions and explicit bearer keys retain their normal policy checks.
+These diagnostic reads do not consume inference budgets.
+
+Revision refresh failure permits existing receipts only until their original deadlines.
+
+| Recovery code | Action |
+| --- | --- |
+| `restore_authority_access_before_receipts_expire` | Restore access to the affected policy store. |
+| `await_mutation_and_reverify` | Wait for the local policy mutation to finish, then verify current policy. |
+| `reinitialize_authority_epoch` | Verify the authoritative store, then restart against its current epoch. |
+
+Verify the intended store before restart. A diagnostic read cannot authorize an epoch transition.
+
 ### Initialize configured storage
 
 Production keeps configuration in environment variables or a secret manager.

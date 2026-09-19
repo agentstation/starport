@@ -4,6 +4,7 @@ import (
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
+	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
@@ -58,17 +59,18 @@ type Controllers struct {
 
 // Config holds configuration for creating handlers
 type Config struct {
-	Readiness          func() bool
-	Service            proxy.Proxy
-	ProviderKeys       keyring.ProviderKeys
-	APIKeys            apikey.Repository
-	Accounts           account.Repository
-	Usage              usage.Repository
-	ProviderOperations ProviderOperations
-	Catalog            CatalogOperations
-	DiscoveryRegistry  connectors.LeasingRegistry
-	DiscoveryViewer    DiscoveryViewerReader
-	Presets            presets.Repository
+	Readiness           func() bool
+	AuthorizationStatus func() authorization.Status
+	Service             proxy.Proxy
+	ProviderKeys        keyring.ProviderKeys
+	APIKeys             apikey.Repository
+	Accounts            account.Repository
+	Usage               usage.Repository
+	ProviderOperations  ProviderOperations
+	Catalog             CatalogOperations
+	DiscoveryRegistry   connectors.LeasingRegistry
+	DiscoveryViewer     DiscoveryViewerReader
+	Presets             presets.Repository
 	// Templates serves the account-template surface. A nil repository
 	// degrades those routes to 503, the way an absent preset store does.
 	Templates account.TemplateRepository
@@ -181,6 +183,7 @@ func NewControllers(cfg Config) *Controllers {
 	// The recorder rides a package-private field instead of each constructor,
 	// because every mutating controller shares the one trail and a nil trail
 	// simply records nothing.
+	collections.Admin.authorizationStatus = cfg.AuthorizationStatus
 	collections.Admin.audit = cfg.Audit
 	collections.Admin.events = cfg.Events
 	collections.Accounts.audit = cfg.Audit

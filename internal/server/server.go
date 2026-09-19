@@ -85,16 +85,17 @@ type Server struct {
 // Dependencies contains ready application ports for the HTTP adapter.
 type Dependencies struct {
 	// Readiness checks common admission prerequisites without external I/O.
-	Readiness          func() bool
-	Authorization      *authorization.Cache
-	PermissionClock    authorization.Clock
-	Service            proxy.Proxy
-	APIKeys            apikey.Repository
-	Accounts           account.Repository
-	ProviderKeys       keyring.ProviderKeys
-	RateLimits         ratelimit.Repository
-	ProviderOperations controllers.ProviderOperations
-	Console            console.PageServer
+	Readiness           func() bool
+	AuthorizationStatus func() authorization.Status
+	Authorization       *authorization.Cache
+	PermissionClock     authorization.Clock
+	Service             proxy.Proxy
+	APIKeys             apikey.Repository
+	Accounts            account.Repository
+	ProviderKeys        keyring.ProviderKeys
+	RateLimits          ratelimit.Repository
+	ProviderOperations  controllers.ProviderOperations
+	Console             console.PageServer
 	// Usage serves recorded request activity. A nil repository degrades
 	// the activity and metrics endpoints to 503, loudly.
 	Usage usage.Repository
@@ -232,38 +233,39 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 	s.auth.AcceptSessions(dependencies.LocalGate)
 
 	handlerConfig := controllers.Config{
-		Readiness:          dependencies.Readiness,
-		Service:            s.service,
-		ProviderKeys:       s.providerKeys,
-		APIKeys:            s.apiKeys,
-		Accounts:           s.accounts,
-		Usage:              dependencies.Usage,
-		ProviderOperations: s.providerOperations,
-		Catalog:            dependencies.Catalog,
-		DiscoveryRegistry:  dependencies.DiscoveryRegistry,
-		DiscoveryViewer:    s.auth.discoveryViewer,
-		Presets:            dependencies.Presets,
-		Templates:          dependencies.Templates,
-		Files:              dependencies.Files,
-		Jobs:               dependencies.Jobs,
-		Batches:            dependencies.Batches,
-		BatchGovernor:      s.batchGovernor(),
-		FileUploadBound:    config.MaxFileUploadSize,
-		FileBackend:        dependencies.FileBackend,
-		ServiceName:        "starport",
-		Build:              config.Build,
-		Deployment:         dependencies.Deployment,
-		Webhooks:           dependencies.Webhooks,
-		AuthPolicy:         s.authPolicy,
-		AuthModeStore:      config.AuthModeStore,
-		AuthModeBindHost:   config.Host,
-		AllowRemoteNoAuth:  config.AllowRemoteNoAuth,
-		Console:            dependencies.Console,
-		LocalGate:          dependencies.LocalGate,
-		IdentityAuth:       dependencies.IdentityAuth,
-		Identity:           dependencies.Identity,
-		Audit:              dependencies.Audit,
-		Events:             dependencies.Events,
+		Readiness:           dependencies.Readiness,
+		AuthorizationStatus: dependencies.AuthorizationStatus,
+		Service:             s.service,
+		ProviderKeys:        s.providerKeys,
+		APIKeys:             s.apiKeys,
+		Accounts:            s.accounts,
+		Usage:               dependencies.Usage,
+		ProviderOperations:  s.providerOperations,
+		Catalog:             dependencies.Catalog,
+		DiscoveryRegistry:   dependencies.DiscoveryRegistry,
+		DiscoveryViewer:     s.auth.discoveryViewer,
+		Presets:             dependencies.Presets,
+		Templates:           dependencies.Templates,
+		Files:               dependencies.Files,
+		Jobs:                dependencies.Jobs,
+		Batches:             dependencies.Batches,
+		BatchGovernor:       s.batchGovernor(),
+		FileUploadBound:     config.MaxFileUploadSize,
+		FileBackend:         dependencies.FileBackend,
+		ServiceName:         "starport",
+		Build:               config.Build,
+		Deployment:          dependencies.Deployment,
+		Webhooks:            dependencies.Webhooks,
+		AuthPolicy:          s.authPolicy,
+		AuthModeStore:       config.AuthModeStore,
+		AuthModeBindHost:    config.Host,
+		AllowRemoteNoAuth:   config.AllowRemoteNoAuth,
+		Console:             dependencies.Console,
+		LocalGate:           dependencies.LocalGate,
+		IdentityAuth:        dependencies.IdentityAuth,
+		Identity:            dependencies.Identity,
+		Audit:               dependencies.Audit,
+		Events:              dependencies.Events,
 	}
 	s.controllers = controllers.NewControllers(handlerConfig)
 

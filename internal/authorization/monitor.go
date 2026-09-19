@@ -17,13 +17,14 @@ type WatchedAuthority struct {
 // AuthorityStatus reports this replica's observation, not fleet-wide enforcement.
 // Errors use fixed codes. Storage errors and connection details never enter status.
 type AuthorityStatus struct {
-	Authority  string
-	Epoch      string
-	Sequence   uint64
-	CheckedAt  time.Time
-	VerifiedAt time.Time
-	Attempts   uint64
-	Failure    string
+	Authority  string    `json:"authority"`
+	Epoch      string    `json:"epoch"`
+	Sequence   uint64    `json:"sequence"`
+	CheckedAt  time.Time `json:"checked_at"`
+	VerifiedAt time.Time `json:"verified_at"`
+	Attempts   uint64    `json:"attempts"`
+	Failure    string    `json:"failure"`
+	Recovery   string    `json:"recovery"`
 }
 
 // Monitor checks durable revisions independently of requests and notifications.
@@ -85,17 +86,17 @@ func (m *Monitor) Start(parent context.Context) {
 }
 
 func (m *Monitor) run(ctx context.Context, index int) {
+	ticker := time.NewTicker(m.interval)
+	defer ticker.Stop()
 	for {
 		if ctx.Err() != nil {
 			return
 		}
 		m.check(ctx, index)
-		timer := time.NewTimer(m.interval)
 		select {
 		case <-ctx.Done():
-			timer.Stop()
 			return
-		case <-timer.C:
+		case <-ticker.C:
 		}
 	}
 }
@@ -146,6 +147,16 @@ func (m *Monitor) check(parent context.Context, index int) {
 		status.Failure = "deadline"
 	default:
 		status.Failure = "unavailable"
+	}
+	switch status.Failure {
+	case "":
+		status.Recovery = recoveryNone
+	case "epoch_changed":
+		status.Recovery = "reinitialize_authority_epoch"
+	case "invalid_revision":
+		status.Recovery = "restore_revision_integrity"
+	default:
+		status.Recovery = "restore_authority_access_before_receipts_expire"
 	}
 }
 

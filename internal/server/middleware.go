@@ -232,6 +232,10 @@ func (m *AuthMiddleware) AcceptSessions(gate *localauth.Gate) {
 // RequireAPIKey validates API key authentication
 func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ctx, ok := m.operatorDiagnosticContext(r); ok {
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
 		if m.policy.Disabled() {
 			ctx, err := m.anonymousContext(r.Context())
 			if err != nil {

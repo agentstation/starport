@@ -19,6 +19,7 @@ import (
 
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
+	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/providers/keyring"
@@ -30,16 +31,17 @@ const systemInfoUnavailable = "unavailable"
 
 // AdminController handles administrative endpoints
 type AdminController struct {
-	apiKeys      apikey.Repository
-	accounts     account.Repository
-	issuer       *apikey.Issuer
-	usageRecords usage.Repository
-	fileBackend  string
-	build        BuildInfo
-	deployment   Deployment
-	webhooks     WebhookReporter
-	audit        AuditRecorder
-	events       EventEmitter
+	authorizationStatus func() authorization.Status
+	apiKeys             apikey.Repository
+	accounts            account.Repository
+	issuer              *apikey.Issuer
+	usageRecords        usage.Repository
+	fileBackend         string
+	build               BuildInfo
+	deployment          Deployment
+	webhooks            WebhookReporter
+	audit               AuditRecorder
+	events              EventEmitter
 }
 
 // BuildInfo is the provenance of the running binary. The linker stamps the
@@ -593,6 +595,10 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 			responseCountField: systemInfoUnavailable,
 			fieldStatus:        systemInfoUnavailable,
 		},
+	}
+
+	if h.authorizationStatus != nil {
+		info["authorization"] = h.authorizationStatus()
 	}
 
 	if err := dto.WriteJSON(w, http.StatusOK, info); err != nil {
