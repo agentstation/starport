@@ -79,6 +79,11 @@ type performanceFixture struct {
 
 func newPerformanceFixture(tb testing.TB, wait time.Duration) *performanceFixture {
 	tb.Helper()
+	return newPerformanceFixtureForCatalog(tb, wait, nil)
+}
+
+func newPerformanceFixtureForCatalog(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig) *performanceFixture {
+	tb.Helper()
 	f := &performanceFixture{samples: make(chan performanceUpstreamSample, 1), handlers: make(chan time.Duration, 1), wait: wait}
 	f.upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer sk-test-key" {
@@ -88,6 +93,9 @@ func newPerformanceFixture(tb testing.TB, wait time.Duration) *performanceFixtur
 	}))
 	tb.Cleanup(f.upstream.Close)
 	cfg := validProductionConfig(tb)
+	if catalog != nil {
+		cfg.Catalog = *catalog
+	}
 	cfg.Catalog.StateDirectory = filepath.Join(tb.TempDir(), "catalog-state")
 	cfg.Storage.SQL.SQLite.Path = filepath.Join(tb.TempDir(), "starport.db")
 	cfg.Telemetry.Metrics = config.TelemetryMetricsOn

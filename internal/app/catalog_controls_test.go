@@ -10,7 +10,6 @@ import (
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
-	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,19 +40,27 @@ func TestCatalogConfigurationControlsRuntimeTraffic(t *testing.T) {
 			}
 			cfg, err := config.NewLoader().WithPaths(config.PathsForConfigDir(t.TempDir())).WithEnvironment(environment).WithEnvFiles().Load(t.Context())
 			require.NoError(t, err)
-			connected, err := runtimecatalog.OpenRuntime(t.Context(), storage.NewMockStore(), catalogSettings(cfg), nil)
-			require.NoError(t, err)
-			t.Cleanup(func() { require.NoError(t, connected.Close(t.Context())) })
+			for restart := range 2 {
+				store, err := openStorage(cfg.Storage)
+				require.NoError(t, err)
+				connected, err := runtimecatalog.OpenRuntime(t.Context(), store, catalogSettings(cfg), nil)
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, connected.Close(t.Context())); require.NoError(t, store.Close()) })
 
-			// Cover startup, polling, and stream subscription before the explicit request.
-			require.Never(t, func() bool { return requests.Load() != 0 }, 100*time.Millisecond, time.Millisecond)
-			_, err = connected.Refresh(t.Context())
-			require.Error(t, err)
-			if mode == "offline" {
-				require.Zero(t, requests.Load())
-			} else {
-				require.Positive(t, requests.Load())
+				// Startup, polling, and stream subscription retain the selected control after restart.
+				require.Never(t, func() bool { return requests.Load() != 0 }, 100*time.Millisecond, time.Millisecond, "restart %d", restart)
+				_, err = connected.Refresh(t.Context())
+				require.Error(t, err)
+				if mode == "offline" {
+					require.Zero(t, requests.Load())
+				} else {
+					require.Positive(t, requests.Load())
+				}
+				require.NoError(t, connected.Close(t.Context()))
+				require.NoError(t, store.Close())
+				requests.Store(0)
 			}
+
 		})
 	}
 }
