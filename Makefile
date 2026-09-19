@@ -102,6 +102,10 @@ test: ## Run all tests
 	@echo "Running tests..."
 	$(GO) test $(GOFLAGS) ./...
 
+.PHONY: test-authorization-capacity
+test-authorization-capacity: ## Measure authorization heap during concurrent tenant churn
+	TEST_AUTHORIZATION_CAPACITY=1 $(GO) test -json -race -count=1 -timeout 3m -run '^TestAuthorizationTenantChurnCapacity$$' ./internal/authorization
+
 .PHONY: tests
 tests: test ## Alias for test
 
