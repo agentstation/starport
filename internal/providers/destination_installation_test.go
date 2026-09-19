@@ -2,6 +2,7 @@ package providers
 
 import (
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -33,7 +34,8 @@ func TestInstallationApprovalsBindCredentialRolesToBundledOrigin(t *testing.T) {
 }
 
 func TestInstallationDefaultsRequireExplicitPrivateOriginApproval(t *testing.T) {
-	for _, origin := range []string{"http://provider.example", "https://127.0.0.1", "https://10.0.0.1", "https://[::1]", "https://[::ffff:127.0.0.1]", "https://localhost.", "https://service.localhost", "https://{location}.example", "https://user:pass@provider.example"} {
+	withUserInfo := url.URL{Scheme: "https", Host: "provider.example", User: url.UserPassword("fixture-user", "fixture-password")}
+	for _, origin := range []string{"http://provider.example", "https://127.0.0.1", "https://10.0.0.1", "https://[::1]", "https://[::ffff:127.0.0.1]", "https://localhost.", "https://service.localhost", "https://{location}.example", withUserInfo.String()} {
 		require.False(t, publicInstallationOrigin(origin), origin)
 	}
 	require.True(t, publicInstallationOrigin("https://provider.example"))
