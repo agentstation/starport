@@ -184,7 +184,7 @@ func TestSafeCatalogRouteProjectsAllowlistedSummaryOnly(t *testing.T) {
 	assert.Equal(t, float64(42), body["age_seconds"])
 	assert.Equal(t, "current", body["freshness"])
 	assert.Equal(t, "starmap", body["source_kind"])
-	assert.Equal(t, float64(1), body["providers"])
+	assert.Equal(t, float64(0), body["providers"], "no permitted provider has a registered adapter")
 	assert.Equal(t, float64(0), body["models"])
 
 	for _, sentinel := range []string{

@@ -101,11 +101,11 @@ func authorModelIDs(catalog *starmapcatalogs.Catalog, authorID starmapcatalogs.A
 	return ids
 }
 
-// AuthorsForViewer projects authors with permitted accepted model membership.
+// AuthorsForViewer projects authors with permitted routable model membership.
 func AuthorsForViewer(snapshot *runtimecatalog.RoutableSnapshot, policy disclosure.Policy) []AuthorInfo {
 	result := make([]AuthorInfo, 0)
 	for _, author := range Authors(snapshot) {
-		author = permittedAuthor(author, policy)
+		author = permittedAuthor(snapshot, author, policy)
 		if len(author.Models) > 0 {
 			result = append(result, author)
 		}
@@ -119,17 +119,17 @@ func AuthorByIDForViewer(snapshot *runtimecatalog.RoutableSnapshot, id string, p
 	if !found {
 		return AuthorInfo{}, false
 	}
-	author = permittedAuthor(author, policy)
+	author = permittedAuthor(snapshot, author, policy)
 	if len(author.Models) == 0 {
 		return AuthorInfo{}, false
 	}
 	return author, true
 }
 
-func permittedAuthor(author AuthorInfo, policy disclosure.Policy) AuthorInfo {
+func permittedAuthor(snapshot *runtimecatalog.RoutableSnapshot, author AuthorInfo, policy disclosure.Policy) AuthorInfo {
 	models := make([]string, 0, len(author.Models))
 	for _, id := range author.Models {
-		if policy.AllowsDefinition(starmapcatalogs.ModelDefinitionID(id)) {
+		if len(permittedRoutes(snapshot.RoutesForDefinition(starmapcatalogs.ModelDefinitionID(id)), policy)) > 0 {
 			models = append(models, id)
 		}
 	}

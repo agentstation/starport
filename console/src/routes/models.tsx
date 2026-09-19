@@ -17,7 +17,7 @@ import {
   matches,
   type ModelsSearch,
   operationsOf,
-  providerOf,
+  servingProviderCounts,
 } from "@/lib/modelFilter";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -121,20 +121,14 @@ function ModelsPage() {
 
   const all = useMemo(() => models.data ?? [], [models.data]);
 
-  const providers = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const model of all) {
-      const provider = providerOf(model);
-      if (provider) counts.set(provider, (counts.get(provider) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([provider, count]) => ({
-        value: provider,
-        label: providerLabel(provider, providerNames.get(provider)),
-        count,
-      }));
-  }, [all, providerNames]);
+  const providers = useMemo(
+    () => servingProviderCounts(all).map(({ provider, count }) => ({
+      value: provider,
+      label: providerLabel(provider, providerNames.get(provider)),
+      count,
+    })),
+    [all, providerNames],
+  );
 
   const authors = useMemo(() => {
     const counts = new Map<string, { name: string; count: number }>();

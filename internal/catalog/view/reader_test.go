@@ -49,3 +49,27 @@ func TestReaderProjectionRejectsDifferentGeneration(t *testing.T) {
 	require.False(t, ok)
 	require.Empty(t, diff)
 }
+
+func TestReaderSummaryMatchesVisibleModelAndProviderLists(t *testing.T) {
+	snapshot := fixtureSnapshot(t, "anthropic")
+	policy := disclosure.New(snapshot, apikey.APIKey{}, account.Account{})
+	summary, ok := SummaryForViewer(runtimecatalog.Summary{GenerationID: snapshot.GenerationID()}, snapshot, policy)
+	require.True(t, ok)
+	require.Equal(t, len(ModelsForViewer(snapshot, policy)), summary.Models)
+	require.Equal(t, len(ProvidersForViewer(snapshot, nil, policy)), summary.Providers)
+	require.Equal(t, 1, summary.Providers, "unregistered providers must not inflate the compatibility summary")
+	visible := make(map[string]bool)
+	for _, model := range ModelsForViewer(snapshot, policy) {
+		visible[model.ID] = true
+	}
+	authors := AuthorsForViewer(snapshot, policy)
+	require.NotEmpty(t, authors)
+	for _, author := range authors {
+		detail, found := AuthorByIDForViewer(snapshot, author.ID, policy)
+		require.True(t, found)
+		require.Equal(t, author, detail)
+		for _, id := range author.Models {
+			require.True(t, visible[id], "author membership must match the visible model list: %s", id)
+		}
+	}
+}

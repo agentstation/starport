@@ -13,7 +13,7 @@ import {
   matches,
   operationsOf,
   outputModalitiesOf,
-  providerOf,
+  servingProviderCounts,
 } from "./modelFilter";
 
 const model: Model = {
@@ -29,10 +29,9 @@ const model: Model = {
   ],
 };
 
-test("provider filter matches serving providers, not just the id prefix", () => {
-  expect(providerOf(model)).toBe("meta");
+test("provider filter uses offering providers", () => {
   expect(matches(model, { provider: "groq" })).toBe(true);
-  expect(matches(model, { provider: "meta" })).toBe(true);
+  expect(matches(model, { provider: "meta" })).toBe(false);
   expect(matches(model, { provider: "openai" })).toBe(false);
 });
 
@@ -210,4 +209,22 @@ test("without a usable provider the first chat model stands in", () => {
     "openai/text-embedding-3-small",
   );
   expect(defaultChatModel("", [], new Set())).toBe("");
+});
+
+test("provider counts use distinct offering providers per model", () => {
+  const repeated = {
+    ...model,
+    offerings: [...model.offerings!, model.offerings![0]!],
+  };
+  const models = [
+    repeated,
+    { id: "another/model", offerings: [{ provider: "groq", provider_model_id: "other" }] },
+    { id: "author/no-offering" },
+  ];
+  expect(servingProviderCounts(models)).toEqual([
+    { provider: "deepinfra", count: 1 },
+    { provider: "groq", count: 2 },
+  ]);
+  expect(matches({ id: "groq/no-offering" }, { provider: "groq" })).toBe(false);
+  expect(matches(model, { author: "meta" })).toBe(true);
 });

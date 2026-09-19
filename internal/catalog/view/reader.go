@@ -6,7 +6,7 @@ import (
 	"github.com/agentstation/starport/internal/catalog/disclosure"
 )
 
-// SummaryForViewer counts permitted membership in the retained generation.
+// SummaryForViewer counts permitted routable membership in the retained generation.
 // The boolean is false when the status belongs to another generation.
 func SummaryForViewer(summary runtimecatalog.Summary, snapshot *runtimecatalog.RoutableSnapshot, policy disclosure.Policy) (runtimecatalog.Summary, bool) {
 	if snapshot == nil || summary.GenerationID != snapshot.GenerationID() {
@@ -19,19 +19,8 @@ func SummaryForViewer(summary runtimecatalog.Summary, snapshot *runtimecatalog.R
 		}
 	}
 	providers := make(map[catalogs.ProviderID]bool)
-	for _, definition := range snapshot.Catalog().Definitions() {
-		if !policy.AllowsDefinition(definition.ID) {
-			continue
-		}
-		offerings, err := snapshot.Catalog().DefinitionOfferings(definition.ID)
-		if err != nil {
-			continue
-		}
-		for _, offering := range offerings {
-			if policy.AllowsOffering(catalogs.OfferingKey{ProviderID: offering.ProviderID, ProviderModelID: offering.ProviderModelID}) {
-				providers[offering.ProviderID] = true
-			}
-		}
+	for _, route := range permittedRoutes(snapshot.Routes(), policy) {
+		providers[route.ProviderID] = true
 	}
 	summary.Providers = len(providers)
 	return summary, true
