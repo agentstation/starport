@@ -69,6 +69,12 @@ func (a testRegistryAdapter) ResolveMaterial(
 	), nil
 }
 
+type leasedTestRegistryAdapter struct{ testRegistryAdapter }
+
+func (a leasedTestRegistryAdapter) AcquireRuntime() (connectors.RuntimeLease, error) {
+	return a.registry.AcquireRuntime()
+}
+
 type testServerOption func(*testServerConfig)
 
 func withTestStore(store storage.KVStore) testServerOption {
@@ -189,7 +195,11 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 			tb.Fatal(err)
 		}
 	}
-	modelRouter := router.New(testRegistryAdapter{registry: reg}, router.WithCatalog(reg.Catalog()))
+	var routerRegistry connectors.Registry = testRegistryAdapter{registry: reg}
+	if testConfig.runtimeRegistry != nil {
+		routerRegistry = leasedTestRegistryAdapter{testRegistryAdapter{registry: reg}}
+	}
+	modelRouter := router.New(routerRegistry, router.WithCatalog(reg.Catalog()))
 	presetRepository, err := presets.Open(testConfig.store)
 	if err != nil {
 		tb.Fatal(err)

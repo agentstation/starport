@@ -129,6 +129,8 @@ python3 -m venv "$python_environment"
 	'openai==3.6.0'
 "$python_environment/bin/python" "$repository_root/scripts/smoke_openrouter_python.py"
 "$python_environment/bin/python" "$repository_root/scripts/smoke_openai_responses.py"
+(cd "$repository_root" && STARPORT_CATALOG_SDK_PYTHON="$python_environment/bin/python" \
+ go test -race -count=1 -timeout 2m ./internal/server -run '^TestSDKCanonicalRemovalAfterSuccessfulInference$')
 
 typescript_environment="$temporary_directory/typescript"
 mkdir -p "$typescript_environment"
