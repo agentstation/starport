@@ -173,7 +173,8 @@ A refresh decodes at most four MiB of accepted documents.
 These bounds apply after the storage adapter returns a value.
 The workers retain at most 4,096 peer records each.
 
-The default peer lifetime is one minute. Expired latency hints return no measurement.
+The default peer lifetime is one minute. Fresh source publications renew unchanged health hints.
+Expired latency hints return no measurement.
 Expired health hints restore local evidence or remove the peer restriction.
 Cold replicas use local state while their worker reads peers.
 Local breaker transitions remain immediate during shared-storage failure.

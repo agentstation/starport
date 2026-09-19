@@ -226,10 +226,15 @@ func (t *Tracker) mergePeerState(ctx context.Context) {
 			if record.UpdatedAt.IsZero() || record.UpdatedAt.After(doc.UpdatedAt) {
 				continue
 			}
-			if t.adoptRecordLocked(record) {
-				t.peerExpires[Offering{ProviderID: record.ProviderID, ProviderModelID: record.ProviderModelID}] = doc.UpdatedAt.Add(ttl)
-				changed = true
+			adopted := t.adoptRecordLocked(record)
+			if adopted || t.matchesPeerRecordLocked(record) {
+				offering := Offering{ProviderID: record.ProviderID, ProviderModelID: record.ProviderModelID}
+				expiry := doc.UpdatedAt.Add(ttl)
+				if expiry.After(t.peerExpires[offering]) {
+					t.peerExpires[offering] = expiry
+				}
 			}
+			changed = adopted || changed
 		}
 	}
 	var snapshot Snapshot
@@ -351,4 +356,16 @@ func (t *Tracker) expirePeersLocked(now time.Time) bool {
 		changed = t.expirePeerLocked(offering, now) || changed
 	}
 	return changed
+}
+
+// matchesPeerRecordLocked permits renewal of unchanged peer evidence.
+func (t *Tracker) matchesPeerRecordLocked(record sharedRecord) bool {
+	offering := Offering{ProviderID: record.ProviderID, ProviderModelID: record.ProviderModelID}
+	if _, peer := t.peerExpires[offering]; !peer {
+		return false
+	}
+	existing := t.records[offering]
+	return existing != nil && existing.updatedAt.Equal(record.UpdatedAt) &&
+		existing.state == record.State && string(existing.failureKind) == record.FailureKind &&
+		existing.consecutiveFailure == record.ConsecutiveFailure && existing.openUntil.Equal(record.OpenUntil)
 }
