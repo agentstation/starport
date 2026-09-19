@@ -44,7 +44,25 @@ forbid_text DX-MAIN-2 'origin/master|fetch origin master' "$root/.github/workflo
 require_text DX-MAIN-3 'origin/main' .github/workflows/release.yaml
 
 forbid_text DX-CFG-1 'os\.Setenv' "$root/internal/config"
-require_text DX-CFG-2 'UserConfigDir' internal/config/paths.go
+platform_path_tests=(
+  TestPlatformPathsUseUserConfigDirectory
+  TestPlatformPathsUseExplicitDirectory
+  TestPlatformPathsRejectRelativeExplicitDirectory
+)
+platform_paths_present=true
+for test_name in "${platform_path_tests[@]}"; do
+  if ! grep -Eq "^func ${test_name}\\(" "$root/internal/config/paths_test.go"; then
+    platform_paths_present=false
+  fi
+done
+if "$platform_paths_present" && (
+  cd "$root"
+  go test -count=1 ./internal/config -run '^TestPlatformPaths(UseUserConfigDirectory|UseExplicitDirectory|RejectRelativeExplicitDirectory)$'
+); then
+  pass DX-CFG-2
+else
+  fail DX-CFG-2
+fi
 forbid_text DX-CFG-3 'default=\./data/starport' "$root/internal/config"
 require_text DX-CFG-4 'default=127\.0\.0\.1' internal/config/config.go
 require_text DX-CFG-5 'ENABLE_CORS,default=false' internal/config/config.go
