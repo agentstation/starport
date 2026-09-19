@@ -62,7 +62,11 @@ func writeAuthorizationRefusal(w http.ResponseWriter, r *http.Request, err error
 }
 
 func (m *AuthMiddleware) cachedLocal(ctx context.Context, subject string, policy func() error) (context.Context, error) {
-	bundle, err := m.authorization.Resolve(ctx, authorization.Identity{Subject: subject})
+	return m.cachedPolicy(ctx, authorization.Identity{Subject: subject}, policy)
+}
+
+func (m *AuthMiddleware) cachedPolicy(ctx context.Context, caller authorization.Identity, policy func() error) (context.Context, error) {
+	bundle, err := m.authorization.Resolve(ctx, caller)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +93,6 @@ func (m *AuthMiddleware) cachedLocal(ctx context.Context, subject string, policy
 		if console {
 			next = requestctx.WithConsoleSession(next, grant, actor)
 		}
-		return m.cachedLocal(next, subject, policy)
+		return m.cachedPolicy(next, caller, policy)
 	}), nil
 }

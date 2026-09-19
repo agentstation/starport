@@ -240,6 +240,21 @@ when there is none — and the other identity routes answer 503 naming these
 settings, so a reader learns the deployment has no identity provider rather
 than guessing at an absent feature.
 
+### Identity account selection
+
+An identity session can use only accounts granted to its user or teams.
+Starport selects the account automatically when the grants name exactly one distinct account.
+When the grants name several accounts, send `X-Starport-Account-ID` with each API request.
+Starport returns `409 account_selection_required` when the request supplies no selection.
+An ungranted account returns 403. No grant permits access to the deployment's default account implicitly.
+
+Identity sessions receive account scopes, without deployment-admin access.
+Removing a user, grant, or team membership invalidates affected authorization.
+Each queued batch line checks current policy before execution. Its account and caller identity remain fixed.
+
+The console account picker remains incomplete in this candidate.
+API clients must supply the selection header when the grants name multiple accounts.
+
 ### Rotation
 
 ```bash

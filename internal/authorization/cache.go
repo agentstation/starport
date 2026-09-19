@@ -272,3 +272,19 @@ func (c *Cache) Close() {
 	c.work.Wait()
 	finish()
 }
+
+// CheckDeadline verifies an external expiry against the configured clock margin.
+// It does not renew a policy receipt or read storage.
+func (c *Cache) CheckDeadline(deadline time.Time) error {
+	if c == nil || c.clock == nil {
+		return ErrUnavailable
+	}
+	now, healthy := c.clock()
+	if !healthy || now.IsZero() {
+		return ErrUnavailable
+	}
+	if deadline.IsZero() || !now.Add(c.limits.ClockUncertainty).Before(deadline) {
+		return ErrExpired
+	}
+	return nil
+}

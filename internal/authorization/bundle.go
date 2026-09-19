@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"slices"
+	"strings"
 
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
@@ -21,10 +22,11 @@ type Identity struct {
 // Candidate contains one coherent source read with explicit dependency revisions.
 // A nil team confirms absence only when the key has no team dependency.
 type Candidate struct {
-	Key      apikey.Record
-	Account  account.Record
-	Team     *identity.TeamRecord
-	Evidence []Evidence
+	Principal *identity.UserRecord
+	Key       apikey.Record
+	Account   account.Record
+	Team      *identity.TeamRecord
+	Evidence  []Evidence
 }
 
 // Bundle holds immutable caller records and their permission receipt.
@@ -39,6 +41,14 @@ type Bundle struct {
 func freeze(candidate Candidate, identity Identity, receipt Permit, limit int) (*Bundle, error) {
 	key := candidate.Key.APIKey
 	if key.Hash != identity.Subject || candidate.Key.Revision == 0 || key.ID == "" {
+		return nil, ErrEvidence
+	}
+	if subject, session := strings.CutPrefix(identity.Subject, SessionSubjectPrefix); session {
+		principal := candidate.Principal
+		if principal == nil || principal.Revision == 0 || principal.Revision != candidate.Key.Revision || principal.User.Subject != subject || key.ID != "session:"+principal.User.ID {
+			return nil, ErrEvidence
+		}
+	} else if candidate.Principal != nil {
 		return nil, ErrEvidence
 	}
 	if candidate.Account.Revision == 0 || candidate.Account.Account.ID != key.EffectiveAccountID() {

@@ -79,6 +79,8 @@ type AccountGrantRepository interface {
 	// ones granted to the user directly and the ones granted to any team
 	// the user belongs to, deduplicated and ordered.
 	ReachableAccounts(ctx context.Context, userID string) ([]string, error)
+	// ResolveAccount verifies an explicit grant or selects the only reachable account.
+	ResolveAccount(ctx context.Context, userID, selected string) (string, error)
 }
 
 // Repositories bundles the identity repositories one store opens.

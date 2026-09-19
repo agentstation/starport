@@ -19,6 +19,7 @@ import (
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/authorization"
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/server/requestctx"
 )
@@ -253,6 +254,8 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r.WithContext(ctx))
 			case errors.Is(err, errAccountUnavailable), errors.Is(err, errAccountDenied):
 				writeAccountRefusal(w, r, err)
+			case errors.Is(err, identity.ErrAccountSelectionRequired):
+				writeProtocolError(w, r, http.StatusConflict, "account_selection_required", "Select an account with X-Starport-Account-ID")
 			case errors.Is(err, errNoSession):
 				writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Missing API key")
 			default:
@@ -387,12 +390,18 @@ func (m *AuthMiddleware) sessionContext(r *http.Request) (context.Context, error
 		return nil, err
 	}
 	if m.authorization != nil {
-		// Identity sessions need their user and grant projection, never operator policy.
+		caller := authorization.Identity{Subject: authorization.OperatorSubject}
 		if session.Grant == localauth.GrantIdentity {
-			return nil, errAccountUnavailable
+			if len(r.Header.Values("X-Starport-Account-ID")) > 1 {
+				return nil, errAccountDenied
+			}
+			caller = authorization.Identity{Subject: authorization.SessionSubjectPrefix + session.Subject, Tenant: r.Header.Get("X-Starport-Account-ID")}
 		}
 		ctx := requestctx.WithConsoleSession(r.Context(), string(session.Grant), session.Subject)
-		result, err := m.cachedLocal(ctx, authorization.OperatorSubject, func() error {
+		result, err := m.cachedPolicy(ctx, caller, func() error {
+			if err := m.authorization.CheckDeadline(session.ExpiresAt); err != nil {
+				return err
+			}
 			now, healthy := m.permissionClock()
 			if !healthy {
 				return authorization.ErrUnavailable
@@ -400,10 +409,19 @@ func (m *AuthMiddleware) sessionContext(r *http.Request) (context.Context, error
 			_, err := m.sessions.Verify(cookie.Value, now)
 			return err
 		})
+		if errors.Is(err, identity.ErrAccountSelectionRequired) {
+			return nil, err
+		}
+		if errors.Is(err, authorization.ErrDenied) || errors.Is(err, account.ErrNotFound) {
+			return nil, errAccountDenied
+		}
 		if err != nil {
 			return nil, errAccountUnavailable
 		}
 		return result, nil
+	}
+	if session.Grant == localauth.GrantIdentity {
+		return nil, errAccountUnavailable
 	}
 	operator := apikey.LocalOperator()
 	// The grant kind and identity subject ride the context so the audit

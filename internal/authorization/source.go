@@ -3,6 +3,7 @@ package authorization
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/agentstation/starport/internal/account"
@@ -14,6 +15,8 @@ import (
 const (
 	// AnonymousSubject identifies host-selected anonymous policy, never a bearer hash.
 	AnonymousSubject = "local:anonymous"
+	// SessionSubjectPrefix separates signed identity sessions from bearer hashes.
+	SessionSubjectPrefix = "session:"
 	// OperatorSubject identifies verified machine-local operator policy.
 	OperatorSubject = "local:operator"
 )
@@ -61,9 +64,21 @@ type TeamReader interface {
 	GetByID(context.Context, string) (identity.TeamRecord, error)
 }
 
+// UserReader resolves a verified external subject to its durable principal.
+type UserReader interface {
+	GetBySubject(context.Context, string) (identity.UserRecord, error)
+}
+
+// GrantReader resolves an account through direct and membership grants.
+type GrantReader interface {
+	ResolveAccount(context.Context, string, string) (string, error)
+}
+
 // RepositorySource checks independent revision markers around one policy read.
 // The constructor starts without I/O. Startup initializes markers and creates fences.
 type RepositorySource struct {
+	users                     UserReader
+	grants                    GrantReader
 	keys                      KeyReader
 	accounts                  AccountReader
 	teams                     TeamReader
@@ -76,6 +91,8 @@ type RepositorySource struct {
 
 // RepositorySources binds policy records to their authoritative revision owners.
 type RepositorySources struct {
+	Users                     UserReader
+	Grants                    GrantReader
 	Keys                      KeyReader
 	Accounts                  AccountReader
 	Teams                     TeamReader
@@ -93,7 +110,7 @@ func NewRepositorySource(s RepositorySources, authorities *AuthoritySet, clock C
 			return nil, ErrEvidence
 		}
 	}
-	return &RepositorySource{keys: s.Keys, accounts: s.Accounts, teams: s.Teams, kv: s.KV, sql: s.SQL, authorities: authorities, clock: clock, lifetime: lifetime, kvAuthority: s.KVAuthority, sqlAuthority: s.SQLAuthority}, nil
+	return &RepositorySource{users: s.Users, grants: s.Grants, keys: s.Keys, accounts: s.Accounts, teams: s.Teams, kv: s.KV, sql: s.SQL, authorities: authorities, clock: clock, lifetime: lifetime, kvAuthority: s.KVAuthority, sqlAuthority: s.SQLAuthority}, nil
 }
 
 // Load refuses records that span a policy change. The caller can retry the whole load.
@@ -150,7 +167,7 @@ func (s *RepositorySource) observe(ctx context.Context, reader RevisionReader, a
 }
 
 func (s *RepositorySource) records(ctx context.Context, caller Identity) (Candidate, error) {
-	key, err := s.keys.GetByHash(ctx, caller.Subject)
+	key, principal, err := s.callerKey(ctx, caller)
 	if err != nil {
 		return Candidate{}, err
 	}
@@ -164,7 +181,7 @@ func (s *RepositorySource) records(ctx context.Context, caller Identity) (Candid
 	if owner.Revision == 0 || owner.Account.ID != key.APIKey.EffectiveAccountID() || (caller.Tenant != "" && caller.Tenant != owner.Account.ID) {
 		return Candidate{}, ErrEvidence
 	}
-	result := Candidate{Key: key, Account: owner}
+	result := Candidate{Key: key, Account: owner, Principal: principal}
 	if key.APIKey.TeamID != "" {
 		team, err := s.teams.GetByID(ctx, key.APIKey.TeamID)
 		if err != nil {
@@ -176,4 +193,37 @@ func (s *RepositorySource) records(ctx context.Context, caller Identity) (Candid
 		result.Team = &team
 	}
 	return result, nil
+}
+
+func (s *RepositorySource) callerKey(ctx context.Context, caller Identity) (apikey.Record, *identity.UserRecord, error) {
+	subject, session := strings.CutPrefix(caller.Subject, SessionSubjectPrefix)
+	if !session {
+		key, err := s.keys.GetByHash(ctx, caller.Subject)
+		return key, nil, err
+	}
+	if s.users == nil || s.grants == nil {
+		return apikey.Record{}, nil, ErrUnavailable
+	}
+	principal, err := s.users.GetBySubject(ctx, subject)
+	if errors.Is(err, identity.ErrUserNotFound) {
+		return apikey.Record{}, nil, ErrDenied
+	}
+	if err != nil {
+		return apikey.Record{}, nil, err
+	}
+	if principal.Revision == 0 || principal.User.Subject != subject || principal.User.ID == "" {
+		return apikey.Record{}, nil, ErrEvidence
+	}
+	accountID, err := s.grants.ResolveAccount(ctx, principal.User.ID, caller.Tenant)
+	if errors.Is(err, identity.ErrAccountGrantNotFound) {
+		return apikey.Record{}, nil, ErrDenied
+	}
+	if err != nil {
+		return apikey.Record{}, nil, err
+	}
+	if accountID == "" || (caller.Tenant != "" && accountID != caller.Tenant) {
+		return apikey.Record{}, nil, ErrEvidence
+	}
+	key := apikey.AccountSession(principal.User.ID, caller.Subject, accountID)
+	return apikey.Record{Revision: principal.Revision, APIKey: key}, &principal, nil
 }

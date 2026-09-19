@@ -92,6 +92,7 @@ func (b *runtimeBuilder) openAuthorizationCache() error {
 		}
 	}
 	source, err := authorization.NewRepositorySource(authorization.RepositorySources{
+		Users: repositories.Users, Grants: repositories.AccountGrants,
 		Keys: authorization.LocalKeys{Keys: b.apiKeys, Anonymous: apikey.Anonymous(b.config.Security.UnauthenticatedScopes)}, Accounts: b.accounts, Teams: repositories.Teams, KV: owner.kvRevision, SQL: owner.sqlRevision, KVAuthority: authorizationKV, SQLAuthority: authorizationSQL,
 	}, owner.authorities, owner.clock, 5*time.Minute)
 	if err != nil {

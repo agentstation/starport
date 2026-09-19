@@ -46,7 +46,7 @@ func cachedAuthFixture(t *testing.T, store storage.KVStore, clock authorization.
 	for _, setup := range configure {
 		setup(repos)
 	}
-	source, err := authorization.NewRepositorySource(authorization.RepositorySources{Keys: authorization.LocalKeys{Keys: keys, Anonymous: apikey.Anonymous(nil)}, Accounts: accounts, Teams: repos.Teams, KV: kv, SQL: sql, KVAuthority: "kv", SQLAuthority: "sql"}, set, clock, 5*time.Minute)
+	source, err := authorization.NewRepositorySource(authorization.RepositorySources{Users: repos.Users, Grants: repos.AccountGrants, Keys: authorization.LocalKeys{Keys: keys, Anonymous: apikey.Anonymous(nil)}, Accounts: accounts, Teams: repos.Teams, KV: kv, SQL: sql, KVAuthority: "kv", SQLAuthority: "sql"}, set, clock, 5*time.Minute)
 	require.NoError(t, err)
 	cache, err := authorization.NewCache(source, set, authorization.CacheLimits{Entries: 16, Bytes: 1 << 20, BundleBytes: 64 << 10, ConcurrentLoads: 4, TenantLoads: 2, LoadTimeout: time.Second, PermissionLifetime: 5 * time.Minute, ClockUncertainty: 30 * time.Second}, clock)
 	require.NoError(t, err)
