@@ -33,6 +33,8 @@ import (
 )
 
 type testServerConfig struct {
+	runtimeRegistry    *registry.Registry
+	cacheManager       proxy.CacheManager
 	store              storage.KVStore
 	masterKey          []byte
 	providerOperations controllers.ProviderOperations
@@ -145,11 +147,17 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	if err != nil {
 		tb.Fatal(err)
 	}
-	client, err := starmap.NewContext(context.Background())
-	if err != nil {
-		tb.Fatal(err)
+	var client *starmap.Client
+	var catalog *catalogs.Catalog
+	if testConfig.runtimeRegistry != nil {
+		catalog = testConfig.runtimeRegistry.Catalog().Current().Catalog()
+	} else {
+		client, err = starmap.NewContext(context.Background())
+		if err != nil {
+			tb.Fatal(err)
+		}
+		catalog = client.CurrentCatalogState().Catalog
 	}
-	catalog := client.CurrentCatalogState().Catalog
 	validator, err := keyring.NewCatalogCredentialValidator(func(providerID catalogs.ProviderID) (catalogs.Provider, bool) {
 		provider, lookupErr := catalog.Provider(providerID)
 		return provider, lookupErr == nil
@@ -166,17 +174,20 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		tb.Fatal(err)
 	}
 
-	reg := registry.NewEmpty()
-	if testConfig.routableCatalog {
-		plane, planeErr := runtimecatalog.Open(client)
-		if planeErr != nil {
-			tb.Fatal(planeErr)
+	reg := testConfig.runtimeRegistry
+	if reg == nil {
+		reg = registry.NewEmpty()
+		if testConfig.routableCatalog {
+			plane, planeErr := runtimecatalog.Open(client)
+			if planeErr != nil {
+				tb.Fatal(planeErr)
+			}
+			reg = registry.NewEmptyWithCatalog(plane)
 		}
-		reg = registry.NewEmptyWithCatalog(plane)
-	}
-	mockConfig := connectors.ProviderConfig{BaseURL: "http://mock"}
-	if err := reg.Register("mock", connectors.NewMockConnector(mockConfig)); err != nil {
-		tb.Fatal(err)
+		mockConfig := connectors.ProviderConfig{BaseURL: "http://mock"}
+		if err := reg.Register("mock", connectors.NewMockConnector(mockConfig)); err != nil {
+			tb.Fatal(err)
+		}
 	}
 	modelRouter := router.New(testRegistryAdapter{registry: reg}, router.WithCatalog(reg.Catalog()))
 	presetRepository, err := presets.Open(testConfig.store)
@@ -241,7 +252,11 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	}
 
 	// Match production composition: preset references resolve before routing.
-	service := proxy.NewPresetResolver(presetRepository).Wrap(proxy.New(reg, modelRouter))
+	var proxyOptions []proxy.Option
+	if testConfig.cacheManager != nil {
+		proxyOptions = append(proxyOptions, proxy.WithCache(testConfig.cacheManager, &proxy.CacheConfig{EnableModelCache: true, EnableProviderCache: true}))
+	}
+	service := proxy.NewPresetResolver(presetRepository).Wrap(proxy.New(reg, modelRouter, proxyOptions...))
 
 	// Production always composes an authentication-mode store, and whether one
 	// exists changes what the switch answers, so the test server composes one
