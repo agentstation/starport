@@ -17,7 +17,7 @@ func TestSavedRuntimeMigrationSelection(t *testing.T) {
 			file := filepath.Join(home, "config.env")
 			target := filepath.Join(home, "replacement")
 			identity := "retained-scheduler"
-			values := map[string]string{"STARPORT_CATALOG_STATE_DIR": target, "STARPORT_SCHEDULER_IDENTITY": identity, "STARPORT_DEPLOYMENT_ID": "team", "STARPORT_INSTANCE_ID": "gateway"}
+			values := map[string]string{"STARPORT_STORAGE_BADGER_PATH": filepath.Join(home, "badger"), "STARPORT_CATALOG_STATE_DIR": target, "STARPORT_SCHEDULER_IDENTITY": identity, "STARPORT_DEPLOYMENT_ID": "team", "STARPORT_INSTANCE_ID": "gateway"}
 			environment := map[string]string{"STARPORT_HOME": home, "STARPORT_CONFIG_FILE": file}
 			if mode == "environment-only" {
 				for key, value := range values {

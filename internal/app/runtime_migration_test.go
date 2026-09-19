@@ -75,6 +75,7 @@ func TestRuntimeMigrationOperatorLifecycle(t *testing.T) {
 	}
 	_, err = MigrateRuntime(t.Context(), cfg, "complete", migration)
 	require.Error(t, err, "completion must require the saved target selection")
+	values["STARPORT_STORAGE_BADGER_PATH"] = cfg.EffectivePaths().BadgerDir
 	values["STARPORT_CATALOG_STATE_DIR"] = migration.TargetDirectory
 	values["STARPORT_SCHEDULER_IDENTITY"] = identity
 	cfg = load()

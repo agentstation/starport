@@ -19,6 +19,7 @@ import (
 )
 
 type migrationStoreReceipt struct {
+	StoreSelection  string                            `json:"store_selection"`
 	StoreID         string                            `json:"store_id"`
 	Version         int                               `json:"version"`
 	Request         runtime.DirectoryMigrationRequest `json:"request"`
@@ -112,7 +113,7 @@ func (m RuntimeMigration) bindStore(ctx context.Context, store storage.KVStore, 
 			if err != nil {
 				return err
 			}
-			receipt := migrationStoreReceipt{StoreID: identity, Version: 1, Request: m.request(settings)}
+			receipt := migrationStoreReceipt{StoreSelection: m.StoreSelection, StoreID: identity, Version: 1, Request: m.request(settings)}
 			current, err := accepted.Current(ctx)
 			if err != nil && !errors.Is(err, starmaperrors.ErrNotFound) {
 				return err
@@ -182,7 +183,7 @@ func (m RuntimeMigration) verifyStoreReceipt(ctx context.Context, store storage.
 	if err := json.Unmarshal(raw, &receipt); err != nil {
 		return fmt.Errorf("decode runtime migration catalog binding: %w", err)
 	}
-	if receipt.StoreID == "" || receipt.Version != 1 || receipt.Request != m.request(settings) {
+	if receipt.StoreSelection != m.StoreSelection || receipt.StoreID == "" || receipt.Version != 1 || receipt.Request != m.request(settings) {
 		return fmt.Errorf("runtime migration catalog binding differs from the selected operation")
 	}
 	identity, err := migrationStoreIdentity(ctx, store, false)

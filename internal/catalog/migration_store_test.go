@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -47,6 +48,10 @@ func TestMigrationStoreBinding(t *testing.T) {
 			require.Equal(t, before, recovered)
 
 			changed := migration
+			changed.StoreSelection = "another-endpoint"
+			require.Error(t, changed.verifyStore(t.Context(), store, settings))
+			require.Error(t, changed.bindStore(t.Context(), store, settings))
+			changed = migration
 			changed.TargetDirectory = filepath.Join(root, "different-target")
 			require.Error(t, changed.verifyStore(t.Context(), store, settings))
 			require.Error(t, changed.bindStore(t.Context(), store, settings))
@@ -100,4 +105,35 @@ type migrationWriteFailureStore struct {
 
 func (s migrationWriteFailureStore) CompareAndSwap(context.Context, string, []byte, []byte) error {
 	return s.failure
+}
+
+func TestMigrationBindingRetainsGenerationBeyondHistoryWindow(t *testing.T) {
+	root := t.TempDir()
+	settings := identityTestSettings(filepath.Join(root, "source"), "", "")
+	migration := RuntimeMigration{OperationID: "retention", JournalRoot: filepath.Join(root, "journal")}
+	store := authoritySnapshotBadger(t, filepath.Join(root, "badger"))
+	generations, err := NewGenerationStore(store)
+	require.NoError(t, err)
+	at := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	first := runtimeTestGeneration(t, "original", testEmptyCatalog(t, "fixture"), at)
+	require.NoError(t, generations.Commit(t.Context(), first, ""))
+	require.NoError(t, migration.bindStore(t.Context(), store, settings))
+	previous := first.Manifest.GenerationID
+	for index := range catalogGenerationIndexCap + 1 {
+		next := runtimeTestGeneration(t, fmt.Sprintf("advance-%d", index), testEmptyCatalog(t, "fixture"), at.Add(time.Duration(index+1)*time.Hour))
+		require.NoError(t, generations.Commit(t.Context(), next, previous))
+		previous = next.Manifest.GenerationID
+	}
+	history, err := generations.History(t.Context())
+	require.NoError(t, err)
+	require.Len(t, history, catalogGenerationIndexCap)
+	require.False(t, indexContains(history, first.Manifest.GenerationID))
+	require.NoError(t, store.Close())
+	reopened := authoritySnapshotBadger(t, filepath.Join(root, "badger"))
+	require.NoError(t, migration.verifyStore(t.Context(), reopened, settings), "history truncation must retain migration evidence after a durable restart")
+	retained, err := NewGenerationStore(reopened)
+	require.NoError(t, err)
+	original, err := retained.Get(t.Context(), first.Manifest.GenerationID)
+	require.NoError(t, err)
+	require.Equal(t, first.Payload, original.Payload)
 }

@@ -370,7 +370,9 @@ Run these phases with the same `--operation`, `--source`, `--target`, `--journal
 2. `stage` copies and verifies private staging files.
 3. `publish` installs the target and retires the source runtime.
 4. Save the absolute target in `STARPORT_CATALOG_STATE_DIR` and the retained identity in `STARPORT_SCHEDULER_IDENTITY` in the primary configuration file.
-5. `complete` verifies the saved configuration, opens the replacement offline, and records completion.
+5. Save the unchanged KV selection in that file: `STARPORT_STORAGE_MODE` and either the absolute `STARPORT_STORAGE_BADGER_PATH` or `STARPORT_STORAGE_VALKEY_URL`.
+6. For Valkey cluster mode, also save `STARPORT_STORAGE_VALKEY_CLUSTER_MODE`. Keep credentials in their configured secret source.
+7. `complete` verifies the saved configuration, opens the replacement offline, and records completion.
 
 All three path flags require absolute paths. Read the retained scheduler identity from the original runtime status.
 Keep the original runtime selected in configuration through `publish`. Select the target only before `complete`.
@@ -383,6 +385,8 @@ The catalog KV store retains matching migration checkpoints under `catalog_migra
 Preserve these records and the source files until the migration and recovery procedure permits removal.
 If a phase fails, correct the reported cause and repeat that phase with the same operation values.
 A different catalog store cannot resume the operation, even when it contains the same catalog generation.
+
+The journal also binds the backend selection. A copied database at another path cannot satisfy the original operation.
 
 Source acquisition uses Starport's cache root, including the session cache during development.
 The models.dev HTTP cache uses `models.dev/`. Its managed Git checkout uses `sources/models.dev-git/`.

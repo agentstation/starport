@@ -18,6 +18,7 @@ type RuntimeMigration struct {
 	TargetDirectory string
 	JournalRoot     string
 	SourceIdentity  string
+	StoreSelection  string
 }
 
 // RuntimeMigrationResult reports the durable phase of a runtime directory move.

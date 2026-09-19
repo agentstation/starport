@@ -63,5 +63,5 @@ func (c *Config) VerifySavedRuntimeSelection(ctx context.Context, target, identi
 	if deployment != paths.DeploymentID || instance != paths.InstanceID {
 		return fmt.Errorf("saved migration owner differs from effective deployment or instance")
 	}
-	return nil
+	return c.verifySavedMigrationStorage(primary)
 }

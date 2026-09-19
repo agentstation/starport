@@ -29,6 +29,10 @@ func MigrateRuntime(ctx context.Context, cfg *config.Config, phase string, migra
 	default:
 		return result, fmt.Errorf("unknown runtime migration phase %q", phase)
 	}
+	migration.StoreSelection, err = cfg.Storage.MigrationStorageSelection()
+	if err != nil {
+		return result, err
+	}
 	selected := cfg.Storage.RuntimeStorage()
 	if selected.Type == storage.StorageTypeBadger {
 		if selected.Badger.InMemory {
