@@ -54,6 +54,14 @@ func TestInferenceAliasUsesTargetPermissionAndExactProviderID(t *testing.T) {
 	request.APIKeyConfig.AllowedModels = []string{"author/embed"}
 	_, err = router.RouteEmbeddings(t.Context(), request)
 	require.ErrorIs(t, err, runtimecatalog.ErrModelNotCatalogued)
+	removedError := err
+	unknownRequest := *request
+	unknownModel := *request.EmbeddingsRequest
+	unknownModel.Model = "author/unknown"
+	unknownRequest.EmbeddingsRequest = &unknownModel
+	_, unknownError := router.RouteEmbeddings(t.Context(), &unknownRequest)
+	require.ErrorIs(t, unknownError, runtimecatalog.ErrModelNotCatalogued)
+	require.Equal(t, unknownError.Error(), removedError.Error(), "error text must not disclose retained alias membership")
 	require.Equal(t, 1, calls)
 	require.True(t, retained.Names(string(alias.ID)))
 }

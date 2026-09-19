@@ -94,7 +94,7 @@ func resolveModelAliases(snapshot *runtimecatalog.RoutableSnapshot, names []stri
 	for index, name := range names {
 		resolved, valid := snapshot.ResolveAlias(name)
 		if !valid {
-			return nil, fmt.Errorf("%w: %s", runtimecatalog.ErrModelNotCatalogued, name)
+			return nil, runtimecatalog.ErrModelNotCatalogued
 		}
 		if resolved == name {
 			continue
