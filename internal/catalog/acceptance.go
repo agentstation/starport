@@ -53,6 +53,15 @@ func (r *Runtime) Accept(ctx context.Context, candidate Candidate) error {
 	if err := r.fenceEpoch(ctx, candidate.Epoch); err != nil {
 		return err
 	}
+	if r.runtime != nil && r.runtime.Status().GenerationPin != "" {
+		selected := r.runtime.State()
+		if state.GenerationID != selected.GenerationID || state.PayloadChecksum != selected.PayloadChecksum {
+			return &starmaperrors.ConflictError{
+				Resource: "catalog generation pin", Expected: selected.GenerationID, Actual: state.GenerationID,
+				Message: "candidate differs from the pinned runtime selection",
+			}
+		}
+	}
 	generation, err := r.candidates.Get(ctx, state.GenerationID)
 	if err != nil {
 		return fmt.Errorf("read candidate catalog generation for acceptance: %w", err)
