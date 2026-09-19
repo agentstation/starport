@@ -54,6 +54,12 @@ type namespacedStore struct {
 	prefix string
 }
 
+// NamespacedStore lets separate test processes share one isolated key namespace.
+// The caller owns namespace cleanup and the underlying store.
+func NamespacedStore(store storage.KVStore, prefix string) storage.KVStore {
+	return &namespacedStore{KVStore: store, prefix: prefix}
+}
+
 func newNamespacedStore(t *testing.T, store storage.KVStore) *namespacedStore {
 	t.Helper()
 	scoped := &namespacedStore{KVStore: store, prefix: "repotest:" + uuid.NewString() + ":"}
