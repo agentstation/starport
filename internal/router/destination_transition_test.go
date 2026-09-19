@@ -1,8 +1,11 @@
 package router
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,7 +27,7 @@ import (
 func TestLiveCatalogDestinationTransition(t *testing.T) {
 	for _, role := range []keyring.CredentialSource{keyring.SourceEnvironment, keyring.SourceShared, keyring.SourceBYOK} {
 		for _, streaming := range []bool{false, true} {
-			for _, mutation := range []string{"host", "port", "path", "placement"} {
+			for _, mutation := range []string{"host", "port", "path", "placement", "operator override", "scheme"} {
 				t.Run(fmt.Sprintf("%s/stream=%t/%s", role, streaming, mutation), func(t *testing.T) {
 					var calls atomic.Int64
 					serve := func(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +44,19 @@ func TestLiveCatalogDestinationTransition(t *testing.T) {
 							fmt.Fprint(w, `{"id":"transition","model":"opaque/model@001","choices":[{"index":0,"message":{"role":"assistant","content":"ok"}}]}`)
 						}
 					}
-					initialServer := httptest.NewServer(http.HandlerFunc(serve))
+					initialServer := httptest.NewUnstartedServer(http.HandlerFunc(serve))
+					if mutation == "scheme" {
+						initialServer.StartTLS()
+						roots := x509.NewCertPool()
+						roots.AddCert(initialServer.Certificate())
+						originalTransport := http.DefaultTransport
+						trusted := originalTransport.(*http.Transport).Clone()
+						trusted.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
+						http.DefaultTransport = trusted
+						t.Cleanup(func() { trusted.CloseIdleConnections(); http.DefaultTransport = originalTransport })
+					} else {
+						initialServer.Start()
+					}
 					defer initialServer.Close()
 					nextServer := httptest.NewServer(http.HandlerFunc(serve))
 					defer nextServer.Close()
@@ -77,10 +92,11 @@ func TestLiveCatalogDestinationTransition(t *testing.T) {
 					}
 					source := &bindingMaterialSource{material: material(initial)}
 					user := &embeddingUserResolver{material: material(initial)}
+					runtimeOverride := ""
 					registrations := func() []registry.Registration {
 						connector, err := connectors.NewOpenAIConnector(connectors.ProviderConfig{BaseURL: initialServer.URL, Timeout: time.Second, Enabled: true})
 						require.NoError(t, err)
-						return []registry.Registration{{Provider: "acme", Connector: connector, Operations: []catalogs.ProviderOperation{catalogs.ProviderOperationChatCompletions}, EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}, OperatorSource: source, RequiresAuth: true}}
+						return []registry.Registration{{Provider: "acme", Connector: connector, Operations: []catalogs.ProviderOperation{catalogs.ProviderOperationChatCompletions}, EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}, OperatorSource: source, OperatorBaseURL: runtimeOverride, RequiresAuth: true}}
 					}
 					reg, err := registry.Open(plane, registrations())
 					require.NoError(t, err)
@@ -88,7 +104,11 @@ func TestLiveCatalogDestinationTransition(t *testing.T) {
 					approve := func(c *catalogs.Catalog) *credentials.DestinationApprovals {
 						p, err := c.Provider("acme")
 						require.NoError(t, err)
-						policy, err := providers.CompileDestinationPolicy(p, string(role), profile.ID, "", nil)
+						approvedOverride := runtimeOverride
+						if role != keyring.SourceEnvironment {
+							approvedOverride = ""
+						}
+						policy, err := providers.CompileDestinationPolicy(p, string(role), profile.ID, approvedOverride, nil)
 						require.NoError(t, err)
 						result, err := credentials.NewDestinationApprovals(nil, policy)
 						require.NoError(t, err)
@@ -118,6 +138,19 @@ func TestLiveCatalogDestinationTransition(t *testing.T) {
 					require.Equal(t, int64(1), calls.Load())
 					origin, path, header := initialServer.URL, "/v1/chat/completions", "Authorization"
 					switch mutation {
+					case "scheme":
+						address := initialServer.Listener.Addr().String()
+						initialServer.Close()
+						listener, err := net.Listen("tcp", address)
+						require.NoError(t, err)
+						replacement := httptest.NewUnstartedServer(http.HandlerFunc(serve))
+						require.NoError(t, replacement.Listener.Close())
+						replacement.Listener = listener
+						replacement.Start()
+						defer replacement.Close()
+						origin = strings.Replace(origin, "https://", "http://", 1)
+					case "operator override":
+						runtimeOverride = nextServer.URL
 					case "host":
 						origin = strings.Replace(origin, "127.0.0.1", "localhost", 1)
 					case "port":
@@ -135,6 +168,11 @@ func TestLiveCatalogDestinationTransition(t *testing.T) {
 					snapshot, err := plane.ReplaceRuntime(state(next, 2), candidate.Availability())
 					require.NoError(t, err)
 					require.NoError(t, reg.Publish(candidate, snapshot))
+					if mutation == "operator override" && role != keyring.SourceEnvironment {
+						require.NoError(t, request())
+						require.Equal(t, int64(2), calls.Load(), "operator overrides must not redirect stored credentials")
+						return
+					}
 					require.Error(t, request())
 					require.Equal(t, int64(1), calls.Load(), "catalog changes must not expand destination approval")
 					WithDestinationApprovals(approve(next))(router.(*modelRouter))
