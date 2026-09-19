@@ -110,7 +110,7 @@ func (t *Tracker) UseSharedStore(store KVStore, config SharedConfig) error {
 }
 
 // sharedDocumentLocked projects the local records into this replica's
-// publication, or nil when no shared store is configured.
+// publication. It returns nil without a store or above the record limit.
 func (t *Tracker) sharedDocumentLocked() *sharedDocument {
 	if t.shared == nil || len(t.localRecords) > sharedRecordLimit {
 		return nil

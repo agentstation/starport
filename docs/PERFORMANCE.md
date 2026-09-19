@@ -177,6 +177,7 @@ The default peer lifetime is one minute. Fresh source publications renew unchang
 Expired latency hints return no measurement.
 Expired health hints restore local evidence or remove the peer restriction.
 Cold replicas use local state while their worker reads peers.
+
 Local breaker transitions remain immediate during shared-storage failure.
 Health publications contain local observations, so replicas do not renew each other's stale evidence.
 
