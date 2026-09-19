@@ -6,6 +6,7 @@ import (
 
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starport/internal/routing"
 )
 
 // Route is one immutable, generation-bound provider offering identity.
@@ -110,6 +111,8 @@ type RoutableSnapshot struct {
 	authorityHead        catalogs.CatalogAuthorityHead
 	permission           catalogAttemptPermission
 	availabilityRevision uint64
+	planningCandidates   []routing.Candidate
+	planningByModel      map[string][]int
 	routes               []Route
 	routability          []OfferingRoutability
 }
@@ -120,7 +123,7 @@ func newRoutableSnapshot(
 	routes []Route,
 	routability []OfferingRoutability,
 ) *RoutableSnapshot {
-	return &RoutableSnapshot{
+	snapshot := &RoutableSnapshot{
 		catalog:              state.Catalog,
 		generationID:         state.GenerationID,
 		payloadChecksum:      state.PayloadChecksum,
@@ -131,6 +134,8 @@ func newRoutableSnapshot(
 		routes:               cloneRoutes(routes),
 		routability:          append([]OfferingRoutability(nil), routability...),
 	}
+	snapshot.buildPlanningCandidates()
+	return snapshot
 }
 
 // OfferingRoutability returns the planning verdict for every offering in the
