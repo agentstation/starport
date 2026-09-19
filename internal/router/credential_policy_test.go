@@ -168,3 +168,12 @@ func TestBYOKGateSkipsTheBYOKSource(t *testing.T) {
 	require.Equal(t, keyring.SourceEnvironment, selection.source)
 	require.Equal(t, int64(1), runtime.operatorCalls.Load())
 }
+
+func TestManagedCredentialRefusalIsRetryableWithoutCredentialFallback(t *testing.T) {
+	for _, err := range []error{keyring.ErrMaterialCapacity, keyring.ErrMaterialChanged, keyring.ErrMaterialClosed} {
+		result, notConfigured := credentialResolutionFailure("acme", err)
+		require.Equal(t, failure.GatewayUnavailable, result.Kind())
+		require.True(t, result.Retryable())
+		require.False(t, notConfigured)
+	}
+}

@@ -44,6 +44,15 @@ func NewMaterial(
 	}
 }
 
+// SecretBytes reports the retained field-value bytes without exposing values.
+func (m Material) SecretBytes() int {
+	size := 0
+	for key, value := range m.values {
+		size += len(key) + len(value)
+	}
+	return size
+}
+
 // Empty reports whether the material contains no selected profile.
 func (m Material) Empty() bool { return m.profile.ID == "" }
 

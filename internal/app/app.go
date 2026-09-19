@@ -475,10 +475,27 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err != nil {
 		return fmt.Errorf("open provider credential validator: %w", err)
 	}
-	b.providerKeys, err = keyring.NewProviderKeys(credentialRepository, masterKey, credentialValidator)
+	managedKeys, err := keyring.NewProviderKeys(credentialRepository, masterKey, credentialValidator)
 	if err != nil {
 		return fmt.Errorf("open provider key service: %w", err)
 	}
+	b.providerKeys = managedKeys
+	materialContext, stopMaterials := context.WithCancel(context.Background())
+	materialDone := make(chan struct{})
+	go func() {
+		defer close(materialDone)
+		_ = managedKeys.RunMaterialRefresh(materialContext)
+	}()
+	b.application.own("managed credential material", func(ctx context.Context) error {
+		stopMaterials()
+		select {
+		case <-materialDone:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	})
+
 	return nil
 }
 

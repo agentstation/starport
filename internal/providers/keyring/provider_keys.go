@@ -2,6 +2,7 @@ package keyring
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ type keyManager struct {
 	repository credentials.Repository
 	encryption *credentials.EncryptionService
 	validator  CredentialValidator
+	materials  *managedMaterials
 }
 
 const providerCredentialScanLimit = 1000
@@ -30,7 +32,7 @@ func NewProviderKeys(
 	repository credentials.Repository,
 	masterKey []byte,
 	validator CredentialValidator,
-) (ProviderKeys, error) {
+) (ManagedProviderKeys, error) {
 	if repository == nil {
 		return nil, ErrRepositoryRequired
 	}
@@ -47,11 +49,13 @@ func NewProviderKeys(
 		repository: repository,
 		encryption: encryption,
 		validator:  validator,
+		materials:  newManagedMaterials(),
 	}, nil
 }
 
 // AddKey adds a new provider key for an account scope
 func (m *keyManager) AddKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback bool, priority int) (*credentials.ProviderKey, error) {
+	defer m.materials.invalidate(scope, provider)
 	// Validate inputs
 	if scope == "" {
 		return nil, ErrScopeRequired
@@ -143,9 +147,9 @@ func (m *keyManager) GetKeys(ctx context.Context, scope, provider string) ([]*cr
 	return keys, nil
 }
 
-// ResolveStoredMaterial decrypts and validates one exact account record against
+// loadStoredMaterial decrypts and validates one exact account record against
 // the provider contract from the leased runtime generation.
-func (m *keyManager) ResolveStoredMaterial(
+func (m *keyManager) loadStoredMaterial(
 	ctx context.Context,
 	scope string,
 	provider catalogs.Provider,
@@ -166,14 +170,20 @@ func (m *keyManager) ResolveStoredMaterial(
 		}
 		return credentials.Material{}, fmt.Errorf("read scoped provider credential: %w", err)
 	}
-	return m.decryptMaterial(provider, record.Key.EncryptedCredential, record.Key.Config,
-		fmt.Sprintf("stored:%d", record.Revision))
+	version, err := storedRecordVersion(record)
+	if err != nil {
+		return credentials.Material{}, err
+	}
+	if prior, ok := m.materials.previous(materialIdentity{scope: scope, provider: string(provider.ID)}, provider, version); ok {
+		return prior, nil
+	}
+	return m.decryptMaterial(provider, record.Key.EncryptedCredential, record.Key.Config, version)
 }
 
-// ResolveSharedMaterial decrypts the first shared credential the named
+// loadSharedMaterial decrypts the first shared credential the named
 // account may spend: open, or granted to that account. An empty account is an
 // anonymous caller, which only an open credential serves.
-func (m *keyManager) ResolveSharedMaterial(
+func (m *keyManager) loadSharedMaterial(
 	ctx context.Context,
 	accountID string,
 	provider catalogs.Provider,
@@ -192,8 +202,15 @@ func (m *keyManager) ResolveSharedMaterial(
 		if !credential.Usable(accountID) {
 			continue
 		}
-		return m.decryptMaterial(provider, credential.EncryptedCredential, credential.Config,
-			fmt.Sprintf("stored:%d:%s", record.Revision, credential.ID))
+		version, err := storedRecordVersion(record)
+		if err != nil {
+			return credentials.Material{}, err
+		}
+		version += ":" + credential.ID
+		if prior, ok := m.materials.previous(materialIdentity{scope: SharedScope, provider: string(provider.ID), account: accountID}, provider, version); ok {
+			return prior, nil
+		}
+		return m.decryptMaterial(provider, credential.EncryptedCredential, credential.Config, version)
 	}
 	return credentials.Material{}, ErrKeyNotFound
 }
@@ -240,6 +257,7 @@ func (m *keyManager) ListKeys(ctx context.Context, scope string) ([]*credentials
 
 // UpdateKey updates an existing provider key at an account scope
 func (m *keyManager) UpdateKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback *bool, priority *int) (*credentials.ProviderKey, error) {
+	defer m.materials.invalidate(scope, provider)
 	if scope == SharedScope {
 		return nil, ErrScopeIsShared
 	}
@@ -281,6 +299,7 @@ func (m *keyManager) UpdateKey(ctx context.Context, scope, provider string, key 
 
 // DeleteKey removes a provider key at an account scope
 func (m *keyManager) DeleteKey(ctx context.Context, scope, provider string) error {
+	defer m.materials.invalidate(scope, provider)
 	if scope == "" || provider == "" {
 		return fmt.Errorf("%w and %w", ErrScopeRequired, ErrProviderRequired)
 	}
@@ -308,6 +327,7 @@ func (m *keyManager) DeleteKey(ctx context.Context, scope, provider string) erro
 // defaults to open: a credential the operator applies without saying
 // otherwise serves every account.
 func (m *keyManager) AddSharedCredential(ctx context.Context, provider string, key map[string]string, config map[string]any, params SharedCredentialParams) (*credentials.SharedCredential, error) {
+	defer m.materials.invalidate(SharedScope, provider)
 	if provider == "" {
 		return nil, ErrProviderRequired
 	}
@@ -401,6 +421,7 @@ func (m *keyManager) GetSharedCredentials(ctx context.Context, provider string) 
 
 // UpdateSharedCredential mutates one shared credential by id.
 func (m *keyManager) UpdateSharedCredential(ctx context.Context, provider, credentialID string, update SharedCredentialUpdate) (*credentials.SharedCredential, error) {
+	defer m.materials.invalidate(SharedScope, provider)
 	if provider == "" {
 		return nil, ErrProviderRequired
 	}
@@ -472,6 +493,7 @@ func (m *keyManager) UpdateSharedCredential(ctx context.Context, provider, crede
 // DeleteSharedCredential removes one shared credential by id, and removes the
 // provider's record when its last credential goes.
 func (m *keyManager) DeleteSharedCredential(ctx context.Context, provider, credentialID string) error {
+	defer m.materials.invalidate(SharedScope, provider)
 	if provider == "" {
 		return ErrProviderRequired
 	}
@@ -647,4 +669,26 @@ func (m *keyManager) RotateEncryptionKey(_ context.Context) error {
 	// 3. Update master key
 	// For now, return not implemented
 	return ErrKeyRotationNotImplemented
+}
+
+// ResolveStoredMaterial returns valid managed material for one account.
+func (m *keyManager) ResolveStoredMaterial(ctx context.Context, scope string, provider catalogs.Provider) (credentials.Material, error) {
+	return m.materials.resolve(ctx, materialIdentity{scope: scope, provider: string(provider.ID)}, provider, false, func(ctx context.Context) (credentials.Material, error) {
+		return m.loadStoredMaterial(ctx, scope, provider)
+	})
+}
+
+// ResolveSharedMaterial returns material bound to the account grant snapshot.
+func (m *keyManager) ResolveSharedMaterial(ctx context.Context, accountID string, provider catalogs.Provider) (credentials.Material, error) {
+	return m.materials.resolve(ctx, materialIdentity{scope: SharedScope, provider: string(provider.ID), account: accountID}, provider, false, func(ctx context.Context) (credentials.Material, error) {
+		return m.loadSharedMaterial(ctx, accountID, provider)
+	})
+}
+
+func storedRecordVersion(record credentials.Record) (string, error) {
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		return "", fmt.Errorf("encode credential revision: %w", err)
+	}
+	return fmt.Sprintf("stored:%x", sha256.Sum256(encoded)), nil
 }
