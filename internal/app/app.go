@@ -959,7 +959,8 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	serverCfg := serverConfig(b.config, b.auth)
 	serverCfg.Build = b.application.build
 	httpServer, err := b.factories.newServer(serverCfg, server.Dependencies{
-		Service: b.gateway, APIKeys: b.apiKeys, Accounts: b.accounts,
+		Readiness: b.application.admissionReady,
+		Service:   b.gateway, APIKeys: b.apiKeys, Accounts: b.accounts,
 		Authorization:   b.application.authorization.cache,
 		PermissionClock: b.application.authorization.clock,
 		ProviderKeys:    b.providerKeys,

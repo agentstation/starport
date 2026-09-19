@@ -140,10 +140,12 @@ func (p Permit) Deadline() time.Time {
 	return deadline
 }
 
-func (p *Permit) clamp(deadline time.Time) {
+func (p *Permit) clamp(deadline, now time.Time) {
 	for i := range p.receipts {
+		p.receipts[i].absoluteDeadline = deadline.Round(0)
 		if deadline.Before(p.receipts[i].deadline) {
-			p.receipts[i].deadline = deadline
+			// Anchor persisted UTC expiry to this sample's monotonic reading.
+			p.receipts[i].deadline = now.Add(deadline.Sub(now))
 		}
 	}
 }

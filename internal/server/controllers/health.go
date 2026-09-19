@@ -11,13 +11,15 @@ import (
 type HealthController struct {
 	version string
 	service string
+	ready   func() bool
 }
 
 // NewHealthController creates a new health controller
-func NewHealthController(service, version string) *HealthController {
+func NewHealthController(service, version string, readiness func() bool) *HealthController {
 	return &HealthController{
 		service: service,
 		version: version,
+		ready:   readiness,
 	}
 }
 
@@ -35,12 +37,6 @@ func (h *HealthController) Live(w http.ResponseWriter, _ *http.Request) {
 
 // Ready handles GET /health/ready
 func (h *HealthController) Ready(w http.ResponseWriter, _ *http.Request) {
-	// In a real implementation, this would check:
-	// - Database connectivity
-	// - Provider health
-	// - Cache availability
-	// etc.
-
 	resp := dto.HealthResponse{
 		Status:    "ok",
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
@@ -48,5 +44,11 @@ func (h *HealthController) Ready(w http.ResponseWriter, _ *http.Request) {
 		Version:   h.version,
 	}
 
-	_ = dto.WriteJSON(w, http.StatusOK, resp)
+	status := http.StatusOK
+	if h.ready != nil && !h.ready() {
+		resp.Status = "not_ready"
+		status = http.StatusServiceUnavailable
+		w.Header().Set("Retry-After", "1")
+	}
+	_ = dto.WriteJSON(w, status, resp)
 }

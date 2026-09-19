@@ -313,6 +313,27 @@ curl --fail http://localhost:8080/health/live
 curl --fail http://localhost:8080/health/ready
 ```
 
+Liveness reports whether the HTTP process responds.
+Readiness returns `503 not_ready` when common authorization or catalog admission prerequisites are unavailable.
+The probe uses memory. It does not contact providers, read caller records, or renew permissions.
+Successful readiness does not guarantee that a particular account has credentials, permission, or budget.
+
+Local and replicated deployments use host time and monotonic cache expiry for gateway authorization.
+Using Valkey, PostgreSQL, or MySQL does not require native clock qualification.
+Cached permission lasts at most 60 seconds from verification, including time spent loading policy.
+The normal revocation-propagation target is two seconds with a reachable authority. Fleet qualification remains pending.
+
+A known withdrawal immediately restricts affected new requests on the replica that observes it.
+Refresh failure cannot extend a receipt. Expired or invalidated receipts require fresh evidence.
+Already admitted streams may finish.
+
+Host time governs absolute key and session expiry. Operators must keep that clock correct.
+An internal authoritative catalog still requires its qualified clock and permission receipt.
+An authorization cache deadline cannot replace that catalog contract.
+
+Budget windows use the admission authority's time. Strict budgets still refuse unknown capacity.
+A clock-dependent lease protocol must separately establish its required clock bounds.
+
 ### Initialize configured storage
 
 Production keeps configuration in environment variables or a secret manager.

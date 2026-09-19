@@ -111,10 +111,12 @@ func (f *Fence) Require(sequence uint64) error {
 // Receipt permits memory reads only during its original verified interval.
 // Copies share the same fence and cannot escape a withdrawal.
 type Receipt struct {
-	ticket   Ticket
-	evidence Evidence
-	deadline time.Time
-	earliest time.Time
+	ticket           Ticket
+	evidence         Evidence
+	deadline         time.Time
+	earliest         time.Time
+	absoluteDeadline time.Time
+	retired          *atomic.Uint32
 }
 
 // Accept bounds authority evidence by the configured permission lifetime.
@@ -141,7 +143,7 @@ func (t Ticket) Accept(evidence Evidence, now time.Time, maxLifetime, uncertaint
 		deadline = limit
 	}
 	deadline = deadline.Add(-uncertainty)
-	receipt := Receipt{ticket: t, evidence: evidence, deadline: deadline, earliest: evidence.VerifiedAt.Add(-uncertainty)}
+	receipt := Receipt{ticket: t, evidence: evidence, deadline: deadline, earliest: evidence.VerifiedAt.Add(-uncertainty), retired: new(atomic.Uint32)}
 	if err := receipt.Check(now, clockHealthy); err != nil {
 		return Receipt{}, err
 	}
@@ -151,7 +153,17 @@ func (t Ticket) Accept(evidence Evidence, now time.Time, maxLifetime, uncertaint
 // Check rechecks permission before admission, retries, and cached response delivery.
 // The caller must supply current clock health on every check.
 func (r Receipt) Check(now time.Time, clockHealthy bool) error {
-	if !clockHealthy || now.Before(r.earliest) {
+	if r.retired == nil {
+		return ErrEvidence
+	}
+	switch r.retired.Load() {
+	case 1:
+		return ErrUnavailable
+	case 2:
+		return ErrExpired
+	}
+	if !clockHealthy || now.Before(r.earliest) || now.Round(0).Before(r.earliest.Round(0)) {
+		r.retired.CompareAndSwap(0, 1)
 		return ErrUnavailable
 	}
 	if r.ticket.fence == nil || r.ticket.state == nil {
@@ -160,7 +172,8 @@ func (r Receipt) Check(now time.Time, clockHealthy bool) error {
 	if r.ticket.fence.state.Load() != r.ticket.state {
 		return ErrWithdrawn
 	}
-	if !now.Before(r.deadline) {
+	if !now.Before(r.deadline) || !now.Round(0).Before(r.deadline.Round(0)) || (!r.absoluteDeadline.IsZero() && !now.Before(r.absoluteDeadline)) {
+		r.retired.CompareAndSwap(0, 2)
 		return ErrExpired
 	}
 	return nil

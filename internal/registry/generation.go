@@ -235,14 +235,17 @@ func (l *Lease) Snapshot() *runtimecatalog.RoutableSnapshot {
 	if l == nil || l.generation == nil {
 		return nil
 	}
-	generation := l.generation
-	if generation.catalog != nil {
-		current := generation.catalog.Current()
-		if current != nil && current.GenerationID() == generation.catalogGenerationID {
+	return l.generation.currentSnapshot()
+}
+
+func (g *runtimeGeneration) currentSnapshot() *runtimecatalog.RoutableSnapshot {
+	if g.catalog != nil {
+		current := g.catalog.Current()
+		if current != nil && current.GenerationID() == g.catalogGenerationID {
 			return current
 		}
 	}
-	return generation.snapshot
+	return g.snapshot
 }
 
 // Get returns a connector from the leased generation.

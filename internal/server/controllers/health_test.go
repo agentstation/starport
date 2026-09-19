@@ -12,7 +12,7 @@ import (
 )
 
 func TestHealthHandler_Live(t *testing.T) {
-	handler := NewHealthController("starport", "v1.0.0")
+	handler := NewHealthController("starport", "v1.0.0", nil)
 
 	req := httptest.NewRequest("GET", "/health/live", nil)
 	w := httptest.NewRecorder()
@@ -40,7 +40,7 @@ func TestHealthHandler_Live(t *testing.T) {
 }
 
 func TestHealthHandler_Ready(t *testing.T) {
-	handler := NewHealthController("starport", "v1.0.0")
+	handler := NewHealthController("starport", "v1.0.0", nil)
 
 	req := httptest.NewRequest("GET", "/health/ready", nil)
 	w := httptest.NewRecorder()
@@ -68,7 +68,7 @@ func TestHealthHandler_Ready(t *testing.T) {
 }
 
 func TestHealthHandler_ContentType(t *testing.T) {
-	handler := NewHealthController("starport", "v1.0.0")
+	handler := NewHealthController("starport", "v1.0.0", nil)
 
 	tests := []struct {
 		name     string
@@ -102,7 +102,7 @@ func TestHealthHandler_ContentType(t *testing.T) {
 }
 
 func TestHealthHandler_Timestamps(t *testing.T) {
-	handler := NewHealthController("starport", "v1.0.0")
+	handler := NewHealthController("starport", "v1.0.0", nil)
 
 	// Get timestamp from live endpoint
 	req1 := httptest.NewRequest("GET", "/health/live", nil)
@@ -160,7 +160,7 @@ func TestHealthHandler_ServiceInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHealthController(tt.service, tt.version)
+			handler := NewHealthController(tt.service, tt.version, nil)
 
 			// Test live endpoint
 			req := httptest.NewRequest("GET", "/health/live", nil)

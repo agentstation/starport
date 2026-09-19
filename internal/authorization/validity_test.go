@@ -42,6 +42,7 @@ func TestReceiptBoundsValidityAndClockHealth(t *testing.T) {
 		{"clock_reversed", now.Add(-31 * time.Second), true, ErrUnavailable},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			receipt := verifiedReceipt(t, NewFence("deployment", "epoch-one"), now)
 			if err := receipt.Check(tc.at, tc.healthy); !errors.Is(err, tc.want) {
 				t.Fatalf("check = %v, want %v", err, tc.want)
 			}

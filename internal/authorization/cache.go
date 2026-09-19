@@ -221,7 +221,7 @@ func (c *Cache) loadOnce(ctx context.Context, identity Identity, ticket tickets)
 		receipt, err = ticket.accept(candidate.Evidence, now, c.limits.PermissionLifetime, c.limits.ClockUncertainty, healthy)
 		if err == nil && candidate.Key.APIKey.ExpiresAt != nil {
 			deadline := candidate.Key.APIKey.ExpiresAt.Add(-c.limits.ClockUncertainty)
-			receipt.clamp(deadline)
+			receipt.clamp(deadline, now)
 			err = receipt.Check(now, healthy)
 		}
 		if err == nil {

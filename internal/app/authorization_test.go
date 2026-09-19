@@ -142,7 +142,7 @@ func (r *sampledCatalogRuntime) PermissionClock() permission.ClockReading {
 	return permission.ClockReading{}
 }
 
-func TestApplicationAuthorizationUsesQualifiedCatalogClock(t *testing.T) {
+func TestSharedAuthorizationDoesNotRequireCatalogClock(t *testing.T) {
 	factories := explicitTestFactories()
 	openCatalog := factories.openCatalog
 	sampled := &sampledCatalogRuntime{}
@@ -156,20 +156,24 @@ func TestApplicationAuthorizationUsesQualifiedCatalogClock(t *testing.T) {
 		dependencies = value
 		return newBlockingHTTPRuntime(), nil
 	}
-	application, err := New(validProductionConfig(t), withRuntimeFactories(factories))
+	cfg := validProductionConfig(t)
+	cfg.Storage.Mode = "valkey"
+	cfg.Storage.Valkey.URL = "redis://127.0.0.1:6379"
+	cfg.Storage.Valkey.MaxConnections = 10
+	application, err := New(cfg, withRuntimeFactories(factories))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
 	require.NotNil(t, dependencies.Authorization)
 	require.NotNil(t, dependencies.PermissionClock)
 	identity := authorization.Identity{Subject: testAPIKey().Hash}
 	_, err = dependencies.Authorization.Resolve(t.Context(), identity)
-	require.ErrorIs(t, err, authorization.ErrUnavailable)
+	require.NoError(t, err)
 	now := time.Now()
 	sampled.sample.Store(&permission.ClockReading{Time: now, Known: true, Uncertainty: time.Second})
 	bundle, err := dependencies.Authorization.Resolve(t.Context(), identity)
 	require.NoError(t, err)
 	current, healthy := dependencies.PermissionClock()
-	require.Equal(t, now, current)
+	require.NotEqual(t, current.Round(0), current)
 	require.True(t, healthy)
 	require.NoError(t, bundle.Permit().Check(current, healthy))
 	for _, sample := range []permission.ClockReading{
@@ -180,9 +184,9 @@ func TestApplicationAuthorizationUsesQualifiedCatalogClock(t *testing.T) {
 	} {
 		sampled.sample.Store(&sample)
 		current, healthy = dependencies.PermissionClock()
-		require.False(t, healthy)
-		require.Error(t, bundle.Permit().Check(current, healthy))
+		require.True(t, healthy)
+		require.NoError(t, bundle.Permit().Check(current, healthy))
 		_, err = dependencies.Authorization.Resolve(t.Context(), identity)
-		require.ErrorIs(t, err, authorization.ErrUnavailable)
+		require.NoError(t, err)
 	}
 }

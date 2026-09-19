@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	authorizationKV               = "gateway-policy"
-	authorizationSQL              = "identity-policy"
-	authorizationRevisionInterval = time.Second
-	authorizationRevisionTimeout  = time.Second
+	authorizationKV                 = "gateway-policy"
+	authorizationSQL                = "identity-policy"
+	authorizationRevisionInterval   = time.Second
+	authorizationRevisionTimeout    = time.Second
+	authorizationPermissionLifetime = 60 * time.Second
 )
 
 // authorizationOwner holds this replica's independent policy fences and revision monitor.
@@ -73,16 +74,11 @@ func (o *authorizationOwner) Close(ctx context.Context) error {
 	return o.monitor.Close(ctx)
 }
 
-// openAuthorizationCache binds policy reads to the shared permission clock.
+// openAuthorizationCache bounds gateway policy with process-local elapsed time.
+// External catalog deadlines remain owned by the catalog permission contract.
 func (b *runtimeBuilder) openAuthorizationCache() error {
 	owner := b.application.authorization
-	owner.clock = func() (time.Time, bool) {
-		if b.application.catalogRuntime == nil {
-			return time.Time{}, false
-		}
-		sample := b.application.catalogRuntime.PermissionClock()
-		return sample.Time, sample.Known && !sample.Time.IsZero() && sample.Uncertainty >= 0 && sample.Uncertainty <= 30*time.Second
-	}
+	owner.clock = func() (time.Time, bool) { return time.Now(), true }
 	repositories := b.identityRepos
 	if repositories.Teams == nil {
 		var err error
@@ -94,12 +90,12 @@ func (b *runtimeBuilder) openAuthorizationCache() error {
 	source, err := authorization.NewRepositorySource(authorization.RepositorySources{
 		Users: repositories.Users, Grants: repositories.AccountGrants,
 		Keys: authorization.LocalKeys{Keys: b.apiKeys, Anonymous: apikey.Anonymous(b.config.Security.UnauthenticatedScopes)}, Accounts: b.accounts, Teams: repositories.Teams, KV: owner.kvRevision, SQL: owner.sqlRevision, KVAuthority: authorizationKV, SQLAuthority: authorizationSQL,
-	}, owner.authorities, owner.clock, 5*time.Minute)
+	}, owner.authorities, owner.clock, authorizationPermissionLifetime)
 	if err != nil {
 		return err
 	}
 	owner.cache, err = authorization.NewCache(source, owner.authorities, authorization.CacheLimits{
-		Entries: 1024, Bytes: 16 << 20, BundleBytes: 64 << 10, ConcurrentLoads: 16, TenantLoads: 4, LoadTimeout: time.Second, PermissionLifetime: 5 * time.Minute, ClockUncertainty: 30 * time.Second,
+		Entries: 1024, Bytes: 16 << 20, BundleBytes: 64 << 10, ConcurrentLoads: 16, TenantLoads: 4, LoadTimeout: time.Second, PermissionLifetime: authorizationPermissionLifetime,
 	}, owner.clock)
 	if err != nil {
 		return err

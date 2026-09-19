@@ -84,6 +84,8 @@ type Server struct {
 
 // Dependencies contains ready application ports for the HTTP adapter.
 type Dependencies struct {
+	// Readiness checks common admission prerequisites without external I/O.
+	Readiness          func() bool
 	Authorization      *authorization.Cache
 	PermissionClock    authorization.Clock
 	Service            proxy.Proxy
@@ -230,6 +232,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 	s.auth.AcceptSessions(dependencies.LocalGate)
 
 	handlerConfig := controllers.Config{
+		Readiness:          dependencies.Readiness,
 		Service:            s.service,
 		ProviderKeys:       s.providerKeys,
 		APIKeys:            s.apiKeys,

@@ -58,6 +58,7 @@ type Controllers struct {
 
 // Config holds configuration for creating handlers
 type Config struct {
+	Readiness          func() bool
 	Service            proxy.Proxy
 	ProviderKeys       keyring.ProviderKeys
 	APIKeys            apikey.Repository
@@ -137,7 +138,7 @@ type Config struct {
 // NewControllers creates a new controller collection
 func NewControllers(cfg Config) *Controllers {
 	collections := &Controllers{
-		Health:               NewHealthController(cfg.ServiceName, orUnstamped(cfg.Build.Version)),
+		Health:               NewHealthController(cfg.ServiceName, orUnstamped(cfg.Build.Version), cfg.Readiness),
 		Chat:                 NewChatController(cfg.Service),
 		OpenRouterChat:       NewOpenRouterChatController(cfg.Service),
 		Responses:            NewResponsesController(cfg.Service),

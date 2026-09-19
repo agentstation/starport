@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/apikey"
+	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/sqlstore"
 )
@@ -103,6 +104,12 @@ func TestSharedStartupDoesNotCreateLocalDatabases(t *testing.T) {
 		t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
 		require.Equal(t, sqlstore.TypePostgres, database.Dialect())
 		require.NoError(t, database.Ping(t.Context()))
+		now, healthy := application.authorization.clock()
+		require.True(t, healthy)
+		require.NotEqual(t, now.Round(0), now)
+		require.True(t, application.admissionReady())
+		_, err = application.authorization.cache.Resolve(t.Context(), authorization.Identity{Subject: testAPIKey().Hash})
+		require.NoError(t, err)
 		if restart == 0 {
 			require.NoError(t, application.store.Set(t.Context(), "shared-startup-probe", []byte("durable")))
 		}

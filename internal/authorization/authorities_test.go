@@ -116,15 +116,15 @@ func TestPermitUsesEarliestDeadlineWithoutAllocations(t *testing.T) {
 	}
 	view := permit.Evidence()
 	view[1].ValidUntil = now.Add(time.Hour)
-	if err := permit.Check(now.Add(30*time.Second), true); !errors.Is(err, ErrExpired) {
-		t.Fatalf("expiry = %v", err)
-	}
 	if allocations := testing.AllocsPerRun(1000, func() {
 		if err := permit.Check(now, true); err != nil {
 			panic(err)
 		}
 	}); allocations != 0 {
 		t.Fatalf("allocations = %v", allocations)
+	}
+	if err := permit.Check(now.Add(30*time.Second), true); !errors.Is(err, ErrExpired) {
+		t.Fatalf("expiry = %v", err)
 	}
 }
 
