@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/agentstation/starport/internal/authorization/revision"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -58,7 +59,8 @@ type Repository interface {
 }
 
 type repository struct {
-	store storage.KVStore
+	authority *revision.KV
+	store     storage.KVStore
 }
 
 type apiKeyRecord struct {
@@ -84,11 +86,15 @@ type apiKeyCollectionRecord struct {
 }
 
 // Open returns a storage-backed API key repository.
-func Open(store storage.KVStore) (Repository, error) {
+func Open(store storage.KVStore, options ...Option) (Repository, error) {
 	if store == nil {
 		return nil, ErrRepositoryRequired
 	}
-	return &repository{store: store}, nil
+	r := &repository{store: store, authority: revision.NewKV(store, nil)}
+	for _, option := range options {
+		option(r)
+	}
+	return r, nil
 }
 
 func (r *repository) Create(ctx context.Context, apiKey APIKey) (Record, error) {
@@ -161,7 +167,7 @@ func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (R
 			Key: initialKey, NewValue: markerData,
 		}}, mutations...)
 	}
-	if err := r.store.CompareAndSwapBatch(ctx, mutations); err != nil {
+	if err := r.authority.Apply(ctx, mutations); err != nil {
 		if initial && errors.Is(err, storage.ErrConflict) {
 			return r.replaceMissingInitial(ctx, stored, data, indexData, markerData)
 		}
@@ -229,7 +235,7 @@ func (r *repository) replaceMissingInitial(
 	if err != nil {
 		return Record{}, fmt.Errorf("encode replacement API key collection record: %w", err)
 	}
-	if err := r.store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
+	if err := r.authority.Apply(ctx, []storage.CompareAndSwapMutation{
 		{Key: initialKey, ExpectedValue: currentMarkerData, NewValue: markerData},
 		{Key: apiKeyStorageKey(stored.APIKey.ID), NewValue: apiKeyData},
 		{Key: hashStorageKey(stored.APIKey.Hash), NewValue: hashData},
@@ -296,7 +302,7 @@ func (r *repository) ReleaseInitial(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("encode released API key collection record: %w", err)
 	}
-	if err := r.store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
+	if err := r.authority.Apply(ctx, []storage.CompareAndSwapMutation{
 		{Key: initialKey, ExpectedValue: markerData},
 		{Key: apiKeyStoreKey, ExpectedValue: apiKeyData},
 		{Key: hashKey, ExpectedValue: hashData},
@@ -410,7 +416,7 @@ func (r *repository) Update(ctx context.Context, apiKey APIKey, expectedRevision
 	if err != nil {
 		return Record{}, fmt.Errorf("encode API key update: %w", err)
 	}
-	if err := r.store.CompareAndSwap(ctx, apiKeyStorageKey(apiKey.ID), currentData, updatedData); err != nil {
+	if err := r.authority.Apply(ctx, []storage.CompareAndSwapMutation{{Key: apiKeyStorageKey(apiKey.ID), ExpectedValue: currentData, NewValue: updatedData}}); err != nil {
 		return Record{}, mapConflict("update API key", err)
 	}
 	return recordFromStored(updated), nil
@@ -476,7 +482,7 @@ func (r *repository) Delete(ctx context.Context, id string, expectedRevision uin
 		// repair must make this delete conflict instead of leaving a dangling index.
 		mutations = append(mutations, storage.CompareAndSwapMutation{Key: indexKey})
 	}
-	if err := r.store.CompareAndSwapBatch(ctx, mutations); err != nil {
+	if err := r.authority.Apply(ctx, mutations); err != nil {
 		return mapConflict("delete API key, hash index, and collection record", err)
 	}
 	return nil
@@ -586,4 +592,12 @@ func mapConflict(action string, err error) error {
 		return ErrConflict
 	}
 	return fmt.Errorf("%s: %w", action, err)
+}
+
+// Option configures the repository's local authorization fence.
+type Option func(*repository)
+
+// WithAuthorizationFence revokes cached permissions before each durable mutation.
+func WithAuthorizationFence(begin func() func()) Option {
+	return func(r *repository) { r.authority = revision.NewKV(r.store, begin) }
 }
