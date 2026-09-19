@@ -15,6 +15,7 @@ type Material struct {
 	profile  catalogs.ProviderCredentialProfile
 	values   map[catalogs.ProviderCredentialFieldID]string
 	metadata MaterialMetadata
+	validity *MaterialValidity
 }
 
 // MaterialMetadata describes one resolved credential lifecycle. Version is

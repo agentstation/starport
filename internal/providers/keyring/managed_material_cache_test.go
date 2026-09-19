@@ -129,3 +129,19 @@ func TestManagedMaterialShutdownRejectsFurtherLoads(t *testing.T) {
 	_, err := manager.ResolveStoredMaterial(t.Context(), AccountScope("a"), syntheticCredentialProvider())
 	require.ErrorIs(t, err, ErrMaterialClosed)
 }
+
+func TestManagedMaterialMutationRevokesPreviouslyReturnedHandles(t *testing.T) {
+	provider := syntheticCredentialProvider()
+	manager := newSyntheticProviderKeys(t, provider)
+	_, err := manager.AddKey(t.Context(), AccountScope("a"), string(provider.ID), map[string]string{"api-key": "before"}, nil, false, 0)
+	require.NoError(t, err)
+	material, err := manager.ResolveStoredMaterial(t.Context(), AccountScope("a"), provider)
+	require.NoError(t, err)
+	require.NoError(t, material.CheckValidity(time.Now()))
+	_, err = manager.UpdateKey(t.Context(), AccountScope("a"), string(provider.ID), map[string]string{"api-key": "after"}, nil, nil, nil)
+	require.NoError(t, err)
+	require.ErrorIs(t, material.CheckValidity(time.Now()), credentials.ErrMaterialRevoked)
+	current, err := manager.ResolveStoredMaterial(t.Context(), AccountScope("a"), provider)
+	require.NoError(t, err)
+	require.NoError(t, current.CheckValidity(time.Now()))
+}

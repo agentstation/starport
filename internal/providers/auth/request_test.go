@@ -3,6 +3,7 @@ package auth
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
@@ -91,4 +92,17 @@ func TestGoogleDefaultAppliesQuotaProjectFromTypedOptions(t *testing.T) {
 	require.NoError(t, registry.Apply(material, request))
 	require.Equal(t, "Bearer token", request.Header.Get("Authorization"))
 	require.Equal(t, "billing-project", request.Header.Get("x-goog-user-project"))
+}
+
+func TestRequestAuthenticationRejectsExpiredMaterial(t *testing.T) {
+	registry, err := ProductionRegistry()
+	require.NoError(t, err)
+	material := credentials.NewMaterial(catalogs.ProviderCredentialProfile{
+		ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
+		Placements: []catalogs.ProviderCredentialPlacement{{Field: "api-key", Kind: catalogs.ProviderCredentialPlacementHeader, Name: "Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer}},
+	}, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, credentials.MaterialMetadata{ExpiresAt: time.Now().Add(-time.Second)})
+	request, err := http.NewRequest(http.MethodPost, "https://provider.example/inference", nil)
+	require.NoError(t, err)
+	require.Error(t, registry.Apply(material, request))
+	require.Empty(t, request.Header.Get("Authorization"))
 }

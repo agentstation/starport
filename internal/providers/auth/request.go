@@ -3,11 +3,13 @@
 package auth
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -82,12 +84,23 @@ func (r *Registry) Apply(material credentials.Material, request *http.Request) e
 	if material.Empty() {
 		return ErrMaterialRequired
 	}
+	if err := material.CheckValidity(time.Now()); err != nil {
+		return err
+	}
 	profile := material.Profile()
 	applicator, exists := r.applicators[profile.Primitive]
 	if !exists {
 		return fmt.Errorf("%s: %w", profile.Primitive, ErrPrimitiveUnsupported)
 	}
-	return applicator(material, request)
+	if err := applicator(material, request); err != nil {
+		return err
+	}
+	expiry, expiring := material.ExpiresAt()
+	if expiring || material.Validity() != nil {
+		bound := requestValidity{expiry: expiry, validity: material.Validity()}
+		*request = *request.WithContext(context.WithValue(request.Context(), requestValidityKey{}, bound))
+	}
+	return nil
 }
 
 func applyGoogleDefault(material credentials.Material, request *http.Request) error {
@@ -153,4 +166,23 @@ func applyScheme(scheme catalogs.ProviderCredentialScheme, value string) (string
 	default:
 		return "", errors.New("provider credential placement scheme is unsupported")
 	}
+}
+
+type requestValidityKey struct{}
+type requestValidity struct {
+	expiry   time.Time
+	validity *credentials.MaterialValidity
+}
+
+// CheckRequestValidity rechecks a bound credential before the HTTP attempt.
+func CheckRequestValidity(request *http.Request) error {
+	bound, ok := request.Context().Value(requestValidityKey{}).(requestValidity)
+	if !ok {
+		return nil
+	}
+	now := time.Now()
+	if !bound.expiry.IsZero() && !now.Before(bound.expiry) {
+		return credentials.ErrMaterialExpired
+	}
+	return bound.validity.Check(now)
 }

@@ -66,6 +66,7 @@ func (c *managedMaterials) invalidate(scope, provider string) {
 }
 
 func (c *managedMaterials) remove(key materialIdentity, entry *managedEntry) {
+	entry.material.Validity().Revoke()
 	delete(c.entries, key)
 	c.bytes -= entry.bytes
 }
@@ -143,13 +144,14 @@ func (c *managedMaterials) resolve(ctx context.Context, key materialIdentity, pr
 			delete(c.tenants, key.scope+"\x00"+key.account)
 		}
 		err = c.publishLoaded(key, entry, material, started, err)
+		result := entry.material
 		entry.busy = nil
 		close(done)
 		c.mu.Unlock()
 		if err != nil {
 			return credentials.Material{}, err
 		}
-		return material, nil
+		return result, nil
 	}
 }
 
@@ -172,11 +174,18 @@ func (c *managedMaterials) publishLoaded(key materialIdentity, entry *managedEnt
 		} else {
 			c.bytes += size - entry.bytes
 			entry.bytes = size
-			entry.material = material
 			entry.deadline = started.Add(managedMaterialValidity)
 			if expiry, ok := material.ExpiresAt(); ok && expiry.Before(entry.deadline) {
 				entry.deadline = expiry
 			}
+			validity := entry.material.Validity()
+			if validity == nil || entry.material.Version() != material.Version() {
+				validity.Revoke()
+				validity = credentials.NewMaterialValidity(entry.deadline)
+			} else {
+				validity = validity.Renew(entry.deadline)
+			}
+			entry.material = material.WithValidity(validity)
 			entry.refreshAt = started.Add(managedMaterialValidity / 2)
 		}
 	}
@@ -253,6 +262,9 @@ func (c *managedMaterials) close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.closed = true
+	for _, entry := range c.entries {
+		entry.material.Validity().Revoke()
+	}
 	clear(c.entries)
 	c.bytes = 0
 }
