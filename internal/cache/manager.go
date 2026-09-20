@@ -139,30 +139,33 @@ func (cm *Manager) SetResponse(ctx context.Context, key string, response []byte)
 }
 
 // GetModel retrieves model metadata (local cache only)
-func (cm *Manager) GetModel(ctx context.Context, modelID string) (any, bool, error) {
+func (cm *Manager) GetModel(ctx context.Context, modelID string, target any) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	data, found, err := cm.models.Get(ctx, cm.modelKey(modelID))
 	if err != nil || !found {
-		return nil, found, err
+		return false, err
 	}
-
-	// Unmarshal the data
-	var model any
-	if err := json.Unmarshal(data, &model); err != nil {
-		return nil, false, fmt.Errorf("failed to unmarshal model: %w", err)
+	if err := json.Unmarshal(data, target); err != nil {
+		return false, fmt.Errorf("decode cached model: %w", err)
 	}
-
-	return model, true, nil
+	return true, nil
 }
 
 // SetModel caches model metadata (local cache only)
 func (cm *Manager) SetModel(ctx context.Context, modelID string, model any) error {
 	key := cm.modelKey(modelID)
-	data, err := json.Marshal(model)
+	data, err := encodeModel(ctx, model, fillQueueBytes-96-len(key))
+	if errors.Is(err, errModelEncodingLimit) {
+		cm.fills.dropped.Add(1)
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("failed to marshal model: %w", err)
 	}
 
-	return cm.fills.enqueueTo(ctx, cm.models, key, data, cm.config.Models.TTL)
+	return cm.fills.enqueueOwnedTo(ctx, cm.models, key, data, cm.config.Models.TTL)
 }
 
 // InvalidateModels clears all model metadata from local cache

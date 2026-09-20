@@ -19,12 +19,12 @@ type withdrawingCatalogCache struct {
 	onRead func()
 }
 
-func (m *withdrawingCatalogCache) GetModel(ctx context.Context, key string) (any, bool, error) {
-	value, found, err := m.mockCacheManager.GetModel(ctx, key)
+func (m *withdrawingCatalogCache) GetModel(ctx context.Context, key string, target any) (bool, error) {
+	found, err := m.mockCacheManager.GetModel(ctx, key, target)
 	if m.onRead != nil {
 		m.onRead()
 	}
-	return value, found, err
+	return found, err
 }
 
 func TestCompatibilityDiscoveryRejectsWithdrawnAuthority(t *testing.T) {

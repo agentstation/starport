@@ -29,18 +29,17 @@ func newMockCacheManager() *mockCacheManager {
 	return &mockCacheManager{storage: make(map[string][]byte), calls: make(map[string]int)}
 }
 
-func (m *mockCacheManager) GetModel(_ context.Context, key string) (any, bool, error) {
+func (m *mockCacheManager) GetModel(_ context.Context, key string, target any) (bool, error) {
 	m.calls["GetModel"]++
 	if m.shouldError {
-		return nil, false, errors.New("cache error")
+		return false, errors.New("cache error")
 	}
 	data, found := m.storage[key]
 	if !found {
-		return nil, false, nil
+		return false, nil
 	}
-	var result any
-	err := json.Unmarshal(data, &result)
-	return result, true, err
+	err := json.Unmarshal(data, target)
+	return err == nil, err
 }
 
 func (m *mockCacheManager) SetModel(_ context.Context, key string, value any) error {

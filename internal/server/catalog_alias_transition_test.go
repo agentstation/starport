@@ -30,12 +30,12 @@ type observedDiscoveryCache struct {
 	lastKey string
 }
 
-func (c *observedDiscoveryCache) GetModel(ctx context.Context, key string) (any, bool, error) {
-	value, found, err := c.Manager.GetModel(ctx, key)
+func (c *observedDiscoveryCache) GetModel(ctx context.Context, key string, target any) (bool, error) {
+	found, err := c.Manager.GetModel(ctx, key, target)
 	if found {
 		c.hits++
 	}
-	return value, found, err
+	return found, err
 }
 
 func (c *observedDiscoveryCache) SetModel(ctx context.Context, key string, value any) error {
@@ -81,7 +81,8 @@ func TestHTTPAliasRemovalWithSerializedDiscoveryCache(t *testing.T) {
 				require.Contains(t, response.Body.String(), "author/current+variant")
 				require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
 				require.Eventually(t, func() bool {
-					_, found, err := manager.GetModel(t.Context(), observed.lastKey)
+					var decoded any
+					found, err := manager.GetModel(t.Context(), observed.lastKey, &decoded)
 					return err == nil && found
 				}, time.Second, time.Millisecond)
 			}
@@ -93,7 +94,8 @@ func TestHTTPAliasRemovalWithSerializedDiscoveryCache(t *testing.T) {
 	require.Equal(t, http.StatusOK, endpoint.Code, endpoint.Body.String())
 	require.Contains(t, endpoint.Body.String(), "https://provider.test/v1/chat/completions")
 	require.Eventually(t, func() bool {
-		_, found, err := manager.GetModel(t.Context(), observed.lastKey)
+		var decoded any
+		found, err := manager.GetModel(t.Context(), observed.lastKey, &decoded)
 		return err == nil && found
 	}, time.Second, time.Millisecond)
 	endpointWrites := observed.writes
@@ -140,7 +142,8 @@ func TestHTTPAliasRemovalWithSerializedDiscoveryCache(t *testing.T) {
 		response = serveAuthorized(s, http.MethodGet, prefix+"/models/author%2Fcurrent+variant", secret, t.Context())
 		require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 		require.Eventually(t, func() bool {
-			_, found, err := manager.GetModel(t.Context(), observed.lastKey)
+			var decoded any
+			found, err := manager.GetModel(t.Context(), observed.lastKey, &decoded)
 			return err == nil && found
 		}, time.Second, time.Millisecond)
 	}

@@ -199,3 +199,13 @@ The payload sizes are 1 KiB, 256 KiB, and 4 MiB. Oversized extraction records sk
 
 These measurements exclude HTTP, permission checks, providers, and shared transport. They report averages, not production latency percentiles.
 High fill rates can cause optional drops. This load does not estimate a deployment's cache hit ratio.
+
+
+The typed discovery benchmark compares direct decoding with the removed map round trip:
+
+```bash
+go test -run '^$' -bench '^BenchmarkModelCacheDecode$' -benchmem -benchtime=100ms -count=3 ./internal/app
+```
+
+Both variants read the same production local cache. The control decodes a map, encodes it, then decodes the response type.
+The direct path decodes the response type once. Neither variant qualifies HTTP latency or shared-service behavior.

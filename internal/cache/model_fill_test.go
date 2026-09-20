@@ -27,7 +27,8 @@ func TestModelFillCannotCrossInvalidation(t *testing.T) {
 	close(model.release)
 	require.NoError(t, <-done)
 	require.Eventually(t, func() bool { return manager.fills.stats().RetainedEntries == 0 }, time.Second, time.Millisecond)
-	_, found, err := manager.GetModel(t.Context(), "model")
+	var decoded any
+	found, err := manager.GetModel(t.Context(), "model", &decoded)
 	require.NoError(t, err)
 	require.False(t, found, "a fill started before invalidation must not restore old metadata")
 }
@@ -47,9 +48,14 @@ func TestModelFillSharesResponseBounds(t *testing.T) {
 	}
 	require.NoError(t, manager.SetModel(t.Context(), "model", map[string]string{"id": "queued"}))
 	require.Equal(t, int64(fillWorkers+1), manager.fills.stats().RetainedEntries)
-	_, found, err := manager.GetModel(t.Context(), "model")
+	var decoded any
+	found, err := manager.GetModel(t.Context(), "model", &decoded)
 	require.NoError(t, err)
 	require.False(t, found, "optional model fill must wait in the bounded queue")
 	close(store.release)
-	require.Eventually(t, func() bool { _, found, err := manager.GetModel(t.Context(), "model"); return err == nil && found }, time.Second, time.Millisecond)
+	require.Eventually(t, func() bool {
+		var decoded any
+		found, err := manager.GetModel(t.Context(), "model", &decoded)
+		return err == nil && found
+	}, time.Second, time.Millisecond)
 }

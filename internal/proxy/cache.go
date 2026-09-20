@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -23,7 +22,7 @@ import (
 
 // CacheManager interface defines the cache operations used by the proxy
 type CacheManager interface {
-	GetModel(ctx context.Context, key string) (any, bool, error)
+	GetModel(ctx context.Context, key string, target any) (bool, error)
 	SetModel(ctx context.Context, key string, value any) error
 	GetResponse(ctx context.Context, key string) ([]byte, bool, error)
 	SetResponse(ctx context.Context, key string, response []byte) error
@@ -420,58 +419,22 @@ func (s *cachedService) ProcessTranscription(
 }
 
 func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMsg string, fetchFunc func() (any, error)) (any, error) {
-	// Try to get from cache
-	cached, found, err := s.cacheManager.GetModel(ctx, cacheKey)
+	var target any
+	switch cacheMsg {
+	case "models":
+		target = &ModelsResponse{CacheStatus: CacheStatusHit}
+	case "providers":
+		target = &ProvidersResponse{CacheStatus: CacheStatusHit}
+	default:
+		return fetchFunc()
+	}
+	found, err := s.cacheManager.GetModel(ctx, cacheKey, target)
 	if err != nil {
 		log.Warn().Err(err).Msgf("%s cache get error", cacheMsg)
 		return fetchFunc()
 	}
-
 	if found {
-		// The cache returns a generic map, we need to convert it back to the proper type
-		// Try to convert from map to the appropriate response type
-		if mapData, ok := cached.(map[string]any); ok {
-			// Marshal back to JSON then unmarshal to proper type
-			jsonData, err := json.Marshal(mapData)
-			if err != nil {
-				log.Warn().Err(err).Msg("failed to marshal cached data")
-				return fetchFunc()
-			}
-
-			// Determine the type based on cache key and unmarshal
-			switch {
-			case strings.HasPrefix(cacheKey, "models:list:"):
-				var resp ModelsResponse
-				if err := json.Unmarshal(jsonData, &resp); err != nil {
-					log.Warn().Err(err).Msg("failed to unmarshal models response")
-					return fetchFunc()
-				}
-				resp.CacheStatus = CacheStatusHit
-				return &resp, nil
-			case strings.HasPrefix(cacheKey, "providers:list:"):
-				var resp ProvidersResponse
-				if err := json.Unmarshal(jsonData, &resp); err != nil {
-					log.Warn().Err(err).Msg("failed to unmarshal providers response")
-					return fetchFunc()
-				}
-				resp.CacheStatus = CacheStatusHit
-				return &resp, nil
-			}
-		}
-
-		// If it's already the correct type (shouldn't happen with current cache implementation)
-		switch v := cached.(type) {
-		case *ModelsResponse:
-			v.CacheStatus = CacheStatusHit
-			return v, nil
-		case *ProvidersResponse:
-			v.CacheStatus = CacheStatusHit
-			return v, nil
-		}
-
-		// If we can't handle the cached data, fetch fresh
-		log.Warn().Msgf("unexpected cache type for %s: %T", cacheKey, cached)
-		return fetchFunc()
+		return target, nil
 	}
 
 	// Fetch from service
@@ -587,26 +550,14 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 	}
 	cacheKey := fmt.Sprintf("model:endpoints:%s:%s:%s", s.catalogGeneration(ctx), disclosure.CacheScope(ctx), modelID)
 
-	// Try to get from cache using GetModel
-	cached, found, err := s.cacheManager.GetModel(ctx, cacheKey)
+	var cached ModelEndpointsResponse
+	found, err := s.cacheManager.GetModel(ctx, cacheKey, &cached)
 	if err != nil {
 		log.Warn().Err(err).Msg("model endpoints cache get error")
 		return s.service.GetModelEndpoints(ctx, modelID)
 	}
-
 	if found {
-		switch value := cached.(type) {
-		case *ModelEndpointsResponse:
-			return value, nil
-		case map[string]any:
-			data, err := json.Marshal(value)
-			if err == nil {
-				var response ModelEndpointsResponse
-				if err := json.Unmarshal(data, &response); err == nil {
-					return &response, nil
-				}
-			}
-		}
+		return &cached, nil
 	}
 
 	resp, err := s.service.GetModelEndpoints(ctx, modelID)

@@ -33,14 +33,19 @@ func TestCacheManagerModelMetadata(t *testing.T) {
 	ctx := context.Background()
 	want := map[string]any{"id": "openai/gpt-4", "context_length": float64(8192)}
 	require.NoError(t, manager.SetModel(ctx, "openai/gpt-4", want))
-	require.Eventually(t, func() bool { _, found, err := manager.GetModel(ctx, "openai/gpt-4"); return err == nil && found }, time.Second, time.Millisecond)
-	got, found, err := manager.GetModel(ctx, "openai/gpt-4")
+	require.Eventually(t, func() bool {
+		var decoded any
+		found, err := manager.GetModel(ctx, "openai/gpt-4", &decoded)
+		return err == nil && found
+	}, time.Second, time.Millisecond)
+	var got map[string]any
+	found, err := manager.GetModel(ctx, "openai/gpt-4", &got)
 	require.NoError(t, err)
 	assert.True(t, found)
 	assert.Equal(t, want, got)
 
 	manager.InvalidateModels()
-	_, found, err = manager.GetModel(ctx, "openai/gpt-4")
+	found, err = manager.GetModel(ctx, "openai/gpt-4", &got)
 	require.NoError(t, err)
 	assert.False(t, found)
 }

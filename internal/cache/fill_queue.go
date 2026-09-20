@@ -57,6 +57,15 @@ func (q *fillQueue) enqueue(ctx context.Context, key string, value []byte, ttl t
 }
 
 func (q *fillQueue) enqueueTo(ctx context.Context, store ResponseStore, key string, value []byte, ttl time.Duration) error {
+	return q.admit(ctx, store, key, value, ttl, false)
+}
+
+// enqueueOwnedTo transfers a freshly encoded buffer without a second payload copy.
+func (q *fillQueue) enqueueOwnedTo(ctx context.Context, store ResponseStore, key string, value []byte, ttl time.Duration) error {
+	return q.admit(ctx, store, key, value, ttl, true)
+}
+
+func (q *fillQueue) admit(ctx context.Context, store ResponseStore, key string, value []byte, ttl time.Duration, owned bool) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -64,7 +73,15 @@ func (q *fillQueue) enqueueTo(ctx context.Context, store ResponseStore, key stri
 		q.dropped.Add(1)
 		return nil
 	}
-	cost := int64(len(key)+len(value)) + 96
+	valueCost := len(value)
+	if owned {
+		valueCost = cap(value)
+	}
+	if valueCost > fillQueueBytes-len(key) {
+		q.dropped.Add(1)
+		return nil
+	}
+	cost := int64(len(key)+valueCost) + 96
 	if !q.mu.TryLock() {
 		q.dropped.Add(1)
 		return nil
@@ -81,7 +98,10 @@ func (q *fillQueue) enqueueTo(ctx context.Context, store ResponseStore, key stri
 		q.dropped.Add(1)
 		return nil
 	}
-	job := fillJob{store: store, key: strings.Clone(key), value: bytes.Clone(value), deadline: time.Now().Add(ttl), cost: cost}
+	if !owned {
+		value = bytes.Clone(value)
+	}
+	job := fillJob{store: store, key: strings.Clone(key), value: value, deadline: time.Now().Add(ttl), cost: cost}
 	q.entries++
 	q.bytes += cost
 	select {

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -58,5 +59,53 @@ func BenchmarkOptionalCacheWork(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+// The control reproduces the removed map, encode, and typed-decode sequence.
+func BenchmarkModelCacheDecode(b *testing.B) {
+	for _, size := range []int{1024, 256 << 10} {
+		for _, roundTrip := range []bool{false, true} {
+			b.Run(fmt.Sprintf("bytes=%d/map-roundtrip=%t", size, roundTrip), func(b *testing.B) {
+				manager, err := cache.NewCacheManager(cache.ManagerConfig{}, nil)
+				require.NoError(b, err)
+				b.Cleanup(func() { require.NoError(b, manager.Close()) })
+				type model struct {
+					Description string `json:"description"`
+				}
+				require.NoError(b, manager.SetModel(b.Context(), "model", model{strings.Repeat("x", size)}))
+				require.Eventually(b, func() bool {
+					var decoded model
+					found, err := manager.GetModel(b.Context(), "model", &decoded)
+					return err == nil && found
+				}, time.Second, time.Millisecond)
+				b.ReportAllocs()
+				for b.Loop() {
+					var decoded model
+					if roundTrip {
+						var intermediate map[string]any
+						found, err := manager.GetModel(b.Context(), "model", &intermediate)
+						if err != nil || !found {
+							b.Fatal("missing model")
+						}
+						data, err := json.Marshal(intermediate)
+						if err != nil {
+							b.Fatal(err)
+						}
+						if err := json.Unmarshal(data, &decoded); err != nil {
+							b.Fatal(err)
+						}
+					} else {
+						found, err := manager.GetModel(b.Context(), "model", &decoded)
+						if err != nil || !found {
+							b.Fatal("missing model")
+						}
+					}
+					if len(decoded.Description) != size {
+						b.Fatal("invalid model")
+					}
+				}
+			})
+		}
 	}
 }

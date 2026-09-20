@@ -34,6 +34,10 @@ Current authorization and catalog checks still govern cached delivery.
 Model invalidation advances a process-local epoch. Queued writes from earlier epochs cannot become visible after invalidation.
 Model serialization still runs on the caller before queue admission.
 
+The encoder rejects strings and byte slices above 512 KiB and containers above 65,536 entries before encoding their contents.
+Encoded output cannot exceed the fill budget after key and job charges. Model fills transfer their encoded buffer and charge its capacity.
+Model, provider, and endpoint reads decode directly into the requested response type.
+
 Extraction fills use an independent queue with the same bounds, even when the operator disables response caching.
 Together, both queues permit at most 2,048 queued or active entries, 8 MiB of charged data, and four workers.
 The admin `extraction_cache` field reports extraction pressure. `response_cache` reports the shared response and model queue.
@@ -42,7 +46,7 @@ Extraction serialization remains synchronous for eligible records. The document 
 That input bound includes identity, text, and offering strings. Six-byte JSON escaping fits within the fill budget.
 Rejected inputs increment the extraction drop counter. Document delivery continues.
 
-Aggregate heap and model serialization latency still need qualification.
+Aggregate heap, stream reconstruction, and full request latency still need qualification.
 
 ## Stream retention
 
