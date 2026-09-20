@@ -34,6 +34,9 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../apikey",
 		"../identity",
 		"../account",
+		"../authorization",
+		"../authorization/revision",
+		"../policyrecord",
 		"../sqlstore",
 		"../limits",
 		"../credentials",
@@ -59,6 +62,9 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/apikey",
 		"github.com/agentstation/starport/internal/identity",
 		"github.com/agentstation/starport/internal/account",
+		"github.com/agentstation/starport/internal/authorization",
+		"github.com/agentstation/starport/internal/authorization/revision",
+		"github.com/agentstation/starport/internal/policyrecord",
 		"github.com/agentstation/starport/internal/sqlstore",
 		"github.com/agentstation/starport/internal/limits",
 		"github.com/agentstation/starport/internal/credentials",
@@ -100,11 +106,8 @@ func TestImportGraphArchitecture(t *testing.T) {
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/response/cache"],
 		"github.com/agentstation/starport/internal/inference",
 	)
-	// A repository-owning concept reaches durable storage — the key-value
-	// store, and for account templates the relational store — and the shared
-	// limits vocabulary, and nothing else inside the module.
+	// Ordinary repositories depend only on storage and the shared limits vocabulary.
 	for _, packagePath := range []string{
-		"github.com/agentstation/starport/internal/account",
 		"github.com/agentstation/starport/internal/credentials",
 		"github.com/agentstation/starport/internal/ratelimit",
 		"github.com/agentstation/starport/internal/presets",
@@ -116,40 +119,57 @@ func TestImportGraphArchitecture(t *testing.T) {
 			"github.com/agentstation/starport/internal/limits",
 		)
 	}
-	// The humans a deployment knows are purely relational: identity
-	// reaches the relational store and the shared limits vocabulary — a
-	// team carries a budget the way an account or a key does — and nothing
-	// else inside the module, so no concept can smuggle behavior in
-	// through a user or a team.
+	// Policy repositories publish revisions and enforce record bounds without importing the cache.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/account"],
+		"github.com/agentstation/starport/internal/storage",
+		"github.com/agentstation/starport/internal/sqlstore",
+		"github.com/agentstation/starport/internal/limits",
+		"github.com/agentstation/starport/internal/authorization/revision",
+		"github.com/agentstation/starport/internal/policyrecord",
+	)
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/identity"],
+		"github.com/agentstation/starport/internal/authorization/revision",
+		"github.com/agentstation/starport/internal/policyrecord",
 		"github.com/agentstation/starport/internal/sqlstore",
 		"github.com/agentstation/starport/internal/limits",
 	)
-	// The relational store is a leaf beside the key-value store: it holds
-	// rows for the concepts that own them and reads no meaning of its own.
+	// The relational store is a leaf beside the key-value store.
+	// It holds rows for their owning concepts and does not interpret them.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/sqlstore"])
 	// A gateway API key belongs to an account, so apikey reaches the account
-	// model for its ID rules and its canonical ID. The loop above holds the
+	// model for its ID rules and its canonical ID. The account rule holds the
 	// other direction closed: account may never reach apikey, because an
 	// account exists whether or not a key names it.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/apikey"],
+		"github.com/agentstation/starport/internal/authorization/revision",
+		"github.com/agentstation/starport/internal/policyrecord",
 		"github.com/agentstation/starport/internal/storage",
 		"github.com/agentstation/starport/internal/limits",
 		"github.com/agentstation/starport/internal/account",
 	)
+	// Revision publication knows storage but cannot read policy or request orchestration.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/authorization/revision"],
+		"github.com/agentstation/starport/internal/storage",
+		"github.com/agentstation/starport/internal/sqlstore",
+	)
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/policyrecord"])
+	// The cache composes repository policy without importing HTTP, routing, or providers.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/authorization"],
+		"github.com/agentstation/starport/internal/account",
+		"github.com/agentstation/starport/internal/apikey",
+		"github.com/agentstation/starport/internal/identity",
+		"github.com/agentstation/starport/internal/authorization/revision",
+	)
+	assertNoImports(t, packages["github.com/agentstation/starport/internal/authorization"], "net/http")
 	// Limits is the vocabulary both a gateway API key and an account hold. It
 	// stays a leaf so neither owner can reach the other through it.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/limits"])
-	// Blob stores opaque bytes at an opaque key. It is a leaf with no internal
-	// import at all, because a store that could reach a Starport concept would
-	// start reading meaning into the bytes it holds. The owner of the key holds
-	// every meaning instead.
+	// Blob stores opaque bytes at an opaque key. It has no internal imports.
+	// The key owner interprets the bytes. The store cannot reach a Starport concept to interpret them.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/blob"])
-	// Document is the native parser engine. It is a leaf, and the rule is the
-	// reason the engine is free: an import of a provider, a connector, or a
-	// transport would mean a document that carries its own text could still
-	// leave the process, and the caller would pay for a read this package
-	// already did. The recognition engine is a route, not an import here.
+	// Document is the native parser engine. It is a leaf and has no provider cost.
+	// A provider, connector, or transport import could send existing document text outside the process and charge the caller for reading it.
+	// The recognition engine uses a route, not an import here.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/document"])
 	assertNoImports(t, packages["github.com/agentstation/starport/internal/document"],
 		"github.com/agentstation/starport/internal/providers",
@@ -171,7 +191,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 	// Jobs owns work that outlives its request. It reaches the operation
 	// vocabulary and the record store, and nothing else. A dependency on
 	// execution or a provider connector would put the poll loop inside the
-	// record, and the seam exists to keep the two apart.
+	// record, and this boundary keeps the two apart.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/jobs"],
 		"github.com/agentstation/starport/internal/blob",
 		"github.com/agentstation/starport/internal/routing",
