@@ -49,6 +49,7 @@ func TestValkeyIntegration(t *testing.T) {
 	t.Run("shared response", func(t *testing.T) {
 		want := []byte("shared response")
 		require.NoError(t, first.SetResponse(ctx, "shared", want))
+		awaitResponse(t, second, "shared", want)
 		got, found, err := second.GetResponse(ctx, "shared")
 		require.NoError(t, err)
 		assert.True(t, found)
@@ -92,6 +93,7 @@ func BenchmarkValkeyCache(b *testing.B) {
 	b.Cleanup(func() { require.NoError(b, manager.Close()) })
 	ctx := context.Background()
 	require.NoError(b, manager.SetResponse(ctx, "bench", []byte("response")))
+	require.Eventually(b, func() bool { _, found, err := manager.GetResponse(ctx, "bench"); return err == nil && found }, time.Second, time.Millisecond)
 
 	b.Run("GetResponse", func(b *testing.B) {
 		for range b.N {

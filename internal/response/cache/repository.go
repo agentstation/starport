@@ -26,6 +26,7 @@ var (
 )
 
 // Store is the byte-cache contract required by the repository.
+// SetResponse can defer or drop optional fills. Success does not guarantee a hit.
 type Store interface {
 	GetResponse(context.Context, string) ([]byte, bool, error)
 	SetResponse(context.Context, string, []byte) error

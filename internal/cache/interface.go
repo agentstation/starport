@@ -10,8 +10,9 @@ import (
 // Cache defines the interface for the caching system.
 // It provides a multi-layer cache with in-memory (hot) and persistent (cold) storage.
 type Cache interface {
+	// Blocking operations must honor context cancellation.
 	// Get retrieves a value from the cache.
-	// Returns the value and a boolean indicating if it was found.
+	// Returns the value and a boolean that reports a cache hit.
 	Get(ctx context.Context, key string) ([]byte, bool, error)
 
 	// Set stores a value in the cache with a TTL.
@@ -32,7 +33,7 @@ type Cache interface {
 	SetMulti(ctx context.Context, items map[string][]byte, ttl time.Duration) error
 
 	// Invalidate removes all items matching the pattern.
-	// Pattern supports wildcards: * matches any sequence of characters.
+	// An asterisk matches zero or more characters.
 	Invalidate(ctx context.Context, pattern string) error
 
 	// Stats returns cache statistics.
@@ -47,6 +48,13 @@ type Cache interface {
 
 // Stats contains cache performance metrics.
 type Stats struct {
+	RetainedEntries int64  `json:"retained_entries,omitzero"`
+	RetainedBytes   int64  `json:"retained_bytes,omitzero"`
+	ActiveFills     int64  `json:"active_fills,omitzero"`
+	DroppedFills    uint64 `json:"dropped_fills,omitzero"`
+	FailedFills     uint64 `json:"failed_fills,omitzero"`
+	CompletedFills  uint64 `json:"completed_fills,omitzero"`
+
 	// Hits is the number of cache hits
 	Hits uint64 `json:"hits"`
 	// Misses is the number of cache misses

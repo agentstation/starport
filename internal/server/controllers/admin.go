@@ -20,6 +20,7 @@ import (
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authorization"
+	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/providers/keyring"
@@ -66,6 +67,8 @@ type DropCounter interface {
 // environment. Every field is a plain value or a live reader, because the
 // surface describes the deployment and not any one request.
 type Deployment struct {
+	// ResponseCache reports bounded optional response work from memory.
+	ResponseCache func() cache.FillStatus
 	// StorageMode names the key-value store: badger or valkey.
 	StorageMode string
 	// RelationalMode names the relational twin: sqlite, postgres, or mysql.
@@ -596,7 +599,8 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 			"files_seconds":      seconds(h.deployment.FileRetention),
 			"job_assets_seconds": seconds(h.deployment.JobAssetRetention),
 		},
-		"webhooks": h.webhookSummary(),
+		"webhooks":       h.webhookSummary(),
+		"response_cache": h.responseCacheStatus(),
 		providersField: map[string]any{
 			responseCountField: systemInfoUnavailable,
 			fieldStatus:        systemInfoUnavailable,

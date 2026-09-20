@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -13,7 +14,11 @@ import (
 // Manager manages different cache strategies for different data types
 type Manager struct {
 	// Responses use a cache-owned store.
-	responses Cache
+	responses      Cache
+	localResponses bool
+	fills          *fillQueue
+	closeOnce      sync.Once
+	closeErr       error
 
 	// Model Metadata: Local only with long TTL
 	models *LocalCache
@@ -61,7 +66,8 @@ func NewCacheManager(config ManagerConfig, store Cache) (*Manager, error) {
 	}
 
 	cm := &Manager{
-		config: config,
+		config:         config,
+		localResponses: store == nil,
 	}
 
 	switch config.Responses.Strategy {
@@ -92,16 +98,29 @@ func NewCacheManager(config ManagerConfig, store Cache) (*Manager, error) {
 		store = responses
 	}
 	cm.responses = store
+	cm.fills = newFillQueue(store)
 
 	return cm, nil
 }
 
 // GetResponse retrieves a cached LLM response
 func (cm *Manager) GetResponse(ctx context.Context, key string) ([]byte, bool, error) {
-	return cm.responses.Get(ctx, key)
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if !cm.localResponses {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, remoteReadTimeout)
+		defer cancel()
+	}
+	value, found, err := cm.responses.Get(ctx, key)
+	if ctx.Err() != nil {
+		return nil, false, ctx.Err()
+	}
+	return value, found, err
 }
 
-// SetResponse caches an LLM response
+// SetResponse admits an optional fill without waiting for persistence.
 func (cm *Manager) SetResponse(ctx context.Context, key string, response []byte) error {
 	// Check size limit
 	if len(response) > cm.config.Responses.MaxItemSizeKB*1024 {
@@ -109,10 +128,11 @@ func (cm *Manager) SetResponse(ctx context.Context, key string, response []byte)
 			Str("key", key).
 			Int("size", len(response)).
 			Msg("response too large to cache")
+		cm.fills.dropped.Add(1)
 		return nil // Oversized responses bypass the cache.
 	}
 
-	return cm.responses.Set(ctx, key, response, cm.config.Responses.TTL)
+	return cm.fills.enqueue(ctx, key, response, cm.config.Responses.TTL)
 }
 
 // GetModel retrieves model metadata (local cache only)
@@ -149,10 +169,14 @@ func (cm *Manager) InvalidateModels() {
 
 // Stats returns aggregated cache statistics.
 func (cm *Manager) Stats() map[string]Stats {
-	return map[string]Stats{"responses": cm.responses.Stats(), "models": cm.models.Stats()}
+	return map[string]Stats{"responses": cm.responses.Stats(), "models": cm.models.Stats(), "response_fills": cm.fills.stats()}
 }
 
 // Close releases both cache stores.
 func (cm *Manager) Close() error {
-	return errors.Join(cm.responses.Close(), cm.models.Close())
+	cm.closeOnce.Do(func() {
+		cm.fills.close()
+		cm.closeErr = errors.Join(cm.responses.Close(), cm.models.Close())
+	})
+	return cm.closeErr
 }

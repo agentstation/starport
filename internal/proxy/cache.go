@@ -156,9 +156,8 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 	// Mark as cache miss
 	resp.CacheStatus = CacheStatusMiss
 
-	// Cache the response after the upstream request completes. This is
-	// intentionally synchronous so cache writes remain owned by the request
-	// path and race tests can reason about completion deterministically.
+	// Submit optional cache work after the upstream request completes.
+	// Encoding runs here. The byte store can defer or drop the fill.
 	cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	canonical, conversionErr := chatResponseToCanonical(resp)
@@ -841,8 +840,8 @@ type cachingStreamWrapper struct {
 	cacheKey   string
 	events     []inference.StreamEvent
 	cached     bool
-	// afterCache runs once after a successful store, so a semantic probe
-	// can record its vector beside the entry the store just wrote.
+	// afterCache submits a semantic vector after the exact fill submission.
+	// Lookup requires the exact entry, even if either fill is pending or dropped.
 	afterCache func(ctx context.Context, exactKey string)
 }
 

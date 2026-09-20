@@ -27,6 +27,7 @@ func TestCacheManagerExplicitSharedStoreSharesResponses(t *testing.T) {
 	ctx := context.Background()
 	want := []byte(`{"response":"shared"}`)
 	require.NoError(t, first.SetResponse(ctx, "shared", want))
+	awaitResponse(t, second, "shared", want)
 	got, found, err := second.GetResponse(ctx, "shared")
 	require.NoError(t, err)
 	assert.True(t, found)
@@ -41,6 +42,7 @@ func TestCacheManagerSingleNodeCachesResponses(t *testing.T) {
 	ctx := context.Background()
 	want := []byte(`{"response":"local"}`)
 	require.NoError(t, manager.SetResponse(ctx, "local", want))
+	awaitResponse(t, manager, "local", want)
 	got, found, err := manager.GetResponse(ctx, "local")
 	require.NoError(t, err)
 	assert.True(t, found)
@@ -88,6 +90,7 @@ func BenchmarkCacheManager(b *testing.B) {
 	b.Cleanup(func() { require.NoError(b, manager.Close()) })
 	ctx := context.Background()
 	require.NoError(b, manager.SetResponse(ctx, "bench", []byte(`{"ok":true}`)))
+	require.Eventually(b, func() bool { _, found, err := manager.GetResponse(ctx, "bench"); return err == nil && found }, time.Second, time.Millisecond)
 
 	b.Run("GetResponse", func(b *testing.B) {
 		for range b.N {
@@ -105,6 +108,7 @@ func TestCacheManagerDefaultIsLocalAndIsolated(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, second.Close()) })
 	require.IsType(t, &LocalCache{}, first.responses)
 	require.NoError(t, first.SetResponse(t.Context(), "scoped", []byte("answer")))
+	awaitResponse(t, first, "scoped", []byte("answer"))
 	value, found, err := first.GetResponse(t.Context(), "scoped")
 	require.NoError(t, err)
 	require.True(t, found)
@@ -132,4 +136,14 @@ func TestCacheManagerRequiresExplicitSharedStrategy(t *testing.T) {
 	manager, err := NewCacheManager(config, nil)
 	require.Error(t, err)
 	require.Nil(t, manager)
+}
+
+func awaitResponse(t *testing.T, manager *Manager, key string, want []byte) {
+	t.Helper()
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		got, found, err := manager.GetResponse(t.Context(), key)
+		assert.NoError(c, err)
+		assert.True(c, found)
+		assert.Equal(c, want, got)
+	}, time.Second, time.Millisecond)
 }

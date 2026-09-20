@@ -16,3 +16,19 @@ Backends without finite lifetime evidence skip local refill. Each retained entry
 Writes invalidate local entries. A later read must prove the stored version's actual expiry.
 
 No production qualification or latency improvement follows from this interface change alone.
+
+## Optional response fills
+
+Response fills use two lifecycle-owned workers. The queue limits queued and active work to 1,024 entries and 4 MiB of charged bytes.
+The byte charge includes copied keys, copied payloads, and 64 bytes per job. It does not measure total process or transport memory.
+Admission drops optional work when capacity or the admission lock is unavailable.
+`SetResponse` does not confirm persistence or a subsequent cache hit.
+
+Writes have a 500 ms context deadline. Cache-only adapters must honor cancellation for blocking work.
+Shutdown cancels fills and joins workers before closing the stores.
+The admin info response reports limits, retained work, completed fills, failures, and drops under `response_cache`.
+It exposes no cache keys or payloads.
+
+Injected response-cache reads have a 2 ms deadline. Local response reads use no additional timer.
+Current authorization and catalog checks still govern cached delivery.
+Model and extraction fills, dedicated shared-service configuration, and stream limits remain under CSP12.1.
