@@ -21,6 +21,7 @@ func pathSelections(cfg *Config) []pathSelection {
 		{pathRoleRuntime, "", catalogconfig.StateDirectory, productpaths.State, &cfg.Catalog.StateDirectory, !cfg.Catalog.StateDirectoryIsScratch()},
 		{"local-token", "", "", productpaths.Data, &cfg.Security.LocalTokenPath, true},
 		{"tls-certificate", "STARPORT_SECURITY_TLS_CERT_PATH", "", "", &cfg.Security.TLSCertPath, false},
+		{cacheCAFileRole, cacheCAFileEnvironment, "", "", &cfg.Cache.CAFile, false},
 		{"tls-key", "STARPORT_SECURITY_TLS_KEY_PATH", "", "", &cfg.Security.TLSKeyPath, false},
 		{"logs", "STARPORT_LOGGING_FILE_PATH", "", "", &cfg.Logging.FilePath, false},
 	}

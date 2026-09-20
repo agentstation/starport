@@ -150,6 +150,8 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 		add(item.id, item.path, "file", selectedAvailability(c.Security.EnableTLS && item.path != ""), item.access,
 			"The operator supplies TLS material.", "Renew through the deployment certificate procedure.")
 	}
+	add(cacheCAFileRole, c.Cache.CAFile, "file", selectedAvailability(c.Cache.Enabled && c.Cache.Backend == "valkey" && c.Cache.CAFile != ""), policy.DeploymentControlled,
+		"The operator supplies cache trust roots.", "Replace the trust bundle and restart the gateway to apply it.", cacheCAFileEnvironment)
 	add("logs", c.Logging.FilePath, "file", filePlanned, policy.OwnerOnly,
 		"File logging has no implemented application writer.", "Current application logging uses streams.", "STARPORT_LOGGING_FILE_PATH")
 	selection := make(map[string]string)

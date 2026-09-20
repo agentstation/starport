@@ -629,7 +629,7 @@ func (b *runtimeBuilder) openCache() error {
 		var responseStore cache.ResponseStore
 		managerConfig := cache.ManagerConfig{}
 		if b.config.Cache.Backend == "valkey" {
-			shared, err := cache.OpenShared(b.config.Cache.URL, b.config.Cache.Namespace, b.config.Cache.AllowInsecure)
+			shared, err := cache.OpenShared(cache.SharedConfig{URL: b.config.Cache.URL, Namespace: b.config.Cache.Namespace, AllowInsecure: b.config.Cache.AllowInsecure, CAFile: b.config.Cache.CAFile})
 			if err != nil {
 				return fmt.Errorf("open shared cache: %w", err)
 			}

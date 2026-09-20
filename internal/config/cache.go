@@ -7,17 +7,23 @@ import (
 )
 
 const cacheBackendLocal = "local"
+const cacheCAFileEnvironment = "STARPORT_CACHE_CA_FILE"
+const cacheCAFileRole = "cache-ca"
 
 // Validate selects local memory or one dedicated shared-cache service.
 func (c *CacheConfig) Validate(durableURL string) error {
 	switch c.Backend {
 	case "", cacheBackendLocal:
-		if c.URL != "" || c.Namespace != "" || c.AllowInsecure {
+		if c.URL != "" || c.Namespace != "" || c.AllowInsecure || c.CAFile != "" {
 			return errors.New("local cache cannot configure a shared endpoint")
 		}
 	case "valkey":
-		if _, err := connection.Parse(c.URL, c.Namespace, c.AllowInsecure); err != nil {
+		u, err := connection.Parse(c.URL, c.Namespace, c.AllowInsecure)
+		if err != nil {
 			return err
+		}
+		if c.CAFile != "" && u.Scheme != "valkeys" && u.Scheme != "rediss" {
+			return errors.New("cache CA file requires a TLS endpoint")
 		}
 		if durableURL != "" && connection.SameServer(c.URL, durableURL) {
 			return errors.New("cache requires a separate service from durable KV; another database does not isolate eviction")

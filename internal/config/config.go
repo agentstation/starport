@@ -360,6 +360,7 @@ type LoggingConfig struct {
 
 // CacheConfig defines cache settings
 type CacheConfig struct {
+	CAFile        string `env:"CA_FILE"`
 	Enabled       bool   `env:"ENABLED,default=true"`
 	Backend       string `env:"BACKEND,default=local"`
 	URL           string `env:"URL" redact:"url"`

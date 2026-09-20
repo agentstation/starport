@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,25 +20,34 @@ var errSharedCacheUnavailable = errors.New("shared cache unavailable")
 
 // SharedStatus reports connection health without endpoint or credential values.
 type SharedStatus struct {
-	Configured bool `json:"configured"`
-	Available  bool `json:"available"`
+	Configured bool   `json:"configured"`
+	Available  bool   `json:"available"`
+	State      string `json:"state"`
 }
 
 // SharedStore owns an optional connection independently of authoritative storage.
 type SharedStore struct {
-	mu        sync.RWMutex
-	client    valkey.Client
-	cancel    context.CancelFunc
-	workers   sync.WaitGroup
-	once      sync.Once
-	prefix    string
-	available atomic.Bool
-	closed    atomic.Bool
+	mu      sync.RWMutex
+	client  valkey.Client
+	cancel  context.CancelFunc
+	workers sync.WaitGroup
+	once    sync.Once
+	prefix  string
+	state   atomic.Uint32
+	closed  atomic.Bool
+}
+
+// SharedConfig selects one cache endpoint and its trust roots.
+type SharedConfig struct {
+	URL           string
+	Namespace     string
+	AllowInsecure bool
+	CAFile        string
 }
 
 // OpenShared starts bounded connection work without delaying application startup.
-func OpenShared(raw, namespace string, allowInsecure bool) (*SharedStore, error) {
-	u, err := connection.Parse(raw, namespace, allowInsecure)
+func OpenShared(config SharedConfig) (*SharedStore, error) {
+	u, err := connection.Parse(config.URL, config.Namespace, config.AllowInsecure)
 	if err != nil {
 		return nil, err
 	}
@@ -44,8 +55,19 @@ func OpenShared(raw, namespace string, allowInsecure bool) (*SharedStore, error)
 	if err != nil {
 		return nil, errors.New("cache connection settings are invalid")
 	}
+	if config.CAFile != "" {
+		if options.TLSConfig == nil {
+			return nil, errors.New("cache CA file requires a TLS endpoint")
+		}
+		roots, err := connection.LoadRoots(config.CAFile)
+		if err != nil {
+			return nil, err
+		}
+		options.TLSConfig.RootCAs = roots
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &SharedStore{cancel: cancel, prefix: "starport:cache:v1:" + namespace + ":"}
+	s := &SharedStore{cancel: cancel, prefix: "starport:cache:v1:" + config.Namespace + ":"}
+	s.state.Store(sharedConnecting)
 	options.DisableCache = true
 	options.DisableRetry = true
 	options.ForceSingleClient = true
@@ -81,6 +103,9 @@ func (s *SharedStore) connect(ctx context.Context, options valkey.ClientOption) 
 		client := s.current()
 		if client == nil {
 			candidate, err := valkey.NewClient(options)
+			if err != nil {
+				s.recordFailure(err)
+			}
 			if err == nil {
 				if ctx.Err() != nil {
 					candidate.Close()
@@ -94,9 +119,13 @@ func (s *SharedStore) connect(ctx context.Context, options valkey.ClientOption) 
 		}
 		if client != nil {
 			pingCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-			err := client.Do(pingCtx, client.B().Ping().Build()).Error()
+			err := s.checkNamespace(pingCtx, client)
 			cancel()
-			s.available.Store(err == nil)
+			if err == nil {
+				s.state.Store(sharedReady)
+			} else {
+				s.recordFailure(err)
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -126,14 +155,12 @@ func (s *SharedStore) Get(ctx context.Context, key string) ([]byte, bool, error)
 	}
 	data, err := sharedRead.Exec(ctx, client, []string{s.prefix + key}, []string{"1048576"}).AsBytes()
 	if valkey.IsValkeyNil(err) {
-		s.available.Store(true)
 		return nil, false, nil
 	}
 	if err != nil {
-		s.available.Store(false)
+		s.recordFailure(err)
 		return nil, false, errSharedCacheUnavailable
 	}
-	s.available.Store(true)
 	return bytes.Clone(data), true, nil
 }
 
@@ -147,8 +174,8 @@ func (s *SharedStore) Set(ctx context.Context, key string, value []byte, ttl tim
 		return errSharedCacheUnavailable
 	}
 	err := client.Do(ctx, client.B().Set().Key(s.prefix+key).Value(string(value)).Px(ttl).Build()).Error()
-	s.available.Store(err == nil)
 	if err != nil {
+		s.recordFailure(err)
 		return errSharedCacheUnavailable
 	}
 	return nil
@@ -159,7 +186,11 @@ func (s *SharedStore) Stats() Stats { return Stats{} }
 
 // SharedStatus reads local connection evidence.
 func (s *SharedStore) SharedStatus() SharedStatus {
-	return SharedStatus{Configured: true, Available: s.available.Load() && !s.closed.Load()}
+	state := s.state.Load()
+	if s.closed.Load() {
+		return SharedStatus{Configured: true, State: "closed"}
+	}
+	return SharedStatus{Configured: true, Available: state == sharedReady, State: sharedStateNames[state]}
 }
 
 // Close cancels connection attempts and joins the connection owner.
@@ -175,7 +206,65 @@ func (s *SharedStore) Close() error {
 		if client != nil {
 			client.Close()
 		}
-		s.available.Store(false)
+		s.state.Store(sharedUnavailable)
 	})
 	return nil
+}
+
+// checkNamespace verifies the cache credential's read and write scope.
+// The reserved probe expires and never stores caller content.
+func (s *SharedStore) checkNamespace(ctx context.Context, client valkey.Client) error {
+	key := s.prefix + "__starport_health_v1__"
+	if err := client.Do(ctx, client.B().Set().Key(key).Value("1").Px(time.Second).Build()).Error(); err != nil {
+		return err
+	}
+	value, err := sharedRead.Exec(ctx, client, []string{key}, []string{"1"}).ToString()
+	if err != nil {
+		return err
+	}
+	if value != "1" {
+		return errSharedCacheUnavailable
+	}
+	return nil
+}
+
+const (
+	sharedConnecting uint32 = iota
+	sharedReady
+	sharedUnavailable
+	sharedUntrusted
+	sharedHostname
+	sharedCertificate
+	sharedAuthentication
+	sharedNamespace
+)
+
+var sharedStateNames = [...]string{"connecting", "ready", "unavailable", "tls_untrusted", "tls_hostname_mismatch", "tls_certificate_invalid", "authentication_failed", "namespace_denied"}
+
+func sharedFailureState(err error) uint32 {
+	if _, ok := errors.AsType[x509.UnknownAuthorityError](err); ok {
+		return sharedUntrusted
+	}
+	if _, ok := errors.AsType[x509.HostnameError](err); ok {
+		return sharedHostname
+	}
+	if _, ok := errors.AsType[x509.CertificateInvalidError](err); ok {
+		return sharedCertificate
+	}
+	if protocol, ok := valkey.IsValkeyErr(err); ok {
+		switch {
+		case strings.HasPrefix(protocol.Error(), "WRONGPASS"), strings.HasPrefix(protocol.Error(), "NOAUTH"):
+			return sharedAuthentication
+		case strings.HasPrefix(protocol.Error(), "NOPERM"):
+			return sharedNamespace
+		}
+	}
+	return sharedUnavailable
+}
+
+func (s *SharedStore) recordFailure(err error) {
+	if errors.Is(err, context.Canceled) {
+		return
+	}
+	s.state.Store(sharedFailureState(err))
 }

@@ -73,4 +73,41 @@ Shutdown cancels connection work and closes the dedicated client.
 The admin `response_cache.shared` status reports the configured service and its availability, without connection values.
 
 Scratch development rejects shared-cache configuration. Use an initialized deployment to test the shared-service recipe.
-TLS service qualification, aggregate transport memory, and cache-outage latency remain part of production acceptance.
+Native TLS deployment, aggregate transport memory, and cache-outage latency remain part of production acceptance.
+
+## Shared-cache trust and access
+
+`STARPORT_CACHE_CA_FILE` selects an explicit PEM trust bundle for a TLS endpoint.
+The connection uses the bundle's roots. The loader accepts a regular file of at most 1 MiB.
+File access remains under deployment control. The file appears as `cache-ca` in the configuration file inventory.
+
+Relative paths require `STARPORT_RELATIVE_PATH_BASE=config` and resolve under the selected configuration directory.
+The reader confines the final file lookup to its parent directory.
+Replace the bundle and restart Starport to change the active trust roots.
+
+Provision a separate cache user for each deployment. Its ACL must restrict keys to `starport:cache:v1:<namespace>:*`.
+The cache needs these commands: `hello`, `ping`, `select`, `client|setname`, `client|setinfo`, `get`, `strlen`, `set`, `eval`, `evalsha`, and `script|load`.
+The service administrator owns ACL changes. Starport does not grant itself access or claim another namespace.
+
+Replicas of one deployment can share the scoped credential. Independent deployments must use distinct credentials and namespaces.
+
+The connection monitor writes and reads the reserved `__starport_health_v1__` key under its namespace.
+The probe contains one fixed byte and expires after one second. It contains no caller data.
+A denied probe keeps the optional cache unavailable. It does not block required gateway operations.
+
+The admin `response_cache.shared.state` field supplies a fixed diagnostic code.
+
+| State | Recovery |
+| --- | --- |
+| `connecting` | Wait for the bounded initial connection attempt. |
+| `ready` | The latest namespace probe succeeded. |
+| `unavailable` | Check the endpoint, network, and service. |
+| `tls_untrusted` | Configure the issuing CA and restart. |
+| `tls_hostname_mismatch` | Use the certificate's valid endpoint name or replace the certificate. |
+| `tls_certificate_invalid` | Check certificate dates and constraints, then replace invalid material. |
+| `authentication_failed` | Correct the cache credential and restart. |
+| `namespace_denied` | Correct the selected namespace or its server ACL. |
+| `closed` | The application closed the connection owner. |
+
+The TLS tests terminate TLS in a local relay before real Valkey traffic.
+They cover trusted, unknown, expired, and wrong-host certificates. Native service deployments still require CSP15 qualification.

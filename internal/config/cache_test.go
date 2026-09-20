@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -61,4 +62,35 @@ func TestDevelopmentRejectsSharedCache(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.NotContains(t, OperatorError(err).Error(), "private-value")
+}
+
+func TestCacheCAFilePathAndManifest(t *testing.T) {
+	paths := PathsForConfigDir(t.TempDir())
+	cfg, err := NewLoader().WithPaths(paths).WithEnvFiles().WithEnvironment(map[string]string{
+		"STARPORT_CACHE_BACKEND":      "valkey",
+		"STARPORT_CACHE_URL":          "valkeys://cache.example",
+		"STARPORT_CACHE_NAMESPACE":    "deployment",
+		"STARPORT_CACHE_CA_FILE":      "certificates/cache.pem",
+		"STARPORT_RELATIVE_PATH_BASE": "config",
+	}).Load(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(paths.ConfigDir, "certificates", "cache.pem"), cfg.Cache.CAFile)
+	manifest, err := cfg.FileManifest("test")
+	require.NoError(t, err)
+	found := false
+	for _, entry := range manifest.Files {
+		if entry.ID == "cache-ca" {
+			found = true
+			require.Equal(t, cfg.Cache.CAFile, entry.Location.Path)
+			require.Equal(t, "available", entry.Availability)
+			require.Equal(t, "deployment-controlled", entry.Policy.Access)
+		}
+	}
+	require.True(t, found)
+	for _, config := range []CacheConfig{
+		{CAFile: cfg.Cache.CAFile},
+		{Backend: "valkey", URL: "valkey://localhost", Namespace: "deployment", CAFile: cfg.Cache.CAFile},
+	} {
+		require.Error(t, config.Validate(""))
+	}
 }
