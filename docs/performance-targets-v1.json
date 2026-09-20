@@ -121,14 +121,17 @@
     "cold_connection": 5000
   },
   "correctness": {
-    "permission_validity_seconds": 300,
-    "maximum_clock_uncertainty_seconds": 30,
     "admission_mode": "atomic-per-attempt",
     "unknown_required_budget": "refuse-retryable",
-    "unknown_clock": "refuse",
+    "unknown_clock": "refuse-affected-operation",
     "authority_activation_failure": "block-new-inference",
     "retained_generation_limit_action": "delay-nonrestrictive-activation-and-block-new-inference-when-required-policy-cannot-activate",
-    "controlled_backend_recovery": true
+    "controlled_backend_recovery": true,
+    "gateway_authorization_lifetime_seconds": 60,
+    "revocation_propagation_target_seconds": 2,
+    "gateway_authorization_clock": "suspend-aware-elapsed",
+    "authority_receipt_clock_contract": "qualified-utc-unless-receipt-allows-conservative-elapsed-deadline",
+    "authority_receipt_maximum_clock_uncertainty_seconds": 30
   },
   "observability": {
     "request_logging": "on",

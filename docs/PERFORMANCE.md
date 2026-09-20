@@ -259,3 +259,23 @@ pause, and verifies recovery of the original entry. Cache reads must finish
 before the caller's independent deadline. The test reports read-plus-fill
 timings under race detection. These samples do not qualify production
 percentiles, provider delivery, or a network partition.
+
+## Default cache memory qualification
+
+The full-size component test fills and churns the default 256 MiB response,
+16 MiB model, and 16 MiB extraction budgets. It records heap after collection
+and after shutdown, including metadata that cache cost counters omit.
+
+```bash
+TEST_DEFAULT_CACHE_CAPACITY=1 go test -race -run '^TestDefaultCacheMemoryBudget$' -v ./internal/cache
+```
+
+Normal runs skip this allocation-heavy check unless the operator sets that environment flag.
+The acceptance verifier reports that skip as unverified. This test measures
+cache memory alone. Full gateway heap, RSS, concurrent streams, and encoding
+remain part of production resource qualification.
+
+The performance profile uses the accepted 60-second authorization lifetime
+and two-second revocation propagation target. Gateway authorization uses
+elapsed time that includes suspend. Catalog receipts retain their own clock
+contract. A clock failure blocks only operations that require that clock.
