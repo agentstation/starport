@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,8 +38,12 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 	if address == "" || os.Getenv("TEST_VALKEY_URL") == "" {
 		t.Skip("UNVERIFIED: Valkey and PostgreSQL are required for separate-process authorization")
 	}
-	for _, owner := range []string{"kv", "sql"} {
-		t.Run(owner, func(t *testing.T) {
+	for _, scenario := range []struct {
+		owner string
+		live  bool
+	}{{"kv", false}, {"sql", false}, {"kv", true}, {"sql", true}} {
+		owner := scenario.owner
+		t.Run(fmt.Sprintf("%s/live_%t", owner, scenario.live), func(t *testing.T) {
 			namespace := "auth_fleet_" + strings.ToLower(rand.Text())
 			admin, err := sqlstore.Open(sqlstore.Config{Type: sqlstore.TypePostgres, Postgres: sqlstore.PostgresConfig{URL: address}})
 			require.NoError(t, err)
@@ -73,8 +79,16 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 			key, err := keys.Create(t.Context(), apikey.APIKey{ID: "key", Name: "fleet-key", Hash: "fleet-fixture-hash", Scopes: []string{"chat:write"}, AccountID: account.DefaultID, TeamID: team.Team.ID, Active: true})
 			require.NoError(t, err)
 
-			peer := startAuthorizationReplica(t)
+			peer := startAuthorizationReplica(t, "ready")
 			require.Equal(t, "permitted", peer.exchange(t, "check"))
+			if scenario.live {
+				require.Equal(t, "loaded", peer.exchange(t, "load"))
+				ready := time.Now()
+				for peer.exchange(t, "observed") != "observed" {
+					require.Less(t, time.Since(ready), 2*time.Second, "monitor did not observe both authorities")
+					time.Sleep(10 * time.Millisecond)
+				}
+			}
 			if owner == "kv" {
 				key.APIKey.Active = false
 				_, err = keys.Update(t.Context(), key.APIKey, key.Revision)
@@ -82,20 +96,30 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 				err = identities.Teams.Delete(t.Context(), team.Team.ID, team.Revision)
 			}
 			require.NoError(t, err)
-			// The write is durable while this replica has not started its revision monitor.
-			require.Equal(t, "permitted", peer.exchange(t, "check"))
 			started := time.Now()
-			require.Equal(t, "monitoring", peer.exchange(t, "monitor"))
+			if !scenario.live {
+				// The write is durable before this replica starts its revision monitor.
+				require.Equal(t, "permitted", peer.exchange(t, "check"))
+				require.Equal(t, "monitoring", peer.exchange(t, "monitor"))
+			}
 			for peer.exchange(t, "check") != "withdrawn" {
 				require.Less(t, time.Since(started), 2*time.Second, "replica did not enforce the withdrawal")
 				time.Sleep(10 * time.Millisecond)
 			}
 			require.Less(t, time.Since(started), 2*time.Second)
-			t.Logf("%s withdrawal observed by separate process after %s", owner, time.Since(started))
+			t.Logf("%s live=%t withdrawal observed by separate process after %s", owner, scenario.live, time.Since(started))
+			if scenario.live {
+				require.NotEqual(t, "checks=0", peer.exchange(t, "load-count"))
+				t.Log(peer.exchange(t, "load-count"))
+			}
 			require.Equal(t, "withdrawn", peer.exchange(t, "check"))
 			require.Equal(t, "stopped", peer.exchange(t, "stop"))
 			require.NoError(t, peer.command.Wait(), peer.stderr.String())
 			peer.finished = true
+			t.Setenv("STARPORT_TEST_AUTH_REFUSAL", owner)
+			restarted := startAuthorizationReplica(t, "refused")
+			require.NoError(t, restarted.command.Wait(), restarted.stderr.String())
+			restarted.finished = true
 		})
 	}
 }
@@ -132,7 +156,7 @@ type authorizationReplica struct {
 	finished bool
 }
 
-func startAuthorizationReplica(t *testing.T) *authorizationReplica {
+func startAuthorizationReplica(t *testing.T, expected string) *authorizationReplica {
 	t.Helper()
 	executable, err := os.Executable()
 	require.NoError(t, err)
@@ -169,7 +193,7 @@ func startAuthorizationReplica(t *testing.T) *authorizationReplica {
 			}
 		}
 	}()
-	require.Equal(t, "ready", peer.read(t))
+	require.Equal(t, expected, peer.read(t))
 	return peer
 }
 
@@ -216,12 +240,27 @@ func runAuthorizationReplica(t *testing.T) {
 	require.NoError(t, err)
 	defer cache.Close()
 	bundle, err := cache.Resolve(t.Context(), Identity{Subject: "fleet-fixture-hash"})
+	if owner := os.Getenv("STARPORT_TEST_AUTH_REFUSAL"); owner != "" {
+		expected := ErrDenied
+		if owner == "sql" {
+			expected = identity.ErrTeamNotFound
+		}
+		require.ErrorIs(t, err, expected)
+		require.Nil(t, bundle)
+		_, writeErr := fmt.Fprintln(os.Stdout, "CSP-AUTH refused")
+		require.NoError(t, writeErr)
+		return
+	}
 	require.NoError(t, err)
 	monitor, err := NewMonitor([]WatchedAuthority{{Authority: "kv", Reader: kv}, {Authority: "sql", Reader: sql}}, set, time.Second, time.Second)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, monitor.Close(context.Background())) }()
 	_, err = fmt.Fprintln(os.Stdout, "CSP-AUTH ready")
 	require.NoError(t, err)
+	loadContext, stopLoad := context.WithCancel(t.Context())
+	var workers sync.WaitGroup
+	var checks atomic.Uint64
+	defer func() { stopLoad(); workers.Wait() }()
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		response := ""
@@ -235,6 +274,35 @@ func runAuthorizationReplica(t *testing.T) {
 				response = "withdrawn"
 			default:
 				t.Fatalf("unexpected permission state: %v", err)
+			}
+		case "load":
+			monitor.Start(t.Context())
+			for range 16 {
+				workers.Go(func() {
+					ticker := time.NewTicker(time.Millisecond)
+					defer ticker.Stop()
+					for {
+						select {
+						case <-loadContext.Done():
+							return
+						case <-ticker.C:
+							for range 32 {
+								_ = bundle.Permit().Check(time.Now(), true)
+								checks.Add(1)
+							}
+						}
+					}
+				})
+			}
+			response = "loaded"
+		case "load-count":
+			response = fmt.Sprintf("checks=%d", checks.Load())
+		case "observed":
+			response = "observed"
+			for _, status := range monitor.Status() {
+				if status.VerifiedAt.IsZero() || status.Failure != "" {
+					response = "waiting"
+				}
 			}
 		case "monitor":
 			monitor.Start(t.Context())
