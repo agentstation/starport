@@ -4,8 +4,10 @@ import (
 	"context"
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
+	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/catalog/disclosure"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -15,12 +17,12 @@ import (
 )
 
 type withdrawingCatalogCache struct {
-	*mockCacheManager
+	*discoveryCacheObserver
 	onRead func()
 }
 
 func (m *withdrawingCatalogCache) GetModel(ctx context.Context, key string, target any) (bool, error) {
-	found, err := m.mockCacheManager.GetModel(ctx, key, target)
+	found, err := m.discoveryCacheObserver.GetModel(ctx, key, target)
 	if m.onRead != nil {
 		m.onRead()
 	}
@@ -84,7 +86,7 @@ func TestDiscoveryCacheLookupRechecksAuthority(t *testing.T) {
 			source.allowed.Store(true)
 			plane, err := runtimecatalog.Open(source)
 			require.NoError(t, err)
-			manager := &withdrawingCatalogCache{mockCacheManager: newMockCacheManager()}
+			manager := &withdrawingCatalogCache{discoveryCacheObserver: newDiscoveryCacheObserver(t)}
 			upstream := &mockProxyImpl{modelsResponse: &ModelsResponse{Data: []ModelInfo{{ID: "retained-private-model"}}}, providersResponse: &ProvidersResponse{Providers: []ProviderInfo{{ID: "retained-private-provider"}}}}
 			service := &cachedService{service: upstream, runtime: &cacheRuntimeSource{snapshot: plane.Current()}, cacheManager: manager, cacheConfig: CacheConfig{EnableModelCache: true, EnableProviderCache: true}}
 			read := func() (bool, error) {
@@ -103,10 +105,13 @@ func TestDiscoveryCacheLookupRechecksAuthority(t *testing.T) {
 			empty, err := read()
 			require.NoError(t, err)
 			require.False(t, empty)
-			require.Equal(t, 1, manager.calls["SetModel"])
+			require.Equal(t, 1, manager.writes)
+			awaitDiscoveryCache(t, manager.discoveryCacheObserver)
 			manager.onRead = func() { source.allowed.Store(false) }
+			hits := manager.hits
 			empty, err = read()
 			require.True(t, empty)
+			require.Greater(t, manager.hits, hits, "withdrawal must override a real cache hit")
 			requireCatalogPermissionRefusal(t, err)
 		})
 	}
@@ -150,7 +155,7 @@ func TestDiscoveryCacheSeparatesDisclosureMembership(t *testing.T) {
 	denied := disclosure.Policy{}
 	for _, kind := range []string{"models", "providers"} {
 		t.Run(kind, func(t *testing.T) {
-			manager := newMockCacheManager()
+			manager := newDiscoveryCacheObserver(t)
 			upstream := &proxy{registry: catalogDiscoveryRegistry{runtime: &catalogDiscoveryRuntime{snapshot: snapshot}}}
 			service := &cachedService{service: upstream, runtime: &cacheRuntimeSource{snapshot: snapshot}, cacheManager: manager, cacheConfig: CacheConfig{EnableModelCache: true, EnableProviderCache: true}}
 			read := func(policy disclosure.Policy, visible bool) {
@@ -167,13 +172,15 @@ func TestDiscoveryCacheSeparatesDisclosureMembership(t *testing.T) {
 				require.NoError(t, err)
 			}
 			read(allowed, true)
-			require.Equal(t, 1, manager.calls["SetModel"])
+			awaitDiscoveryCache(t, manager)
+			require.Equal(t, 1, manager.writes)
 			read(allowed, true)
-			require.Equal(t, 1, manager.calls["SetModel"], "same membership must hit the serialized cache")
+			require.Equal(t, 1, manager.writes, "same membership must hit the serialized cache")
 			read(denied, false)
-			require.Equal(t, 2, manager.calls["SetModel"], "different membership must not reuse the first response")
+			awaitDiscoveryCache(t, manager)
+			require.Equal(t, 2, manager.writes, "different membership must not reuse the first response")
 			read(denied, false)
-			require.Equal(t, 2, manager.calls["SetModel"])
+			require.Equal(t, 2, manager.writes)
 		})
 	}
 }
@@ -186,8 +193,17 @@ func TestEndpointLookupDoesNotRevealDeniedMembership(t *testing.T) {
 	_, offering := firstDiscoveryOffering(t, client.Catalog())
 	snapshot := plane.Current()
 	direct := &proxy{registry: catalogDiscoveryRegistry{runtime: &catalogDiscoveryRuntime{snapshot: snapshot}}}
-	manager := newMockCacheManager()
+	manager := newDiscoveryCacheObserver(t)
 	cached := &cachedService{service: direct, runtime: &cacheRuntimeSource{snapshot: snapshot}, cacheManager: manager, cacheConfig: CacheConfig{EnableModelCache: true}}
+	allowed := disclosure.WithPolicy(t.Context(), disclosure.New(snapshot, apikey.APIKey{}, account.Account{}))
+	_, err = cached.GetModelEndpoints(allowed, string(offering.DefinitionID))
+	require.NoError(t, err)
+	awaitDiscoveryCache(t, manager)
+	hits := manager.hits
+	_, err = cached.GetModelEndpoints(allowed, string(offering.DefinitionID))
+	require.NoError(t, err)
+	require.Greater(t, manager.hits, hits)
+	reads := manager.reads
 	ctx := disclosure.WithPolicy(t.Context(), disclosure.Policy{})
 	for _, service := range []Proxy{direct, cached} {
 		for _, name := range []string{string(offering.DefinitionID), "unknown/model"} {
@@ -199,5 +215,22 @@ func TestEndpointLookupDoesNotRevealDeniedMembership(t *testing.T) {
 			require.Equal(t, "Model not found", refusal.Message)
 		}
 	}
-	require.Zero(t, manager.calls["GetModel"], "denied membership must not reach cache lookup")
+	require.Equal(t, reads, manager.reads, "denied membership must not reach cache lookup")
+}
+
+func newDiscoveryCacheObserver(t *testing.T) *discoveryCacheObserver {
+	t.Helper()
+	manager, err := cache.NewCacheManager(cache.ManagerConfig{}, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, manager.Close()) })
+	return &discoveryCacheObserver{Manager: manager}
+}
+
+func awaitDiscoveryCache(t *testing.T, manager *discoveryCacheObserver) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		var value any
+		found, err := manager.GetModel(t.Context(), manager.key, &value)
+		return err == nil && found
+	}, time.Second, time.Millisecond)
 }

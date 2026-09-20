@@ -22,6 +22,17 @@ type discoveryCacheObserver struct {
 	*cache.Manager
 	key    string
 	writes int
+	reads  int
+	hits   int
+}
+
+func (c *discoveryCacheObserver) GetModel(ctx context.Context, key string, target any) (bool, error) {
+	c.reads++
+	found, err := c.Manager.GetModel(ctx, key, target)
+	if found {
+		c.hits++
+	}
+	return found, err
 }
 
 func (c *discoveryCacheObserver) SetModel(ctx context.Context, key string, value any) error {
