@@ -469,6 +469,7 @@ func (s *cachedService) readCachedCatalogList(ctx context.Context, kind string, 
 	if s.runtime != nil && runtime == nil {
 		return fetch(ctx)
 	}
+	ctx = bindDiscoverySnapshot(ctx, runtime)
 	if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 		return nil, refusal
 	}
@@ -477,7 +478,7 @@ func (s *cachedService) readCachedCatalogList(ctx context.Context, kind string, 
 			response, err = nil, refusal
 		}
 	}()
-	key := kind + ":list:" + s.catalogGeneration(ctx) + ":" + disclosure.CacheScope(ctx)
+	key := kind + ":list:" + s.discoveryCacheIdentity(ctx) + ":" + disclosure.CacheScope(ctx)
 	return s.cacheListResponse(ctx, key, kind, func() (any, error) { return fetch(ctx) })
 }
 
@@ -534,6 +535,7 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 	if s.runtime != nil && runtime == nil {
 		return s.service.GetModelEndpoints(ctx, modelID)
 	}
+	ctx = bindDiscoverySnapshot(ctx, runtime)
 	if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 		return nil, refusal
 	}
@@ -544,11 +546,11 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 	}()
 
 	if runtime != nil {
-		if err := checkEndpointDisclosure(ctx, runtime.Snapshot(), modelID); err != nil {
+		if err := checkEndpointDisclosure(ctx, discoverySnapshot(ctx, runtime), modelID); err != nil {
 			return nil, err
 		}
 	}
-	cacheKey := fmt.Sprintf("model:endpoints:%s:%s:%s", s.catalogGeneration(ctx), disclosure.CacheScope(ctx), modelID)
+	cacheKey := fmt.Sprintf("model:endpoints:%s:%s:%s", s.discoveryCacheIdentity(ctx), disclosure.CacheScope(ctx), modelID)
 
 	var cached ModelEndpointsResponse
 	found, err := s.cacheManager.GetModel(ctx, cacheKey, &cached)
@@ -619,6 +621,15 @@ func (s *cachedService) generateEmbeddingsCacheKey(
 		Request:           req.Request,
 		Policy:            cachePolicy("", nil, req.APIKeyConfig),
 	})
+}
+
+func (s *cachedService) discoveryCacheIdentity(ctx context.Context) string {
+	if runtime := connectors.RuntimeLeaseFromContext(ctx); runtime != nil {
+		if snapshot := discoverySnapshot(ctx, runtime); snapshot != nil {
+			return snapshot.DiscoveryCacheIdentity()
+		}
+	}
+	return s.generation
 }
 
 func (s *cachedService) catalogGeneration(ctx context.Context) string {

@@ -206,7 +206,7 @@ func TestCachedServiceRetainsOneRuntimeGeneration(t *testing.T) {
 	require.NoError(t, err)
 	plane, err := runtimecatalog.Open(client)
 	require.NoError(t, err)
-	generationID := plane.Current().GenerationID()
+	discoveryID := plane.Current().DiscoveryCacheIdentity()
 
 	t.Run("chat", func(t *testing.T) {
 		source := &cacheRuntimeSource{snapshot: plane.Current()}
@@ -254,7 +254,7 @@ func TestCachedServiceRetainsOneRuntimeGeneration(t *testing.T) {
 		_, err := service.ListModels(t.Context())
 		require.NoError(t, err)
 		require.True(t, source.lastLease(t).released.Load())
-		_, found := manager.storage["models:list:"+generationID+":internal"]
+		_, found := manager.storage["models:list:"+discoveryID+":internal"]
 		require.True(t, found)
 	})
 }

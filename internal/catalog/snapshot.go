@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"crypto/rand"
 	"strings"
 	"time"
 
@@ -103,24 +104,25 @@ type OfferingRoutability struct {
 // RoutableSnapshot projects one Starmap generation and one runtime availability
 // revision into an immutable route set.
 type RoutableSnapshot struct {
-	catalog              *catalogs.Catalog
-	generationID         string
-	payloadChecksum      string
-	generatedAt          time.Time
-	catalogSequence      uint64
-	authorityHead        catalogs.CatalogAuthorityHead
-	permission           catalogAttemptPermission
-	availabilityRevision uint64
-	discoveryIndex       []discoveryEntry
-	catalogNames         map[string]struct{}
-	routesByID           map[string]int
-	routesByDefinition   map[catalogs.ModelDefinitionID][]int
-	routesByProvider     map[catalogs.ProviderID][]int
-	routableDefinitions  []catalogs.ModelDefinitionID
-	planningCandidates   []routing.Candidate
-	planningByModel      map[string][]int
-	routes               []Route
-	routability          []OfferingRoutability
+	discoveryCacheIdentity string
+	catalog                *catalogs.Catalog
+	generationID           string
+	payloadChecksum        string
+	generatedAt            time.Time
+	catalogSequence        uint64
+	authorityHead          catalogs.CatalogAuthorityHead
+	permission             catalogAttemptPermission
+	availabilityRevision   uint64
+	discoveryIndex         []discoveryEntry
+	catalogNames           map[string]struct{}
+	routesByID             map[string]int
+	routesByDefinition     map[catalogs.ModelDefinitionID][]int
+	routesByProvider       map[catalogs.ProviderID][]int
+	routableDefinitions    []catalogs.ModelDefinitionID
+	planningCandidates     []routing.Candidate
+	planningByModel        map[string][]int
+	routes                 []Route
+	routability            []OfferingRoutability
 }
 
 func newRoutableSnapshot(
@@ -134,16 +136,17 @@ func newRoutableSnapshot(
 		return nil, err
 	}
 	snapshot := &RoutableSnapshot{
-		catalog:              state.Catalog,
-		discoveryIndex:       index,
-		generationID:         state.GenerationID,
-		payloadChecksum:      state.PayloadChecksum,
-		generatedAt:          state.GeneratedAt,
-		catalogSequence:      state.Sequence,
-		authorityHead:        state.AuthorityHead,
-		availabilityRevision: availabilityRevision,
-		routes:               cloneRoutes(routes),
-		routability:          append([]OfferingRoutability(nil), routability...),
+		discoveryCacheIdentity: rand.Text(),
+		catalog:                state.Catalog,
+		discoveryIndex:         index,
+		generationID:           state.GenerationID,
+		payloadChecksum:        state.PayloadChecksum,
+		generatedAt:            state.GeneratedAt,
+		catalogSequence:        state.Sequence,
+		authorityHead:          state.AuthorityHead,
+		availabilityRevision:   availabilityRevision,
+		routes:                 cloneRoutes(routes),
+		routability:            append([]OfferingRoutability(nil), routability...),
 	}
 	snapshot.buildRouteIndexes()
 	snapshot.buildPlanningCandidates()
@@ -452,4 +455,13 @@ func cloneRoute(route Route) Route {
 		copyRoute.PromptCache = &value
 	}
 	return copyRoute
+}
+
+// DiscoveryCacheIdentity names this immutable runtime view across process lifetimes.
+// Adapter changes create a new view even when the catalog generation is unchanged.
+func (s *RoutableSnapshot) DiscoveryCacheIdentity() string {
+	if s == nil {
+		return ""
+	}
+	return s.discoveryCacheIdentity
 }

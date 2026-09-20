@@ -577,7 +577,7 @@ func (p *proxy) ListModels(ctx context.Context) (response *ModelsResponse, err e
 	if owned {
 		defer runtime.Release()
 	}
-	snapshot := runtime.Snapshot()
+	snapshot := discoverySnapshot(ctx, runtime)
 	if snapshot == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
 	}
@@ -608,7 +608,7 @@ func (p *proxy) ListProviders(ctx context.Context) (response *ProvidersResponse,
 	if owned {
 		defer runtime.Release()
 	}
-	snapshot := runtime.Snapshot()
+	snapshot := discoverySnapshot(ctx, runtime)
 	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
 		return nil, refusal
 	}
@@ -748,7 +748,7 @@ func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (response
 	if owned {
 		defer runtime.Release()
 	}
-	snapshot := runtime.Snapshot()
+	snapshot := discoverySnapshot(ctx, runtime)
 	if snapshot == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
 	}
