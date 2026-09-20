@@ -20,7 +20,7 @@ func TestDefaultResponseCacheDoesNotWriteDurableKV(t *testing.T) {
 	require.NoError(t, err)
 	keys, err := apikey.Open(store)
 	require.NoError(t, err)
-	_, err = keys.Create(t.Context(), testAPIKey())
+	created, err := keys.Create(t.Context(), testAPIKey())
 	require.NoError(t, err)
 	require.NoError(t, store.Close())
 	factories := explicitTestFactories()
@@ -40,6 +40,13 @@ func TestDefaultResponseCacheDoesNotWriteDurableKV(t *testing.T) {
 	storedKeys, err := application.store.ScanWithPrefix(t.Context(), storage.KeyPrefixResponse, 10)
 	require.NoError(t, err)
 	require.Empty(t, storedKeys)
+	application.cacheManager.InvalidateModels()
+	require.NoError(t, application.cacheManager.Close())
+	durableKeys, err := apikey.Open(application.store)
+	require.NoError(t, err)
+	retained, err := durableKeys.GetByID(t.Context(), created.APIKey.ID)
+	require.NoError(t, err)
+	require.Equal(t, created, retained, "cache cleanup must preserve authoritative API key records")
 }
 
 func TestExtractionCacheHasIndependentLocalLifecycle(t *testing.T) {
