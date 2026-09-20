@@ -8,3 +8,10 @@ func (h *AdminController) responseCacheStatus() cache.FillStatus {
 	}
 	return h.deployment.ResponseCache()
 }
+
+func (h *AdminController) extractionCacheStatus() cache.FillStatus {
+	if h.deployment.ExtractionCache == nil {
+		return cache.FillStatus{}
+	}
+	return h.deployment.ExtractionCache()
+}

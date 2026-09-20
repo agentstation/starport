@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -24,8 +25,9 @@ func (s aliasHTTPSource) CurrentCatalogState() starmap.CatalogState { return s.s
 
 type observedDiscoveryCache struct {
 	*cache.Manager
-	hits   int
-	writes int
+	hits    int
+	writes  int
+	lastKey string
 }
 
 func (c *observedDiscoveryCache) GetModel(ctx context.Context, key string) (any, bool, error) {
@@ -38,6 +40,7 @@ func (c *observedDiscoveryCache) GetModel(ctx context.Context, key string) (any,
 
 func (c *observedDiscoveryCache) SetModel(ctx context.Context, key string, value any) error {
 	c.writes++
+	c.lastKey = key
 	return c.Manager.SetModel(ctx, key, value)
 }
 
@@ -77,6 +80,10 @@ func TestHTTPAliasRemovalWithSerializedDiscoveryCache(t *testing.T) {
 				require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 				require.Contains(t, response.Body.String(), "author/current+variant")
 				require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
+				require.Eventually(t, func() bool {
+					_, found, err := manager.GetModel(t.Context(), observed.lastKey)
+					return err == nil && found
+				}, time.Second, time.Millisecond)
 			}
 		})
 	}
@@ -121,6 +128,10 @@ func TestHTTPAliasRemovalWithSerializedDiscoveryCache(t *testing.T) {
 		}
 		response = serveAuthorized(s, http.MethodGet, prefix+"/models/author%2Fcurrent+variant", secret, t.Context())
 		require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+		require.Eventually(t, func() bool {
+			_, found, err := manager.GetModel(t.Context(), observed.lastKey)
+			return err == nil && found
+		}, time.Second, time.Millisecond)
 	}
 	require.Equal(t, writesBeforeReplacement+1, observed.writes, "replacement generation must use a different cache entry")
 	record, err := s.accounts.GetByID(t.Context(), account.DefaultID)

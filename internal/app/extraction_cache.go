@@ -10,7 +10,7 @@ import (
 
 // Extraction caching has an independent capacity and lifecycle from response caching.
 func (b *runtimeBuilder) openExtractionCache() (*document.Cache, error) {
-	store, err := cache.NewLocalCache(16, document.DefaultCacheWindow)
+	store, err := cache.NewBufferedLocalCache(16, document.DefaultCacheWindow)
 	if err != nil {
 		return nil, fmt.Errorf("open extraction byte cache: %w", err)
 	}
@@ -19,6 +19,7 @@ func (b *runtimeBuilder) openExtractionCache() (*document.Cache, error) {
 		_ = store.Close()
 		return nil, fmt.Errorf("open extraction cache: %w", err)
 	}
+	b.application.extractionCache = store
 	b.application.own("extraction cache", func(context.Context) error { return store.Close() })
 	return extractions, nil
 }

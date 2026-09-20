@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -21,7 +23,8 @@ type Manager struct {
 	closeErr       error
 
 	// Model Metadata: Local only with long TTL
-	models *LocalCache
+	models     *LocalCache
+	modelEpoch atomic.Uint64
 
 	// Configuration
 	config ManagerConfig
@@ -137,7 +140,7 @@ func (cm *Manager) SetResponse(ctx context.Context, key string, response []byte)
 
 // GetModel retrieves model metadata (local cache only)
 func (cm *Manager) GetModel(ctx context.Context, modelID string) (any, bool, error) {
-	data, found, err := cm.models.Get(ctx, modelID)
+	data, found, err := cm.models.Get(ctx, cm.modelKey(modelID))
 	if err != nil || !found {
 		return nil, found, err
 	}
@@ -153,16 +156,18 @@ func (cm *Manager) GetModel(ctx context.Context, modelID string) (any, bool, err
 
 // SetModel caches model metadata (local cache only)
 func (cm *Manager) SetModel(ctx context.Context, modelID string, model any) error {
+	key := cm.modelKey(modelID)
 	data, err := json.Marshal(model)
 	if err != nil {
 		return fmt.Errorf("failed to marshal model: %w", err)
 	}
 
-	return cm.models.Set(ctx, modelID, data, cm.config.Models.TTL)
+	return cm.fills.enqueueTo(ctx, cm.models, key, data, cm.config.Models.TTL)
 }
 
 // InvalidateModels clears all model metadata from local cache
 func (cm *Manager) InvalidateModels() {
+	cm.modelEpoch.Add(1)
 	cm.models.Clear()
 	log.Info().Msg("invalidated all model metadata")
 }
@@ -179,4 +184,8 @@ func (cm *Manager) Close() error {
 		cm.closeErr = errors.Join(cm.responses.Close(), cm.models.Close())
 	})
 	return cm.closeErr
+}
+
+func (cm *Manager) modelKey(id string) string {
+	return strconv.FormatUint(cm.modelEpoch.Load(), 10) + ":" + id
 }

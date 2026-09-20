@@ -25,7 +25,13 @@ func (cm *Manager) FillStatus() FillStatus {
 	if reporter, ok := cm.responses.(interface{ SharedStatus() SharedStatus }); ok {
 		shared = reporter.SharedStatus()
 	}
-	return FillStatus{Enabled: true, Shared: shared, EntryLimit: fillQueueEntries, ByteLimit: fillQueueBytes, WorkerLimit: fillWorkers,
+	status := fillStatus(stats)
+	status.Shared = shared
+	return status
+}
+
+func fillStatus(stats Stats) FillStatus {
+	return FillStatus{Enabled: true, EntryLimit: fillQueueEntries, ByteLimit: fillQueueBytes, WorkerLimit: fillWorkers,
 		RetainedEntries: stats.RetainedEntries, RetainedBytes: stats.RetainedBytes, ActiveFills: stats.ActiveFills,
 		DroppedFills: stats.DroppedFills, FailedFills: stats.FailedFills, CompletedFills: stats.CompletedFills}
 }

@@ -50,6 +50,7 @@ func TestExtractionCacheHasIndependentLocalLifecycle(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, application.closeLifecycle(context.Background())) })
 	key := document.CacheKey{AccountID: "account", ContentHash: "hash", Engine: "native", Generation: "generation"}
 	require.NoError(t, extractions.Put(t.Context(), key, document.Reading{Text: "text"}))
+	require.Eventually(t, func() bool { _, found, err := extractions.Get(t.Context(), key); return err == nil && found }, time.Second, time.Millisecond)
 	value, found, err := extractions.Get(t.Context(), key)
 	require.NoError(t, err)
 	require.True(t, found)

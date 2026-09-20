@@ -18,6 +18,7 @@ const (
 )
 
 type fillJob struct {
+	store    ResponseStore
 	key      string
 	value    []byte
 	deadline time.Time
@@ -52,6 +53,10 @@ func newFillQueue(store ResponseStore) *fillQueue {
 
 // enqueue drops optional work when capacity or the short admission lock is unavailable.
 func (q *fillQueue) enqueue(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+	return q.enqueueTo(ctx, q.store, key, value, ttl)
+}
+
+func (q *fillQueue) enqueueTo(ctx context.Context, store ResponseStore, key string, value []byte, ttl time.Duration) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -59,7 +64,7 @@ func (q *fillQueue) enqueue(ctx context.Context, key string, value []byte, ttl t
 		q.dropped.Add(1)
 		return nil
 	}
-	cost := int64(len(key)+len(value)) + 64
+	cost := int64(len(key)+len(value)) + 96
 	if !q.mu.TryLock() {
 		q.dropped.Add(1)
 		return nil
@@ -76,7 +81,7 @@ func (q *fillQueue) enqueue(ctx context.Context, key string, value []byte, ttl t
 		q.dropped.Add(1)
 		return nil
 	}
-	job := fillJob{key: strings.Clone(key), value: bytes.Clone(value), deadline: time.Now().Add(ttl), cost: cost}
+	job := fillJob{store: store, key: strings.Clone(key), value: bytes.Clone(value), deadline: time.Now().Add(ttl), cost: cost}
 	q.entries++
 	q.bytes += cost
 	select {
@@ -105,7 +110,7 @@ func (q *fillQueue) run() {
 			ttl := time.Until(job.deadline)
 			if ttl > 0 && q.ctx.Err() == nil {
 				ctx, cancel := context.WithTimeout(q.ctx, min(ttl, fillWriteTimeout))
-				err := q.store.Set(ctx, job.key, job.value, ttl)
+				err := job.store.Set(ctx, job.key, job.value, ttl)
 				cancel()
 				if err != nil {
 					q.failed.Add(1)

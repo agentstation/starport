@@ -103,6 +103,7 @@ type App struct {
 	jobs                *jobs.Service
 	events              *events.Dispatcher
 	cacheManager        *cache.Manager
+	extractionCache     *cache.BufferedLocalCache
 	transports          *connectors.TransportRegistry
 	authentication      *providerauth.Registry
 	providerReconciler  *providers.Reconciler
@@ -945,6 +946,7 @@ func (b *runtimeBuilder) deployment() controllers.Deployment {
 	cfg := b.config
 	deployment := controllers.Deployment{
 		ResponseCache:     b.application.cacheManager.FillStatus,
+		ExtractionCache:   b.application.extractionCache.FillStatus,
 		StorageMode:       cmp.Or(cfg.Storage.Mode, storage.StorageTypeBadger),
 		RelationalMode:    cmp.Or(cfg.Storage.SQL.Mode, sqlstore.TypeSQLite),
 		MetricsMode:       cmp.Or(cfg.Telemetry.Metrics, config.TelemetryMetricsOn),

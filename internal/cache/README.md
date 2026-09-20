@@ -19,8 +19,8 @@ No production qualification or latency improvement follows from this interface c
 
 ## Optional response fills
 
-Response fills use two lifecycle-owned workers. The queue limits queued and active work to 1,024 entries and 4 MiB of charged bytes.
-The byte charge includes copied keys, copied payloads, and 64 bytes per job. It does not measure total process or transport memory.
+Response and model fills share two lifecycle-owned workers. The queue limits queued and active work to 1,024 entries and 4 MiB of charged bytes.
+The byte charge includes copied keys, copied payloads, and 96 bytes per job. It does not measure total process or transport memory.
 Admission drops optional work when capacity or the admission lock is unavailable.
 `SetResponse` does not confirm persistence or a subsequent cache hit.
 
@@ -31,7 +31,13 @@ It exposes no cache keys or payloads.
 
 Injected response-cache reads have a 2 ms deadline. Local response reads use no additional timer.
 Current authorization and catalog checks still govern cached delivery.
-Model and extraction fills and full shared-service and stream qualification remain under CSP12.1.
+Model invalidation advances a process-local epoch. Queued writes from earlier epochs cannot become visible after invalidation.
+Model serialization still runs on the caller before queue admission.
+
+Extraction fills use an independent queue with the same bounds, even when the operator disables response caching.
+Together, both queues permit at most 2,048 queued or active entries, 8 MiB of charged data, and four workers.
+The admin `extraction_cache` field reports extraction pressure. `response_cache` reports the shared response and model queue.
+Extraction serialization also remains synchronous. Aggregate heap and serialization latency still need qualification.
 
 ## Stream retention
 

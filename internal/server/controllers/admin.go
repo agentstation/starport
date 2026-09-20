@@ -68,7 +68,8 @@ type DropCounter interface {
 // surface describes the deployment and not any one request.
 type Deployment struct {
 	// ResponseCache reports bounded optional response work from memory.
-	ResponseCache func() cache.FillStatus
+	ResponseCache   func() cache.FillStatus
+	ExtractionCache func() cache.FillStatus
 	// StorageMode names the key-value store: badger or valkey.
 	StorageMode string
 	// RelationalMode names the relational twin: sqlite, postgres, or mysql.
@@ -599,8 +600,9 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 			"files_seconds":      seconds(h.deployment.FileRetention),
 			"job_assets_seconds": seconds(h.deployment.JobAssetRetention),
 		},
-		"webhooks":       h.webhookSummary(),
-		"response_cache": h.responseCacheStatus(),
+		"webhooks":         h.webhookSummary(),
+		"response_cache":   h.responseCacheStatus(),
+		"extraction_cache": h.extractionCacheStatus(),
 		providersField: map[string]any{
 			responseCountField: systemInfoUnavailable,
 			fieldStatus:        systemInfoUnavailable,
