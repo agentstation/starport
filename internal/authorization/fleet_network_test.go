@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +19,8 @@ type fleetNetwork struct {
 	listener    net.Listener
 	target      string
 	blocked     bool
+	silent      atomic.Bool
+	dropped     atomic.Uint64
 	connections map[net.Conn]struct{}
 	workers     sync.WaitGroup
 }
@@ -79,8 +82,12 @@ func (n *fleetNetwork) forward(client net.Conn) {
 	n.mu.Unlock()
 	defer func() { n.mu.Lock(); delete(n.connections, upstream); n.mu.Unlock() }()
 	done := make(chan struct{})
-	go func() { _, _ = io.Copy(upstream, client); _ = upstream.Close(); close(done) }()
-	_, _ = io.Copy(client, upstream)
+	go func() {
+		_, _ = io.Copy(fleetWriter{network: n, destination: upstream}, client)
+		_ = upstream.Close()
+		close(done)
+	}()
+	_, _ = io.Copy(fleetWriter{network: n, destination: client}, upstream)
 	_ = client.Close()
 	<-done
 }
@@ -98,4 +105,19 @@ func (n *fleetNetwork) restore() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.blocked = false
+	n.silent.Store(false)
+}
+
+// fleetWriter drops payloads without returning a transport error to the sender.
+type fleetWriter struct {
+	network     *fleetNetwork
+	destination net.Conn
+}
+
+func (w fleetWriter) Write(data []byte) (int, error) {
+	if w.network.silent.Load() {
+		w.network.dropped.Add(uint64(len(data)))
+		return len(data), nil
+	}
+	return w.destination.Write(data)
 }

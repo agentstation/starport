@@ -41,10 +41,11 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 	for _, scenario := range []struct {
 		owner     string
 		live      bool
+		expiry    bool
 		partition bool
-	}{{"kv", false, false}, {"sql", false, false}, {"kv", true, false}, {"sql", true, false}, {"kv", true, true}, {"sql", true, true}} {
+	}{{"kv", false, false, false}, {"sql", false, false, false}, {"kv", true, false, false}, {"sql", true, false, false}, {"kv", true, false, true}, {"sql", true, false, true}, {"kv", true, true, true}, {"sql", true, true, true}} {
 		owner := scenario.owner
-		t.Run(fmt.Sprintf("%s/live_%t/partition_%t", owner, scenario.live, scenario.partition), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/live_%t/partition_%t/expiry_%t", owner, scenario.live, scenario.partition, scenario.expiry), func(t *testing.T) {
 			namespace := "auth_fleet_" + strings.ToLower(rand.Text())
 			admin, err := sqlstore.Open(sqlstore.Config{Type: sqlstore.TypePostgres, Postgres: sqlstore.PostgresConfig{URL: address}})
 			require.NoError(t, err)
@@ -85,7 +86,7 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 			if scenario.partition {
 				variable := "STARPORT_TEST_AUTH_SQL"
 				failedAuthority = "sql"
-				if owner == "sql" {
+				if (owner == "sql") != scenario.expiry {
 					variable, failedAuthority = "TEST_VALKEY_URL", "kv"
 				}
 				var proxyURL string
@@ -95,7 +96,11 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 			peer := startAuthorizationReplica(t, "ready")
 			require.Equal(t, "permitted", peer.exchange(t, "check"))
 			if scenario.live {
-				require.Equal(t, "loaded", peer.exchange(t, "load"))
+				if scenario.expiry {
+					require.Equal(t, "monitoring", peer.exchange(t, "monitor"))
+				} else {
+					require.Equal(t, "loaded", peer.exchange(t, "load"))
+				}
 				ready := time.Now()
 				for peer.exchange(t, "observed") != "observed" {
 					require.Less(t, time.Since(ready), 2*time.Second, "monitor did not observe both authorities")
@@ -103,7 +108,11 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 				}
 			}
 			if network != nil {
-				network.cut()
+				if scenario.expiry {
+					network.silent.Store(true)
+				} else {
+					network.cut()
+				}
 				started := time.Now()
 				for peer.exchange(t, "failure-"+failedAuthority) != "unavailable" {
 					require.Less(t, time.Since(started), 4*time.Second, "partition did not reach authority diagnostics")
@@ -124,17 +133,22 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 				require.Equal(t, "permitted", peer.exchange(t, "check"))
 				require.Equal(t, "monitoring", peer.exchange(t, "monitor"))
 			}
-			for peer.exchange(t, "check") != "withdrawn" {
-				require.Less(t, time.Since(started), 2*time.Second, "replica did not enforce the withdrawal")
-				time.Sleep(10 * time.Millisecond)
+			expected, bound, poll := "withdrawn", 2*time.Second, 10*time.Millisecond
+			if scenario.expiry {
+				expected, bound, poll = "expired", 60*time.Second, 100*time.Millisecond
+				require.Positive(t, network.dropped.Load(), "fault did not drop any authority payload")
 			}
-			require.Less(t, time.Since(started), 2*time.Second)
-			t.Logf("%s live=%t withdrawal observed by separate process after %s", owner, scenario.live, time.Since(started))
-			if scenario.live {
+			for peer.exchange(t, "check") != expected {
+				require.Less(t, time.Since(started), bound, "replica did not refuse permission before its bound")
+				time.Sleep(poll)
+			}
+			require.Less(t, time.Since(started), bound)
+			t.Logf("%s live=%t expiry=%t permission refused by separate process after %s", owner, scenario.live, scenario.expiry, time.Since(started))
+			if scenario.live && !scenario.expiry {
 				require.NotEqual(t, "checks=0", peer.exchange(t, "load-count"))
 				t.Log(peer.exchange(t, "load-count"))
 			}
-			require.Equal(t, "withdrawn", peer.exchange(t, "check"))
+			require.Equal(t, expected, peer.exchange(t, "check"))
 			require.Equal(t, "stopped", peer.exchange(t, "stop"))
 			require.NoError(t, peer.command.Wait(), peer.stderr.String())
 			peer.finished = true
@@ -185,9 +199,9 @@ func startAuthorizationReplica(t *testing.T, expected string) *authorizationRepl
 	t.Helper()
 	executable, err := os.Executable()
 	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	t.Cleanup(cancel)
-	command := exec.CommandContext(ctx, executable, "-test.run=^TestFleetDurableReceiptPrecedesReplicaEnforcement$", "-test.timeout=25s")
+	command := exec.CommandContext(ctx, executable, "-test.run=^TestFleetDurableReceiptPrecedesReplicaEnforcement$", "-test.timeout=85s")
 	command.Env = append(os.Environ(), "STARPORT_TEST_AUTH_REPLICA=1")
 	input, err := command.StdinPipe()
 	require.NoError(t, err)
@@ -295,6 +309,8 @@ func runAuthorizationReplica(t *testing.T) {
 			switch {
 			case err == nil:
 				response = "permitted"
+			case errors.Is(err, ErrExpired):
+				response = "expired"
 			case errors.Is(err, ErrWithdrawn):
 				response = "withdrawn"
 			default:
