@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/agentstation/starport/internal/inference"
 )
@@ -54,7 +55,7 @@ func CompleteStream(events []inference.StreamEvent) (inference.ChatResponse, err
 		return inference.ChatResponse{}, ErrNoStreamEvents
 	}
 	response := inference.ChatResponse{}
-	choices := make(map[int]*inference.Choice)
+	choices := make(map[int]*streamChoice)
 	for _, event := range events {
 		applyEventIdentity(&response, event)
 		if event.Usage != nil {
@@ -63,16 +64,16 @@ func CompleteStream(events []inference.StreamEvent) (inference.ChatResponse, err
 		for _, delta := range event.Deltas {
 			choice := choices[delta.Index]
 			if choice == nil {
-				choice = &inference.Choice{Index: delta.Index}
+				choice = &streamChoice{Choice: inference.Choice{Index: delta.Index}, textIndex: -1}
 				choices[delta.Index] = choice
 			}
 			if delta.Role != "" {
 				choice.Message.Role = delta.Role
 			}
-			appendMessageText(&choice.Message, delta.Text)
+			choice.appendText(delta.Text)
 			choice.Message.Content = append(choice.Message.Content, delta.Media...)
-			choice.Message.Reasoning += delta.Reasoning
-			mergeToolCalls(&choice.Message.ToolCalls, delta.ToolCalls)
+			choice.reasoning.WriteString(delta.Reasoning)
+			choice.mergeToolCalls(delta.ToolCalls)
 			choice.LogProbs = append(choice.LogProbs, delta.LogProbs...)
 			if delta.FinishReason != "" {
 				choice.FinishReason = delta.FinishReason
@@ -86,7 +87,7 @@ func CompleteStream(events []inference.StreamEvent) (inference.ChatResponse, err
 	sort.Ints(indexes)
 	response.Choices = make([]inference.Choice, 0, len(indexes))
 	for _, index := range indexes {
-		response.Choices = append(response.Choices, *choices[index])
+		response.Choices = append(response.Choices, choices[index].complete())
 	}
 	return response.Clone(), nil
 }
@@ -137,30 +138,51 @@ func applyEventIdentity(response *inference.ChatResponse, event inference.Stream
 	}
 }
 
-// appendMessageText accumulates streamed text into the message's text part.
-// It looks the part up rather than assuming index zero: a delta that carried a
-// generated image before the first text delta arrived would otherwise append
-// the answer's words into the image part.
-func appendMessageText(message *inference.Message, text string) {
+// streamChoice owns incremental strings without copying earlier deltas.
+type streamChoice struct {
+	inference.Choice
+	textIndex int
+	text      strings.Builder
+	reasoning strings.Builder
+	arguments []*strings.Builder
+}
+
+func (c *streamChoice) complete() inference.Choice {
+	if c.textIndex >= 0 {
+		c.Message.Content[c.textIndex].Text = c.text.String()
+	}
+	c.Message.Reasoning = c.reasoning.String()
+	for index, arguments := range c.arguments {
+		c.Message.ToolCalls[index].Arguments = arguments.String()
+	}
+	return c.Choice
+}
+
+func (c *streamChoice) appendText(text string) {
 	if text == "" {
 		return
 	}
-	for index := range message.Content {
-		if message.Content[index].Kind == inference.ContentText {
-			message.Content[index].Text += text
-			return
+	if c.textIndex < 0 {
+		for index, part := range c.Message.Content {
+			if part.Kind == inference.ContentText {
+				c.textIndex = index
+				c.text.WriteString(part.Text)
+				break
+			}
+		}
+		if c.textIndex < 0 {
+			c.textIndex = len(c.Message.Content)
+			c.Message.Content = append(c.Message.Content, inference.ContentPart{Kind: inference.ContentText})
 		}
 	}
-	message.Content = append(message.Content, inference.ContentPart{
-		Kind: inference.ContentText, Text: text,
-	})
+	c.text.WriteString(text)
 }
 
-func mergeToolCalls(target *[]inference.ToolCall, updates []inference.ToolCall) {
+func (c *streamChoice) mergeToolCalls(updates []inference.ToolCall) {
 	for _, update := range updates {
 		matched := false
-		for index := range *target {
-			current := &(*target)[index]
+		for index := range c.Message.ToolCalls {
+			current := &c.Message.ToolCalls[index]
 			if update.ID != "" && current.ID != update.ID {
 				continue
 			}
@@ -173,12 +195,15 @@ func mergeToolCalls(target *[]inference.ToolCall, updates []inference.ToolCall) 
 			if current.Name == "" {
 				current.Name = update.Name
 			}
-			current.Arguments += update.Arguments
+			_, _ = c.arguments[index].WriteString(update.Arguments)
 			matched = true
 			break
 		}
 		if !matched {
-			*target = append(*target, update)
+			c.Message.ToolCalls = append(c.Message.ToolCalls, update)
+			arguments := new(strings.Builder)
+			arguments.WriteString(update.Arguments)
+			c.arguments = append(c.arguments, arguments)
 		}
 	}
 }

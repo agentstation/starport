@@ -228,3 +228,18 @@ during load, verifies store costs after draining, and verifies shutdown.
 It reports retained heap after collection and total allocation volume.
 Those measurements cover this synthetic workload, not default-size or full
 gateway capacity. Production heap and RSS qualification remains in CSP22.
+
+## Stream completion
+
+Completed stream caching reconstructs text, reasoning, and tool arguments with
+per-choice string builders. The retained event and byte limits still apply
+before reconstruction. EOF reconstruction and record encoding run on the caller.
+Storage fill admission uses the bounded cache queue.
+
+```bash
+go test -run '^$' -bench '^BenchmarkBoundedStreamCompletion$' -benchmem -count=3 ./internal/response/cache
+```
+
+This component benchmark uses 64 events that fit the production retention limit.
+It measures reconstruction alone. It excludes record encoding, cache admission,
+HTTP delivery, and shared storage.
