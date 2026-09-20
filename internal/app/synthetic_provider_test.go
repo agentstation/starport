@@ -135,8 +135,10 @@ func syntheticInferenceCatalog(t *testing.T, baseURL string) *catalogs.Catalog {
 	require.NoError(t, err)
 	baseline, err := baselineBuilder.Build()
 	require.NoError(t, err)
-	builder, err := catalogs.NewBuilderFrom(baseline)
-	require.NoError(t, err)
+	builder := catalogs.NewEmpty()
+	for _, author := range baseline.Authors().List() {
+		require.NoError(t, builder.SetAuthor(author))
+	}
 
 	provider, err := baseline.Provider(catalogs.ProviderIDOpenAI)
 	require.NoError(t, err)
@@ -146,6 +148,12 @@ func syntheticInferenceCatalog(t *testing.T, baseURL string) *catalogs.Catalog {
 	embeddingSource := provider.Models["text-embedding-3-small"]
 	require.NotNil(t, embeddingSource)
 	embeddingModel := catalogs.DeepCopyModel(*embeddingSource)
+	// Copy only the two definitions. The fixture owns no publication history.
+	for _, record := range baseline.AuthoredModels() {
+		if record.ID() == chatModel.ModelRef || record.ID() == embeddingModel.ModelRef {
+			require.NoError(t, builder.SetAuthorModel(record.AuthorID, record.Model))
+		}
+	}
 	provider.ID = "acme"
 	provider.Aliases = nil
 	provider.Name = "Acme Models"

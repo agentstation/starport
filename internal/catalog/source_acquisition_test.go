@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
 	catalogconfig "github.com/agentstation/starmap/pkg/catalogs/config"
 	"github.com/agentstation/starmap/pkg/sources"
 	"github.com/agentstation/starport/internal/storage"
@@ -52,6 +53,8 @@ func TestRuntimeAcquiresSelectedMetadataSource(t *testing.T) {
 	require.Zero(t, calls.Load(), "disabled automatic acquisition must remain passive")
 	initial, err := connected.CurrentCandidate(t.Context())
 	require.NoError(t, err)
+	baseline, err := connected.candidates.Get(t.Context(), initial.State.GenerationID)
+	require.NoError(t, err)
 	baselineProvider, err := initial.State.Catalog.Provider("openai")
 	require.NoError(t, err)
 	report, err := connected.Refresh(t.Context())
@@ -75,7 +78,13 @@ func TestRuntimeAcquiresSelectedMetadataSource(t *testing.T) {
 	require.NoError(t, connected.Accept(t.Context(), candidate))
 	accepted, err := connected.accepted.Get(t.Context(), candidate.State.GenerationID)
 	require.NoError(t, err)
-	require.Equal(t, report.Acquisition.SourceObservations, accepted.Manifest.SourceObservations)
+	expected := append([]catalogs.SourceObservationLink(nil), report.Acquisition.SourceObservations...)
+	for _, observation := range baseline.Manifest.SourceObservations {
+		if observation.Source != sources.ModelsDevHTTPID {
+			expected = append(expected, observation)
+		}
+	}
+	require.ElementsMatch(t, expected, accepted.Manifest.SourceObservations)
 	require.NoError(t, connected.Close(t.Context()))
 	require.NoError(t, store.Close())
 	store = openStore()

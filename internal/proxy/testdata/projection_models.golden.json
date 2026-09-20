@@ -1038,7 +1038,6 @@
           "pricing": {
             "prompt": "5.0000000000000004e-08",
             "completion": "8e-08",
-            "cache_read": "2.5000000000000002e-08",
             "currency": "USD"
           },
           "operations": [
@@ -1100,7 +1099,6 @@
           "pricing": {
             "prompt": "5.9e-07",
             "completion": "7.900000000000001e-07",
-            "cache_read": "2.95e-07",
             "currency": "USD"
           },
           "operations": [
@@ -1790,6 +1788,11 @@
       "object": "model",
       "created": -62135596800,
       "owned_by": "sdaia",
+      "pricing": {
+        "prompt": "0",
+        "completion": "0",
+        "currency": "USD"
+      },
       "context_length": 4096,
       "architecture": {
         "input_modalities": [
@@ -1827,6 +1830,11 @@
           "max_completion_tokens": 4096,
           "availability": "unknown",
           "lifecycle": "active",
+          "pricing": {
+            "prompt": "0",
+            "completion": "0",
+            "currency": "USD"
+          },
           "operations": [
             "chat-completions"
           ]
