@@ -7,32 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/agentstation/starport/internal/storage"
 )
-
-func TestCacheManagerExplicitSharedStoreSharesResponses(t *testing.T) {
-	sharedStore := storage.NewMockStore()
-	store := NewDistributedCache(sharedStore, storage.KeyPrefixResponse)
-	config := ManagerConfig{}
-	config.Responses.Strategy = "distributed"
-
-	first, err := NewCacheManager(config, store)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, first.Close()) })
-	second, err := NewCacheManager(config, store)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, second.Close()) })
-
-	ctx := context.Background()
-	want := []byte(`{"response":"shared"}`)
-	require.NoError(t, first.SetResponse(ctx, "shared", want))
-	awaitResponse(t, second, "shared", want)
-	got, found, err := second.GetResponse(ctx, "shared")
-	require.NoError(t, err)
-	assert.True(t, found)
-	assert.Equal(t, want, got)
-}
 
 func TestCacheManagerSingleNodeCachesResponses(t *testing.T) {
 	manager, err := NewCacheManager(ManagerConfig{}, nil)
@@ -77,10 +52,12 @@ func TestCacheManagerConfig(t *testing.T) {
 	config.Models.TTL = time.Hour
 	config.Models.SizeMB = 8
 
-	manager, err := NewCacheManager(config, NewDistributedCache(storage.NewMockStore(), storage.KeyPrefixResponse))
+	store, err := NewLocalCache(1, time.Minute)
+	require.NoError(t, err)
+	manager, err := NewCacheManager(config, store)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, manager.Close()) })
-	assert.IsType(t, &DistributedCache{}, manager.responses)
+	assert.Same(t, store, manager.responses)
 	assert.Equal(t, config.Responses.TTL, manager.config.Responses.TTL)
 }
 

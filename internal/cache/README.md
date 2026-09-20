@@ -9,11 +9,11 @@ These capacities bound cache cost, not total process memory.
 Extraction caching retains its independent lifecycle when the operator disables response caching.
 
 CSP12.1 must qualify shared-service configuration, bounded fills, and stream accumulation limits.
-The legacy layered and hybrid constructors remain outside application composition.
 
-Refills require the value and its lifetime from the same record version. Badger and Valkey provide this atomic read contract.
-Backends without finite lifetime evidence skip local refill. Each retained entry checks its source deadline independently of the cache queue.
-Writes invalidate local entries. A later read must prove the stored version's actual expiry.
+Shared response bytes use the dedicated cache service directly. No local refill can extend their server expiry.
+The package has no durable KV cache adapter, layered cache, or invalidation pub/sub implementation.
+Real-service tests cover shared expiry and isolation. Local tests cover expiry and clearing.
+Historical evidence retains the removed adapters' original defects and repairs.
 
 No production qualification or latency improvement follows from this interface change alone.
 

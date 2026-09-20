@@ -15,7 +15,6 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/registry"
-	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,9 +63,8 @@ func TestHTTPAliasRemovalWithSerializedDiscoveryCache(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, reg.Close()) })
 	var cacheConfig cache.ManagerConfig
-	cacheConfig.Responses.Strategy = "distributed"
 	cacheConfig.Models.SizeMB = 1
-	manager, err := cache.NewCacheManager(cacheConfig, cache.NewDistributedCache(storage.NewMockStore(), storage.KeyPrefixResponse))
+	manager, err := cache.NewCacheManager(cacheConfig, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, manager.Close()) })
 	observed := &observedDiscoveryCache{Manager: manager}

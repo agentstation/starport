@@ -11,7 +11,7 @@ import (
 )
 
 type heldFillCache struct {
-	Cache
+	ResponseStore
 	release chan struct{}
 }
 
@@ -20,14 +20,14 @@ func (s *heldFillCache) Set(ctx context.Context, key string, value []byte, ttl t
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-s.release:
-		return s.Cache.Set(ctx, key, value, ttl)
+		return s.ResponseStore.Set(ctx, key, value, ttl)
 	}
 }
 
 func TestResponseFillDoesNotWaitForStorage(t *testing.T) {
 	local, err := NewLocalCache(1, time.Minute)
 	require.NoError(t, err)
-	store := &heldFillCache{Cache: local, release: make(chan struct{})}
+	store := &heldFillCache{ResponseStore: local, release: make(chan struct{})}
 	config := ManagerConfig{}
 	config.Responses.Strategy = "distributed"
 	manager, err := NewCacheManager(config, store)
@@ -54,7 +54,7 @@ func TestResponseFillDoesNotWaitForStorage(t *testing.T) {
 func TestResponseFillQueueBoundsAndShutdown(t *testing.T) {
 	local, err := NewLocalCache(1, time.Minute)
 	require.NoError(t, err)
-	store := &heldFillCache{Cache: local, release: make(chan struct{})}
+	store := &heldFillCache{ResponseStore: local, release: make(chan struct{})}
 	config := ManagerConfig{}
 	config.Responses.Strategy = "distributed"
 	manager, err := NewCacheManager(config, store)
@@ -87,7 +87,7 @@ func TestResponseFillQueueBoundsAndShutdown(t *testing.T) {
 func TestResponseFillOwnsBytes(t *testing.T) {
 	local, err := NewLocalCache(1, time.Minute)
 	require.NoError(t, err)
-	store := &heldFillCache{Cache: local, release: make(chan struct{})}
+	store := &heldFillCache{ResponseStore: local, release: make(chan struct{})}
 	config := ManagerConfig{}
 	config.Responses.Strategy = "distributed"
 	manager, err := NewCacheManager(config, store)
@@ -100,7 +100,7 @@ func TestResponseFillOwnsBytes(t *testing.T) {
 	awaitResponse(t, manager, "key", []byte("answer"))
 }
 
-type slowReadCache struct{ Cache }
+type slowReadCache struct{ ResponseStore }
 
 func (s slowReadCache) Get(ctx context.Context, _ string) ([]byte, bool, error) {
 	<-ctx.Done()
@@ -127,7 +127,7 @@ func TestResponseCacheReadUsesDeadline(t *testing.T) {
 func TestExpiredQueuedFillDoesNotAcquireNewLifetime(t *testing.T) {
 	local, err := NewLocalCache(1, time.Minute)
 	require.NoError(t, err)
-	store := &heldFillCache{Cache: local, release: make(chan struct{})}
+	store := &heldFillCache{ResponseStore: local, release: make(chan struct{})}
 	config := ManagerConfig{}
 	config.Responses.Strategy = "distributed"
 	manager, err := NewCacheManager(config, store)
@@ -149,7 +149,7 @@ func TestExpiredQueuedFillDoesNotAcquireNewLifetime(t *testing.T) {
 	require.Equal(t, uint64(1), manager.fills.stats().DroppedFills)
 }
 
-type failedFillCache struct{ Cache }
+type failedFillCache struct{ ResponseStore }
 
 func (s failedFillCache) Set(context.Context, string, []byte, time.Duration) error {
 	return errors.New("cache unavailable")
