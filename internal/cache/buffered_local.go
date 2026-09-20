@@ -48,3 +48,6 @@ func (c *BufferedLocalCache) Close() error {
 	c.once.Do(func() { c.fills.close(); _ = c.local.Close() })
 	return nil
 }
+
+// RecordDroppedFill reports optional input rejected before encoding.
+func (c *BufferedLocalCache) RecordDroppedFill() { c.fills.dropped.Add(1) }

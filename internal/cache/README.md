@@ -37,7 +37,12 @@ Model serialization still runs on the caller before queue admission.
 Extraction fills use an independent queue with the same bounds, even when the operator disables response caching.
 Together, both queues permit at most 2,048 queued or active entries, 8 MiB of charged data, and four workers.
 The admin `extraction_cache` field reports extraction pressure. `response_cache` reports the shared response and model queue.
-Extraction serialization also remains synchronous. Aggregate heap and serialization latency still need qualification.
+
+Extraction serialization remains synchronous for eligible records. The document cache rejects inputs above 512 KiB before serialization.
+That input bound includes identity, text, and offering strings. Six-byte JSON escaping fits within the fill budget.
+Rejected inputs increment the extraction drop counter. Document delivery continues.
+
+Aggregate heap and model serialization latency still need qualification.
 
 ## Stream retention
 

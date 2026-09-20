@@ -92,6 +92,17 @@ func TestHTTPAliasRemovalWithSerializedDiscoveryCache(t *testing.T) {
 	endpoint := serveAuthorized(s, http.MethodGet, "/api/v1/models/author%2Fold+variant/endpoints", secret, t.Context())
 	require.Equal(t, http.StatusOK, endpoint.Code, endpoint.Body.String())
 	require.Contains(t, endpoint.Body.String(), "https://provider.test/v1/chat/completions")
+	require.Eventually(t, func() bool {
+		_, found, err := manager.GetModel(t.Context(), observed.lastKey)
+		return err == nil && found
+	}, time.Second, time.Millisecond)
+	endpointWrites := observed.writes
+	endpointHits := observed.hits
+	cachedEndpoint := serveAuthorized(s, http.MethodGet, "/api/v1/models/author%2Fold+variant/endpoints", secret, t.Context())
+	require.Equal(t, http.StatusOK, cachedEndpoint.Code)
+	require.JSONEq(t, endpoint.Body.String(), cachedEndpoint.Body.String())
+	require.Greater(t, observed.hits, endpointHits, "endpoint request must read the real serialized cache")
+	require.Equal(t, endpointWrites, observed.writes, "endpoint cache hit must not rebuild and rewrite the result")
 	writesBeforeReplacement := observed.writes
 	alias.State = catalogs.CanonicalAliasRemoved
 	require.NoError(t, builder.SetCanonicalAliasRecords([]catalogs.CanonicalAlias{alias}))

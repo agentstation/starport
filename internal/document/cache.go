@@ -35,6 +35,10 @@ const CacheKeyVersion = 1
 // an idle deployment holds nothing.
 const DefaultCacheWindow = time.Hour
 
+// MaxCacheInputBytes bounds extraction strings before JSON encoding.
+// Six-byte JSON escaping plus record overhead fits the 4 MiB fill budget.
+const MaxCacheInputBytes = 512 << 10
+
 var (
 	// ErrCacheStoreRequired reports a cache built with no byte store.
 	ErrCacheStoreRequired = errors.New("extraction cache store is required")
@@ -225,6 +229,16 @@ func (c *Cache) Put(ctx context.Context, key CacheKey, reading Reading) error {
 	}
 	if err := key.Validate(); err != nil {
 		return err
+	}
+	remaining := MaxCacheInputBytes
+	for _, field := range []string{key.AccountID, key.ContentHash, key.Engine, key.Generation, reading.Text, reading.Offering} {
+		if len(field) > remaining {
+			if reporter, ok := c.store.(interface{ RecordDroppedFill() }); ok {
+				reporter.RecordDroppedFill()
+			}
+			return nil
+		}
+		remaining -= len(field)
 	}
 	stored := key.String()
 	data, err := json.Marshal(cacheRecord{

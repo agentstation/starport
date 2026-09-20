@@ -114,3 +114,15 @@ func TestSharedCacheCanonicalDeploymentIsolation(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, found, "different canonical deployments must not share cached responses")
 }
+
+func TestExtractionCacheOversizeReportsDrop(t *testing.T) {
+	application := &App{}
+	builder := &runtimeBuilder{application: application}
+	extractions, err := builder.openExtractionCache()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, application.closeLifecycle(context.Background())) })
+	key := document.CacheKey{AccountID: "account", ContentHash: "hash", Engine: "native", Generation: "generation"}
+	require.NoError(t, extractions.Put(t.Context(), key, document.Reading{Text: string(make([]byte, document.MaxCacheInputBytes+1))}))
+	require.Equal(t, uint64(1), application.extractionCache.FillStatus().DroppedFills)
+	require.Zero(t, application.extractionCache.FillStatus().RetainedBytes)
+}

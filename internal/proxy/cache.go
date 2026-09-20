@@ -595,9 +595,17 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 	}
 
 	if found {
-		// Type assert to ModelEndpointsResponse
-		if cachedResp, ok := cached.(*ModelEndpointsResponse); ok {
-			return cachedResp, nil
+		switch value := cached.(type) {
+		case *ModelEndpointsResponse:
+			return value, nil
+		case map[string]any:
+			data, err := json.Marshal(value)
+			if err == nil {
+				var response ModelEndpointsResponse
+				if err := json.Unmarshal(data, &response); err == nil {
+					return &response, nil
+				}
+			}
 		}
 	}
 

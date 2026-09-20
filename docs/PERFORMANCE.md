@@ -183,3 +183,19 @@ Health publications contain local observations, so replicas do not renew each ot
 
 These hints do not grant catalog permission or replace required budget and credential checks.
 The callback tests establish storage isolation. They do not qualify production HTTP percentiles.
+
+
+## Optional cache component measurements
+
+Run cache read and fill measurements separately from the full HTTP benchmark:
+
+```bash
+go test -run '^$' -bench '^BenchmarkOptionalCacheWork$' -benchmem -benchtime=100ms -count=3 ./internal/app
+```
+
+The benchmark reports local hit and miss cost, model and extraction fill cost, and drops per call.
+Fill measurements include caller serialization, admission, and test assertions. Allocation counts can include concurrent worker activity.
+The payload sizes are 1 KiB, 256 KiB, and 4 MiB. Oversized extraction records skip serialization and report a drop.
+
+These measurements exclude HTTP, permission checks, providers, and shared transport. They report averages, not production latency percentiles.
+High fill rates can cause optional drops. This load does not estimate a deployment's cache hit ratio.
