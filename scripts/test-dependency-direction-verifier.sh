@@ -70,6 +70,14 @@ GOWORK=off STARPORT_DEPENDENCY_DIRECTION_ROOT="$FIXTURE" bash "$VERIFIER" >"$cle
 assert_complete_report "$clean_report"
 grep -Fq 'Summary: 6 passed, 0 failed' "$clean_report"
 
+# Cache contract tests use the production adapter without changing runtime imports.
+printf 'package proxy\nimport _ "github.com/agentstation/starport/internal/cache"\n' >"$FIXTURE/internal/proxy/cache_test.go"
+printf 'package proxy_test\nimport _ "github.com/agentstation/starport/internal/cache"\n' >"$FIXTURE/internal/proxy/external_test.go"
+cache_test_report="$FIXTURE/cache-tests.txt"
+GOWORK=off STARPORT_DEPENDENCY_DIRECTION_ROOT="$FIXTURE" bash "$VERIFIER" >"$cache_test_report"
+assert_complete_report "$cache_test_report"
+grep -Fq 'Summary: 6 passed, 0 failed' "$cache_test_report"
+
 run_mutation() {
 	local id="$1"
 	local expected="$2"

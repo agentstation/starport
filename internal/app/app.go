@@ -945,8 +945,8 @@ func (b *runtimeBuilder) webhookReporter() controllers.WebhookReporter {
 func (b *runtimeBuilder) deployment() controllers.Deployment {
 	cfg := b.config
 	deployment := controllers.Deployment{
-		ResponseCache:     b.application.cacheManager.FillStatus,
-		ExtractionCache:   b.application.extractionCache.FillStatus,
+		ResponseCache:     func() controllers.CacheFillStatus { return cacheStatus(b.application.cacheManager.FillStatus()) },
+		ExtractionCache:   func() controllers.CacheFillStatus { return cacheStatus(b.application.extractionCache.FillStatus()) },
 		StorageMode:       cmp.Or(cfg.Storage.Mode, storage.StorageTypeBadger),
 		RelationalMode:    cmp.Or(cfg.Storage.SQL.Mode, sqlstore.TypeSQLite),
 		MetricsMode:       cmp.Or(cfg.Telemetry.Metrics, config.TelemetryMetricsOn),

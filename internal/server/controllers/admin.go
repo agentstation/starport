@@ -20,7 +20,6 @@ import (
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authorization"
-	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/providers/keyring"
@@ -68,8 +67,8 @@ type DropCounter interface {
 // surface describes the deployment and not any one request.
 type Deployment struct {
 	// ResponseCache reports bounded optional response work from memory.
-	ResponseCache   func() cache.FillStatus
-	ExtractionCache func() cache.FillStatus
+	ResponseCache   func() CacheFillStatus
+	ExtractionCache func() CacheFillStatus
 	// StorageMode names the key-value store: badger or valkey.
 	StorageMode string
 	// RelationalMode names the relational twin: sqlite, postgres, or mysql.

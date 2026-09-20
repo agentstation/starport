@@ -32,8 +32,13 @@ check_import_absent() {
 	local importer="$1"
 	local forbidden="$2"
 	local imports
+	local scope="${3:-all}"
+	local template='{{range .Imports}}{{println .}}{{end}}'
+	if [[ "$scope" == all ]]; then
+		template+='{{range .TestImports}}{{println .}}{{end}}{{range .XTestImports}}{{println .}}{{end}}'
+	fi
 
-	imports="$(cd "$ROOT" && go list -e -f '{{range .Imports}}{{println .}}{{end}}{{range .TestImports}}{{println .}}{{end}}{{range .XTestImports}}{{println .}}{{end}}' "./$importer")" || return 1
+	imports="$(cd "$ROOT" && go list -e -f "$template" "./$importer")" || return 1
 	if grep -Fxq "$forbidden" <<<"$imports"; then
 		printf '%s imports forbidden package %s\n' "$importer" "$forbidden"
 		return 1
@@ -54,7 +59,7 @@ check_proxy_field() {
 }
 
 run_condition SP-D01 "proxy does not import the concrete cache adapter" \
-	check_import_absent "internal/proxy" "$MODULE/internal/cache"
+	check_import_absent "internal/proxy" "$MODULE/internal/cache" production
 run_condition SP-D02 "proxy does not import the concrete provider registry" \
 	check_import_absent "internal/proxy" "$MODULE/internal/registry"
 run_condition SP-D03 "proxy exposes the cache behavior contract" \
