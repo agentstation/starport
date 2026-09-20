@@ -35,6 +35,7 @@ import (
 type testServerConfig struct {
 	runtimeRegistry    *registry.Registry
 	cacheManager       proxy.CacheManager
+	cacheConfig        *proxy.CacheConfig
 	store              storage.KVStore
 	masterKey          []byte
 	providerOperations controllers.ProviderOperations
@@ -264,7 +265,11 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	// Match production composition: preset references resolve before routing.
 	var proxyOptions []proxy.Option
 	if testConfig.cacheManager != nil {
-		proxyOptions = append(proxyOptions, proxy.WithCache(testConfig.cacheManager, &proxy.CacheConfig{EnableModelCache: true, EnableProviderCache: true}))
+		cacheConfig := testConfig.cacheConfig
+		if cacheConfig == nil {
+			cacheConfig = &proxy.CacheConfig{EnableModelCache: true, EnableProviderCache: true}
+		}
+		proxyOptions = append(proxyOptions, proxy.WithCache(testConfig.cacheManager, cacheConfig))
 	}
 	service := proxy.NewPresetResolver(presetRepository).Wrap(proxy.New(reg, modelRouter, proxyOptions...))
 
