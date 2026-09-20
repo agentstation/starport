@@ -39,11 +39,12 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 		t.Skip("UNVERIFIED: Valkey and PostgreSQL are required for separate-process authorization")
 	}
 	for _, scenario := range []struct {
-		owner string
-		live  bool
-	}{{"kv", false}, {"sql", false}, {"kv", true}, {"sql", true}} {
+		owner     string
+		live      bool
+		partition bool
+	}{{"kv", false, false}, {"sql", false, false}, {"kv", true, false}, {"sql", true, false}, {"kv", true, true}, {"sql", true, true}} {
 		owner := scenario.owner
-		t.Run(fmt.Sprintf("%s/live_%t", owner, scenario.live), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/live_%t/partition_%t", owner, scenario.live, scenario.partition), func(t *testing.T) {
 			namespace := "auth_fleet_" + strings.ToLower(rand.Text())
 			admin, err := sqlstore.Open(sqlstore.Config{Type: sqlstore.TypePostgres, Postgres: sqlstore.PostgresConfig{URL: address}})
 			require.NoError(t, err)
@@ -79,6 +80,18 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 			key, err := keys.Create(t.Context(), apikey.APIKey{ID: "key", Name: "fleet-key", Hash: "fleet-fixture-hash", Scopes: []string{"chat:write"}, AccountID: account.DefaultID, TeamID: team.Team.ID, Active: true})
 			require.NoError(t, err)
 
+			var network *fleetNetwork
+			failedAuthority := ""
+			if scenario.partition {
+				variable := "STARPORT_TEST_AUTH_SQL"
+				failedAuthority = "sql"
+				if owner == "sql" {
+					variable, failedAuthority = "TEST_VALKEY_URL", "kv"
+				}
+				var proxyURL string
+				network, proxyURL = newFleetNetwork(t, os.Getenv(variable))
+				t.Setenv(variable, proxyURL)
+			}
 			peer := startAuthorizationReplica(t, "ready")
 			require.Equal(t, "permitted", peer.exchange(t, "check"))
 			if scenario.live {
@@ -88,6 +101,15 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 					require.Less(t, time.Since(ready), 2*time.Second, "monitor did not observe both authorities")
 					time.Sleep(10 * time.Millisecond)
 				}
+			}
+			if network != nil {
+				network.cut()
+				started := time.Now()
+				for peer.exchange(t, "failure-"+failedAuthority) != "unavailable" {
+					require.Less(t, time.Since(started), 4*time.Second, "partition did not reach authority diagnostics")
+					time.Sleep(10 * time.Millisecond)
+				}
+				require.Equal(t, "permitted", peer.exchange(t, "check"), "partition removed still-valid permission")
 			}
 			if owner == "kv" {
 				key.APIKey.Active = false
@@ -116,6 +138,9 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 			require.Equal(t, "stopped", peer.exchange(t, "stop"))
 			require.NoError(t, peer.command.Wait(), peer.stderr.String())
 			peer.finished = true
+			if network != nil {
+				network.restore()
+			}
 			t.Setenv("STARPORT_TEST_AUTH_REFUSAL", owner)
 			restarted := startAuthorizationReplica(t, "refused")
 			require.NoError(t, restarted.command.Wait(), restarted.stderr.String())
@@ -274,6 +299,15 @@ func runAuthorizationReplica(t *testing.T) {
 				response = "withdrawn"
 			default:
 				t.Fatalf("unexpected permission state: %v", err)
+			}
+		case "failure-kv", "failure-sql":
+			wanted := strings.TrimPrefix(scanner.Text(), "failure-")
+			response = "healthy"
+			for _, status := range monitor.Status() {
+				if status.Authority == wanted && status.Failure != "" {
+					require.Equal(t, "restore_authority_access_before_receipts_expire", status.Recovery)
+					response = "unavailable"
+				}
 			}
 		case "load":
 			monitor.Start(t.Context())
