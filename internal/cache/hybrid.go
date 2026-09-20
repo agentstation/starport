@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -13,11 +14,12 @@ import (
 // HybridCache implements a two-layer cache with local (Ristretto) and distributed (KV store) layers
 // It supports pub/sub based invalidation for multi-node consistency
 type HybridCache struct {
-	local        *ristretto.Cache[string, []byte]
+	local        *ristretto.Cache[string, expiringValue]
 	distributed  storage.KVStore
 	pubsub       PubSubClient
 	prefix       string
 	localTTL     time.Duration
+	maxBytes     int
 	invalidateCh string // Channel prefix for invalidation
 }
 
@@ -32,14 +34,14 @@ type HybridCacheConfig struct {
 // NewHybridCache creates a new hybrid cache
 func NewHybridCache(config HybridCacheConfig, store storage.KVStore, pubsub PubSubClient) (*HybridCache, error) {
 	// Configure Ristretto
-	ristrettoConfig := &ristretto.Config[string, []byte]{
+	ristrettoConfig := &ristretto.Config[string, expiringValue]{
 		NumCounters: config.LocalSizeMB * 10 * 1024, // 10x the cache size
 		MaxCost:     config.LocalSizeMB * 1024 * 1024,
 		BufferItems: 64,
 		Metrics:     true,
 	}
 
-	local, err := ristretto.NewCache[string, []byte](ristrettoConfig)
+	local, err := ristretto.NewCache[string, expiringValue](ristrettoConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create local cache: %w", err)
 	}
@@ -50,6 +52,7 @@ func NewHybridCache(config HybridCacheConfig, store storage.KVStore, pubsub PubS
 		pubsub:       pubsub,
 		prefix:       config.Prefix,
 		localTTL:     config.LocalTTL,
+		maxBytes:     int(config.LocalSizeMB * 1024 * 1024),
 		invalidateCh: config.InvalidatePrefix,
 	}, nil
 }
@@ -57,19 +60,19 @@ func NewHybridCache(config HybridCacheConfig, store storage.KVStore, pubsub PubS
 // Get retrieves a value from the cache
 func (h *HybridCache) Get(ctx context.Context, key string) ([]byte, bool, error) {
 	// 1. Check local cache first
-	if value, found := h.local.Get(key); found {
+	if value, found := h.local.Get(key); found && value.valid() {
 		log.Debug().
 			Str("key", key).
 			Str("cache", "local").
 			Msg("cache hit")
-		return value, true, nil
+		return value.data, true, nil
 	}
 
 	// 2. Check distributed cache
 	fullKey := h.prefix + key
-	value, err := h.distributed.Get(ctx, fullKey)
+	value, deadline, err := readBacking(ctx, h.distributed, fullKey, h.maxBytes)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if errors.Is(err, storage.ErrNotFound) {
 			log.Debug().
 				Str("key", key).
 				Str("cache", "distributed").
@@ -80,8 +83,13 @@ func (h *HybridCache) Get(ctx context.Context, key string) ([]byte, bool, error)
 	}
 
 	// 3. Populate local cache
-	h.local.SetWithTTL(key, value, int64(len(value)), h.localTTL)
-	h.local.Wait()
+	if ttl := time.Until(deadline); !deadline.IsZero() && ttl > 0 {
+		if h.localTTL > 0 {
+			ttl = min(ttl, h.localTTL)
+		}
+		h.local.SetWithTTL(key, expiringValue{data: value, deadline: deadline}, int64(len(value)), ttl)
+		h.local.Wait()
+	}
 
 	log.Debug().
 		Str("key", key).
@@ -100,12 +108,8 @@ func (h *HybridCache) Set(ctx context.Context, key string, value []byte, ttl tim
 		return fmt.Errorf("failed to set in distributed cache: %w", err)
 	}
 
-	// 2. Set in local cache
-	localTTL := h.localTTL
-	if ttl > 0 && ttl < localTTL {
-		localTTL = ttl // Use shorter TTL if specified
-	}
-	h.local.SetWithTTL(key, value, int64(len(value)), localTTL)
+	// A later read must prove the stored version's actual expiry.
+	h.local.Del(key)
 	h.local.Wait()
 
 	log.Debug().
@@ -193,54 +197,22 @@ func (h *HybridCache) Stats() Stats {
 
 // Exists checks if a key exists in the cache
 func (h *HybridCache) Exists(ctx context.Context, key string) (bool, error) {
-	// Check local cache first
-	if _, found := h.local.Get(key); found {
-		return true, nil
-	}
-
-	// Check distributed cache
-	fullKey := h.prefix + key
-	return h.distributed.Exists(ctx, fullKey)
+	_, found, err := h.Get(ctx, key)
+	return found, err
 }
 
 // GetMulti retrieves multiple values from the cache
 func (h *HybridCache) GetMulti(ctx context.Context, keys []string) (map[string][]byte, error) {
 	result := make(map[string][]byte)
-	missingKeys := []string{}
-
-	// Check local cache first
 	for _, key := range keys {
-		if value, found := h.local.Get(key); found {
-			result[key] = value
-		} else {
-			missingKeys = append(missingKeys, key)
-		}
-	}
-
-	// Get missing keys from distributed
-	if len(missingKeys) > 0 {
-		fullKeys := make([]string, len(missingKeys))
-		for i, key := range missingKeys {
-			fullKeys[i] = h.prefix + key
-		}
-
-		kvValues, err := h.distributed.BatchGet(ctx, fullKeys)
+		value, found, err := h.Get(ctx, key)
 		if err != nil {
-			return result, fmt.Errorf("failed to batch get from distributed: %w", err)
+			return result, err
 		}
-
-		// Add to result and populate local cache
-		for i, key := range missingKeys {
-			fullKey := fullKeys[i]
-			if value, ok := kvValues[fullKey]; ok {
-				result[key] = value
-				h.local.SetWithTTL(key, value, int64(len(value)), h.localTTL)
-			}
+		if found {
+			result[key] = value
 		}
-		// Wait for all values to be set
-		h.local.Wait()
 	}
-
 	return result, nil
 }
 
@@ -257,14 +229,8 @@ func (h *HybridCache) SetMulti(ctx context.Context, items map[string][]byte, ttl
 		return fmt.Errorf("failed to batch set in distributed: %w", err)
 	}
 
-	// Set in local cache
-	localTTL := h.localTTL
-	if ttl > 0 && ttl < localTTL {
-		localTTL = ttl
-	}
-
-	for key, value := range items {
-		h.local.SetWithTTL(key, value, int64(len(value)), localTTL)
+	for key := range items {
+		h.local.Del(key)
 	}
 	h.local.Wait()
 
@@ -273,32 +239,8 @@ func (h *HybridCache) SetMulti(ctx context.Context, items map[string][]byte, ttl
 
 // Warm pre-loads the cache with frequently accessed data
 func (h *HybridCache) Warm(ctx context.Context, keys []string) error {
-	if len(keys) == 0 {
-		return nil
-	}
-
-	// Get from distributed
-	fullKeys := make([]string, len(keys))
-	for i, key := range keys {
-		fullKeys[i] = h.prefix + key
-	}
-
-	values, err := h.distributed.BatchGet(ctx, fullKeys)
-	if err != nil {
-		return fmt.Errorf("failed to warm cache: %w", err)
-	}
-
-	// Load into local cache
-	for i, key := range keys {
-		fullKey := fullKeys[i]
-		if value, ok := values[fullKey]; ok {
-			h.local.SetWithTTL(key, value, int64(len(value)), h.localTTL)
-		}
-	}
-	// Wait for all values to be set
-	h.local.Wait()
-
-	return nil
+	_, err := h.GetMulti(ctx, keys)
+	return err
 }
 
 // Close closes the local cache
@@ -410,7 +352,7 @@ func (d *DistributedCache) Invalidate(ctx context.Context, pattern string) error
 
 // Stats returns empty stats for distributed cache
 func (d *DistributedCache) Stats() Stats {
-	// Distributed cache doesn't track local stats
+	// Distributed caches have no local statistics.
 	return Stats{}
 }
 
@@ -464,7 +406,7 @@ func (l *LocalCache) Set(_ context.Context, key string, value []byte, ttl time.D
 		ttl = l.ttl
 	}
 	l.cache.SetWithTTL(key, value, int64(len(value)), ttl)
-	// Wait for value to be set in Ristretto
+	// Wait for Ristretto to apply the value.
 	l.cache.Wait()
 	return nil
 }
@@ -540,7 +482,7 @@ func (l *LocalCache) Stats() Stats {
 
 // Warm pre-loads the cache (no-op for local cache)
 func (l *LocalCache) Warm(_ context.Context, _ []string) error {
-	// Local cache doesn't support warming from external source
+	// Local caches have no external source.
 	return nil
 }
 

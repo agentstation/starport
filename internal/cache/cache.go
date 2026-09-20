@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -16,7 +17,7 @@ import (
 // layeredCache implements the Cache interface with multi-layer caching
 type layeredCache struct {
 	config   Config
-	local    *ristretto.Cache[string, []byte]
+	local    *ristretto.Cache[string, expiringValue]
 	kv       storage.KVStore
 	policies map[PolicyType]Policy
 	stats    cacheStats
@@ -34,11 +35,11 @@ type cacheStats struct {
 // New creates a new layered cache instance
 func New(config Config, kv storage.KVStore) (Cache, error) {
 	// Configure Ristretto with appropriate settings
-	ristrettoConfig := &ristretto.Config[string, []byte]{
+	ristrettoConfig := &ristretto.Config[string, expiringValue]{
 		NumCounters: config.MaxSize * 10, // 10x the cache size for better accuracy
 		MaxCost:     config.MaxSizeInMB * 1024 * 1024,
 		BufferItems: 64,
-		OnEvict: func(item *ristretto.Item[[]byte]) {
+		OnEvict: func(item *ristretto.Item[expiringValue]) {
 			log.Debug().
 				Int64("cost", item.Cost).
 				Msg("item evicted from cache")
@@ -46,7 +47,7 @@ func New(config Config, kv storage.KVStore) (Cache, error) {
 		Metrics: config.EnableMetrics,
 	}
 
-	localCache, err := ristretto.NewCache[string, []byte](ristrettoConfig)
+	localCache, err := ristretto.NewCache[string, expiringValue](ristrettoConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ristretto cache: %w", err)
 	}
@@ -73,15 +74,15 @@ func New(config Config, kv storage.KVStore) (Cache, error) {
 // Get retrieves a value from the cache
 func (lc *layeredCache) Get(ctx context.Context, key string) ([]byte, bool, error) {
 	// Check local cache first
-	if value, found := lc.local.Get(key); found {
+	if value, found := lc.local.Get(key); found && value.valid() {
 		lc.stats.hits.Add(1)
-		return value, true, nil
+		return value.data, true, nil
 	}
 
 	// Fall back to KV store
-	value, err := lc.kv.Get(ctx, key)
+	value, deadline, err := readBacking(ctx, lc.kv, key, int(lc.config.MaxSizeInMB*1024*1024))
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if errors.Is(err, storage.ErrNotFound) {
 			lc.stats.misses.Add(1)
 			return nil, false, nil
 		}
@@ -89,7 +90,9 @@ func (lc *layeredCache) Get(ctx context.Context, key string) ([]byte, bool, erro
 	}
 
 	// Populate local cache
-	lc.local.Set(key, value, int64(len(value)))
+	if ttl := time.Until(deadline); !deadline.IsZero() && ttl > 0 {
+		lc.local.SetWithTTL(key, expiringValue{data: value, deadline: deadline}, int64(len(value)), ttl)
+	}
 
 	lc.stats.hits.Add(1)
 	return value, true, nil
@@ -109,8 +112,9 @@ func (lc *layeredCache) Set(ctx context.Context, key string, value []byte, ttl t
 		return fmt.Errorf("failed to set in kv store: %w", err)
 	}
 
-	// Store in local cache
-	lc.local.SetWithTTL(key, value, int64(len(value)), ttl)
+	// A later read must prove the stored version's actual expiry.
+	lc.local.Del(key)
+	lc.local.Wait()
 
 	return nil
 }
@@ -133,51 +137,22 @@ func (lc *layeredCache) Delete(ctx context.Context, key string) error {
 
 // Exists checks if a key exists in the cache
 func (lc *layeredCache) Exists(ctx context.Context, key string) (bool, error) {
-	// Check local cache first
-	if _, found := lc.local.Get(key); found {
-		return true, nil
-	}
-
-	// Check KV store
-	return lc.kv.Exists(ctx, key)
+	_, found, err := lc.Get(ctx, key)
+	return found, err
 }
 
 // GetMulti retrieves multiple values from the cache
 func (lc *layeredCache) GetMulti(ctx context.Context, keys []string) (map[string][]byte, error) {
 	result := make(map[string][]byte)
-	missingKeys := []string{}
-
-	// Check local cache first
 	for _, key := range keys {
-		if value, found := lc.local.Get(key); found {
-			result[key] = value
-			lc.stats.hits.Add(1)
-		} else {
-			missingKeys = append(missingKeys, key)
-		}
-	}
-
-	// Fetch missing keys from KV store
-	if len(missingKeys) > 0 {
-		kvValues, err := lc.kv.BatchGet(ctx, missingKeys)
+		value, found, err := lc.Get(ctx, key)
 		if err != nil {
-			return result, fmt.Errorf("failed to batch get from kv store: %w", err)
+			return result, err
 		}
-
-		for key, value := range kvValues {
+		if found {
 			result[key] = value
-			lc.stats.hits.Add(1)
-			// Populate local cache
-			lc.local.Set(key, value, int64(len(value)))
-		}
-
-		// Count misses for keys not found in either cache
-		missCount := len(missingKeys) - len(kvValues)
-		if missCount > 0 {
-			lc.stats.misses.Add(uint64(missCount))
 		}
 	}
-
 	return result, nil
 }
 
@@ -195,10 +170,10 @@ func (lc *layeredCache) SetMulti(ctx context.Context, items map[string][]byte, t
 		return fmt.Errorf("failed to batch set in kv store: %w", err)
 	}
 
-	// Store in local cache
-	for key, value := range items {
-		lc.local.SetWithTTL(key, value, int64(len(value)), ttl)
+	for key := range items {
+		lc.local.Del(key)
 	}
+	lc.local.Wait()
 
 	return nil
 }
@@ -288,27 +263,8 @@ func (lc *layeredCache) Stats() Stats {
 
 // Warm pre-loads the cache with frequently accessed data
 func (lc *layeredCache) Warm(ctx context.Context, keys []string) error {
-	if len(keys) == 0 {
-		return nil
-	}
-
-	// Batch get from KV store
-	values, err := lc.kv.BatchGet(ctx, keys)
-	if err != nil {
-		return fmt.Errorf("failed to warm cache: %w", err)
-	}
-
-	// Load into local cache
-	for key, value := range values {
-		lc.local.Set(key, value, int64(len(value)))
-	}
-
-	log.Info().
-		Int("keys_warmed", len(values)).
-		Int("keys_requested", len(keys)).
-		Msg("cache warmed")
-
-	return nil
+	_, err := lc.GetMulti(ctx, keys)
+	return err
 }
 
 // Close gracefully shuts down the cache
