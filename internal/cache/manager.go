@@ -3,16 +3,16 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/agentstation/starport/internal/storage"
 	"github.com/rs/zerolog/log"
 )
 
 // Manager manages different cache strategies for different data types
 type Manager struct {
-	// LLM Responses: Distributed only for multi-node, hybrid for single-node
+	// Responses use a cache-owned store.
 	responses Cache
 
 	// Model Metadata: Local only with long TTL
@@ -40,8 +40,9 @@ type ManagerConfig struct {
 	} `env:",prefix=MODELS_"`
 }
 
-// NewCacheManager creates a new cache manager with appropriate strategies for each data type
-func NewCacheManager(config ManagerConfig, store storage.KVStore) (*Manager, error) {
+// NewCacheManager uses bounded memory unless the caller supplies a cache-only store.
+// The manager owns the supplied store after successful construction.
+func NewCacheManager(config ManagerConfig, store Cache) (*Manager, error) {
 	// Apply defaults if zero values
 	if config.Models.SizeMB == 0 {
 		config.Models.SizeMB = 16
@@ -63,37 +64,17 @@ func NewCacheManager(config ManagerConfig, store storage.KVStore) (*Manager, err
 		config: config,
 	}
 
-	// Detect pub/sub capability
-	var pubsub PubSubClient = &NoopPubSub{}
-	if provider, ok := store.(PubSubProvider); ok {
-		pubsub = provider.GetPubSub()
-		log.Info().Msg("pub/sub invalidation enabled")
-	} else {
-		log.Info().Msg("pub/sub not available, using TTL-based expiration")
-	}
-
-	// Initialize caches based on deployment mode
-	isMultiNode := pubsub != nil && !isNoopPubSub(pubsub)
-
-	// LLM Responses: Strategy depends on deployment mode
-	if isMultiNode || config.Responses.Strategy == "distributed" {
-		// Multi-node: distributed only
-		cm.responses = NewDistributedCache(store, storage.KeyPrefixResponse)
-		log.Info().Msg("using distributed cache for LLM responses")
-	} else {
-		// Single-node: can use hybrid for better performance
-		respConfig := HybridCacheConfig{
-			LocalSizeMB: config.Responses.LocalSizeMB,
-			LocalTTL:    30 * time.Minute,
-			Prefix:      storage.KeyPrefixResponse,
-			// No invalidation for responses (immutable)
+	switch config.Responses.Strategy {
+	case "", "auto", "local":
+		if store != nil {
+			return nil, errors.New("shared response cache requires distributed strategy")
 		}
-		resp, err := NewHybridCache(respConfig, store, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create responses cache: %w", err)
+	case "distributed":
+		if store == nil {
+			return nil, errors.New("distributed response cache requires a cache-only store")
 		}
-		cm.responses = resp
-		log.Info().Msg("using hybrid cache for LLM responses")
+	default:
+		return nil, errors.New("unknown response cache strategy")
 	}
 
 	// Model Metadata: Local only with long TTL
@@ -102,6 +83,15 @@ func NewCacheManager(config ManagerConfig, store storage.KVStore) (*Manager, err
 		return nil, fmt.Errorf("failed to create models cache: %w", err)
 	}
 	cm.models = models
+	if store == nil {
+		responses, err := NewLocalCache(config.Responses.LocalSizeMB, config.Responses.TTL)
+		if err != nil {
+			_ = models.Close()
+			return nil, fmt.Errorf("create response cache: %w", err)
+		}
+		store = responses
+	}
+	cm.responses = store
 
 	return cm, nil
 }
@@ -119,7 +109,7 @@ func (cm *Manager) SetResponse(ctx context.Context, key string, response []byte)
 			Str("key", key).
 			Int("size", len(response)).
 			Msg("response too large to cache")
-		return nil // Don't cache, but don't error
+		return nil // Oversized responses bypass the cache.
 	}
 
 	return cm.responses.Set(ctx, key, response, cm.config.Responses.TTL)
@@ -159,31 +149,10 @@ func (cm *Manager) InvalidateModels() {
 
 // Stats returns aggregated cache statistics.
 func (cm *Manager) Stats() map[string]Stats {
-	stats := make(map[string]Stats)
-	if hybrid, ok := cm.responses.(*HybridCache); ok {
-		stats["responses"] = hybrid.Stats()
-	}
-
-	return stats
+	return map[string]Stats{"responses": cm.responses.Stats(), "models": cm.models.Stats()}
 }
 
-// Close gracefully shuts down the cache manager
+// Close releases both cache stores.
 func (cm *Manager) Close() error {
-	if hybrid, ok := cm.responses.(*HybridCache); ok {
-		if err := hybrid.Close(); err != nil {
-			log.Warn().Err(err).Msg("failed to close responses cache")
-		}
-	}
-
-	if err := cm.models.Close(); err != nil {
-		log.Warn().Err(err).Msg("failed to close models cache")
-	}
-
-	return nil
-}
-
-// isNoopPubSub checks if the pub/sub client is a noop implementation
-func isNoopPubSub(pubsub PubSubClient) bool {
-	_, ok := pubsub.(*NoopPubSub)
-	return ok
+	return errors.Join(cm.responses.Close(), cm.models.Close())
 }

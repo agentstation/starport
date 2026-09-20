@@ -38,10 +38,11 @@ func TestValkeyIntegration(t *testing.T) {
 	})
 
 	config := ManagerConfig{}
-	first, err := NewCacheManager(config, store)
+	config.Responses.Strategy = "distributed"
+	first, err := NewCacheManager(config, NewDistributedCache(store, storage.KeyPrefixResponse))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, first.Close()) })
-	second, err := NewCacheManager(config, store)
+	second, err := NewCacheManager(config, NewDistributedCache(store, storage.KeyPrefixResponse))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, second.Close()) })
 
@@ -84,7 +85,9 @@ func BenchmarkValkeyCache(b *testing.B) {
 	store, err := storage.OpenValkey(storage.ValkeyConfig{URL: valkeyURL, MaxRetries: 3, MinIdleConns: 10, DB: 14})
 	require.NoError(b, err)
 	b.Cleanup(func() { require.NoError(b, store.Close()) })
-	manager, err := NewCacheManager(ManagerConfig{}, store)
+	config := ManagerConfig{}
+	config.Responses.Strategy = "distributed"
+	manager, err := NewCacheManager(config, NewDistributedCache(store, storage.KeyPrefixResponse))
 	require.NoError(b, err)
 	b.Cleanup(func() { require.NoError(b, manager.Close()) })
 	ctx := context.Background()

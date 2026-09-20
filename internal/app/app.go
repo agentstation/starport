@@ -26,7 +26,6 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/guardrails"
@@ -627,7 +626,7 @@ func (b *runtimeBuilder) openRegistry() error {
 
 func (b *runtimeBuilder) openCache() error {
 	if b.config.Cache.Enabled {
-		cacheManager, err := b.factories.newCache(cache.ManagerConfig{}, b.application.store)
+		cacheManager, err := b.factories.newCache(cache.ManagerConfig{}, nil)
 		if err != nil {
 			if cacheManager != nil {
 				if closeErr := cacheManager.Close(); closeErr != nil {
@@ -693,20 +692,12 @@ func (b *runtimeBuilder) buildGateway() error {
 	if b.files != nil {
 		proxyOptions = append(proxyOptions, proxy.WithFiles(storedDocuments{service: b.files}))
 	}
-	// A parser plugin reads an attachment once per account, engine, and
-	// catalog generation. The entries hold text rather than bytes, so they sit
-	// in the key-value store under their own prefix and expire on their own
-	// window.
-	if b.application.store != nil {
-		extractions, err := document.NewCache(
-			cache.NewDistributedCache(b.application.store, storage.KeyPrefixExtraction),
-			nil, 0,
-		)
-		if err != nil {
-			return fmt.Errorf("open extraction cache: %w", err)
-		}
-		proxyOptions = append(proxyOptions, proxy.WithDocumentCache(extractions))
+	extractions, err := b.openExtractionCache()
+	if err != nil {
+		return err
 	}
+	proxyOptions = append(proxyOptions, proxy.WithDocumentCache(extractions))
+
 	if b.application.cacheManager != nil {
 		cacheConfig := &proxy.CacheConfig{
 			EnableChatCache: true, EnableEmbeddingCache: true,

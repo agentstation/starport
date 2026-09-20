@@ -66,7 +66,7 @@ func TestHTTPAliasRemovalWithSerializedDiscoveryCache(t *testing.T) {
 	var cacheConfig cache.ManagerConfig
 	cacheConfig.Responses.Strategy = "distributed"
 	cacheConfig.Models.SizeMB = 1
-	manager, err := cache.NewCacheManager(cacheConfig, storage.NewMockStore())
+	manager, err := cache.NewCacheManager(cacheConfig, cache.NewDistributedCache(storage.NewMockStore(), storage.KeyPrefixResponse))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, manager.Close()) })
 	observed := &observedDiscoveryCache{Manager: manager}

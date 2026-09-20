@@ -11,11 +11,11 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-func TestCacheManagerMultiNodeSharesResponses(t *testing.T) {
+func TestCacheManagerExplicitSharedStoreSharesResponses(t *testing.T) {
 	sharedStore := storage.NewMockStore()
-	sharedPubSub := NewMemoryPubSub()
-	store := &mockStoreWithPubSub{KVStore: sharedStore, pubsub: sharedPubSub}
+	store := NewDistributedCache(sharedStore, storage.KeyPrefixResponse)
 	config := ManagerConfig{}
+	config.Responses.Strategy = "distributed"
 
 	first, err := NewCacheManager(config, store)
 	require.NoError(t, err)
@@ -34,7 +34,7 @@ func TestCacheManagerMultiNodeSharesResponses(t *testing.T) {
 }
 
 func TestCacheManagerSingleNodeCachesResponses(t *testing.T) {
-	manager, err := NewCacheManager(ManagerConfig{}, storage.NewMockStore())
+	manager, err := NewCacheManager(ManagerConfig{}, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, manager.Close()) })
 
@@ -49,7 +49,7 @@ func TestCacheManagerSingleNodeCachesResponses(t *testing.T) {
 }
 
 func TestCacheManagerModelMetadata(t *testing.T) {
-	manager, err := NewCacheManager(ManagerConfig{}, storage.NewMockStore())
+	manager, err := NewCacheManager(ManagerConfig{}, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, manager.Close()) })
 
@@ -75,24 +75,15 @@ func TestCacheManagerConfig(t *testing.T) {
 	config.Models.TTL = time.Hour
 	config.Models.SizeMB = 8
 
-	manager, err := NewCacheManager(config, storage.NewMockStore())
+	manager, err := NewCacheManager(config, NewDistributedCache(storage.NewMockStore(), storage.KeyPrefixResponse))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, manager.Close()) })
 	assert.IsType(t, &DistributedCache{}, manager.responses)
 	assert.Equal(t, config.Responses.TTL, manager.config.Responses.TTL)
 }
 
-type mockStoreWithPubSub struct {
-	storage.KVStore
-	pubsub PubSubClient
-}
-
-func (m *mockStoreWithPubSub) GetPubSub() PubSubClient {
-	return m.pubsub
-}
-
 func BenchmarkCacheManager(b *testing.B) {
-	manager, err := NewCacheManager(ManagerConfig{}, storage.NewMockStore())
+	manager, err := NewCacheManager(ManagerConfig{}, nil)
 	require.NoError(b, err)
 	b.Cleanup(func() { require.NoError(b, manager.Close()) })
 	ctx := context.Background()
@@ -103,4 +94,42 @@ func BenchmarkCacheManager(b *testing.B) {
 			_, _, _ = manager.GetResponse(ctx, "bench")
 		}
 	})
+}
+
+func TestCacheManagerDefaultIsLocalAndIsolated(t *testing.T) {
+	first, err := NewCacheManager(ManagerConfig{}, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, first.Close()) })
+	second, err := NewCacheManager(ManagerConfig{}, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, second.Close()) })
+	require.IsType(t, &LocalCache{}, first.responses)
+	require.NoError(t, first.SetResponse(t.Context(), "scoped", []byte("answer")))
+	value, found, err := first.GetResponse(t.Context(), "scoped")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, []byte("answer"), value)
+	_, found, err = second.GetResponse(t.Context(), "scoped")
+	require.NoError(t, err)
+	require.False(t, found)
+}
+
+func TestCacheManagerRequiresExplicitSharedStrategy(t *testing.T) {
+	for _, strategy := range []string{"", "auto", "local", "invalid"} {
+		t.Run(strategy, func(t *testing.T) {
+			config := ManagerConfig{}
+			config.Responses.Strategy = strategy
+			store, err := NewLocalCache(1, time.Minute)
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, store.Close()) })
+			manager, err := NewCacheManager(config, store)
+			require.Error(t, err)
+			require.Nil(t, manager)
+		})
+	}
+	config := ManagerConfig{}
+	config.Responses.Strategy = "distributed"
+	manager, err := NewCacheManager(config, nil)
+	require.Error(t, err)
+	require.Nil(t, manager)
 }
