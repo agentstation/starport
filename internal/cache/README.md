@@ -32,3 +32,15 @@ It exposes no cache keys or payloads.
 Injected response-cache reads have a 2 ms deadline. Local response reads use no additional timer.
 Current authorization and catalog checks still govern cached delivery.
 Model and extraction fills, dedicated shared-service configuration, and stream limits remain under CSP12.1.
+
+## Stream retention
+
+The canonical response-cache buffer limits each stream to 256 KiB of charged input and 1,024 events.
+Either limit discards all accumulated cache input and prevents further accumulation for that stream.
+Delivery continues with the original events. EOF, upstream failure, and close release retained input.
+The byte check precedes cloning and includes media, tool arguments, probability data, metadata, and strings.
+Copies own their strings so a short substring cannot retain a large provider buffer.
+
+Fixed structure charges and doubled payload charges allow for slice growth and allocation rounding on supported 64-bit hosts.
+The charge is an admission bound. Full retained-heap and concurrent-stream qualification remain required.
+EOF response reconstruction and encoding remain synchronous and need separate latency qualification.

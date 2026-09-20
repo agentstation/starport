@@ -838,7 +838,8 @@ type cachingStreamWrapper struct {
 	stream     ChatCompletionStreamResponse
 	repository responsecache.Repository
 	cacheKey   string
-	events     []inference.StreamEvent
+	cacheMu    sync.Mutex
+	buffer     responsecache.StreamBuffer
 	cached     bool
 	// afterCache submits a semantic vector after the exact fill submission.
 	// Lookup requires the exact entry, even if either fill is pending or dropped.
@@ -852,29 +853,38 @@ func newCachingStreamWrapper(
 ) *cachingStreamWrapper {
 	return &cachingStreamWrapper{
 		stream: stream, repository: repository, cacheKey: cacheKey,
-		events: make([]inference.StreamEvent, 0),
 	}
 }
 
 func (w *cachingStreamWrapper) Read() (*inference.StreamEvent, error) {
 	event, err := w.stream.Read()
+	w.cacheMu.Lock()
+	defer w.cacheMu.Unlock()
 	if event != nil {
-		w.events = append(w.events, event.Clone())
+		w.buffer.Add(*event)
 	}
-	if err == io.EOF && !w.cached && len(w.events) > 0 {
+	if err == io.EOF && !w.cached && len(w.buffer.Events()) > 0 {
 		w.cached = true
 		w.cacheResponse()
+	}
+	if err != nil {
+		w.buffer.Discard()
 	}
 	return event, err
 }
 
-func (w *cachingStreamWrapper) Close() error                         { return w.stream.Close() }
+func (w *cachingStreamWrapper) Close() error {
+	w.cacheMu.Lock()
+	w.buffer.Discard()
+	w.cacheMu.Unlock()
+	return w.stream.Close()
+}
 func (w *cachingStreamWrapper) GetCacheStatus() string               { return CacheStatusMiss }
 func (w *cachingStreamWrapper) GetCacheAge() int                     { return 0 }
 func (w *cachingStreamWrapper) Unwrap() ChatCompletionStreamResponse { return w.stream }
 
 func (w *cachingStreamWrapper) cacheResponse() {
-	response, err := responsecache.CompleteStream(w.events)
+	response, err := responsecache.CompleteStream(w.buffer.Events())
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to reconstruct canonical cached stream")
 		return
