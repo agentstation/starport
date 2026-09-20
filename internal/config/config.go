@@ -360,11 +360,16 @@ type LoggingConfig struct {
 
 // CacheConfig defines cache settings
 type CacheConfig struct {
-	CAFile        string `env:"CA_FILE"`
-	Enabled       bool   `env:"ENABLED,default=true"`
-	Backend       string `env:"BACKEND,default=local"`
-	URL           string `env:"URL" redact:"url"`
-	AllowInsecure bool   `env:"ALLOW_INSECURE,default=false"`
+	ChatEnabled        bool   `env:"CHAT_ENABLED,default=true"`
+	EmbeddingsEnabled  bool   `env:"EMBEDDINGS_ENABLED,default=true"`
+	ModelsEnabled      bool   `env:"MODELS_ENABLED,default=true"`
+	ProvidersEnabled   bool   `env:"PROVIDERS_ENABLED,default=true"`
+	ExtractionsEnabled bool   `env:"EXTRACTIONS_ENABLED,default=true"`
+	CAFile             string `env:"CA_FILE"`
+	Enabled            bool   `env:"ENABLED,default=true"`
+	Backend            string `env:"BACKEND,default=local"`
+	URL                string `env:"URL" redact:"url"`
+	AllowInsecure      bool   `env:"ALLOW_INSECURE,default=false"`
 }
 
 // ConsoleConfig defines settings for the embedded web console

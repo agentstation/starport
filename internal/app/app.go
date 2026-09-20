@@ -626,10 +626,10 @@ func (b *runtimeBuilder) openRegistry() error {
 }
 
 func (b *runtimeBuilder) openCache() error {
-	if b.config.Cache.Enabled {
+	if b.config.Cache.Enabled && (b.config.Cache.ChatEnabled || b.config.Cache.EmbeddingsEnabled || b.config.Cache.ModelsEnabled || b.config.Cache.ProvidersEnabled) {
 		var responseStore cache.ResponseStore
 		managerConfig := cache.ManagerConfig{}
-		if b.config.Cache.Backend == "valkey" {
+		if b.config.Cache.Backend == "valkey" && (b.config.Cache.ChatEnabled || b.config.Cache.EmbeddingsEnabled) {
 			shared, err := cache.OpenShared(cache.SharedConfig{URL: b.config.Cache.URL, DeploymentID: b.config.EffectivePaths().DeploymentID, AllowInsecure: b.config.Cache.AllowInsecure, CAFile: b.config.Cache.CAFile})
 			if err != nil {
 				return fmt.Errorf("open shared cache: %w", err)
@@ -717,11 +717,11 @@ func (b *runtimeBuilder) buildGateway() error {
 
 	if b.application.cacheManager != nil {
 		cacheConfig := &proxy.CacheConfig{
-			EnableChatCache: true, EnableEmbeddingCache: true,
-			EnableModelCache: true, EnableProviderCache: true,
+			EnableChatCache: b.config.Cache.ChatEnabled, EnableEmbeddingCache: b.config.Cache.EmbeddingsEnabled,
+			EnableModelCache: b.config.Cache.ModelsEnabled, EnableProviderCache: b.config.Cache.ProvidersEnabled,
 			CacheControlHeader: "X-Cache-Control",
 		}
-		if b.config.SemanticCache.Enabled {
+		if b.config.SemanticCache.Enabled && b.config.Cache.ChatEnabled {
 			// The embedder calls the finished gateway, late-bound like the
 			// guardrail moderator: the embedding rides the account's own
 			// routing and draws its own usage record.

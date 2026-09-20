@@ -92,3 +92,22 @@ func TestCacheCAFilePathAndManifest(t *testing.T) {
 		require.Error(t, config.Validate(""))
 	}
 }
+
+func TestCacheKindSettingsLoadIndependently(t *testing.T) {
+	keys := []string{"CHAT", "EMBEDDINGS", "MODELS", "PROVIDERS", "EXTRACTIONS"}
+	for _, disabled := range append([]string{""}, keys...) {
+		t.Run(disabled, func(t *testing.T) {
+			environment := map[string]string{}
+			if disabled != "" {
+				environment["STARPORT_CACHE_"+disabled+"_ENABLED"] = "false"
+			}
+			cfg, err := NewLoader().WithPaths(PathsForConfigDir(t.TempDir())).WithEnvFiles().WithEnvironment(environment).Load(t.Context())
+			require.NoError(t, err)
+			require.True(t, cfg.Cache.Enabled)
+			states := []bool{cfg.Cache.ChatEnabled, cfg.Cache.EmbeddingsEnabled, cfg.Cache.ModelsEnabled, cfg.Cache.ProvidersEnabled, cfg.Cache.ExtractionsEnabled}
+			for i, key := range keys {
+				require.Equal(t, key != disabled, states[i], key)
+			}
+		})
+	}
+}

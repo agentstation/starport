@@ -51,7 +51,9 @@ func TestDefaultResponseCacheDoesNotWriteDurableKV(t *testing.T) {
 
 func TestExtractionCacheHasIndependentLocalLifecycle(t *testing.T) {
 	application := &App{}
-	builder := &runtimeBuilder{application: application}
+	cfg := validProductionConfig(t)
+	cfg.Cache.Enabled = true
+	builder := &runtimeBuilder{application: application, config: cfg}
 	extractions, err := builder.openExtractionCache()
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, application.closeLifecycle(context.Background())) })
@@ -124,7 +126,9 @@ func TestSharedCacheCanonicalDeploymentIsolation(t *testing.T) {
 
 func TestExtractionCacheOversizeReportsDrop(t *testing.T) {
 	application := &App{}
-	builder := &runtimeBuilder{application: application}
+	cfg := validProductionConfig(t)
+	cfg.Cache.Enabled = true
+	builder := &runtimeBuilder{application: application, config: cfg}
 	extractions, err := builder.openExtractionCache()
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, application.closeLifecycle(context.Background())) })
@@ -132,4 +136,52 @@ func TestExtractionCacheOversizeReportsDrop(t *testing.T) {
 	require.NoError(t, extractions.Put(t.Context(), key, document.Reading{Text: string(make([]byte, document.MaxCacheInputBytes+1))}))
 	require.Equal(t, uint64(1), application.extractionCache.FillStatus().DroppedFills)
 	require.Zero(t, application.extractionCache.FillStatus().RetainedBytes)
+}
+
+func TestMasterCacheSwitchDisablesExtraction(t *testing.T) {
+	cfg := validProductionConfig(t)
+	cfg.Cache.Enabled = false
+	application := &App{}
+	builder := &runtimeBuilder{application: application, config: cfg, factories: defaultRuntimeFactories()}
+	require.NoError(t, builder.openCache())
+	require.Nil(t, application.cacheManager)
+	extractions, err := builder.openExtractionCache()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, application.closeLifecycle(context.Background())) })
+	require.Nil(t, extractions)
+	require.Nil(t, application.extractionCache)
+	require.Empty(t, application.lifecycle)
+}
+
+func TestCacheKindComposition(t *testing.T) {
+	for _, kind := range []string{"none", "chat", "embeddings", "models", "providers", "extractions"} {
+		t.Run(kind, func(t *testing.T) {
+			cfg, err := config.NewLoader().WithPaths(config.PathsForConfigDir(t.TempDir())).WithEnvFiles().WithEnvironment(nil).Load(t.Context())
+			require.NoError(t, err)
+			cfg.Cache = config.CacheConfig{
+				Enabled: true, Backend: "valkey", URL: "valkey://127.0.0.1:1",
+				ChatEnabled: kind == "chat", EmbeddingsEnabled: kind == "embeddings",
+				ModelsEnabled: kind == "models", ProvidersEnabled: kind == "providers",
+				ExtractionsEnabled: kind == "extractions",
+			}
+			application := &App{}
+			builder := &runtimeBuilder{application: application, config: cfg, factories: defaultRuntimeFactories()}
+			require.NoError(t, builder.openCache())
+			extractions, err := builder.openExtractionCache()
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, application.closeLifecycle(context.Background())) })
+			if kind == "none" || kind == "extractions" {
+				require.Nil(t, application.cacheManager)
+			} else {
+				require.NotNil(t, application.cacheManager)
+				require.Equal(t, kind == "chat" || kind == "embeddings", application.cacheManager.FillStatus().Shared.Configured)
+			}
+			if kind == "extractions" {
+				require.NotNil(t, extractions)
+			} else {
+				require.Nil(t, extractions)
+				require.Nil(t, application.extractionCache)
+			}
+		})
+	}
 }

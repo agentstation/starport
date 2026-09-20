@@ -60,6 +60,13 @@ Fixed structure charges and doubled payload charges allow for slice growth and a
 The charge is an admission bound. Full retained-heap and concurrent-stream qualification remain required.
 EOF response reconstruction and encoding remain synchronous and need separate latency qualification.
 
+## Enablement
+
+The master cache switch controls every optional cache kind.
+Independent flags select chat, embeddings, models, providers, and extractions.
+See the [operator controls](../../docs/OPTIONAL-CACHES.md).
+Semantic caching also requires chat caching and its existing opt-ins.
+
 ## Dedicated shared response cache
 
 The default `STARPORT_CACHE_BACKEND=local` uses process memory.
