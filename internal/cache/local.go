@@ -45,7 +45,7 @@ func (l *LocalCache) Set(_ context.Context, key string, value []byte, ttl time.D
 	if ttl == 0 {
 		ttl = l.ttl
 	}
-	l.cache.SetWithTTL(key, value, int64(len(value)), ttl)
+	l.cache.SetWithTTL(key, value, int64(cap(value)), ttl)
 	// Wait for Ristretto to apply the value.
 	l.cache.Wait()
 	return nil

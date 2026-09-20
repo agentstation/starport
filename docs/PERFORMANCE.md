@@ -209,3 +209,22 @@ go test -run '^$' -bench '^BenchmarkModelCacheDecode$' -benchmem -benchtime=100m
 
 Both variants read the same production local cache. The control decodes a map, encodes it, then decodes the response type.
 The direct path decodes the response type once. Neither variant qualifies HTTP latency or shared-service behavior.
+
+## Optional cache capacity
+
+Local cache accounting charges the retained byte-buffer capacity.
+Ristretto adds its per-entry cost. These charges do not include all process
+heap, cache metadata, caller encoding, or concurrent request state.
+
+Run the concurrent component exercise:
+
+```bash
+go test -race -count=3 -run '^TestConcurrentOptionalCacheCapacity$' -v ./internal/cache
+```
+
+The exercise uses 32 callers and 4,096 keys per response, model, and extraction
+cache. Each local cache has a two MiB cost limit. It checks both fill queues
+during load, verifies store costs after draining, and verifies shutdown.
+It reports retained heap after collection and total allocation volume.
+Those measurements cover this synthetic workload, not default-size or full
+gateway capacity. Production heap and RSS qualification remains in CSP22.

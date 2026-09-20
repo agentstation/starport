@@ -23,3 +23,15 @@ func TestLocalCacheExpiryAndClear(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, found)
 }
+
+func TestLocalCacheChargesRetainedBuffer(t *testing.T) {
+	store, err := NewLocalCache(1, time.Minute)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	// A short slice still retains its full backing allocation.
+	value := make([]byte, 1, 2<<20)
+	require.NoError(t, store.Set(t.Context(), "oversized", value, time.Minute))
+	_, found, err := store.Get(t.Context(), "oversized")
+	require.NoError(t, err)
+	require.False(t, found, "a retained allocation larger than the cache must not be admitted")
+}
