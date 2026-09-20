@@ -243,3 +243,19 @@ go test -run '^$' -bench '^BenchmarkBoundedStreamCompletion$' -benchmem -count=3
 This component benchmark uses 64 events that fit the production retention limit.
 It measures reconstruction alone. It excludes record encoding, cache admission,
 HTTP delivery, and shared storage.
+
+## Shared cache outage check
+
+The real-service fault test pauses all Valkey commands for one second.
+Use a disposable instance because this pause affects every client of that service:
+
+```bash
+TEST_SHARED_CACHE_FAULT_URL=valkey://127.0.0.1:6379 \
+  go test -race -run '^TestSharedCachePausedServiceDeadlineAndRecovery$' -v ./internal/cache
+```
+
+The test warms an entry, issues 32 concurrent reads and optional fills during the
+pause, and verifies recovery of the original entry. Cache reads must finish
+before the caller's independent deadline. The test reports read-plus-fill
+timings under race detection. These samples do not qualify production
+percentiles, provider delivery, or a network partition.
