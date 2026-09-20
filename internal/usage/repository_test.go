@@ -10,7 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var testBase = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+// Keep real-store fixtures inside retention as the calendar advances.
+var testBase = time.Now().UTC().Truncate(24 * time.Hour).Add(12 * time.Hour)
 
 func testRecord(keyID, requestID string, at time.Time) Record {
 	return Record{
@@ -250,10 +251,8 @@ func TestPutRejectsInvalidRecords(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidScope)
 }
 
-// TestAccountCounterSumsEveryKeyItHolds proves the storage guarantee the
-// account meter rests on. An account cap has to count every key the account
-// holds, and a key counter cannot answer for it: two keys under one account
-// each stay well under their own totals while the account total is their sum.
+// TestAccountCounterSumsEveryKeyItHolds proves that the account meter includes every key.
+// Individual key totals cannot replace their sum when enforcing an account cap.
 func TestAccountCounterSumsEveryKeyItHolds(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		ctx := context.Background()
@@ -286,9 +285,8 @@ func TestAccountCounterSumsEveryKeyItHolds(t *testing.T) {
 	})
 }
 
-// TestTeamCounterSumsEveryAttributedKey proves the team counter set: a team
-// sums every key attributed to it across accounts, a teamless record advances
-// no team counter, and one team's traffic never reaches another's.
+// TestTeamCounterSumsEveryAttributedKey proves team aggregation across keys and accounts.
+// A teamless record advances no team counter. One team's traffic never reaches another's.
 func TestTeamCounterSumsEveryAttributedKey(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		ctx := context.Background()
@@ -328,9 +326,8 @@ func TestTeamCounterSumsEveryAttributedKey(t *testing.T) {
 	})
 }
 
-// TestListByAccountSpansEveryKey covers the per-provider rollup's read path:
-// records are key-indexed, so an account query has to scan and filter rather
-// than address a namespace, and it must still return every key's records.
+// TestListByAccountSpansEveryKey covers the per-provider aggregation read path.
+// The repository indexes records by key. An account query scans and filters those records to return every account key's records.
 func TestListByAccountSpansEveryKey(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		ctx := context.Background()

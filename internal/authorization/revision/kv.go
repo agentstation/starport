@@ -12,7 +12,8 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-const key = "authorization:v1:revision"
+// StorageKey identifies the durable KV authorization marker.
+const StorageKey = "authorization:v1:revision"
 
 // ErrCorrupt reports invalid durable revision evidence.
 var ErrCorrupt = errors.New("authorization revision is invalid")
@@ -43,7 +44,7 @@ func (k *KV) read(ctx context.Context) (Stamp, []byte, error) {
 	if err := ctx.Err(); err != nil {
 		return Stamp{}, nil, err
 	}
-	data, err := k.store.GetBounded(ctx, key, 1024)
+	data, err := k.store.GetBounded(ctx, StorageKey, 1024)
 	if errors.Is(err, storage.ErrValueTooLarge) {
 		return Stamp{}, nil, ErrCorrupt
 	}
@@ -72,7 +73,7 @@ func (k *KV) Initialize(ctx context.Context) (Stamp, error) {
 	if err != nil {
 		return Stamp{}, err
 	}
-	if err := k.store.CompareAndSwap(ctx, key, nil, data); err != nil {
+	if err := k.store.CompareAndSwap(ctx, StorageKey, nil, data); err != nil {
 		if errors.Is(err, storage.ErrConflict) {
 			return k.Read(ctx)
 		}
@@ -88,7 +89,7 @@ func (k *KV) Apply(ctx context.Context, mutations []storage.CompareAndSwapMutati
 		return storage.ErrInvalidKey
 	}
 	for _, mutation := range mutations {
-		if mutation.Key == key {
+		if mutation.Key == StorageKey {
 			return storage.ErrInvalidKey
 		}
 	}
@@ -113,7 +114,7 @@ func (k *KV) Apply(ctx context.Context, mutations []storage.CompareAndSwapMutati
 		}
 		batch := make([]storage.CompareAndSwapMutation, 0, len(mutations)+1)
 		batch = append(batch, mutations...)
-		batch = append(batch, storage.CompareAndSwapMutation{Key: key, ExpectedValue: previous, NewValue: next})
+		batch = append(batch, storage.CompareAndSwapMutation{Key: StorageKey, ExpectedValue: previous, NewValue: next})
 		err = k.store.CompareAndSwapBatch(ctx, batch)
 		if !errors.Is(err, storage.ErrConflict) {
 			return err

@@ -77,7 +77,7 @@ func TestKVRevisionRefusesCorruptionAndOverflow(t *testing.T) {
 	for _, data := range []string{"not-json", `{"epoch":"one","sequence":0}`, fmt.Sprintf(`{"epoch":"one","sequence":%d}`, uint64(math.MaxUint64))} {
 		store := storage.NewMockStore()
 		t.Cleanup(func() { _ = store.Close() })
-		if err := store.Set(t.Context(), key, []byte(data)); err != nil {
+		if err := store.Set(t.Context(), StorageKey, []byte(data)); err != nil {
 			t.Fatal(err)
 		}
 		if err := NewKV(store, nil).Apply(t.Context(), []storage.CompareAndSwapMutation{{Key: "policy", NewValue: []byte("unsafe")}}); !errors.Is(err, ErrCorrupt) {

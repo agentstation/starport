@@ -81,7 +81,7 @@ func TestSetupRecoversProcessTermination(t *testing.T) {
 			require.NoError(t, err)
 			records, err := store.ScanWithPrefix(t.Context(), "", 0)
 			require.NoError(t, err)
-			require.Len(t, records, 4)
+			require.Len(t, records, 5)
 			require.NoError(t, store.Close())
 		})
 	}
