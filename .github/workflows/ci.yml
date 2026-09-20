@@ -31,12 +31,20 @@ jobs:
         run: make lint
 
   test:
-    name: Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Test (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    env:
+      CGO_ENABLED: ${{ matrix.cgo }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - {runner: ubuntu-24.04, cgo: '1', race: '-race'}
+          - {runner: ubuntu-24.04-arm, cgo: '1', race: '-race'}
+          - {runner: macos-15, cgo: '1', race: '-race'}
+          - {runner: macos-15-intel, cgo: '1', race: '-race'}
+          - {runner: windows-2025, cgo: '1', race: '-race'}
+          - {runner: windows-11-arm, cgo: '0', race: ''}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,16 +58,32 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests (Unix)
-        if: runner.os != 'Windows'
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+      - name: Test native evidence verifier
+        shell: bash
+        run: python scripts/test-native-catalog.py
 
-      - name: Run tests (Windows)
-        if: runner.os == 'Windows'
-        run: go test -v -race "-coverprofile=coverage.txt" "-covermode=atomic" ./...
+      - name: Record native toolchain
+        shell: bash
+        run: |
+          mkdir -p native-catalog
+          go version > native-catalog/toolchain.txt
+          go env GOOS GOARCH GOHOSTOS GOHOSTARCH CGO_ENABLED >> native-catalog/toolchain.txt
+
+      - name: Run native tests
+        shell: bash
+        run: go test -json -count=1 ${{ matrix.race }} -coverprofile=coverage.txt -covermode=atomic ./... | tee native-catalog/tests.jsonl
+
+      - name: Retain native test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-catalog-${{ matrix.runner }}
+          path: native-catalog/
+          retention-days: 14
+          if-no-files-found: error
 
       - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.runner == 'ubuntu-24.04'
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
