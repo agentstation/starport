@@ -26,7 +26,7 @@ type fillJob struct {
 
 // fillQueue bounds queued and active payloads together.
 type fillQueue struct {
-	store     Cache
+	store     ResponseStore
 	jobs      chan fillJob
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -41,7 +41,7 @@ type fillQueue struct {
 	completed atomic.Uint64
 }
 
-func newFillQueue(store Cache) *fillQueue {
+func newFillQueue(store ResponseStore) *fillQueue {
 	ctx, cancel := context.WithCancel(context.Background())
 	q := &fillQueue{store: store, jobs: make(chan fillJob, fillQueueEntries), ctx: ctx, cancel: cancel}
 	for range fillWorkers {

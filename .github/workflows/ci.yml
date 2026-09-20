@@ -107,6 +107,10 @@ jobs:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
           TEST_AUTHORIZATION_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
         run: go test -json -race -count=1 -timeout 4m ./internal/authorization -run '^(TestRepositorySourceRealStoresAndLocalMutation|TestFleetDurableReceiptPrecedesReplicaEnforcement)$' > authorization-storage.jsonl
+      - name: Verify dedicated response cache
+        env:
+          TEST_SHARED_CACHE_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+        run: go test -json -race -count=1 -timeout 2m ./internal/cache ./internal/app -run '^TestSharedCache' > shared-cache.jsonl
       - name: Retain shared startup evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -115,6 +119,7 @@ jobs:
           path: |
             shared-startup.jsonl
             authorization-storage.jsonl
+            shared-cache.jsonl
           retention-days: 7
 
   authorization-capacity:

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -55,4 +56,27 @@ func TestExtractionCacheHasIndependentLocalLifecycle(t *testing.T) {
 	require.Nil(t, application.store)
 	require.Nil(t, application.cacheManager)
 	require.Len(t, application.lifecycle, 1)
+}
+
+func TestSharedCacheCompositionUsesSeparateService(t *testing.T) {
+	raw := os.Getenv("TEST_SHARED_CACHE_URL")
+	if raw == "" {
+		t.Skip("UNVERIFIED: TEST_SHARED_CACHE_URL is not set")
+	}
+	cfg := validProductionConfig(t)
+	cfg.Cache.Enabled = true
+	cfg.Cache.Backend = "valkey"
+	cfg.Cache.URL = raw
+	cfg.Cache.Namespace = "app-composition"
+	application := &App{}
+	builder := &runtimeBuilder{application: application, config: cfg, factories: defaultRuntimeFactories()}
+	require.NoError(t, builder.openCache())
+	t.Cleanup(func() { require.NoError(t, application.closeLifecycle(context.Background())) })
+	require.Nil(t, application.store)
+	require.Eventually(t, func() bool { return application.cacheManager.FillStatus().Shared.Available }, 5*time.Second, time.Millisecond)
+	require.NoError(t, application.cacheManager.SetResponse(t.Context(), "composition", []byte("answer")))
+	require.Eventually(t, func() bool {
+		value, found, err := application.cacheManager.GetResponse(t.Context(), "composition")
+		return err == nil && found && string(value) == "answer"
+	}, time.Second, time.Millisecond)
 }

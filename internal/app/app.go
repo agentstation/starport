@@ -626,16 +626,32 @@ func (b *runtimeBuilder) openRegistry() error {
 
 func (b *runtimeBuilder) openCache() error {
 	if b.config.Cache.Enabled {
-		cacheManager, err := b.factories.newCache(cache.ManagerConfig{}, nil)
+		var responseStore cache.ResponseStore
+		managerConfig := cache.ManagerConfig{}
+		if b.config.Cache.Backend == "valkey" {
+			shared, err := cache.OpenShared(b.config.Cache.URL, b.config.Cache.Namespace, b.config.Cache.AllowInsecure)
+			if err != nil {
+				return fmt.Errorf("open shared cache: %w", err)
+			}
+			responseStore = shared
+			managerConfig.Responses.Strategy = "distributed"
+		}
+		cacheManager, err := b.factories.newCache(managerConfig, responseStore)
 		if err != nil {
 			if cacheManager != nil {
 				if closeErr := cacheManager.Close(); closeErr != nil {
 					err = errors.Join(err, fmt.Errorf("close failed cache manager: %w", closeErr))
 				}
 			}
+			if responseStore != nil {
+				_ = responseStore.Close()
+			}
 			return fmt.Errorf("open cache manager: %w", err)
 		}
 		if cacheManager == nil {
+			if responseStore != nil {
+				_ = responseStore.Close()
+			}
 			return errors.New("cache factory returned no cache manager")
 		}
 		b.application.cacheManager = cacheManager

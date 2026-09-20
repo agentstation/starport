@@ -14,7 +14,7 @@ import (
 // Manager manages different cache strategies for different data types
 type Manager struct {
 	// Responses use a cache-owned store.
-	responses      Cache
+	responses      ResponseStore
 	localResponses bool
 	fills          *fillQueue
 	closeOnce      sync.Once
@@ -47,7 +47,7 @@ type ManagerConfig struct {
 
 // NewCacheManager uses bounded memory unless the caller supplies a cache-only store.
 // The manager owns the supplied store after successful construction.
-func NewCacheManager(config ManagerConfig, store Cache) (*Manager, error) {
+func NewCacheManager(config ManagerConfig, store ResponseStore) (*Manager, error) {
 	// Apply defaults if zero values
 	if config.Models.SizeMB == 0 {
 		config.Models.SizeMB = 16

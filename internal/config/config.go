@@ -360,7 +360,11 @@ type LoggingConfig struct {
 
 // CacheConfig defines cache settings
 type CacheConfig struct {
-	Enabled bool `env:"ENABLED,default=true"`
+	Enabled       bool   `env:"ENABLED,default=true"`
+	Backend       string `env:"BACKEND,default=local"`
+	URL           string `env:"URL" redact:"url"`
+	Namespace     string `env:"NAMESPACE"`
+	AllowInsecure bool   `env:"ALLOW_INSECURE,default=false"`
 }
 
 // ConsoleConfig defines settings for the embedded web console
@@ -373,6 +377,14 @@ func (c *Config) Validate() error {
 	c.prepareCredentialResolver()
 	// Validate server config
 	if err := c.Server.Validate(); err != nil {
+		return err
+	}
+
+	durableCacheURL := ""
+	if c.Storage.Mode == storageModeValkey {
+		durableCacheURL = c.Storage.Valkey.URL
+	}
+	if err := c.Cache.Validate(durableCacheURL); err != nil {
 		return err
 	}
 

@@ -142,3 +142,12 @@ func DefaultPolicies() map[PolicyType]Policy {
 		},
 	}
 }
+
+// ResponseStore owns optional response bytes and their lifecycle.
+// Blocking operations must honor context cancellation.
+type ResponseStore interface {
+	Get(context.Context, string) ([]byte, bool, error)
+	Set(context.Context, string, []byte, time.Duration) error
+	Stats() Stats
+	Close() error
+}

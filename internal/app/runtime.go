@@ -48,7 +48,7 @@ type runtimeFactories struct {
 	openBlob     func(context.Context, config.FilesConfig) (blob.Store, error)
 	openCatalog  func(context.Context, storage.KVStore, runtimecatalog.Settings, runtimecatalog.DeploymentLookup) (catalogRuntime, error)
 	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
-	newCache     func(cache.ManagerConfig, cache.Cache) (*cache.Manager, error)
+	newCache     func(cache.ManagerConfig, cache.ResponseStore) (*cache.Manager, error)
 	newServer    func(*server.Config, server.Dependencies) (httpRuntime, error)
 }
 
