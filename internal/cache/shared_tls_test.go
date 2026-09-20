@@ -118,7 +118,7 @@ func TestSharedCacheTLSWithRealService(t *testing.T) {
 			if !tc.trusted {
 				caFile = ""
 			}
-			store, err := OpenShared(SharedConfig{URL: endpoint, Namespace: "tls-" + tc.name, CAFile: caFile})
+			store, err := OpenShared(SharedConfig{URL: endpoint, DeploymentID: "tls-" + tc.name, CAFile: caFile})
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, store.Close()) })
 			valid := tc.trusted && !tc.expired && !tc.wrongHost

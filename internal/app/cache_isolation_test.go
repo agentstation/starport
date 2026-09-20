@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/apikey"
+	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
@@ -63,11 +64,12 @@ func TestSharedCacheCompositionUsesSeparateService(t *testing.T) {
 	if raw == "" {
 		t.Skip("UNVERIFIED: TEST_SHARED_CACHE_URL is not set")
 	}
-	cfg := validProductionConfig(t)
+	cfg, err := config.NewLoader().WithPaths(config.PathsForConfigDir(t.TempDir())).WithEnvFiles().WithEnvironment(map[string]string{
+		"STARPORT_CACHE_BACKEND": "valkey", "STARPORT_CACHE_URL": raw,
+		"STARPORT_DEPLOYMENT_ID": "app-composition",
+	}).Load(t.Context())
+	require.NoError(t, err)
 	cfg.Cache.Enabled = true
-	cfg.Cache.Backend = "valkey"
-	cfg.Cache.URL = raw
-	cfg.Cache.Namespace = "app-composition"
 	application := &App{}
 	builder := &runtimeBuilder{application: application, config: cfg, factories: defaultRuntimeFactories()}
 	require.NoError(t, builder.openCache())
@@ -79,4 +81,35 @@ func TestSharedCacheCompositionUsesSeparateService(t *testing.T) {
 		value, found, err := application.cacheManager.GetResponse(t.Context(), "composition")
 		return err == nil && found && string(value) == "answer"
 	}, time.Second, time.Millisecond)
+}
+
+func TestSharedCacheCanonicalDeploymentIsolation(t *testing.T) {
+	raw := os.Getenv("TEST_SHARED_CACHE_URL")
+	if raw == "" {
+		t.Skip("UNVERIFIED: TEST_SHARED_CACHE_URL is not set")
+	}
+	open := func(id string) *App {
+		t.Helper()
+		cfg, err := config.NewLoader().WithPaths(config.PathsForConfigDir(t.TempDir())).WithEnvFiles().WithEnvironment(map[string]string{
+			"STARPORT_DEPLOYMENT_ID": id, "STARPORT_CACHE_BACKEND": "valkey", "STARPORT_CACHE_URL": raw,
+		}).Load(t.Context())
+		require.NoError(t, err)
+		cfg.Cache.Enabled = true
+		application := &App{}
+		builder := &runtimeBuilder{application: application, config: cfg, factories: defaultRuntimeFactories()}
+		require.NoError(t, builder.openCache())
+		t.Cleanup(func() { require.NoError(t, application.closeLifecycle(context.Background())) })
+		require.Eventually(t, func() bool { return application.cacheManager.FillStatus().Shared.Available }, 5*time.Second, time.Millisecond)
+		return application
+	}
+	id := t.Name() + time.Now().Format("150405.000000000")
+	first, replica, other := open(id+"/東京:*"), open(id+"/東京:*"), open(id+"/東京:?")
+	require.NoError(t, first.cacheManager.SetResponse(t.Context(), "same-key", []byte("private-answer")))
+	require.Eventually(t, func() bool {
+		value, found, err := replica.cacheManager.GetResponse(t.Context(), "same-key")
+		return err == nil && found && string(value) == "private-answer"
+	}, time.Second, time.Millisecond)
+	_, found, err := other.cacheManager.GetResponse(t.Context(), "same-key")
+	require.NoError(t, err)
+	require.False(t, found, "different canonical deployments must not share cached responses")
 }

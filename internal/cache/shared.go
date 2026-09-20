@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/cache/connection"
+	"github.com/agentstation/starport/internal/deployment"
 	"github.com/valkey-io/valkey-go"
 )
 
@@ -23,6 +24,7 @@ type SharedStatus struct {
 	Configured bool   `json:"configured"`
 	Available  bool   `json:"available"`
 	State      string `json:"state"`
+	KeyPrefix  string `json:"key_prefix"`
 }
 
 // SharedStore owns an optional connection independently of authoritative storage.
@@ -40,14 +42,18 @@ type SharedStore struct {
 // SharedConfig selects one cache endpoint and its trust roots.
 type SharedConfig struct {
 	URL           string
-	Namespace     string
+	DeploymentID  string
 	AllowInsecure bool
 	CAFile        string
 }
 
 // OpenShared starts bounded connection work without delaying application startup.
 func OpenShared(config SharedConfig) (*SharedStore, error) {
-	u, err := connection.Parse(config.URL, config.Namespace, config.AllowInsecure)
+	prefix, err := deployment.KeyPrefix(config.DeploymentID)
+	if err != nil {
+		return nil, err
+	}
+	u, err := connection.Parse(config.URL, config.AllowInsecure)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +72,7 @@ func OpenShared(config SharedConfig) (*SharedStore, error) {
 		options.TLSConfig.RootCAs = roots
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &SharedStore{cancel: cancel, prefix: "starport:cache:v1:" + config.Namespace + ":"}
+	s := &SharedStore{cancel: cancel, prefix: prefix + "cache:"}
 	s.state.Store(sharedConnecting)
 	options.DisableCache = true
 	options.DisableRetry = true
@@ -188,9 +194,9 @@ func (s *SharedStore) Stats() Stats { return Stats{} }
 func (s *SharedStore) SharedStatus() SharedStatus {
 	state := s.state.Load()
 	if s.closed.Load() {
-		return SharedStatus{Configured: true, State: "closed"}
+		return SharedStatus{Configured: true, KeyPrefix: s.prefix, State: "closed"}
 	}
-	return SharedStatus{Configured: true, Available: state == sharedReady, State: sharedStateNames[state]}
+	return SharedStatus{Configured: true, KeyPrefix: s.prefix, Available: state == sharedReady, State: sharedStateNames[state]}
 }
 
 // Close cancels connection attempts and joins the connection owner.

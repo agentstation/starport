@@ -16,15 +16,13 @@ func TestCacheServiceConfiguration(t *testing.T) {
 	}{
 		{"default", CacheConfig{}, "", true},
 		{"local", CacheConfig{Backend: "local"}, "", true},
-		{"dedicated", CacheConfig{Backend: "valkey", URL: "valkeys://cache.example/3", Namespace: "deployment"}, "valkeys://durable.example", true},
-		{"loopback", CacheConfig{Backend: "valkey", URL: "valkey://127.0.0.1:6380", Namespace: "deployment"}, "valkey://localhost:6379", true},
-		{"same service other database", CacheConfig{Backend: "valkey", URL: "valkey://localhost:6379/3", Namespace: "deployment"}, "valkey://127.0.0.1/2", false},
-		{"same service other credentials", CacheConfig{Backend: "valkey", URL: "valkeys://user:private-value@CACHE.example/3", Namespace: "deployment"}, "redis://cache.example", false},
-		{"plaintext", CacheConfig{Backend: "valkey", URL: "valkey://cache.example", Namespace: "deployment"}, "", false},
-		{"explicit plaintext", CacheConfig{Backend: "valkey", URL: "valkey://cache.example", Namespace: "deployment", AllowInsecure: true}, "", true},
-		{"query bypass", CacheConfig{Backend: "valkey", URL: "valkeys://user:private-value@cache.example?skip_verify=true", Namespace: "deployment"}, "", false},
-		{"empty namespace", CacheConfig{Backend: "valkey", URL: "valkeys://cache.example"}, "", false},
-		{"namespace glob", CacheConfig{Backend: "valkey", URL: "valkeys://cache.example", Namespace: "*"}, "", false},
+		{"dedicated", CacheConfig{Backend: "valkey", URL: "valkeys://cache.example/3"}, "valkeys://durable.example", true},
+		{"loopback", CacheConfig{Backend: "valkey", URL: "valkey://127.0.0.1:6380"}, "valkey://localhost:6379", true},
+		{"same service other database", CacheConfig{Backend: "valkey", URL: "valkey://localhost:6379/3"}, "valkey://127.0.0.1/2", false},
+		{"same service other credentials", CacheConfig{Backend: "valkey", URL: "valkeys://user:private-value@CACHE.example/3"}, "redis://cache.example", false},
+		{"plaintext", CacheConfig{Backend: "valkey", URL: "valkey://cache.example"}, "", false},
+		{"explicit plaintext", CacheConfig{Backend: "valkey", URL: "valkey://cache.example", AllowInsecure: true}, "", true},
+		{"query bypass", CacheConfig{Backend: "valkey", URL: "valkeys://user:private-value@cache.example?skip_verify=true"}, "", false},
 		{"local endpoint", CacheConfig{URL: "valkey://localhost"}, "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -41,13 +39,13 @@ func TestCacheServiceConfiguration(t *testing.T) {
 
 func TestCacheSettingsLoadAndRedact(t *testing.T) {
 	cfg, err := NewLoader().WithPaths(PathsForConfigDir(t.TempDir())).WithEnvFiles().WithEnvironment(map[string]string{
-		"STARPORT_CACHE_BACKEND":   "valkey",
-		"STARPORT_CACHE_URL":       "valkeys://user:private-value@cache.example/3",
-		"STARPORT_CACHE_NAMESPACE": "deployment",
+		"STARPORT_CACHE_BACKEND": "valkey",
+		"STARPORT_CACHE_URL":     "valkeys://user:private-value@cache.example/3",
+		"STARPORT_DEPLOYMENT_ID": "deployment",
 	}).Load(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "valkey", cfg.Cache.Backend)
-	require.Equal(t, "deployment", cfg.Cache.Namespace)
+	require.Equal(t, "deployment", cfg.EffectivePaths().DeploymentID)
 	require.Equal(t, redactedValue, Redacted(cfg)["cache"].(map[string]any)["url"])
 }
 
@@ -58,7 +56,7 @@ func TestDevelopmentRejectsSharedCache(t *testing.T) {
 	require.Error(t, err)
 	require.NotContains(t, OperatorError(err).Error(), "private-value")
 	_, err = NewLoader().WithPaths(PathsForConfigDir(t.TempDir())).WithEnvFiles().WithEnvironment(nil).LoadDevelopment(t.Context(), func(c *Config) {
-		c.Cache = CacheConfig{Backend: "valkey", URL: "valkeys://private-value@cache.example", Namespace: "deployment"}
+		c.Cache = CacheConfig{Backend: "valkey", URL: "valkeys://private-value@cache.example"}
 	})
 	require.Error(t, err)
 	require.NotContains(t, OperatorError(err).Error(), "private-value")
@@ -69,7 +67,7 @@ func TestCacheCAFilePathAndManifest(t *testing.T) {
 	cfg, err := NewLoader().WithPaths(paths).WithEnvFiles().WithEnvironment(map[string]string{
 		"STARPORT_CACHE_BACKEND":      "valkey",
 		"STARPORT_CACHE_URL":          "valkeys://cache.example",
-		"STARPORT_CACHE_NAMESPACE":    "deployment",
+		"STARPORT_DEPLOYMENT_ID":      "deployment",
 		"STARPORT_CACHE_CA_FILE":      "certificates/cache.pem",
 		"STARPORT_RELATIVE_PATH_BASE": "config",
 	}).Load(t.Context())
@@ -89,7 +87,7 @@ func TestCacheCAFilePathAndManifest(t *testing.T) {
 	require.True(t, found)
 	for _, config := range []CacheConfig{
 		{CAFile: cfg.Cache.CAFile},
-		{Backend: "valkey", URL: "valkey://localhost", Namespace: "deployment", CAFile: cfg.Cache.CAFile},
+		{Backend: "valkey", URL: "valkey://localhost", CAFile: cfg.Cache.CAFile},
 	} {
 		require.Error(t, config.Validate(""))
 	}

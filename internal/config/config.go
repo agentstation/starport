@@ -364,7 +364,6 @@ type CacheConfig struct {
 	Enabled       bool   `env:"ENABLED,default=true"`
 	Backend       string `env:"BACKEND,default=local"`
 	URL           string `env:"URL" redact:"url"`
-	Namespace     string `env:"NAMESPACE"`
 	AllowInsecure bool   `env:"ALLOW_INSECURE,default=false"`
 }
 

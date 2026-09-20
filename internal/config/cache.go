@@ -14,11 +14,11 @@ const cacheCAFileRole = "cache-ca"
 func (c *CacheConfig) Validate(durableURL string) error {
 	switch c.Backend {
 	case "", cacheBackendLocal:
-		if c.URL != "" || c.Namespace != "" || c.AllowInsecure || c.CAFile != "" {
+		if c.URL != "" || c.AllowInsecure || c.CAFile != "" {
 			return errors.New("local cache cannot configure a shared endpoint")
 		}
 	case "valkey":
-		u, err := connection.Parse(c.URL, c.Namespace, c.AllowInsecure)
+		u, err := connection.Parse(c.URL, c.AllowInsecure)
 		if err != nil {
 			return err
 		}

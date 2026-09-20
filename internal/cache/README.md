@@ -48,10 +48,12 @@ EOF response reconstruction and encoding remain synchronous and need separate la
 ## Dedicated shared response cache
 
 The default `STARPORT_CACHE_BACKEND=local` uses process memory.
-Select `STARPORT_CACHE_BACKEND=valkey` with an explicit `STARPORT_CACHE_URL` and `STARPORT_CACHE_NAMESPACE` for shared response bytes.
+Select `STARPORT_CACHE_BACKEND=valkey` with an explicit `STARPORT_CACHE_URL` and `STARPORT_DEPLOYMENT_ID` for shared response bytes.
 Model and extraction caches remain local.
-Namespaces contain 1 through 64 letters, digits, underscores, dots, or hyphens.
-Use the same namespace only for replicas of one deployment. Keys use the `starport:cache:v1:<namespace>:` prefix.
+Use the same deployment ID for its replicas and different IDs for independent deployments. The default ID is `local`.
+
+Keys use `starport:v1:<base64url-deployment-id>:cache:` with unpadded UTF-8 encoding.
+The admin cache status exposes the effective `key_prefix` for ACL provisioning.
 
 The URI accepts credentials and an optional database number.
 Use `valkeys://` or `rediss://` for TLS with system trust and hostname verification.
@@ -85,7 +87,7 @@ Relative paths require `STARPORT_RELATIVE_PATH_BASE=config` and resolve under th
 The reader confines the final file lookup to its parent directory.
 Replace the bundle and restart Starport to change the active trust roots.
 
-Provision a separate cache user for each deployment. Its ACL must restrict keys to `starport:cache:v1:<namespace>:*`.
+Provision a separate cache user for each deployment. Its ACL must restrict keys to the reported `key_prefix` followed by `*`.
 The cache needs these commands: `hello`, `ping`, `select`, `client|setname`, `client|setinfo`, `get`, `strlen`, `set`, `eval`, `evalsha`, and `script|load`.
 The service administrator owns ACL changes. Starport does not grant itself access or claim another namespace.
 

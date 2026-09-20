@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"maps"
 	"path/filepath"
-	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/agentstation/starmap/pkg/productpaths"
+	"github.com/agentstation/starport/internal/deployment"
 	"github.com/sethvargo/go-envconfig"
 )
 
@@ -180,9 +178,8 @@ func (l *Loader) managedPaths(bootstrap Paths, source envconfig.Lookuper, layers
 	if value, present := source.Lookup("STARPORT_DEPLOYMENT_ID"); present {
 		paths.DeploymentID = value
 	}
-	deployment := paths.DeploymentID
-	if deployment == "" || strings.TrimSpace(deployment) != deployment || len(deployment) > 256 || !utf8.ValidString(deployment) || strings.ContainsFunc(deployment, unicode.IsControl) {
-		return Paths{}, fmt.Errorf("STARPORT_DEPLOYMENT_ID requires at most 256 UTF-8 bytes without surrounding whitespace or control characters")
+	if err := deployment.ValidateID(paths.DeploymentID); err != nil {
+		return Paths{}, fmt.Errorf("STARPORT_DEPLOYMENT_ID: %w", err)
 	}
 	paths.RuntimeDir = filepath.Join(paths.StateDir, "catalog", "runtime", paths.InstanceID)
 	return paths, nil

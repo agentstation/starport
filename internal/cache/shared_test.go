@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"github.com/agentstation/starport/internal/deployment"
 	"net"
 	"net/url"
 	"os"
@@ -27,7 +28,7 @@ func TestSharedCacheUnavailableLifecycle(t *testing.T) {
 			accepted <- conn
 		}
 	}()
-	store, err := OpenShared(SharedConfig{URL: "valkey://" + listener.Addr().String(), Namespace: "unavailable"})
+	store, err := OpenShared(SharedConfig{URL: "valkey://" + listener.Addr().String(), DeploymentID: "unavailable"})
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, store.Close())
@@ -80,11 +81,11 @@ func TestSharedCacheRealService(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(control.Close)
 	namespace := "test-" + strings.ReplaceAll(t.Name(), "/", "-")
-	first, err := OpenShared(SharedConfig{URL: raw, Namespace: namespace, AllowInsecure: true})
+	first, err := OpenShared(SharedConfig{URL: raw, DeploymentID: namespace, AllowInsecure: true})
 	require.NoError(t, err)
-	second, err := OpenShared(SharedConfig{URL: raw, Namespace: namespace, AllowInsecure: true})
+	second, err := OpenShared(SharedConfig{URL: raw, DeploymentID: namespace, AllowInsecure: true})
 	require.NoError(t, err)
-	isolated, err := OpenShared(SharedConfig{URL: raw, Namespace: namespace + "-other", AllowInsecure: true})
+	isolated, err := OpenShared(SharedConfig{URL: raw, DeploymentID: namespace + "-other", AllowInsecure: true})
 	require.NoError(t, err)
 	for _, store := range []*SharedStore{first, second, isolated} {
 		t.Cleanup(func() { require.NoError(t, store.Close()) })
@@ -141,7 +142,9 @@ func TestSharedCacheURIAuthenticationAndDatabase(t *testing.T) {
 	defer cancel()
 	createUser := func(user, namespace string) {
 		t.Helper()
-		require.NoError(t, control.Do(ctx, control.B().Arbitrary("ACL", "SETUSER", user, "on", ">fixture-password", "~starport:cache:v1:"+namespace+":*", "+hello", "+ping", "+select", "+client|setname", "+client|setinfo", "+get", "+strlen", "+set", "+eval", "+evalsha", "+script|load").Build()).Error())
+		prefix, err := deployment.KeyPrefix(namespace)
+		require.NoError(t, err)
+		require.NoError(t, control.Do(ctx, control.B().Arbitrary("ACL", "SETUSER", user, "on", ">fixture-password", "~"+prefix+"cache:*", "+hello", "+ping", "+select", "+client|setname", "+client|setinfo", "+get", "+strlen", "+set", "+eval", "+evalsha", "+script|load").Build()).Error())
 	}
 	createUser("cachefixture", "auth-test")
 	createUser("cachefixture-other", "auth-other")
@@ -154,7 +157,7 @@ func TestSharedCacheURIAuthenticationAndDatabase(t *testing.T) {
 	require.NoError(t, err)
 	u.User = url.UserPassword("cachefixture", "fixture-password")
 	u.Path = "/3"
-	store, err := OpenShared(SharedConfig{URL: u.String(), Namespace: "auth-test", AllowInsecure: true})
+	store, err := OpenShared(SharedConfig{URL: u.String(), DeploymentID: "auth-test", AllowInsecure: true})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, store.Close()) })
 	require.Eventually(t, func() bool { return store.SharedStatus().Available }, 5*time.Second, time.Millisecond)
@@ -165,12 +168,12 @@ func TestSharedCacheURIAuthenticationAndDatabase(t *testing.T) {
 	require.Equal(t, "authenticated", string(got))
 	ownerURI := *u
 	ownerURI.User = url.UserPassword("cachefixture-other", "fixture-password")
-	owner, err := OpenShared(SharedConfig{URL: ownerURI.String(), Namespace: "auth-other", AllowInsecure: true})
+	owner, err := OpenShared(SharedConfig{URL: ownerURI.String(), DeploymentID: "auth-other", AllowInsecure: true})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, owner.Close()) })
 	require.Eventually(t, func() bool { return owner.SharedStatus().Available }, 3*time.Second, time.Millisecond)
 	require.NoError(t, owner.Set(ctx, "entry", []byte("other-owner"), time.Minute))
-	other, err := OpenShared(SharedConfig{URL: u.String(), Namespace: "auth-other", AllowInsecure: true})
+	other, err := OpenShared(SharedConfig{URL: u.String(), DeploymentID: "auth-other", AllowInsecure: true})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, other.Close()) })
 	require.Eventually(t, func() bool { return other.current() != nil }, 5*time.Second, time.Millisecond)
@@ -186,7 +189,7 @@ func TestSharedCacheURIAuthenticationAndDatabase(t *testing.T) {
 	require.Equal(t, "other-owner", string(preserved))
 	invalidURI := *u
 	invalidURI.User = url.UserPassword("cachefixture", "wrong-fixture-password")
-	invalid, err := OpenShared(SharedConfig{URL: invalidURI.String(), Namespace: "auth-test", AllowInsecure: true})
+	invalid, err := OpenShared(SharedConfig{URL: invalidURI.String(), DeploymentID: "auth-test", AllowInsecure: true})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, invalid.Close()) })
 	require.Eventually(t, func() bool { return invalid.SharedStatus().State == "authentication_failed" }, 3*time.Second, time.Millisecond)

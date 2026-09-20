@@ -34,7 +34,7 @@ func rejectDevelopmentEnvironment(source envconfig.Lookuper) error {
 	for _, key := range []string{
 		"STARPORT_STORAGE_MODE", badgerPathEnvironment,
 		"STARPORT_STORAGE_VALKEY_URL", "STARPORT_STORAGE_VALKEY_PASSWORD", "STARPORT_STORAGE_VALKEY_CLUSTER_MODE",
-		"STARPORT_CACHE_BACKEND", "STARPORT_CACHE_URL", "STARPORT_CACHE_NAMESPACE", "STARPORT_CACHE_ALLOW_INSECURE", cacheCAFileEnvironment,
+		"STARPORT_CACHE_BACKEND", "STARPORT_CACHE_URL", "STARPORT_CACHE_ALLOW_INSECURE", cacheCAFileEnvironment,
 		"STARPORT_STORAGE_SQL_MODE", sqlitePathEnvironment,
 		"STARPORT_STORAGE_SQL_POSTGRES_URL", "STARPORT_STORAGE_SQL_MYSQL_DSN",
 		"STARPORT_FILES_BACKEND", filesPathEnvironment,
@@ -59,7 +59,6 @@ func (c *Config) validateDevelopmentStorage() error {
 		{"STARPORT_CACHE_BACKEND", c.Cache.Backend != "" && c.Cache.Backend != cacheBackendLocal},
 		{cacheCAFileEnvironment, c.Cache.CAFile != ""},
 		{"STARPORT_CACHE_URL", c.Cache.URL != ""},
-		{"STARPORT_CACHE_NAMESPACE", c.Cache.Namespace != ""},
 		{"STARPORT_CACHE_ALLOW_INSECURE", c.Cache.AllowInsecure},
 		{"STARPORT_STORAGE_MODE", c.Storage.Mode != "" && c.Storage.Mode != storageModeBadger},
 		{badgerPathEnvironment, c.Storage.Badger.Path != ""},

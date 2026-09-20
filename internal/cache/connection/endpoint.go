@@ -11,10 +11,7 @@ import (
 
 // Parse accepts one endpoint with verified TLS or explicit plaintext permission.
 // Errors contain no URI or credential values.
-func Parse(raw, namespace string, allowInsecure bool) (*url.URL, error) {
-	if err := validateNamespace(namespace); err != nil {
-		return nil, err
-	}
+func Parse(raw string, allowInsecure bool) (*url.URL, error) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Hostname() == "" || u.Opaque != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "" || u.RawPath != "" {
 		return nil, errors.New("cache URL must name one host without query options or fragments")
@@ -75,20 +72,4 @@ func endpoint(u *url.URL) string {
 		port = "6379"
 	}
 	return net.JoinHostPort(host, port)
-}
-
-func validateNamespace(namespace string) error {
-	if len(namespace) == 0 || len(namespace) > 64 {
-		return errors.New("cache namespace must contain 1 through 64 letters, digits, underscores, dots, or hyphens")
-	}
-	for _, c := range namespace {
-		if !namespaceCharacter(c) {
-			return errors.New("cache namespace contains an invalid character")
-		}
-	}
-	return nil
-}
-
-func namespaceCharacter(c rune) bool {
-	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '.' || c == '-'
 }
