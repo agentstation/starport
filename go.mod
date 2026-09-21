@@ -3,7 +3,7 @@ module github.com/agentstation/starport
 go 1.27.1
 
 require (
-	cloud.google.com/go/auth v0.23.2
+	cloud.google.com/go/auth v0.23.3
 	cloud.google.com/go/secretmanager v1.21.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.1
@@ -11,11 +11,11 @@ require (
 	github.com/agentstation/starmap v0.16.6-0.20260917204518-b09931c66d7d
 	github.com/agentstation/uuidkey v1.2.0
 	github.com/aws/aws-sdk-go-v2 v1.47.0
-	github.com/aws/aws-sdk-go-v2/config v1.33.4
-	github.com/aws/aws-sdk-go-v2/credentials v1.20.4
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.23.5
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.0
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.49.0
+	github.com/aws/aws-sdk-go-v2/config v1.33.5
+	github.com/aws/aws-sdk-go-v2/credentials v1.20.5
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.23.7
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.1
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.50.0
 	github.com/aws/smithy-go v1.28.1
 	github.com/dgraph-io/badger/v4 v4.9.6
 	github.com/dgraph-io/ristretto/v2 v2.4.2
@@ -39,10 +39,10 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/tiktoken-go/tokenizer v0.8.1
 	github.com/urfave/cli-docs/v3 v3.1.0
-	github.com/urfave/cli/v3 v3.11.0
-	github.com/valkey-io/valkey-go v1.0.77
-	github.com/valkey-io/valkey-go/mock v1.0.77
-	github.com/workos/workos-go/v10 v10.3.0
+	github.com/urfave/cli/v3 v3.12.0
+	github.com/valkey-io/valkey-go v1.0.78
+	github.com/valkey-io/valkey-go/mock v1.0.78
+	github.com/workos/workos-go/v10 v10.5.0
 	github.com/yuin/goldmark v1.8.6
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.46.0
@@ -52,8 +52,8 @@ require (
 	golang.org/x/crypto v0.57.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sys v0.48.0
-	google.golang.org/grpc v1.83.2
-	modernc.org/sqlite v1.58.0
+	google.golang.org/grpc v1.84.0
+	modernc.org/sqlite v1.59.0
 )
 
 require (
@@ -80,7 +80,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/signin v1.10.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.38.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.50.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.51.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
@@ -211,7 +211,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	modernc.org/libc v1.75.6 // indirect
+	modernc.org/libc v1.75.7 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
