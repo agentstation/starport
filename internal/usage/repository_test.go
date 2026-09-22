@@ -10,7 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var testBase = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+// testBase is noon today in UTC. A record's counters expire at their window
+// end plus the retention, an absolute instant the store compares against the
+// wall clock, so a fixture on a fixed calendar date ages out of retention and
+// every total reads zero once that date is a month old. Noon keeps the fixture
+// and the records a few minutes after it inside one day, week, and month
+// window, and two days earlier is always a different window.
+var testBase = func() time.Time {
+	now := time.Now().UTC()
+	return time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC)
+}()
 
 func testRecord(keyID, requestID string, at time.Time) Record {
 	return Record{
