@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
@@ -31,9 +29,7 @@ func TestRuntimeRequiresNamedAPIKey(t *testing.T) {
 		requireAPIKey(context.Background(), apiKeys, config.AuthModeRequired),
 		ErrAPIKeyRequired)
 
-	// An empty API key store is the expected state of a gateway that requires
-	// no key, and refusing to start there would make the mode unusable for the
-	// operator it exists for.
+	// An empty API key store must permit startup when authentication is disabled.
 	require.NoError(t, requireAPIKey(context.Background(), apiKeys, config.AuthModeDisabled))
 
 	_, err = apiKeys.Create(context.Background(), testAPIKey())
@@ -61,7 +57,8 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 				factories.openCatalog = func(
 					context.Context,
 					storage.KVStore,
-					config.CatalogConfig,
+					runtimecatalog.Settings,
+					runtimecatalog.DeploymentLookup,
 				) (catalogRuntime, error) {
 					return nil, nil
 				}
@@ -110,40 +107,33 @@ func TestRuntimeStartsWithoutOperatorCredentials(t *testing.T) {
 	require.ErrorIs(t, err, credentials.ErrProviderNotConfigured)
 }
 
-func TestStartupCatalogRefreshIsExplicitAndResilient(t *testing.T) {
-	refreshErr := errors.New("catalog source unavailable")
-	tests := []struct {
-		name           string
-		refreshOnStart bool
-		workspacePath  string
-		wantCalls      int
-	}{
-		{name: "workspace does not imply refresh", workspacePath: "configured-workspace"},
-		{name: "requested refresh retains current generation on failure", refreshOnStart: true, wantCalls: 1},
+// TestCompositionPassesCatalogAcquisitionThrough proves the composition root
+// changes no catalog setting. A gateway that reads no catalog routes nothing,
+// so only the operator turns automatic acquisition off.
+func TestCompositionPassesCatalogAcquisitionThrough(t *testing.T) {
+	cfg := validProductionConfig(t)
+	cfg.Catalog.WorkspacePath = t.TempDir()
+	// The operator enabled acquisition. The composition passes that setting
+	// through unchanged, so no runtime mode turns automatic catalog work off.
+	cfg.Catalog.AcquisitionEnabled = true
+	opened := 0
+	factories := explicitTestFactories()
+	inner := factories.openCatalog
+	factories.openCatalog = func(
+		ctx context.Context,
+		store storage.KVStore,
+		settings runtimecatalog.Settings,
+		lookup runtimecatalog.DeploymentLookup,
+	) (catalogRuntime, error) {
+		opened++
+		require.True(t, settings.AcquisitionEnabled)
+		return inner(ctx, store, settings, lookup)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			cfg := validProductionConfig(t)
-			cfg.Catalog.RefreshOnStart = test.refreshOnStart
-			cfg.Catalog.WorkspacePath = test.workspacePath
-			baseRuntime, err := runtimecatalog.OpenRuntime(context.Background(), storage.NewMockStore(), "")
-			require.NoError(t, err)
-			catalog := &failingCatalogRuntime{Runtime: baseRuntime, err: refreshErr}
-			factories := explicitTestFactories()
-			factories.openCatalog = func(
-				context.Context,
-				storage.KVStore,
-				config.CatalogConfig,
-			) (catalogRuntime, error) {
-				return catalog, nil
-			}
 
-			application, err := New(cfg, withRuntimeFactories(factories))
-			require.NoError(t, err)
-			require.Equal(t, test.wantCalls, catalog.calls)
-			require.NoError(t, application.Close(context.Background()))
-		})
-	}
+	application, err := New(cfg, withRuntimeFactories(factories))
+	require.NoError(t, err)
+	require.Equal(t, 1, opened)
+	require.NoError(t, application.Close(context.Background()))
 }
 
 func TestDefaultFactoryErrorsReturnNilInterfaces(t *testing.T) {
@@ -159,24 +149,67 @@ func TestDefaultFactoryErrorsReturnNilInterfaces(t *testing.T) {
 		Mode: "badger", Badger: config.BadgerConfig{Path: storagePath, Compression: "snappy"},
 	})
 	require.Error(t, err)
-	require.Nil(t, store)
+	require.True(t, store == nil, "failed storage constructor must return a nil interface")
 }
 
-func TestDefaultCatalogFactorySelectsVerifiedRemoteRuntime(t *testing.T) {
+func TestProductionCompositionReturnsStorageOpenError(t *testing.T) {
+	for _, reason := range []string{"not a directory", "already open"} {
+		t.Run(reason, func(t *testing.T) {
+			cfg := validProductionConfig(t)
+			if reason == "not a directory" {
+				cfg.Storage.Badger.Path = filepath.Join(t.TempDir(), "occupied")
+				require.NoError(t, os.WriteFile(cfg.Storage.Badger.Path, []byte("occupied"), 0o600))
+			} else {
+				store, err := openStorage(cfg.Storage)
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, store.Close()) })
+			}
+			application, err := New(cfg)
+			require.ErrorContains(t, err, "open storage:")
+			require.Nil(t, application)
+			if reason == "not a directory" {
+				var pathError *os.PathError
+				require.ErrorAs(t, err, &pathError)
+			} else {
+				require.ErrorContains(t, err, "failed to open badger:")
+			}
+		})
+	}
+}
+
+// TestDefaultCatalogFactoryComposesOneConnectedRuntime proves the composition
+// root makes no local-or-remote choice. A source address and no source address
+// both reach the same connected runtime type.
+func TestDefaultCatalogFactoryComposesOneConnectedRuntime(t *testing.T) {
 	factories := defaultRuntimeFactories()
-	runtime, err := factories.openCatalog(
-		t.Context(),
-		storage.NewMockStore(),
-		config.CatalogConfig{
-			RemoteURL:                "http://127.0.0.1:1/api/v1",
-			RemoteActivationInterval: time.Millisecond,
-			RefreshTimeout:           time.Second,
+	tests := []struct {
+		name     string
+		settings runtimecatalog.Settings
+	}{
+		{name: "no source address", settings: testCatalogSettings(t)},
+		{
+			name: "deployment source address",
+			settings: func() runtimecatalog.Settings {
+				settings := testCatalogSettings(t)
+				settings.WorkspacePath = t.TempDir()
+				return settings
+			}(),
 		},
-	)
-	require.NoError(t, err)
-	remoteRuntime, ok := runtime.(*runtimecatalog.RemoteRuntime)
-	require.True(t, ok)
-	require.NoError(t, remoteRuntime.Close(t.Context()))
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			runtime, err := factories.openCatalog(
+				t.Context(),
+				storage.NewMockStore(),
+				test.settings,
+				func(string) (string, bool) { return "", false },
+			)
+			require.NoError(t, err)
+			connected, ok := runtime.(*runtimecatalog.Runtime)
+			require.True(t, ok)
+			require.NoError(t, connected.Close(t.Context()))
+		})
+	}
 }
 
 func TestServerConfigCredentialsFollowOriginScope(t *testing.T) {
@@ -267,7 +300,7 @@ func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
 	require.True(t, fakeHTTP.wasStopped())
 }
 
-func validProductionConfig(t *testing.T) *config.Config {
+func validProductionConfig(t testing.TB) *config.Config {
 	t.Helper()
 	credentialPath := filepath.Join(t.TempDir(), "openai-api-key")
 	require.NoError(t, os.WriteFile(credentialPath, []byte("sk-test-key"), 0o600))
@@ -306,12 +339,34 @@ func validProductionConfig(t *testing.T) *config.Config {
 			Level: "info", Format: "json", Output: "stdout",
 			MaxSize: 100, MaxBackups: 3, MaxAge: 7,
 		},
+		Catalog: testCatalogConfig(),
 		Cache:   config.CacheConfig{Enabled: false},
 		Console: config.ConsoleConfig{},
 		// The loader always resolves a path for the filesystem backend, so a
 		// production configuration always carries one.
 		Files: config.FilesConfig{Path: t.TempDir()},
 	}
+}
+
+// testCatalogConfig reads the embedded catalog, so a composition test reaches
+// no network address for its catalog source.
+func testCatalogConfig() config.CatalogConfig {
+	settings := config.DefaultCatalogConfig()
+	settings.Source = config.CatalogSourceEmbedded
+	settings.AcquisitionEnabled = false
+	return settings
+}
+
+// testCatalogSettings returns the catalog settings a test opens a runtime
+// with. The state directory is a fresh directory per test, so no test shares
+// an instance identity with another.
+func testCatalogSettings(t *testing.T) runtimecatalog.Settings {
+	t.Helper()
+	deployment := &config.Config{Catalog: testCatalogConfig()}
+	deployment.Server.Host = "127.0.0.1"
+	deployment.Server.Port = 8080
+	deployment.Catalog.StateDirectory = filepath.Join(t.TempDir(), "catalog-state")
+	return catalogSettings(deployment)
 }
 
 func explicitTestFactories() runtimeFactories {
@@ -338,20 +393,6 @@ func testAPIKey() apikey.APIKey {
 		Scopes: []string{"*"}, Active: true, CreatedAt: time.Now().UTC(),
 		Metadata: map[string]any{"source": "test"},
 	}
-}
-
-type failingCatalogRuntime struct {
-	*runtimecatalog.Runtime
-	err   error
-	calls int
-}
-
-func (runtime *failingCatalogRuntime) RefreshCandidate(
-	context.Context,
-	time.Duration,
-) (starmap.CatalogState, error) {
-	runtime.calls++
-	return starmap.CatalogState{}, runtime.err
 }
 
 type blockingHTTPRuntime struct {

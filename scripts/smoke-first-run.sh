@@ -30,6 +30,7 @@ done
 binary="$smoke_root/starport"
 config_directory="$smoke_root/config"
 development_config_directory="$smoke_root/development-config"
+state_root="$smoke_root/state"
 development_log="$smoke_root/development.log"
 server_log="$smoke_root/server.log"
 setup_log="$smoke_root/setup.log"
@@ -92,10 +93,14 @@ kill -INT "$server_pid"
 wait "$server_pid"
 server_pid=""
 
+# A serving gateway keeps its catalog state under the user state root, and
+# this environment has no home directory. The state root points into the
+# smoke root, so the run stays isolated and leaves nothing behind.
 starport_environment=(
 	env -i
 	"PATH=${PATH:-/usr/bin:/bin}"
 	"STARPORT_CONFIG_DIR=$config_directory"
+	"XDG_STATE_HOME=$state_root"
 	"OPENAI_API_KEY=first-run-provider-key"
 	"STARPORT_SERVER_PORT=$server_port"
 )

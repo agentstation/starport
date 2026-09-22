@@ -158,8 +158,10 @@ type Page struct {
 
 // Totals are the aggregate counters for one scope and window.
 type Totals struct {
-	Requests     int64
-	Tokens       int64
+	Requests int64
+	Tokens   int64
+	// SpendNanoUSD includes known extraction charges even if the total is unknown.
+	// It is a known subtotal, not proof that every provider charge settled.
 	SpendNanoUSD int64
 }
 
@@ -218,10 +220,7 @@ func (r *repository) Put(ctx context.Context, record Record) error {
 }
 
 func (r *repository) accumulate(ctx context.Context, record Record) error {
-	var spend int64
-	if record.Cost != nil {
-		spend = record.Cost.NanoUSD
-	}
+	spend := record.knownSpendNanoUSD()
 	counters := []struct {
 		name  string
 		delta int64

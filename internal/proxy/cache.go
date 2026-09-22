@@ -10,7 +10,9 @@ import (
 	"sync"
 	"time"
 
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/catalog/view"
+	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -115,6 +117,9 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 		}
 		resp.CacheStatus = CacheStatusHit
 		resp.CacheAge = cacheAge(cachedAt)
+		if refusal := cachePermissionFailure(runtime); refusal != nil {
+			return nil, refusal
+		}
 		return resp, nil
 	}
 
@@ -133,6 +138,9 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 				resp.CacheStatus = CacheStatusHit
 				resp.CacheAge = cacheAge(cachedAt)
 				resp.CacheSimilarity = similarity
+				if refusal := cachePermissionFailure(runtime); refusal != nil {
+					return nil, refusal
+				}
 				return resp, nil
 			}
 		}
@@ -239,7 +247,10 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 		if err != nil {
 			return finish(s.service.ProcessChatCompletionStream(ctx, req))
 		}
-		return finish(newCachedEventStream(events, cachedAt), nil)
+		if refusal := cachePermissionFailure(runtime); refusal != nil {
+			return finish(nil, refusal)
+		}
+		return finish(newCachedEventStream(events, cachedAt, runtime), nil)
 	}
 
 	log.Info().
@@ -254,7 +265,10 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 		if cached, cachedAt, similarity, ok := probe.lookup(ctx, repository); ok {
 			events, err := responsecache.StreamEvents(cached, canonicalRequest.StreamOptions)
 			if err == nil {
-				replay := newCachedEventStream(events, cachedAt)
+				if refusal := cachePermissionFailure(runtime); refusal != nil {
+					return finish(nil, refusal)
+				}
+				replay := newCachedEventStream(events, cachedAt, runtime)
 				replay.similarity = similarity
 				return finish(replay, nil)
 			}
@@ -314,6 +328,9 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 		resp := embeddingResponseFromCanonical(cachedResp)
 		resp.CacheStatus = CacheStatusHit
 		resp.CacheAge = cacheAge(cachedAt)
+		if refusal := cachePermissionFailure(runtime); refusal != nil {
+			return nil, refusal
+		}
 		return resp, nil
 	}
 
@@ -734,25 +751,47 @@ func cacheAge(cachedAt time.Time) int {
 	return int(age / time.Second)
 }
 
+func cachePermissionFailure(runtime connectors.RuntimeLease) *failure.Failure {
+	if runtime == nil {
+		return nil
+	}
+	return runtime.Snapshot().CheckNewAttempt()
+}
+
 // cachedEventStream replays canonical events from one completed result.
 type cachedEventStream struct {
-	events   []inference.StreamEvent
-	position int
-	cachedAt time.Time
+	snapshot          *runtimecatalog.RoutableSnapshot
+	permissionFailure *failure.Failure
+	events            []inference.StreamEvent
+	position          int
+	cachedAt          time.Time
 	// similarity is nonzero only when a semantic match answered the
 	// replay, and the X-Cache-Similarity header reports it.
 	similarity float64
 }
 
-func newCachedEventStream(events []inference.StreamEvent, cachedAt time.Time) *cachedEventStream {
+func newCachedEventStream(events []inference.StreamEvent, cachedAt time.Time, runtime connectors.RuntimeLease) *cachedEventStream {
 	clones := make([]inference.StreamEvent, len(events))
 	for index, event := range events {
 		clones[index] = event.Clone()
 	}
-	return &cachedEventStream{events: clones, cachedAt: cachedAt}
+	var snapshot *runtimecatalog.RoutableSnapshot
+	if runtime != nil {
+		snapshot = runtime.Snapshot()
+	}
+	return &cachedEventStream{events: clones, cachedAt: cachedAt, snapshot: snapshot}
 }
 
 func (s *cachedEventStream) Read() (*inference.StreamEvent, error) {
+	if s.permissionFailure != nil {
+		return nil, s.permissionFailure
+	}
+	if s.position == 0 && s.snapshot != nil {
+		s.permissionFailure = s.snapshot.CheckNewAttempt()
+		if s.permissionFailure != nil {
+			return nil, s.permissionFailure
+		}
+	}
 	if s.position >= len(s.events) {
 		return nil, io.EOF
 	}

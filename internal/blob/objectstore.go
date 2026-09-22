@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+
 	//nolint:staticcheck // The replacement, feature/s3/transfermanager, is a
 	// pre-1.0 module. This package holds durable bytes, so it waits for a
 	// stable API rather than tracking one that may still change.

@@ -10,9 +10,13 @@ import { cn } from "@/lib/utils";
 export function CopyButton({
   text,
   label,
+  className,
 }: {
   text: string | (() => string);
   label?: string;
+  // className lets a caller size or align the chip inside its own row, for
+  // example a label column that is the copy control of the row.
+  className?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -43,6 +47,7 @@ export function CopyButton({
             className={cn(
               "flex h-7 shrink-0 items-center gap-1.5 rounded-xs px-1.5 text-xs transition-colors duration-150 ease-standard hover:bg-bg-hover",
               copied ? "text-success" : "text-text-3 hover:text-text-2",
+              className,
             )}
           />
         }

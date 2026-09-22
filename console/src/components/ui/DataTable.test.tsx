@@ -140,6 +140,51 @@ describe("DataTable", () => {
   });
 });
 
+describe("DataTable priority columns", () => {
+  const priorityColumns = helper.columns([
+    helper.accessor("name", { id: "name", header: "Name" }),
+    helper.accessor("size", { id: "size", header: "Size", meta: { minTableWidth: 800 } }),
+    helper.display({ id: "note", header: "Note", cell: () => "n" }),
+  ]);
+
+  function stubWidth(width: number) {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width,
+      height: 0,
+      top: 0,
+      left: 0,
+      right: width,
+      bottom: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("hides a column whose minTableWidth the table does not reach", () => {
+    stubWidth(600);
+    render(<DataTable columns={priorityColumns} data={items(2)} getRowId={(row) => row.id} />);
+    expect(screen.queryByRole("columnheader", { name: /size/i })).toBeNull();
+    expect(screen.getByRole("columnheader", { name: /name/i })).toBeTruthy();
+    const cells = screen.getAllByRole("row")[1]?.querySelectorAll('[role="cell"]');
+    expect(cells?.length).toBe(2);
+  });
+
+  it("shows every column when the table is wide enough or unmeasured", () => {
+    stubWidth(900);
+    render(<DataTable columns={priorityColumns} data={items(2)} getRowId={(row) => row.id} />);
+    expect(screen.getByRole("columnheader", { name: /size/i })).toBeTruthy();
+    cleanup();
+    stubWidth(0);
+    render(<DataTable columns={priorityColumns} data={items(2)} getRowId={(row) => row.id} />);
+    expect(screen.getByRole("columnheader", { name: /size/i })).toBeTruthy();
+  });
+});
+
 describe("DataTableFooter", () => {
   it("states the loaded count, the bound, and the way to the rest", () => {
     const more = vi.fn();

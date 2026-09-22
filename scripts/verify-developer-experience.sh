@@ -102,7 +102,7 @@ else
   pass DX-DEV-5
 fi
 require_text DX-DEV-6 '127\.0\.0\.1:\$\{STARPORT_VALKEY_PORT:-6379\}:6379' docker-compose.integration.yml
-require_text DX-DOC-1 'brew install agentstation/tap/starport' README.md
+require_text DX-DOC-1 'brew install --cask agentstation/tap/starport' README.md
 forbid_text DX-DOC-2 'Coming Soon' "$root/docs/README.md"
 require_file DX-DOC-3 scripts/smoke-first-run.sh
 if "$root/scripts/verify-readme-quickstart.sh" >/dev/null; then

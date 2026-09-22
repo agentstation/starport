@@ -103,6 +103,45 @@ func TestDevRemovesItsScratchFileStorageOnClose(t *testing.T) {
 	require.NoDirExists(t, scratch)
 }
 
+// TestDevKeepsCatalogStateInScratch proves the catalog state the connected
+// runtime retains lives in the session scratch directory and goes with it on
+// close. The development contract clears the default, so the runtime never
+// writes a layer, an identity seed, or a discovery record to the user state
+// root.
+func TestDevKeepsCatalogStateInScratch(t *testing.T) {
+	cfg := validProductionConfig(t)
+	cfg.Providers = config.ProvidersConfig{}
+	require.Empty(t, cfg.Catalog.StateDirectory)
+
+	runtime, err := NewDevelopment(t.Context(), cfg)
+	require.NoError(t, err)
+	stateDirectory := cfg.Catalog.StateDirectory
+	require.NotEmpty(t, stateDirectory)
+	require.DirExists(t, stateDirectory)
+	require.Equal(t, filepath.Dir(cfg.Files.Path), filepath.Dir(stateDirectory))
+
+	require.NoError(t, runtime.Close(context.Background()))
+	require.NoDirExists(t, stateDirectory)
+}
+
+// TestDevKeepsAnOperatorCatalogStateDirectory proves an operator value is
+// never scratch: the session opens the runtime there and leaves the directory
+// in place on close.
+func TestDevKeepsAnOperatorCatalogStateDirectory(t *testing.T) {
+	cfg := validProductionConfig(t)
+	cfg.Providers = config.ProvidersConfig{}
+	stateDirectory := filepath.Join(t.TempDir(), "operator-state")
+	cfg.Catalog.StateDirectory = stateDirectory
+
+	runtime, err := NewDevelopment(t.Context(), cfg)
+	require.NoError(t, err)
+	require.Equal(t, stateDirectory, cfg.Catalog.StateDirectory)
+	require.DirExists(t, stateDirectory)
+
+	require.NoError(t, runtime.Close(context.Background()))
+	require.DirExists(t, stateDirectory)
+}
+
 func TestDevBindsLoopbackOnly(t *testing.T) {
 	cfg := validProductionConfig(t)
 	cfg.Server.Host = "0.0.0.0"

@@ -224,6 +224,19 @@ export function shortGenerationID(id: string | undefined): string {
   return id.length > 22 ? `${id.slice(0, 20)}…` : id;
 }
 
+// formatAge writes one age in the shortest unit that keeps it readable. The
+// catalog chip has room for a few characters only, so an age reads as "40s",
+// "2h", or "3d" and never as a sentence. A negative or missing value reads as
+// the dash, because an age the gateway did not report is not a zero age.
+export function formatAge(seconds: number | undefined | null): string {
+  if (seconds === undefined || seconds === null || !Number.isFinite(seconds)) return DASH;
+  if (seconds < 0) return DASH;
+  if (seconds < 60) return `${Math.floor(seconds)}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86_400)}d`;
+}
+
 // providerLabel is the one place provider display names resolve. The
 // catalog name wins; the raw provider id is the fallback so unknown or
 // unfetched ids still render. Never case-transform the id: casing is

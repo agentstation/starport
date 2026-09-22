@@ -17,6 +17,21 @@ and out-finish).
 
 ## Laws
 
+### Static documentation
+
+The documentation route works without console authentication or deployment queries.
+It uses a separate page layout with an explicit link to the protected console.
+Audience selection belongs in the URL. Section headings have stable fragment links.
+
+Documentation body text uses `1rem` with a 1.625 line height.
+The reading column stops at `68ch` or 720 px, with at least `1rem` side gutters.
+Titles use `1.875rem`, section headings use `1.375rem`, and code uses `0.875rem`.
+Code blocks scroll inside the page and accept keyboard focus.
+Copy controls and audience tabs have a minimum height of `2.75rem`.
+Settings instructions use readable text roles even when a field cannot change.
+
+### Console laws
+
 These seven laws resolve every ambiguous decision:
 
 1. **One accent, four jobs.** The beacon amber appears only as: primary CTA,
@@ -157,11 +172,26 @@ report lifecycle.**
 - Sidebar footer: gateway status dot + version, theme toggle, GitHub link.
 - Content region: max-width 1280px, 32px gutters, left-aligned within the
   remaining space.
-- Below 640px the sidebar becomes a left sheet behind a 48px top bar (menu
-  trigger, wordmark, search). The content region drops to 16px gutters. The
-  collapse state belongs to the desktop layout and never applies in the
-  sheet. Two-column grids declare `grid-cols-1` below their breakpoint, so an
-  implicit `auto` track never widens the page past the viewport.
+- Three shell tiers, decided by viewport width. Test at 390, 768, 1024, and
+  1280, plus 767 and 1023 as edge checks.
+  - **Wide** (1024px and up): the 240px sidebar with the persisted collapse
+    preference.
+  - **Compact** (768–1023px): the 64px icon rail. "Expand" opens the full
+    sidebar as an overlay. The overlay closes on navigation, Escape, or a
+    click on the backdrop. The collapse preference does not apply.
+  - **Phone** (below 768px): the sidebar becomes a left sheet behind a 48px
+    top bar (menu trigger, wordmark, catalog chip, search). The content
+    region drops to 16px gutters.
+- The catalog chip and the page's primary action sit on the title line. On
+  the phone tier they move into the top bar.
+- Page grids use container queries against the content column
+  (`@2xl:`, `@3xl:`, `@4xl:`, `@5xl:`), never viewport prefixes. The sidebar
+  takes 64 to 240px of the viewport, and a viewport breakpoint cannot know
+  which. Two-column grids declare `grid-cols-1` below their threshold, so an
+  implicit `auto` track never widens the page past the column.
+- Dense tables declare priority columns. A column carries the table width
+  it needs. A narrower table drops the column instead of clipping it behind
+  a scrollbar.
 
 ### Page header
 

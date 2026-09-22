@@ -63,7 +63,7 @@ function ModelRow({
           {model.id}
         </span>
         {model.name && model.name !== model.id && (
-          <span className="hidden min-w-0 truncate text-xs text-text-4 lg:inline">
+          <span className="hidden min-w-0 truncate text-xs text-text-4 @4xl:inline">
             {model.name}
           </span>
         )}

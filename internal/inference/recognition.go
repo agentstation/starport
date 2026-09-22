@@ -52,12 +52,17 @@ type RecognitionResponse struct {
 	Model string
 	// Pages holds one entry per page the provider read, in page order.
 	Pages []RecognizedPage
-	Usage Usage
+	// Usage is nil when the provider supplied no measurement.
+	Usage *Usage
 }
 
 // Clone returns an independent recognition response copy.
 func (r RecognitionResponse) Clone() RecognitionResponse {
 	clone := r
+	if r.Usage != nil {
+		usage := *r.Usage
+		clone.Usage = &usage
+	}
 	clone.Pages = append([]RecognizedPage(nil), r.Pages...)
 	return clone
 }

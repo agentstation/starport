@@ -1,6 +1,8 @@
 package config
 
 import (
+	"strings"
+
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -58,8 +60,9 @@ func (c *Config) ConfigureDevelopmentRuntime() {
 	}
 	c.Server.Host = "127.0.0.1"
 	c.Server.EnableProfiling = false
-	c.Catalog.RefreshOnStart = false
-	c.Catalog.RefreshInterval = 0
+	// Catalog acquisition stays on. A development gateway that reads no
+	// catalog routes nothing, and an operator who wants a quiet gateway
+	// sets STARPORT_CATALOG_ACQUISITION_ENABLED=false.
 	c.Storage = StorageConfig{
 		Mode: storageModeBadger,
 		Badger: BadgerConfig{
@@ -75,6 +78,12 @@ func (c *Config) ConfigureDevelopmentRuntime() {
 	// and the console paste path in agreement with a development gateway;
 	// the read-only mark keeps a machine that holds none exactly as it was.
 	c.Security.localTokenReadOnly = true
+	// The default catalog state directory is session scratch. The development
+	// composition creates it and removes it on close. The runtime then retains
+	// no layer, no identity seed, and no discovery record on the machine. An
+	// operator value stays. An operator who names a directory asks the
+	// session to retain its catalog state there.
+	c.Catalog.stateDirectoryScratch = strings.TrimSpace(c.Catalog.StateDirectory) == ""
 	c.Security.MasterKey = ""
 	c.Security.EnableTLS = false
 	c.Security.TLSCertPath = ""

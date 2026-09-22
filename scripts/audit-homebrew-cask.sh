@@ -20,11 +20,17 @@ fi
 
 cask="$(cd "$(dirname "$cask")" && pwd)/$(basename "$cask")"
 brew tap-new --no-git "$tap" >/dev/null
-trap 'brew untap "$tap" >/dev/null' EXIT
-
 tap_root="$(brew --repository "$tap")"
+cleanup() {
+	# Remove only the audit copy before Homebrew checks for installed casks.
+	rm -f "$tap_root/Casks/starport.rb"
+	brew untap "$tap" >/dev/null
+	brew untrust --cask "$tap/starport" >/dev/null
+}
+trap cleanup EXIT
 mkdir -p "$tap_root/Casks"
 install -m 0644 "$cask" "$tap_root/Casks/starport.rb"
+brew trust --cask "$tap/starport" >/dev/null
 brew audit --cask --strict "$tap/starport"
 
 printf 'PASS Homebrew strict cask audit\n'

@@ -12,7 +12,6 @@ import { DOCUMENT_ACTIVITY_LIMIT, queries } from "@/lib/queries";
 import {
   formatMs,
   formatNanoUSD,
-  formatPricePerK,
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -20,11 +19,14 @@ import { DataTableFooter } from "@/components/ui/DataTable";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "@/components/ui/RelativeTime";
 
-// Reading a document is the one provider call this gateway makes that the
-// request never named. It runs before the model the caller asked for, it bills
-// by the page rather than by the token, and the request cost alone reports the
-// two together. An operator watching spend rise has no other place to learn
-// that documents caused it.
+// Recognition charges use the provider's declared page or token units.
+
+function perThousand(value: string | undefined): string | null {
+  if (value === undefined || value.trim() === "") return null;
+  const amount = Number(value) * 1000;
+  return Number.isFinite(amount) && amount >= 0
+    ? amount.toLocaleString("en-US", { maximumFractionDigits: 9 }) : null;
+}
 
 // extractions keeps the turns that attached a document. The engine name is the
 // marker: the gateway writes it only when it read something, so a record
@@ -58,14 +60,15 @@ function readingOf(record: ActivityRecord): pageReading {
   };
 }
 
-// recognitionOfferings lists what this deployment can pay to read a document
-// with, and what each one charges for a page. The list comes from the catalog,
-// so a deployment whose providers serve no recognition says so rather than
-// naming a model no request could reach.
+// Recognition offerings report actual billing units and optional input estimates.
 type recognitionOffering = {
   model: string;
   provider: string;
   providerModelID: string;
+  basis?: string;
+  prompt?: string;
+  completion?: string;
+  estimate?: { tokens: number; source: string; assumptions: string };
   pagePrice?: string;
   currency?: string;
 };
@@ -79,6 +82,10 @@ function recognitionOfferings(models: Model[]): recognitionOffering[] {
         model: model.id,
         provider: offering.provider,
         providerModelID: offering.provider_model_id,
+        basis: offering.billing?.recognition?.basis,
+        prompt: offering.pricing?.prompt,
+        completion: offering.pricing?.completion,
+        estimate: offering.billing?.recognition?.input_page_estimate,
         pagePrice: offering.pricing?.page_input,
         currency: offering.pricing?.currency,
       });
@@ -108,10 +115,10 @@ function CostCell({ record }: { record: ActivityRecord }) {
       </span>
     );
   }
-  if (record.recognized_pages) {
+  if (record.recognized_pages || record.extractions?.length) {
     return (
       <span className="text-warning">
-        unpriced — {record.cost_unavailable_reason ?? "unknown"}
+        unpriced — {record.extractions?.find((entry) => !entry.cost)?.cost_unavailable_reason ?? record.cost_unavailable_reason ?? "unknown"}
       </span>
     );
   }
@@ -199,7 +206,7 @@ function RecognitionPrices({ offerings }: { offerings: recognitionOffering[] }) 
             <th scope="col" className="px-4 py-2.5">Model</th>
             <th scope="col" className="px-4 py-2.5">Provider</th>
             <th scope="col" className="px-4 py-2.5">Provider model</th>
-            <th scope="col" className="px-4 py-2.5 text-right">Per 1K pages</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Billing</th>
           </tr>
         </thead>
         <tbody>
@@ -217,10 +224,22 @@ function RecognitionPrices({ offerings }: { offerings: recognitionOffering[] }) 
                 {offering.providerModelID}
               </td>
               <td className="px-4 py-2.5 text-right font-mono tabular-nums text-xs text-text-2">
-                {formatPricePerK(offering.pagePrice) !== null ? (
-                  `${formatPricePerK(offering.pagePrice)} ${offering.currency ?? "USD"}`
+                {offering.basis === "pages" && perThousand(offering.pagePrice) !== null ? (
+                  `${perThousand(offering.pagePrice)} ${offering.currency ?? "unknown currency"} / 1K pages`
+                ) : offering.basis === "tokens" ? (
+                  <>
+                    <div>Token billing · {offering.currency ?? "unknown currency"}</div>
+                    <div>Input: {perThousand(offering.prompt) ?? "unknown"} / 1K tokens</div>
+                    <div>Output: {perThousand(offering.completion) ?? "unknown"} / 1K tokens</div>
+                    {offering.estimate && (
+                      <div className="font-sans text-text-3">
+                        Input estimate: {offering.estimate.tokens} tokens / page; excludes output.
+                        {" "}{offering.estimate.assumptions} Source: {offering.estimate.source}
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <span className="text-warning">unpriced</span>
+                  <span className="text-warning">unpriced — billing basis or rate unknown</span>
                 )}
               </td>
             </tr>
@@ -291,12 +310,12 @@ export function DocumentsPanel() {
       </section>
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium text-text-2">
-          What a page costs here
+          Recognition billing
         </h2>
         <p className="text-sm text-text-3">
-          The engine that runs inside this gateway charges nothing. A page sent
-          to one of these models is billed by the page, and the catalog
-          publishes the price.
+          The local engine has no provider charge. Provider recognition uses the
+          catalog’s declared page or token billing units. Input estimates exclude
+          output and never determine the billed amount.
         </p>
         <RecognitionPrices offerings={recognitionOfferings(models.data ?? [])} />
       </section>

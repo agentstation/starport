@@ -47,6 +47,9 @@ func (r *modelRouter) planOperation(
 	if snapshot == nil {
 		return nil, ErrNoModelsAvailable
 	}
+	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+		return nil, refusal
+	}
 	request.Operation = operation
 	request.Models, request.AllowAnyModelFallback = splitAutoModel(request.Models)
 	request.AllowModelFallbacks = len(request.Models) > 1

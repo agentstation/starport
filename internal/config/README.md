@@ -11,6 +11,11 @@ Starport resolves each value in this order:
 2. The first environment file that defines the value.
 3. A built-in default.
 
+Permission clock settings also accept the canonical `STARMAP_CATALOG_PERMISSION_CLOCK_` names.
+The loader resolves each alias within its source, after the corresponding `STARPORT_` name.
+Thus, a process environment alias precedes a file value. An explicit empty value never selects an alias.
+Starmap owns the clock schema, parsing, and bound validation. Loading starts no native observation.
+
 The standard loader reads one platform file named `config.env`. It uses these
 locations:
 

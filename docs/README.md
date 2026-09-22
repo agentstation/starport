@@ -6,7 +6,10 @@ Use this index to find current product, operator, and developer information.
 
 - [README](../README.md): install, initialize, and send a first request.
 - [Operator guide](OPERATOR-GUIDE.md): configure storage, provider credentials,
-  direct secret sources, remote catalogs, clients, diagnosis, and shutdown.
+  direct secret sources, the catalog settings, clients, diagnosis, and
+  shutdown.
+- [Deployment topologies](DEPLOYMENT-TOPOLOGIES.md): select a catalog source
+  kind, a request budget, and a freshness age.
 - [Configuration reference](../.env.example): list all supported environment
   fields and secure defaults.
 - [Vertex AI configuration](VERTEX_AI_CONFIG.md): configure static or renewable
@@ -26,8 +29,8 @@ Use this index to find current product, operator, and developer information.
 - [Architecture control-plane history](ARCHITECTURE_CONTROL_PLANE.md): inspect
   the completed architecture-hardening record.
 - [Task status](TASKS.md): inspect current repository work. A durable plan
-  lives under `docs/plans/` while its campaign runs, and is deleted when the
-  campaign closes.
+  lives under `docs/plans/` while its campaign runs. The close of the campaign
+  deletes that plan.
 
 Starport has no legacy provider aliases or storage compatibility readers.
 Starmap owns provider and model facts. Starport owns inference and gateway

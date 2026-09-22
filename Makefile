@@ -1,3 +1,5 @@
+export GOTOOLCHAIN := go1.27.1
+
 # Starport Makefile
 MAKEFLAGS += --no-print-directory
 
@@ -19,7 +21,7 @@ GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknow
 GO_VERSION = $(shell go version | awk '{print $$3}')
 GORELEASER_VERSION=2.17.1
 SYFT_VERSION=1.51.0
-GOLANGCI_LINT_VERSION=v2.12.2
+GOLANGCI_LINT_VERSION=v2.13.2
 AIR_VERSION=v1.67.4
 GOIMPORTS_VERSION=v0.48.0
 VALKEY_INTEGRATION_PORT ?= 16379
@@ -70,12 +72,8 @@ build: console-build ## Build the binary
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
 .PHONY: console-build
-console-build: ## Build the embedded SPA console when pnpm is available
-	@if command -v pnpm >/dev/null 2>&1; then \
-		pnpm -C console install --frozen-lockfile && pnpm -C console build; \
-	else \
-		echo "pnpm not found; skipping console build (the binary serves a console-not-built notice)"; \
-	fi
+console-build: ## Build the embedded SPA console
+	bash scripts/build-console.sh
 
 .PHONY: build-race
 build-race: ## Build with race detector enabled
@@ -84,7 +82,7 @@ build-race: ## Build with race detector enabled
 	@echo "Build complete with race detector"
 
 .PHONY: release
-release: ## Build optimized production binary
+release: console-build ## Build optimized production binary
 	@echo "Building release version..."
 	$(GO) build -trimpath -ldflags "-s -w \
 		-X main.version=$(VERSION) \

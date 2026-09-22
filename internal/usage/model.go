@@ -60,6 +60,8 @@ const (
 	CostReasonNoRoute = "no_route"
 	// CostReasonNoUsage means the provider returned no token counts.
 	CostReasonNoUsage = "no_usage"
+	// CostReasonInvalidUsage reports inconsistent provider usage dimensions.
+	CostReasonInvalidUsage = "invalid_usage"
 	// CostReasonMediaUnpriced means the turn carried a media unit the
 	// offering does not price. The token half of such a turn does have a
 	// price, so a cost is computable; it would omit the media half, which is
@@ -182,9 +184,8 @@ type Record struct {
 	// read them or the cache answered for them.
 	DocumentPages int64 `json:"document_pages,omitempty"`
 	// RecognizedPages is how many of those pages this turn sent to a
-	// recognition model. It is what ExtractionCost is charged for, and it is
-	// zero on a cached read: the pages were recognized once, on an earlier turn
-	// that paid for them.
+	// recognition model. It reports document size independently of billing units.
+	// A cache hit adds no recognized pages.
 	RecognizedPages int64 `json:"recognized_pages,omitempty"`
 	// NativePages is how many pages this turn read in process. They cost
 	// nothing: no provider saw them.
@@ -202,6 +203,8 @@ type Record struct {
 	// so an operator can see what reading a document cost apart from what
 	// answering about it cost. It is nil when the turn recognized nothing.
 	ExtractionCost *Cost `json:"extraction_cost,omitempty"`
+	// Extractions retain each recognition measurement and its selected offering.
+	Extractions []Extraction `json:"extractions,omitempty"`
 
 	// GuardrailVerdict is the strongest guardrail verdict of the turn:
 	// `allow`, `redact`, or `refuse`. It is empty on a turn no guardrail

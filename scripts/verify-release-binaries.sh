@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 distribution_directory="${1:-dist}"
 metadata_file="$distribution_directory/metadata.json"
 # This value is unset unless an approved release policy supplies a hard budget.
@@ -41,6 +42,11 @@ while IFS= read -r binary; do
 	build_info="$(go version -m "$binary" 2>/dev/null || true)"
 	if [[ "$build_info" != *$'\tpath\tgithub.com/agentstation/starport/cmd/starport'* ]]; then
 		continue
+	fi
+
+	if [[ "${build_info%%$'\n'*}" != *": go1.27.1" ]]; then
+		printf 'release binary does not use Go 1.27.1: %s\n' "$binary" >&2
+		exit 1
 	fi
 
 	if ! grep -Eq $'^[[:space:]]*build[[:space:]]+CGO_ENABLED=0$' <<<"$build_info"; then
@@ -115,6 +121,7 @@ while IFS= read -r binary; do
 				"$version_output" "starport version $expected_version" >&2
 			exit 1
 		fi
+		python3 "$repository_root/scripts/verify-console-binary.py" "$binary"
 		native_verified=$((native_verified + 1))
 	fi
 

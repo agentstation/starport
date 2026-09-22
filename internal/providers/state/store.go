@@ -272,12 +272,12 @@ func newWithClock(source clock) *Store {
 		source = systemClock{}
 	}
 	return &Store{
-		clock:            source,
-		adapters:         make(map[catalogs.ProviderID]AdapterStatus),
-		credentials:      make(map[catalogs.ProviderID]credentialEntry),
-		catalogOfferings: make(map[availability.Offering]OfferingStatus),
-		offerings:        make(map[availability.Offering]OfferingStatus),
-		routing:          make(map[availability.Offering]RoutingStatus),
+		clock:              source,
+		adapters:           make(map[catalogs.ProviderID]AdapterStatus),
+		credentials:        make(map[catalogs.ProviderID]credentialEntry),
+		catalogOfferings:   make(map[availability.Offering]OfferingStatus),
+		offerings:          make(map[availability.Offering]OfferingStatus),
+		routing:            make(map[availability.Offering]RoutingStatus),
 		incidents:          make(map[catalogs.ProviderID]IncidentStatus),
 		observedIndicators: make(map[catalogs.ProviderID]string),
 	}

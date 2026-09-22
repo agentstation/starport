@@ -21,6 +21,19 @@ const MINUTE = 60_000;
 const CATALOG_STALE = 5 * MINUTE;
 const RUNTIME_STALE = MINUTE;
 
+// SUMMARY_INTERVAL is the cadence the shell reads the catalog summary at while
+// a reader looks at the console. One minute is short enough that an activation
+// shows soon and long enough that an idle console stays quiet.
+export const SUMMARY_INTERVAL = MINUTE;
+
+// STATUS_INTERVAL is the cadence the operator status reads at while the panel
+// is open. A closed panel reads nothing.
+export const STATUS_INTERVAL = 30_000;
+
+// OPERATION_INTERVAL is the cadence the operator status reads at while a
+// refresh run is open. A run ends in seconds, so the panel follows it closely.
+export const OPERATION_INTERVAL = 2_000;
+
 // ActivityScope is what the usage page learned about its credential from one
 // probe: the admin listing answered, the admin listing refused it, or no
 // activity store is configured. A refused own listing surfaces as the error
@@ -98,11 +111,24 @@ export const queries = {
       queryFn: ({ signal }) => api.listProviderCatalog({ signal }),
       staleTime: CATALOG_STALE,
     }),
-  catalogMetadata: () =>
+  // The shell owns the one catalog summary the whole console reads, so the
+  // session identity sits in the key. A read the gateway refused must not
+  // repeat until the session behind it changes, and a new key is a new record
+  // rather than a refetch of the refused one.
+  catalogSummary: (session: string) =>
     queryOptions({
-      queryKey: ["catalog-metadata"],
-      queryFn: ({ signal }) => api.catalogMetadata({ signal }),
-      staleTime: CATALOG_STALE,
+      queryKey: ["catalog-summary", session],
+      queryFn: ({ signal }) => api.catalogSummary({ signal }),
+      staleTime: SUMMARY_INTERVAL,
+    }),
+  // The generation sits in the status key beside the session, so an activation
+  // the summary reports draws exactly one new status request. The cadence
+  // itself belongs to the panel, which knows whether a reader is looking.
+  catalogStatus: (session: string, generation: string) =>
+    queryOptions({
+      queryKey: ["catalog-status", session, generation],
+      queryFn: ({ signal }) => api.catalogStatus({ signal }),
+      staleTime: RUNTIME_STALE,
     }),
   catalogChanges: () =>
     queryOptions({

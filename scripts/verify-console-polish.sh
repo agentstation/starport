@@ -222,7 +222,7 @@ check CPL-V27 "the seven plain tables carry column scopes" \
   $C/components/documents/DocumentsPanel.tsx \
   $C/components/files/FilesPanel.tsx \
   $C/components/jobs/JobsPanel.tsx \
-  $C/components/models/ChangesPanel.tsx \
+  $C/components/shell/CatalogChanges.tsx \
   $C/routes/accounts.tsx \
   $C/routes/teams.tsx
 

@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	catalogCurrentGenerationKey = "catalog_generation:v1:current"
-	remoteCurrentGenerationKey  = "catalog_remote_generation:v1:current"
-	catalogGenerationKeyPrefix  = "catalog_generation:v1:generation:"
-	catalogGenerationResource   = "catalog generation"
+	catalogCurrentGenerationKey   = "catalog_generation:v1:current"
+	candidateCurrentGenerationKey = "catalog_candidate_generation:v1:current"
+	catalogGenerationKeyPrefix    = "catalog_generation:v1:generation:"
+	catalogGenerationResource     = "catalog generation"
 )
 
 // GenerationStore adapts Starport's configured KV store to Starmap's durable
@@ -27,8 +27,8 @@ type GenerationStore struct {
 	store      storage.KVStore
 	currentKey string
 	// indexKey selects the ordered acceptance-history record. Only the
-	// accepted runtime store keeps history; the remote head store leaves it
-	// empty and records none.
+	// accepted runtime store keeps history; the candidate head store leaves
+	// it empty and records none.
 	indexKey string
 }
 
@@ -37,11 +37,12 @@ func NewGenerationStore(store storage.KVStore) (*GenerationStore, error) {
 	return newGenerationStore(store, catalogCurrentGenerationKey, catalogGenerationIndexKey)
 }
 
-// newRemoteGenerationStore creates the verified remote-head store. It shares
+// newCandidateGenerationStore creates the candidate head store. It shares
 // immutable generation records with the accepted runtime store but owns a
-// separate current pointer.
-func newRemoteGenerationStore(store storage.KVStore) (*GenerationStore, error) {
-	return newGenerationStore(store, remoteCurrentGenerationKey, "")
+// separate current pointer, so the head Starmap publishes and the head
+// Starport accepted stay independent.
+func newCandidateGenerationStore(store storage.KVStore) (*GenerationStore, error) {
+	return newGenerationStore(store, candidateCurrentGenerationKey, "")
 }
 
 func newGenerationStore(store storage.KVStore, currentKey, indexKey string) (*GenerationStore, error) {

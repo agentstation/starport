@@ -445,7 +445,7 @@ export function CompareView({
           {compare.prompt}
         </div>
         <div
-          className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:[grid-template-columns:repeat(var(--compare-cols),minmax(0,1fr))]"
+          className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:[grid-template-columns:repeat(var(--compare-cols),minmax(0,1fr))]"
           style={{ "--compare-cols": String(compare.columns.length) } as React.CSSProperties}
         >
           {compare.columns.map((column, index) => (

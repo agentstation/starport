@@ -21,7 +21,7 @@ cp "$repository_root/scripts/testdata/starport-cask.rb.tmpl" "$valid"
 
 "$repository_root/scripts/verify-homebrew-cask.sh" "$valid" >/dev/null
 
-sed 's|#{staged_path}/starport|#{staged_path}|' "$valid" > "$broad"
+sed 's|{{staged_path}}/starport|{{staged_path}}|' "$valid" > "$broad"
 if "$repository_root/scripts/verify-homebrew-cask.sh" "$broad" >/dev/null 2>&1; then
 	printf 'Homebrew cask verifier accepted a broad staged path\n' >&2
 	exit 1
@@ -33,9 +33,16 @@ if "$repository_root/scripts/verify-homebrew-cask.sh" "$sudo" >/dev/null 2>&1; t
 	exit 1
 fi
 
-sed 's/if OS\.mac? && /if /' "$valid" > "$unguarded"
+sed 's/on_macos do/on_linux do/' "$valid" > "$unguarded"
 if "$repository_root/scripts/verify-homebrew-cask.sh" "$unguarded" >/dev/null 2>&1; then
 	printf 'Homebrew cask verifier accepted a cross-platform xattr hook\n' >&2
+	exit 1
+fi
+
+legacy="$test_root/legacy.rb"
+sed 's/postflight_steps do/postflight do/' "$valid" > "$legacy"
+if "$repository_root/scripts/verify-homebrew-cask.sh" "$legacy" >/dev/null 2>&1; then
+	printf 'Homebrew cask verifier accepted a legacy hook\n' >&2
 	exit 1
 fi
 

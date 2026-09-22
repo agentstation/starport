@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -115,14 +116,39 @@ func methodCarriesBody(method string) bool {
 	return method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch
 }
 
-// Timeout adds a timeout to requests
+// Timeout bounds one request and hands the handler the release of that bound.
+//
+// Route timing is route-specific. An ordinary JSON route writes its body at the
+// end, so the bound covers it from end to end. A route that commits to a long
+// response releases the bound and then runs as long as its provider sends
+// bytes. The middleware owns the bound, because clearing the write deadline
+// alone leaves the parent context deadline in place and still cuts a healthy
+// stream in half.
 func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 	if timeout <= 0 {
 		return func(next http.Handler) http.Handler {
 			return next
 		}
 	}
-	return middleware.Timeout(timeout)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx, cancel := context.WithCancelCause(r.Context())
+			expired := &atomic.Bool{}
+			timer := time.AfterFunc(timeout, func() {
+				expired.Store(true)
+				cancel(context.DeadlineExceeded)
+			})
+			defer func() {
+				timer.Stop()
+				cancel(context.Canceled)
+				if expired.Load() {
+					w.WriteHeader(http.StatusGatewayTimeout)
+				}
+			}()
+			ctx = requestctx.WithTimeoutRelease(ctx, func() { timer.Stop() })
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
 
 // CORS returns a configured CORS handler

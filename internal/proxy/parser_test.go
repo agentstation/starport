@@ -42,6 +42,7 @@ type recognizingRouter struct {
 	asked *routepkg.RecognitionRequest
 	calls int
 	pages []inference.RecognizedPage
+	usage *inference.Usage
 	fail  error
 }
 
@@ -63,7 +64,7 @@ func (r *recognizingRouter) RouteDocumentRecognition(
 		return nil, r.fail
 	}
 	return &routepkg.RecognitionResponse{
-		Response:  inference.RecognitionResponse{Pages: r.pages},
+		Response:  inference.RecognitionResponse{Pages: r.pages, Usage: r.usage},
 		ModelUsed: "google/gemini-2.5-flash",
 	}, nil
 }

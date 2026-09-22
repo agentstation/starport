@@ -14,7 +14,11 @@ func Open(config Config) (KVStore, error) {
 
 	switch config.Type {
 	case StorageTypeBadger:
-		return OpenBadger(config.Badger)
+		store, err := OpenBadger(config.Badger)
+		if err != nil {
+			return nil, err
+		}
+		return store, nil
 	case StorageTypeValkey:
 		return OpenValkey(config.Valkey)
 	default:

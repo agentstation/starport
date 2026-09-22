@@ -171,6 +171,7 @@ func modelOfferings(
 			}
 		}
 		info.Pricing = offeringPricing(offering.Pricing)
+		info.Billing = offeringBilling(offering.Billing)
 		info.Operations = offeringOperations(route)
 		offerings = append(offerings, info)
 	}

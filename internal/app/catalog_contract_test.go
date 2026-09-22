@@ -28,8 +28,14 @@ func TestCatalogWideProviderActivation(t *testing.T) {
 }
 
 func TestConfiguredProviderMissingCatalogFailsStartup(t *testing.T) {
-	runtime, err := runtimecatalog.OpenRuntime(context.Background(), storage.NewMockStore(), "")
+	runtime, err := runtimecatalog.OpenRuntime(
+		context.Background(),
+		storage.NewMockStore(),
+		testCatalogSettings(t),
+		func(string) (string, bool) { return "", false },
+	)
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, runtime.Close(context.Background())) })
 	transports, err := connectors.ProductionTransportRegistry()
 	require.NoError(t, err)
 	authentication, err := providerauth.ProductionRegistry()
@@ -160,8 +166,14 @@ func testAuthPlanesAreIsolated(t *testing.T) {
 		Load(context.Background())
 	require.NoError(t, err)
 
-	runtime, err := runtimecatalog.OpenRuntime(context.Background(), storage.NewMockStore(), "")
+	runtime, err := runtimecatalog.OpenRuntime(
+		context.Background(),
+		storage.NewMockStore(),
+		testCatalogSettings(t),
+		func(string) (string, bool) { return "", false },
+	)
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, runtime.Close(context.Background())) })
 	require.NoError(t, cfg.ResolveProviders(
 		context.Background(), runtime.ControlPlane().Current().Catalog().Providers(),
 	))

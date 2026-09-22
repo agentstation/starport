@@ -14,10 +14,26 @@ case "${1:-}" in
 	--repository)
 		printf '%s\n' "$STARPORT_AUDIT_TEST_ROOT/tap"
 		;;
+	trust)
+		test "${2:-}" = --cask
+		test "${3:-}" = agentstation/starport-audit/starport
+		touch "$STARPORT_AUDIT_TEST_ROOT/trusted"
+		;;
+	untrust)
+		test "${2:-}" = --cask
+		test "${3:-}" = agentstation/starport-audit/starport
+		rm "$STARPORT_AUDIT_TEST_ROOT/trusted"
+		;;
 	audit)
+		test -f "$STARPORT_AUDIT_TEST_ROOT/trusted"
 		test -f "$STARPORT_AUDIT_TEST_ROOT/tap/Casks/starport.rb"
+		touch "$STARPORT_AUDIT_TEST_ROOT/audited"
+		exit "${STARPORT_AUDIT_TEST_EXIT:-0}"
 		;;
 	untap)
+		test "${2:-}" = agentstation/starport-audit
+		test ! -f "$STARPORT_AUDIT_TEST_ROOT/tap/Casks/starport.rb"
+		test -f "$STARPORT_AUDIT_TEST_ROOT/trusted"
 		exit 0
 		;;
 	*)

@@ -34,7 +34,25 @@ const (
 	// is. It is empty for the machine-local grants, which prove where the
 	// caller is and not who.
 	ConsoleSubject Key = "console_subject"
+	// TimeoutRelease stores the release of the request timing bound. The
+	// middleware owns the bound, so a handler that commits to a long response
+	// releases it here instead of clearing a write deadline that leaves the
+	// parent context deadline in place.
+	TimeoutRelease Key = "timeout_release"
 )
+
+// WithTimeoutRelease stores the release of the request timing bound.
+func WithTimeoutRelease(ctx context.Context, release func()) context.Context {
+	return context.WithValue(ctx, TimeoutRelease, release)
+}
+
+// ReleaseTimeout releases the request timing bound. A request that carries no
+// bound releases nothing, so a handler calls it without a check.
+func ReleaseTimeout(ctx context.Context) {
+	if release, ok := ctx.Value(TimeoutRelease).(func()); ok && release != nil {
+		release()
+	}
+}
 
 // WithAPIKey stores the raw API key in the context.
 func WithAPIKey(ctx context.Context, value string) context.Context {

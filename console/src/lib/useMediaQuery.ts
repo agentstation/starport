@@ -1,9 +1,21 @@
 import { useSyncExternalStore } from "react";
 
-// SMALL_SCREEN is the console's one layout breakpoint: below Tailwind's
-// `sm` (640 px) the sidebar becomes a sheet, the model picker becomes a
-// bottom sheet, and row actions grow to a 44 px touch target.
-export const SMALL_SCREEN = "(max-width: 639px)";
+// The shell has three shapes, because the 240 px sidebar is only affordable
+// on a wide viewport:
+//
+// - phone (below 768 px): the sidebar is a sheet behind a 48 px top bar, the
+//   catalog chip lives in the top bar, the model picker is a bottom sheet.
+// - compact (768–1023 px): the sidebar is the 64 px icon rail and expands
+//   as an overlay; the chip and the page actions sit on the title line.
+// - wide (1024 px and up): the 240 px sidebar with the persisted collapse
+//   preference.
+//
+// Page grids do not read these tiers. They use container queries against
+// the content column, so they react to the space the shell leaves them.
+export const PHONE_SCREEN = "(max-width: 767px)";
+export const COMPACT_SCREEN = "(max-width: 1023px)";
+
+export type ShellTier = "phone" | "compact" | "wide";
 
 function subscribe(query: string, onChange: () => void): () => void {
   if (typeof window.matchMedia !== "function") return () => {};
@@ -27,4 +39,14 @@ export function useMediaQuery(query: string): boolean {
     () => matches(query),
     () => false,
   );
+}
+
+// useShellTier names the shell shape for the current viewport. Without a
+// matchMedia answer (server render, tests) the tier is wide.
+export function useShellTier(): ShellTier {
+  const phone = useMediaQuery(PHONE_SCREEN);
+  const compact = useMediaQuery(COMPACT_SCREEN);
+  if (phone) return "phone";
+  if (compact) return "compact";
+  return "wide";
 }

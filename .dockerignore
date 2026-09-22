@@ -10,3 +10,6 @@ coverage.html
 starport
 starport.exe
 *.log
+
+console/node_modules
+internal/console/dist

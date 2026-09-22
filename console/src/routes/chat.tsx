@@ -23,7 +23,7 @@ import {
 import { queries } from "@/lib/queries";
 import type { Attachment, ContentPart } from "@/lib/attachments";
 import { defaultChatModel } from "@/lib/modelFilter";
-import { SMALL_SCREEN, useMediaQuery } from "@/lib/useMediaQuery";
+import { useShellTier } from "@/lib/useMediaQuery";
 import {
   DEFAULT_PARAMS,
   lastModel,
@@ -123,7 +123,10 @@ function ChatPage() {
   const [favorites, setFavorites] = useState<Set<string>>(loadFavorites);
   // Below the breakpoint the thread list is a sheet, closed until asked
   // for, and its stored preference belongs to the desktop layout only.
-  const small = useMediaQuery(SMALL_SCREEN);
+  // The thread list is a sheet on every tier but wide: a phone has no room
+  // beside the column, and a compact shell already spends its width on the
+  // rail. The persisted open state belongs to the wide layout alone.
+  const small = useShellTier() !== "wide";
   const [sidebarOpen, setSidebarOpen] = useState(() => !small && !sidebarClosed());
   const [pickerOpen, setPickerOpen] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -633,7 +636,7 @@ function ChatPage() {
       ) : (
         sidebarOpen && threadList
       )}
-      <div className="flex h-full min-w-0 flex-1 flex-col">
+      <div className="flex h-full min-w-0 flex-1 flex-col @container">
         <div className="flex h-12 shrink-0 items-center gap-2 px-3">
           <button
             type="button"
@@ -755,7 +758,7 @@ function ChatPage() {
                       <X aria-hidden="true" className="size-3.5" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-2 @2xl:grid-cols-2">
                     {STARTER_PROMPTS.map((prompt) => (
                       <button
                         key={prompt}

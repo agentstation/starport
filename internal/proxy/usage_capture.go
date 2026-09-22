@@ -144,6 +144,7 @@ type usageCaptureService struct {
 // ProcessChatCompletion records usage for one completed chat request.
 func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	start := time.Now()
+	ctx = withExtractionCapture(ctx, req)
 	response, err := s.Proxy.ProcessChatCompletion(ctx, req)
 
 	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.AccountID, req.TeamID, req.Protocol, req.Request.Model, start)
@@ -164,7 +165,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 		snapshot = response.CatalogSnapshot
 	}
 	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
-	applyExtraction(&record, response)
+	applyCapturedExtraction(ctx, &record, response)
 	if overheadMS, ok := OverheadMS(ctx); ok {
 		record.OverheadMS = overheadMS
 	}
@@ -176,6 +177,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 // ProcessChatCompletionStream records usage when the routed stream ends.
 func (s *usageCaptureService) ProcessChatCompletionStream(ctx context.Context, req *ChatCompletionRequest) (ChatCompletionStreamResponse, error) {
 	start := time.Now()
+	ctx = withExtractionCapture(ctx, req)
 	stream, err := s.Proxy.ProcessChatCompletionStream(ctx, req)
 
 	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.AccountID, req.TeamID, req.Protocol, req.Request.Model, start)
@@ -184,6 +186,7 @@ func (s *usageCaptureService) ProcessChatCompletionStream(ctx context.Context, r
 	if err != nil {
 		applyOutcome(&record, err)
 		record.Cost, record.CostUnavailableReason = usageCost(nil, record)
+		applyCapturedExtraction(ctx, &record, nil)
 		if overheadMS, ok := OverheadMS(ctx); ok {
 			record.OverheadMS = overheadMS
 		}
@@ -439,6 +442,7 @@ func (s *usageCaptureStream) finalize(terminal error) {
 			snapshot = evidence.CatalogSnapshot()
 		}
 		record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
+		applyCapturedExtraction(s.requestCtx, &record, nil)
 		if s.timer != nil {
 			record.OverheadMS = s.timer.OverheadMS()
 		}
@@ -634,9 +638,19 @@ func applyExtraction(record *usage.Record, response *ChatCompletionResponse) {
 	record.NativePages = int64(response.NativePages)
 	record.ExtractionCached = response.ExtractionCached
 	record.ExtractionMillis = response.ExtractionDuration.Milliseconds()
+	record.Extractions = make([]usage.Extraction, len(response.Extractions))
+	for i, entry := range response.Extractions {
+		record.Extractions[i] = entry.Clone()
+	}
 	if response.ExtractionUnpriced {
 		record.Cost = nil
 		record.CostUnavailableReason = usage.CostReasonNoPricing
+		for _, entry := range response.Extractions {
+			if entry.CostUnavailableReason != "" {
+				record.CostUnavailableReason = entry.CostUnavailableReason
+				break
+			}
+		}
 		return
 	}
 	if response.RecognizedPages == 0 {
@@ -646,6 +660,11 @@ func applyExtraction(record *usage.Record, response *ChatCompletionResponse) {
 	}
 	record.ExtractionCost = &usage.Cost{NanoUSD: response.ExtractionNanoUSD, Currency: usageCurrency}
 	if record.Cost == nil {
+		return
+	}
+	if record.Cost.NanoUSD > math.MaxInt64-response.ExtractionNanoUSD {
+		record.Cost = nil
+		record.CostUnavailableReason = usage.CostReasonNoPricing
 		return
 	}
 	record.Cost.NanoUSD += response.ExtractionNanoUSD

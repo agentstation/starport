@@ -10,17 +10,16 @@ One Starmap catalog generation gives it every provider, model, capability,
 context, and price fact. The 2026-08-29 generation lists 17 providers and
 routes 511 models.
 
-[![The Starport console: the gateway overview, the model catalog, one model across providers, and provider health with incident history.](docs/assets/2026-08-29_starport-console.gif)](docs/assets/2026-08-29_starport-console.gif)
+[![Starport returns a real streamed OpenAI answer after installation, catalog inspection, and provider setup. Select the preview to play.](docs/assets/first-use-v1.2.0/poster.png)](docs/assets/first-use-v1.2.0/first-use.gif)
 
-The embedded console above shows the gateway overview, the model catalog with
-prices, one model across two providers, and provider health with incident
-history.
+[Watch the 38-second first request](docs/assets/first-use-v1.2.0/first-use.gif)
+or read the [transcript and reproduction steps](docs/assets/first-use-v1.2.0/TRANSCRIPT.md).
+The recording uses release v1.2.0 and a real provider. It shortens the credential-entry wait and preserves inference timing.
+The static preview does not autoplay. The earlier [console tour](docs/assets/2026-08-29_starport-console.gif) shows the catalog and provider views.
 
-Starport adds less than 50 ms p99 gateway overhead per request. The overhead
-benchmark measures 0 ms p50 and p99 over 200 requests against a mock upstream.
-Every response reports its own number in the `x-starport-overhead-ms` header.
-A CI benchmark fails the build when the bound breaks. See
-[docs/PERFORMANCE.md](docs/PERFORMANCE.md) for the methodology and exclusions.
+The current overhead benchmark guards one part of chat request processing.
+It does not establish complete gateway latency or a production p99 limit.
+See [the measurement boundaries](docs/PERFORMANCE.md) before using its results.
 
 Starport serves individual developers, startups, and enterprises:
 
@@ -35,15 +34,28 @@ Starport serves individual developers, startups, and enterprises:
 Install the released cask on macOS or Linux:
 
 ```bash
-brew install agentstation/tap/starport
+brew trust --cask agentstation/tap/starport
+brew install --cask agentstation/tap/starport
 starport --version
+```
+
+Homebrew 6 requires package trust. See [Homebrew tap trust](https://docs.brew.sh/Tap-Trust).
+Use `brew install` for the first installation. To upgrade an installed cask:
+
+```bash
+brew update
+brew upgrade --cask agentstation/tap/starport
 ```
 
 The current public release also contains checksummed archives for macOS,
 Linux, and Windows. Download an archive from
 [GitHub Releases](https://github.com/agentstation/starport/releases).
 
-To build from source, install the Go version from `go.mod`, then run:
+To build from source, install Go 1.27.1 and pnpm 11.22.0.
+
+Starport and Starmap use the same exact Go version for development, CI, and releases.
+Qualify future upgrades across both repositories and update their pins together.
+Then run:
 
 ```bash
 git clone https://github.com/agentstation/starport.git
@@ -53,6 +65,18 @@ make build
 ```
 
 ## Quick start
+
+### Explore the catalog without provider keys
+
+Inspect the embedded catalog before starting a gateway or configuring a provider:
+
+```bash
+starport models search gpt-4o --json
+starport models show openai/gpt-4o-mini --json
+```
+
+These commands need no provider credential or network access.
+Catalog presence does not prove that a provider will accept an inference request.
 
 Starport checks every provider in the active catalog generation. It registers
 each provider whose transport and authentication primitive it supports. It
@@ -70,13 +94,14 @@ pays a provider, and a provider credential never authenticates a client.
 Set one conventional provider credential. This example uses OpenAI:
 
 ```bash
+unset STARPORT_CATALOG_STATE_DIR STARPORT_FILES_BACKEND
 export OPENAI_API_KEY="replace-with-provider-inference-key"
 starport dev
 ```
 
-The command starts an isolated gateway at `http://127.0.0.1:8080`. It uses
-in-memory state, creates no configuration files, prints one temporary Starport
-gateway API key, and opens the console in a browser:
+The command starts a development gateway at `http://127.0.0.1:8080`.
+It uses in-memory state for Badger and SQLite and creates no configuration files.
+It prints one temporary Starport gateway API key and opens the console:
 
 ```text
 Starport development gateway
@@ -92,10 +117,17 @@ into the browser, and the browser stores no key. Add `--no-open` to print the
 link instead, which fits a machine you reach over SSH. `starport ui` opens a
 new link at any time.
 
-A browser without a link must present this machine's local admin token.
+A browser on the gateway machine can also present its local admin token.
 `starport auth token --copy` puts the token on the clipboard of the gateway
 machine. Both paths prove presence at that machine and end in the same console
 session.
+
+Development mode skips `config.env` but still reads process environment values.
+An explicit `STARPORT_CATALOG_STATE_DIR` retains catalog state after exit.
+An explicit `STARPORT_FILES_BACKEND=objectstore` keeps remote blob storage active.
+The `unset` command above removes those two persistence selectors for this example.
+Default catalog state and uploaded files use temporary directories that normal shutdown removes.
+A crash can leave those temporary files behind.
 
 Keep this terminal open.
 
@@ -122,10 +154,10 @@ curl --fail-with-body \
 Send an OpenRouter-style chat request:
 
 ```bash
-curl --fail-with-body \
+curl --no-buffer --fail-with-body \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model":"openrouter/auto","messages":[{"role":"user","content":"Hello"}]}' \
+  -d '{"model":"openai/gpt-4o-mini","max_tokens":32,"stream":true,"messages":[{"role":"user","content":"Hello"}]}' \
   http://127.0.0.1:8080/api/v1/chat/completions
 ```
 
@@ -154,6 +186,8 @@ provider or persist provider inference credentials. Then use `starport serve`,
 and `starport ui` to open the console. Issue further gateway API keys in the
 console under Keys.
 See the [operator guide](docs/OPERATOR-GUIDE.md#initialize-persistent-state).
+
+Review [current production limits](docs/PRODUCTION-STATUS.md) before deploying multiple replicas.
 
 Local Ollama inference needs no credential. Add each installed model to a
 reviewed Starmap workspace, and set `STARPORT_CATALOG_WORKSPACE_PATH` before
@@ -283,17 +317,38 @@ export STARPORT_OPENAI_API_KEY_REFERENCE='aws-secrets-manager:starport/openai#ap
 The [operator guide](docs/OPERATOR-GUIDE.md#direct-secret-sources) defines the
 resource syntax, source authentication, version selection, and fallback rule.
 
-To consume verified catalog publications from a Starmap server, set its
-versioned API base URL:
+### Catalog topology
 
-```bash
-export STARPORT_CATALOG_REMOTE_URL="https://catalog.example.com/api/v1"
-export STARPORT_CATALOG_REMOTE_API_KEY="replace-if-the-server-requires-one"
+Starport reads one connected Starmap runtime. `STARPORT_CATALOG_SOURCE` names
+the kind, and the kind decides the egress, the freshness age, and the request
+budget. The default `public` kind follows the published GitHub channel, which
+suits one gateway and a small fleet. A larger fleet, or a fleet that reaches no
+GitHub address, uses a central Starmap server instead. The central server holds
+the single egress to GitHub and pushes each publication to the replicas.
+
+```mermaid
+flowchart LR
+  GH[("GitHub catalog/v1")]
+  SM[Central Starmap server]
+  subgraph FLEET[Starport fleet]
+    S1[Starport 1]
+    S2[Starport N]
+  end
+  GH -->|hourly conditional poll| SM
+  SM -->|server-sent events| FLEET
 ```
 
-Remote mode keeps the last accepted generation for restart and recovery. It is
-mutually exclusive with a local catalog workspace and local acquisition. See
-the [remote catalog guide](docs/OPERATOR-GUIDE.md#remote-starmap-catalogs).
+```bash
+export STARPORT_CATALOG_SOURCE="starmap"
+export STARPORT_CATALOG_SOURCE_URL="https://catalog.example.com/api/v1"
+export STARPORT_CATALOG_SOURCE_API_KEY="replace-if-the-server-requires-one"
+```
+
+`STARPORT_CATALOG_SOURCE_API_KEY` is a catalog-acquisition credential. It never
+pays a provider. Each gateway keeps its last accepted generation for restart
+and recovery. [Deployment topologies](docs/DEPLOYMENT-TOPOLOGIES.md) gives the
+five topologies, their request budgets, and the thresholds that move a fleet to
+a central Starmap server.
 
 See the [configuration reference](.env.example) and
 [operator guide](docs/OPERATOR-GUIDE.md) for production settings.
@@ -335,7 +390,7 @@ gh attestation verify "oci://ghcr.io/agentstation/starport:$STARPORT_VERSION" \
 docker run --rm "ghcr.io/agentstation/starport:$STARPORT_VERSION" --version
 ```
 
-The Compose file builds Starport locally and uses Valkey for shared state. Put
+The Compose file builds one Starport process locally and uses Valkey for KV records. Put
 the master key and any catalog-declared provider values in the ignored `.env`
 file. This example uses OpenAI:
 
@@ -344,11 +399,20 @@ cp .env.example .env
 # Edit .env. Set STARPORT_SECURITY_MASTER_KEY and OPENAI_API_KEY.
 docker compose up --build -d valkey
 docker compose run --rm starport init --configured-storage --name primary-admin
+docker compose run --rm starport auth rotate
 docker compose up -d starport
 ```
 
 Save the gateway key from initialization. Do not initialize the same identity
 repository again.
+
+Rotation prepares the local admin token for the container's network bind.
+Keep its printed value private. The named Starport volumes retain SQLite records,
+uploaded files, local admin state, and the accepted catalog through container replacement.
+The Valkey volume retains gateway keys and other KV records. Back up all three volumes and the master key.
+
+Do not scale this example to multiple Starport processes. It uses local SQLite and file storage.
+See [current production limits](docs/PRODUCTION-STATUS.md) for replicated deployments.
 
 ## Develop
 
@@ -369,6 +433,7 @@ See the [development guide](DEVELOPMENT.md) and
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Operator guide](docs/OPERATOR-GUIDE.md)
+- [Deployment topologies](docs/DEPLOYMENT-TOPOLOGIES.md)
 - [Security posture](docs/SECURITY-POSTURE.md)
 - [Performance methodology](docs/PERFORMANCE.md)
 - [Vertex AI configuration](docs/VERTEX_AI_CONFIG.md)

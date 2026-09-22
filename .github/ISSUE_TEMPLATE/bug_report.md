@@ -31,7 +31,7 @@ Paste relevant logs here
 
 **Environment (please complete the following information):**
  - OS: [e.g. Ubuntu 22.04]
- - Go Version: [e.g. 1.22]
+ - Go Version: [e.g. 1.27.1]
  - Starport Version: [e.g. v0.1.0 or commit hash]
  - Storage Backend: [e.g. Badger/Valkey]
  - Deployment: [e.g. Docker/Binary]

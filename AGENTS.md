@@ -61,7 +61,7 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
   package names a backend, a bucket, or a storage path.
 - Put document reading in `internal/document`. It owns the text layer, the page
   count, and the scanned verdict, and it reaches no network address. The engine
-  vocabulary lives in `internal/inference`, and the page price comes from the
+  vocabulary lives in `internal/inference`, and the billing basis and prices come from the
   catalog.
 - Make `internal/proxy` depend on `CacheManager` and
   `connectors.LeasingRegistry`, not concrete cache or registry adapters.
@@ -168,8 +168,8 @@ conditions (`AMJ-V01` through `AMJ-V18`) and runs in CI.
 the typed `file-parser` option and the two engines this gateway runs. It covers
 the refusals an unknown engine and an unenforced plugin draw. It covers the
 in-process read that reaches no provider. It covers the recognition route, its
-page charge, the extraction cache, the spend bound, and the console view of
-what a page cost. It is terminal at 20 conditions (`PLG-V01` through `PLG-V20`) and
+page or token charges, the extraction cache, the spend bound, and the console view of
+what recognition cost. It is terminal at 20 conditions (`PLG-V01` through `PLG-V20`) and
 runs in CI.
 
 `scripts/verify-reranking.sh` guards reranking. It covers the canonical types,

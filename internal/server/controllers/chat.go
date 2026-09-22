@@ -13,6 +13,7 @@ import (
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/protocol/openrouter"
 	"github.com/agentstation/starport/internal/proxy"
+	"github.com/agentstation/starport/internal/server/requestctx"
 )
 
 // ChatController handles chat completion endpoints
@@ -185,9 +186,18 @@ func (h *ChatController) handleStream(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 	defer func() { _ = stream.Close() }()
+	// Read the first event before headers so cache permission refusals keep their HTTP status.
+	firstEvent, firstErr := stream.Read()
+	if firstErr != nil && firstErr != io.EOF {
+		h.logError(r.Context(), firstErr, "chat stream admission failed")
+		h.writeError(w, firstErr)
+		return
+	}
 
-	// http.Server.WriteTimeout applies to the whole response by default. Clear
-	// the write deadline for SSE so healthy long-running streams are not cut off.
+	// http.Server.WriteTimeout applies to the whole response by default, and
+	// the request timing bound applies to the whole request. A committed stream
+	// releases both, so a healthy long-running stream is never cut off.
+	requestctx.ReleaseTimeout(r.Context())
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 
 	// Check if stream provides cache status
@@ -220,8 +230,7 @@ func (h *ChatController) handleStream(w http.ResponseWriter, r *http.Request, re
 	}
 
 	var lastEvent inference.StreamEvent
-	for {
-		event, err := stream.Read()
+	for event, err := firstEvent, firstErr; ; event, err = stream.Read() {
 		if err == io.EOF {
 			// End of stream
 			_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")

@@ -7,10 +7,8 @@ import { ApiError, type SystemInfo, type WebhookSummary } from "@/lib/api";
 import { formatCount, formatRetention } from "@/lib/format";
 import { queries } from "@/lib/queries";
 
-// The deployment sections read what the gateway states about itself and
-// name the environment variable that sets each value. Nothing here writes:
-// every one of these settings is a process setting, and the process that
-// holds it is the only place that can change it. The console says where.
+// Deployment sections show process settings and their environment variables.
+// These read-only controls do not change the process configuration.
 
 // A Fact is one row: what the reader calls it, what the gateway says, and
 // which variable an operator sets to change it. A row with no variable is
@@ -19,7 +17,7 @@ type Fact = { label: string; value: ReactNode; variable?: string; detail?: strin
 
 function FactList({ facts }: { facts: Fact[] }) {
   return (
-    <dl className="grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr_auto]">
+    <dl className="grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm @2xl:grid-cols-[auto_1fr_auto]">
       {facts.map((fact) => (
         <div key={fact.label} className="contents">
           <dt className="text-text-3">{fact.label}</dt>
@@ -27,7 +25,7 @@ function FactList({ facts }: { facts: Fact[] }) {
             <span className="font-mono">{fact.value}</span>
             {fact.detail && <span className="ml-2 text-text-3">{fact.detail}</span>}
           </dd>
-          <dd className="col-start-2 font-mono text-xs text-text-4 sm:col-start-3 sm:text-right">
+          <dd className="col-start-2 break-words font-mono text-base text-text-2 @2xl:col-start-3 @2xl:text-right">
             {fact.variable}
           </dd>
         </div>
@@ -36,9 +34,7 @@ function FactList({ facts }: { facts: Fact[] }) {
   );
 }
 
-// Gate reads the system info once for every deployment section and turns
-// the locked and failed states into one line each, so the five sections
-// state the same thing when the admin plane is closed to this browser.
+// Gate gives each deployment section the same loading and access states.
 function Gate<T>({
   query,
   what,

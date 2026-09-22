@@ -29,6 +29,20 @@ if [ ! -f "$workflow" ]; then
 	exit 1
 fi
 
+grep -Fxq 'go 1.27.1' "$repository_root/go.mod"
+grep -Fxq 'export GOTOOLCHAIN := go1.27.1' "$repository_root/Makefile"
+require_goreleaser_text 'GOTOOLCHAIN=go1\.27\.1$' 'the exact Go toolchain'
+for source in "$repository_root"/.github/workflows/*; do
+	if grep -q 'actions/setup-go@' "$source"; then
+		setups="$(grep -c 'actions/setup-go@' "$source")"
+		pins="$(grep -Ec 'go-version: "1\.27\.1"$' "$source" || true)"
+		if [ "$setups" != "$pins" ]; then
+			printf 'workflow Go pins do not match Go 1.27.1: %s\n' "$source" >&2
+			exit 1
+		fi
+	fi
+done
+
 require_text '^permissions:$' 'a default permission boundary'
 require_text '^[[:space:]]+contents: read$' 'read-only default contents permission'
 if [ "$(grep -Ec '^[[:space:]]+artifact-metadata: write$' "$workflow")" -ne 2 ]; then
@@ -81,6 +95,12 @@ for credential in \
 	MACOS_NOTARY_ISSUER_ID; do
 	require_goreleaser_text "enabled:.*isEnvSet.*$credential" "conditional macOS signing credential $credential"
 done
+
+require_goreleaser_text 'bash scripts/build-console.sh' 'the mandatory console build'
+require_goreleaser_text 'python3 scripts/verify-embedded-console.py' 'embedded console verification for every binary'
+require_text 'python3 scripts/verify-console-binary.py' 'installed console verification'
+python3 "$repository_root/scripts/test-console-release.py"
+python3 "$repository_root/scripts/test-native-release.py"
 
 if grep -q 'Require Apple signing and notarization credentials' "$workflow"; then
 	printf 'release workflow has a mandatory Apple credential gate\n' >&2
