@@ -1,6 +1,8 @@
+import type { CSSProperties } from "react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { onLogoStyleChange, savedLogoStyle } from "@/lib/logoStyle";
+import { cn } from "@/lib/utils";
 
 // EntityLogo renders catalog identity offline through a fallback chain:
 // bundled gateway SVG → tinted monochrome (currentColor marks inherit the
@@ -66,15 +68,28 @@ export function EntityLogo({
     };
   }, [kind, id]);
 
-  const frame = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-sm ${className}`;
+  // The frame is a square of `size` pixels whose font size equals its
+  // width, so an inline SVG sized in em fills it. Both reach the element
+  // as custom properties; the utilities stay static.
+  const frame = cn(
+    "inline-flex size-(--logo-size) shrink-0 items-center justify-center overflow-hidden rounded-sm text-(length:--logo-size)",
+    className,
+  );
+  const geometry = {
+    "--logo-size": `${size}px`,
+    "--logo-font": `${size * 0.38}px`,
+  } as CSSProperties;
 
   if (svg === null) {
     return (
       <span
         aria-hidden="true"
         data-testid="entity-initials"
-        className={`${frame} border border-border-1 bg-bg-raised font-medium text-text-2`}
-        style={{ width: size, height: size, fontSize: size * 0.38 }}
+        className={cn(
+          frame,
+          "border border-border-1 bg-bg-raised font-medium text-(length:--logo-font) text-text-2",
+        )}
+        style={geometry}
       >
         {entityInitials(name)}
       </span>
@@ -98,22 +113,13 @@ export function EntityLogo({
         aria-hidden="true"
         data-testid="entity-mark"
         data-logo-style={logoStyle}
-        className={`${frame} text-text-1`}
-        style={{ width: size, height: size, fontSize: size }}
+        className={cn(frame, "text-text-1")}
+        style={geometry}
       >
         <span
           data-testid="entity-mask"
-          className="block h-[1em] w-[1em] bg-current opacity-85"
-          style={{
-            maskImage: mask,
-            maskSize: "contain",
-            maskRepeat: "no-repeat",
-            maskPosition: "center",
-            WebkitMaskImage: mask,
-            WebkitMaskSize: "contain",
-            WebkitMaskRepeat: "no-repeat",
-            WebkitMaskPosition: "center",
-          }}
+          className="block size-[1em] bg-current opacity-85 mask-(--logo-mask) mask-contain mask-center mask-no-repeat"
+          style={{ "--logo-mask": mask } as CSSProperties}
         />
       </span>
     );
@@ -129,10 +135,8 @@ export function EntityLogo({
       // each mark as shipped.
       dangerouslySetInnerHTML={svg ? { __html: svg } : undefined}
       data-logo-style={logoStyle}
-      className={`${frame} text-text-1 [&_svg]:h-[1em] [&_svg]:w-[1em] ${
-        bare ? "[&_svg]:fill-current" : ""
-      }`}
-      style={{ width: size, height: size, fontSize: size }}
+      className={cn(frame, "text-text-1 [&_svg]:size-[1em]", bare && "[&_svg]:fill-current")}
+      style={geometry}
     />
   );
 }

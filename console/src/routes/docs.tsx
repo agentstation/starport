@@ -55,7 +55,7 @@ function DocsPage() {
         </div>
       </nav>
       <div>
-        <h1 className="font-semibold tracking-[-0.01em]">Documentation</h1>
+        <h1 className="font-semibold">Documentation</h1>
         <p className="mt-2 text-text-2">
           How to call, manage, and run the Starport gateway.
         </p>
@@ -106,8 +106,8 @@ function DocSection({ title, children }: { title: string; children: ReactNode })
   const id = `doc-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "")}`;
   return (
     <section className="flex flex-col gap-3 border-t border-border-1 pt-5 first:border-t-0 first:pt-0">
-      <h2 id={id} tabIndex={-1} className="font-semibold tracking-[-0.01em] text-text-1"><a href={`#${id}`}>{title}</a></h2>
-      <div className="docs-prose flex flex-col gap-3 text-text-2">
+      <h2 id={id} tabIndex={-1} className="font-semibold text-text-1"><a href={`#${id}`}>{title}</a></h2>
+      <div className="flex flex-col gap-3 text-text-2">
         {children}
       </div>
     </section>

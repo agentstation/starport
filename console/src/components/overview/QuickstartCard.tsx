@@ -86,8 +86,8 @@ function Highlighted({ snippet }: { snippet: Snippet }) {
             return (
               <span
                 key={position}
-                className="text-[var(--sdm-c,inherit)] dark:text-[var(--shiki-dark,var(--sdm-c,inherit))]"
-                style={{ "--sdm-c": light, "--shiki-dark": dark } as CSSProperties}
+                className="text-(--sdm-c) dark:text-(--shiki-dark)"
+                style={{ "--sdm-c": light, "--shiki-dark": dark ?? light } as CSSProperties}
               >
                 {token.content}
               </span>
@@ -116,9 +116,9 @@ export function QuickstartCard() {
         {/* The copy control shares the tab row, so it never sits over the
             code when the card is narrow. */}
         <div className="flex items-center justify-between gap-2">
-          <TabsList aria-label="Snippet language" className="gap-0">
+          <TabsList aria-label="Snippet language" size="sm">
             {all.map((snippet) => (
-              <TabsTrigger key={snippet.name} value={snippet.name} className="h-8 px-2.5 text-xs">
+              <TabsTrigger key={snippet.name} value={snippet.name}>
                 {snippet.name}
               </TabsTrigger>
             ))}

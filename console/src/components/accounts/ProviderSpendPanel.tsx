@@ -5,6 +5,7 @@ import { RelativeTime } from "@/components/ui/RelativeTime";
 import { ApiError, type ProviderUsage } from "@/lib/api";
 import { formatCount, formatNanoUSD } from "@/lib/format";
 import { queries } from "@/lib/queries";
+import { cn } from "@/lib/utils";
 
 // ProviderSpendPanel shows where one account's spend went: its recorded
 // requests in the gateway's rollup window, grouped by the provider that
@@ -102,7 +103,10 @@ function ProviderRow({ row }: { row: ProviderUsage }) {
         {formatCount(row.requests)}
       </td>
       <td
-        className={`px-3 py-1.5 text-right tabular-nums ${row.errors > 0 ? "text-error" : "text-text-3"}`}
+        className={cn(
+          "px-3 py-1.5 text-right tabular-nums",
+          row.errors > 0 ? "text-error" : "text-text-3",
+        )}
       >
         {formatCount(row.errors)}
       </td>

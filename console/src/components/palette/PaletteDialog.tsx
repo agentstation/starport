@@ -46,6 +46,7 @@ import {
   type PaletteItemKind,
 } from "./paletteIndex";
 import { readRecents, rememberRecent } from "./paletteRecents";
+import { cn } from "@/lib/utils";
 
 const PAGES: { path: string; label: string; icon: typeof LayoutDashboard }[] = [
   { path: "/", label: "Overview", icon: LayoutDashboard },
@@ -71,7 +72,7 @@ const PAGE_ICONS = new Map(PAGES.map((page) => [page.path, page.icon]));
 
 function Kbd({ children }: { children: string }) {
   return (
-    <kbd className="rounded-xs border border-border-1 bg-bg-panel px-1.5 py-0.5 font-sans text-[10px] text-text-4">
+    <kbd className="rounded-xs border border-border-1 bg-bg-panel px-1.5 py-0.5 font-sans text-2xs text-text-4">
       {children}
     </kbd>
   );
@@ -275,9 +276,10 @@ export default function PaletteDialog({
                     iconFor(item)
                   )}
                   <span
-                    className={`min-w-0 truncate text-text-1 ${
-                      item.kind === "model" ? "font-mono text-sm" : "text-base"
-                    }`}
+                    className={cn(
+                      "min-w-0 truncate text-text-1",
+                      item.kind === "model" ? "font-mono text-sm" : "text-base",
+                    )}
                   >
                     {item.label}
                   </span>
@@ -291,7 +293,7 @@ export default function PaletteDialog({
             </CommandGroup>
           ))}
         </CommandList>
-        <div className="flex items-center gap-4 border-t border-border-1 px-4 py-2 text-[11px] text-text-4">
+        <div className="flex items-center gap-4 border-t border-border-1 px-4 py-2 text-xs text-text-4">
           <span className="flex items-center gap-1.5">
             <Kbd>↑</Kbd>
             <Kbd>↓</Kbd>

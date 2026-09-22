@@ -29,6 +29,7 @@ import { optionalString } from "@/lib/search";
 import { formatUSD } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import { announce } from "@/lib/mutations";
+import { cn } from "@/lib/utils";
 
 // The preset under edit lives in the address, so a reload or a shared link
 // opens the same editor. The create, history, and delete dialogs stay local.
@@ -293,7 +294,7 @@ function EditorModal({
                   placeholder="e.g. fast-cheap"
                   autoComplete="off"
                   disabled={editing}
-                  className={`${INPUT_CLASS} font-mono disabled:opacity-50`}
+                  className={cn(INPUT_CLASS, "font-mono disabled:opacity-50")}
                 />
               </Field>
               <Field label="Description">
@@ -790,7 +791,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 function Header() {
   return (
     <div>
-      <h1 className="text-xl font-semibold tracking-[-0.01em]">Presets</h1>
+      <h1 className="text-xl font-semibold">Presets</h1>
       <p className="mt-1 text-sm text-text-3">
         Reusable request configurations. Reference one from any request with{" "}
         <code className="rounded-xs bg-bg-raised px-1 py-0.5 font-mono text-xs text-text-2">

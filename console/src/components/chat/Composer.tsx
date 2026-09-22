@@ -29,6 +29,7 @@ import {
 } from "@/lib/attachments";
 import type { Attachment, AttachmentKind } from "@/lib/attachments";
 import { SEMANTIC_CACHE_HEADER, type ChatParams } from "@/lib/chatStore";
+import { cn } from "@/lib/utils";
 
 // Composer is the DESIGN.md chat input card: one rounded surface with
 // the textarea on top and a control bar below — attach button left;
@@ -108,11 +109,12 @@ function BarButton({
           <button
             type="button"
             aria-label={label}
-            className={`flex h-11 items-center gap-1 rounded-sm px-2 text-sm transition-colors duration-150 ease-standard sm:h-8 ${
-              active
-                ? "bg-bg-hover text-text-1"
-                : "text-text-3 hover:bg-bg-hover hover:text-text-2"
-            } disabled:cursor-not-allowed disabled:text-text-4 disabled:hover:bg-transparent ${className ?? ""}`}
+            className={cn(
+              "flex h-11 items-center gap-1 rounded-sm px-2 text-sm transition-colors duration-150 ease-standard sm:h-8",
+              active ? "bg-bg-hover text-text-1" : "text-text-3 hover:bg-bg-hover hover:text-text-2",
+              "disabled:cursor-not-allowed disabled:text-text-4 disabled:hover:bg-transparent",
+              className,
+            )}
             {...props}
           />
         }
@@ -198,7 +200,7 @@ function ParamsPopover({
             value={params.system}
             onChange={(event) => onChange({ ...params, system: event.target.value })}
             rows={3}
-            className={`${TEXTAREA_CLASS} w-full text-sm`}
+            className={cn(TEXTAREA_CLASS, "w-full text-sm")}
           />,
         )}
         <div className="grid grid-cols-2 gap-3">
@@ -220,7 +222,7 @@ function ParamsPopover({
                 })
               }
               placeholder="default"
-              className={`${INPUT_CLASS} w-full`}
+              className={cn(INPUT_CLASS, "w-full")}
             />,
           )}
           {field(
@@ -239,7 +241,7 @@ function ParamsPopover({
                 })
               }
               placeholder="default"
-              className={`${INPUT_CLASS} w-full`}
+              className={cn(INPUT_CLASS, "w-full")}
             />,
           )}
         </div>
@@ -254,7 +256,7 @@ function ParamsPopover({
               value={params.order}
               onChange={(event) => onChange({ ...params, order: event.target.value })}
               placeholder="groq, openai"
-              className={`${INPUT_CLASS} w-full font-mono text-xs`}
+              className={cn(INPUT_CLASS, "w-full font-mono text-xs")}
             />,
           )}
           {field(
@@ -263,7 +265,7 @@ function ParamsPopover({
               type="text"
               value={params.only}
               onChange={(event) => onChange({ ...params, only: event.target.value })}
-              className={`${INPUT_CLASS} w-full font-mono text-xs`}
+              className={cn(INPUT_CLASS, "w-full font-mono text-xs")}
             />,
           )}
           {field(
@@ -272,7 +274,7 @@ function ParamsPopover({
               type="text"
               value={params.ignore}
               onChange={(event) => onChange({ ...params, ignore: event.target.value })}
-              className={`${INPUT_CLASS} w-full font-mono text-xs`}
+              className={cn(INPUT_CLASS, "w-full font-mono text-xs")}
             />,
           )}
           {field(
@@ -649,9 +651,10 @@ export function Composer({
                       onParamsChange({ ...params, effort: choice.value });
                       setMenu("none");
                     }}
-                    className={`rounded-sm px-2 py-1.5 text-left text-sm transition-colors duration-150 ease-standard hover:bg-bg-hover ${
-                      effort === choice.value ? "text-text-1" : "text-text-3"
-                    }`}
+                    className={cn(
+                      "rounded-sm px-2 py-1.5 text-left text-sm transition-colors duration-150 ease-standard hover:bg-bg-hover",
+                      effort === choice.value ? "text-text-1" : "text-text-3",
+                    )}
                   >
                     {choice.label}
                   </button>
@@ -687,11 +690,10 @@ export function Composer({
               onClick={send}
               disabled={!canSend}
               aria-label="Send message"
-              className={`flex size-8 items-center justify-center rounded-sm transition-colors duration-150 ease-standard ${
-                canSend
-                  ? "bg-accent text-accent-ink hover:opacity-90"
-                  : "bg-bg-hover text-text-4"
-              }`}
+              className={cn(
+                "flex size-8 items-center justify-center rounded-sm transition-colors duration-150 ease-standard",
+                canSend ? "bg-accent text-accent-ink hover:opacity-90" : "bg-bg-hover text-text-4",
+              )}
             >
               <ArrowUp aria-hidden="true" className="size-4" />
             </button>

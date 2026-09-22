@@ -73,9 +73,9 @@ export function chipSentence(read: CatalogSummaryRead): string {
 function FreshnessDot({ verdict }: { verdict: CatalogVerdict }) {
   const tone =
     verdict === "fresh"
-      ? "bg-success text-bg"
+      ? "bg-success text-bg-canvas"
       : verdict === "stale"
-        ? "bg-warning text-bg"
+        ? "bg-warning text-bg-canvas"
         : "bg-border-2 text-text-3";
   return (
     <span
@@ -83,7 +83,7 @@ function FreshnessDot({ verdict }: { verdict: CatalogVerdict }) {
       data-verdict={verdict}
       aria-hidden="true"
       className={cn(
-        "inline-flex size-2.5 shrink-0 items-center justify-center rounded-full text-[8px] font-bold leading-none",
+        "inline-flex size-2.5 shrink-0 items-center justify-center rounded-full text-2xs font-bold leading-none",
         tone,
       )}
     >

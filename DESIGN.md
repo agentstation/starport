@@ -127,6 +127,7 @@ report lifecycle.**
 
 | Step | Size/line | Weight | Use |
 |---|---|---|---|
+| 2xs | 10/14 | 500 | Keyboard hints and uppercase micro-labels only; never text a reader must read |
 | xs | 12/16 | 400–500 | Table headers, pills, fine metadata |
 | sm | 13/18 | 400 | Mono data, secondary UI |
 | base | 14/20 | 400–500 | Default UI text, nav, tables |
@@ -135,11 +136,13 @@ report lifecycle.**
 | xl | 24/32 | 600 | Stat values, page titles (spacious pages) |
 | 2xl | 32/38 | 600 | Hero numbers only |
 
-- Tracking: `-0.01em` at 20–24px, `-0.02em` at 32px, none below 20px.
-  Uppercase micro-labels (rare) get `+0.04em`.
+- Tracking: `-0.01em` at 20–24px, `-0.02em` at 32px, none below 20px. The
+  `lg`, `xl`, and `2xl` steps carry that tracking in the theme, so a title
+  never restates it. Uppercase micro-labels (rare) get `tracking-caps`
+  (`+0.04em`). No class writes an arbitrary tracking value.
 - Wordmark: the sidebar brand renders `STARPORT` — uppercase, 600 weight,
-  `+0.08em` tracking at 14px. It is the one uppercase display treatment;
-  nothing else borrows it.
+  `tracking-wordmark` (`+0.08em`) at 14px. It is the one uppercase display
+  treatment; nothing else borrows it.
 - `font-variant-numeric: tabular-nums` on every numeric column and every
   live-updating number. Costs, tokens, and latencies must not wiggle.
 - Table headers: 12px/500, Text 3, sentence case. No all-caps letterspaced
@@ -245,12 +248,43 @@ key). Sequential content uses flat sections with hairline dividers.
 ## Components
 
 Built on shadcn/ui (Base UI primitives), restyled through the tokens above.
-Rules that override shadcn defaults:
+
+### Ownership
+
+A component owns its color, typography, spacing, shape, effects, and
+motion. A call site adds layout alone: a position, a width in a grid, a
+margin, a flex or grid role, a responsive hide. A treatment the component
+does not offer becomes a variant or a size in `components/ui`, never a
+className at the call site. `@shadcn/lint` enforces this at error level
+(see Implementation mapping); every component under `components/ui`
+inherits the rule, including the local ones (`IconButton`, `ExternalLink`,
+`Pill`, `GhostButton`, `RelativeTime`).
+
+Four contracts widen the rule where the component is a bare wrapper: a
+`RelativeTime` takes its size and tone from the caller; a `PopoverContent`,
+`SheetContent`, `DialogContent`, or `TabsContent` takes its inner padding
+and gap; a `LoadingStatus` lays out its children; a `Skeleton` takes the
+shape of the content it stands in for. Nothing else is exempt.
+
+Every dynamic value (a meter width, a virtual row offset, a grid template,
+a logo size, a chart swatch color) reaches the page as a CSS custom
+property on `style` and a static utility that reads it: `w-(--meter)`,
+`translate-y-(--row-y)`, `grid-cols-(--grid-template)`, `bg-(--swatch)`.
+No inline style sets a CSS property directly.
+
+### Rules that override shadcn defaults
 
 - **Buttons:** primary = accent fill (one per viewport, law 1); secondary =
   `--bg-raised` + `--border-2`; ghost = text-only with hover bg; destructive
   = error solid, confirmation required for irreversible actions. Height 32px
-  (dense contexts) / 36px (forms). Icon buttons are square with tooltips.
+  (dense contexts) / 36px (forms). Icon buttons are square with tooltips:
+  `IconButton` has `ghost` (default), `outline`, and `destructive`
+  variants and `xs` 24, `sm` 28 (default), `md` 32, and `lg` 44 sizes.
+- **External links:** every link that leaves the console is an
+  `ExternalLink`, which opens a new tab and carries the new-tab glyph. Its
+  variants are `link` (accent, underline on hover; the default), `quiet`
+  (Text 3 that brightens), `plain` (Text 1 that turns accent), and `button`
+  (a 36px ghost button whose label is a destination).
 - **Inputs:** `--bg-raised`, `--border-2`, radius 6, 36px; focus = accent
   two-layer ring, no border color change alone.
 - **Tables:** TanStack Table; header row 12px/500 Text 3 on transparent
@@ -264,7 +298,9 @@ Rules that override shadcn defaults:
   of checkbox facets with a search field above ~8 options, summarized in
   the trigger as `label · n`.
 - **Popovers/dropdowns:** `--bg-raised`, `--border-2`, radius 8, shadow
-  `0 8px 24px rgba(0,0,0,0.4)` + inset 1px white@0.05 ring (dark).
+  `--shadow-overlay` (`0 8px 24px rgba(0,0,0,0.4)` + inset 1px white@0.05
+  ring in dark). Every floating surface, including the model picker and the
+  chart tooltip, uses that one token.
 - **Sheets:** one `SheetContent` with a `side`. Detail panels enter from
   the right at 480px; navigation and the chat thread list enter from the
   left; pickers a thumb reaches enter from the bottom at up to 85vh.
@@ -388,9 +424,39 @@ columns, each with its own header (icon + name), stop/retry, and stats line.
 - Tokens live in one CSS file as Tailwind v4 `@theme` variables; dark is the
   `:root` default, light under `.light` (explicit) with a
   `prefers-color-scheme` bootstrap. Components consume only role tokens
-  (law 4).
+  (law 4). The type scale, the radius scale, the tracking tokens, the
+  easing, and the overlay shadow are theme tokens too, so an arbitrary
+  value (`text-[10px]`, `tracking-[0.08em]`, `shadow-[…]`) has a named
+  token to become. A one-off transition property (`transition-width`,
+  `transition-margin`) is an `@utility` in `app.css`.
 - shadcn/ui components are generated then restyled at the token layer, not
-  per-component.
+  per-component. The console runs shadcn on Base UI (`base-nova`), and a
+  component composes through Base UI's `render` prop, never `asChild`.
+- `@shadcn/lint` runs under oxlint (`pnpm lint`, first step of
+  `pnpm check`, so CI blocks on it). Its six rules run at error level:
+  `no-restyle` (a component's color, typography, spacing, shape, effects, and
+  motion stay inside `components/ui`; layout classes are allowed at a call
+  site, plus the four contracts above), `no-arbitrary-values` (layout
+  excepted), `no-raw-colors`, `no-inline-styles`, `no-unknown-classes`, and
+  `require-static-classes`. Files under `components/ui` are exempt from the
+  restyle, arbitrary-value, and static-class rules, because that is where
+  the styling lives. Configuration is `console/.oxlintrc.json`.
+- Classes compose through `cn` from the `cn` package, never through a
+  template literal, so conditional classes stay static strings the lint and
+  Tailwind can read. Siblings space through `flex gap-*` or `grid gap-*`,
+  not `space-*`. A square takes `size-*`. An icon takes its size from the
+  component that renders it, not from the call site.
+- The shadcn skill (`.agents/skills/shadcn`, pinned by `skills-lock.json`,
+  with `.claude/skills/shadcn` a symlink) is the agent-facing statement of
+  these rules and of shadcn's own composition, forms, icons, and styling
+  guidance. It is project-local so every agent that works on the console
+  reads the same version. Update it with `npx skills update`.
+- Direction: the remaining hand-rolled controls (`Form` buttons and fields,
+  `Select`, `Pill`, `Card`, `LoadingFailed`) migrate to their shadcn
+  counterparts (`Button` with DESIGN radii, `Field`, `NativeSelect`,
+  `Badge`, `Card`, `Empty` and `Alert`) once each has a variant set tuned
+  to this document. That work is a proposed campaign in `docs/TASKS.md`,
+  not a call-site rewrite.
 - Fonts self-hosted as woff2 (latin, 400/500/600) via `@font-face`; no
   runtime font CDN.
 - Charts use the shadcn chart wrapper over Recharts with the neutral series

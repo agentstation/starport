@@ -117,8 +117,13 @@ export function ChartCard({
                 <li key={item.name} className="flex items-center gap-1.5">
                   <span
                     aria-hidden="true"
-                    className="size-1.5 rounded-full"
-                    style={{ background: item.color, opacity: item.opacity ?? 1 }}
+                    className="size-1.5 rounded-full bg-(--swatch) opacity-(--swatch-opacity)"
+                    style={
+                      {
+                        "--swatch": item.color,
+                        "--swatch-opacity": String(item.opacity ?? 1),
+                      } as CSSProperties
+                    }
                   />
                   {item.name}
                 </li>
@@ -145,7 +150,7 @@ export function ChartTip({
 }) {
   if (!active || rows.length === 0) return null;
   return (
-    <div className="rounded-sm border border-border-2 bg-bg-raised px-2.5 py-1.5 text-xs shadow-[0_4px_12px_rgba(0,0,0,0.3)]">
+    <div className="rounded-sm border border-border-2 bg-bg-raised px-2.5 py-1.5 text-xs shadow-overlay">
       {label !== undefined && <div className="mb-1 text-text-3">{label}</div>}
       {rows.map((row) => (
         <div key={row.name} className="flex items-center justify-between gap-4">
@@ -153,8 +158,8 @@ export function ChartTip({
             {row.color && (
               <span
                 aria-hidden="true"
-                className="size-1.5 rounded-full"
-                style={{ background: row.color }}
+                className="size-1.5 rounded-full bg-(--swatch)"
+                style={{ "--swatch": row.color } as CSSProperties}
               />
             )}
             {row.name}

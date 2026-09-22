@@ -132,6 +132,7 @@ test("the mono style paints a full-color mark through a currentColor mask", asyn
   // The brand fill never reaches the page: the SVG is a mask over the
   // theme ink, so no filter has to hard-code black or white.
   expect(screen.getByTestId("entity-mark").querySelector("svg")).toBeNull();
-  expect(mask.style.maskImage).toContain("data:image/svg+xml");
+  expect(mask.style.getPropertyValue("--logo-mask")).toContain("data:image/svg+xml");
+  expect(mask.className).toContain("mask-(--logo-mask)");
   expect(mask.className).toContain("bg-current");
 });

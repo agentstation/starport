@@ -311,7 +311,7 @@ function ModelsPage() {
 function Header() {
   return (
     <div>
-      <h1 className="text-xl font-semibold tracking-[-0.01em]">Models</h1>
+      <h1 className="text-xl font-semibold">Models</h1>
       <p className="mt-1 text-sm text-text-3">
         Every model this gateway can route, from the current Starmap snapshot.
       </p>

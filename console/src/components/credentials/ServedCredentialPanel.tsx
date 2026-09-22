@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import type { ActivityRecord } from "@/lib/api";
 import { formatCount } from "@/lib/format";
 
@@ -80,8 +82,8 @@ export function ServedCredentialPanel({
               </div>
               <div className="h-1 overflow-hidden rounded-xs bg-bg-raised">
                 <div
-                  className="h-full bg-text-3"
-                  style={{ width: `${(count / total) * 100}%` }}
+                  className="h-full w-(--meter) bg-text-3"
+                  style={{ "--meter": `${(count / total) * 100}%` } as CSSProperties}
                 />
               </div>
             </li>

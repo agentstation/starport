@@ -23,6 +23,7 @@ import {
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { announce } from "@/lib/mutations";
+import { cn } from "@/lib/utils";
 
 // AccountTemplatesPanel manages the account templates this gateway holds. A
 // template names creation defaults once — limits, credential strategy, BYOK
@@ -145,7 +146,7 @@ function CreateTemplateForm({ onCreated }: { onCreated: () => void }) {
           placeholder="team-default"
           autoComplete="off"
           spellCheck={false}
-          className={`${INPUT_CLASS} font-mono`}
+          className={cn(INPUT_CLASS, "font-mono")}
         />
       </Field>
       <Field label="Name" hint="What a person calls this template. Optional.">

@@ -27,7 +27,12 @@ function Count({
         openOnHover
         delay={150}
         data-testid={`count-${id}`}
-        className="-mx-2 -my-1 flex flex-col items-start gap-1 rounded-sm px-2 py-1 text-left outline-none transition-colors duration-150 ease-standard hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent/50 data-popup-open:bg-bg-hover"
+        render={
+          <button
+            type="button"
+            className="-mx-2 -my-1 flex flex-col items-start gap-1 rounded-sm px-2 py-1 text-left outline-none transition-colors duration-150 ease-standard hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent/50 data-popup-open:bg-bg-hover"
+          />
+        }
       >
         <span className="text-xs text-text-3">{label}</span>
         <span className="font-mono text-xl font-medium tabular-nums text-text-1">

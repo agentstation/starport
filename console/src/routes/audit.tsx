@@ -15,6 +15,7 @@ import { RelativeTime } from "@/components/ui/RelativeTime";
 import { Select } from "@/components/ui/Select";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 // The audit log is the durable answer to "who changed what": every admin
 // mutation leaves one record naming its actor, its action, its subject, the
@@ -291,7 +292,7 @@ function AuditLog() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-[-0.01em]">Audit log</h1>
+        <h1 className="text-xl font-semibold">Audit log</h1>
         <p className="mt-1 text-sm text-text-3">
           Every admin mutation on this gateway, newest first: who asked, what
           it touched, which request carried it, and how it ended.
@@ -305,7 +306,7 @@ function AuditLog() {
           aria-label="Filter by actor"
           value={actorDraft}
           onChange={(event) => setActorDraft(event.target.value)}
-          className={`${INPUT_CLASS} w-44 font-mono`}
+          className={cn(INPUT_CLASS, "w-44 font-mono")}
         />
         <input
           type="search"
@@ -313,7 +314,7 @@ function AuditLog() {
           aria-label="Filter by action"
           value={actionDraft}
           onChange={(event) => setActionDraft(event.target.value)}
-          className={`${INPUT_CLASS} w-60 font-mono`}
+          className={cn(INPUT_CLASS, "w-60 font-mono")}
         />
         <Select
           uiSize="sm"
@@ -341,11 +342,11 @@ function AuditLog() {
               const value = event.target.value;
               setSearch({ until: value ? new Date(value).toISOString() : undefined });
             }}
-            className={`${INPUT_CLASS} w-52`}
+            className={cn(INPUT_CLASS, "w-52")}
           />
         </label>
         {hasFilters && (
-          <GhostButton onClick={clearFilters} className="text-xs">
+          <GhostButton onClick={clearFilters}>
             Clear filters
           </GhostButton>
         )}

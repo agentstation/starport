@@ -103,7 +103,7 @@ function ProviderDetailPage() {
           <EntityLogo kind="providers" id={providerId} name={name} size={40} />
           <div className="min-w-0">
             <div className="flex items-baseline gap-2.5">
-              <h1 className="truncate text-xl font-semibold tracking-[-0.01em]">
+              <h1 className="truncate text-xl font-semibold">
                 {name}
               </h1>
               <span className="shrink-0 font-mono text-xs text-text-4">
@@ -151,7 +151,6 @@ function ProviderDetailPage() {
           <ExternalLink
             href={entry.url}
             icon={Globe}
-            className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
           >
             Website
           </ExternalLink>
@@ -160,7 +159,6 @@ function ProviderDetailPage() {
           <ExternalLink
             href={entry.docs_url}
             icon={BookOpen}
-            className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
           >
             Documentation
           </ExternalLink>
@@ -169,7 +167,6 @@ function ProviderDetailPage() {
           <ExternalLink
             href={entry.status_page_url}
             icon={Activity}
-            className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
           >
             Status
           </ExternalLink>

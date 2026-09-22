@@ -7,6 +7,7 @@ import { CommandBlock } from "./CommandBlock";
 import { destination } from "./destination";
 import { IdentitySignIn } from "./IdentitySignIn";
 import { trustScope } from "./trust";
+import { cn } from "@/lib/utils";
 
 // FirstContact is the page a browser with no usable credential sees.
 //
@@ -60,7 +61,7 @@ export function FirstContact({ next }: { next?: string }) {
         </p>
       </header>
 
-      <a href="/docs?audience=operate" className="text-[0.875rem] text-accent-link hover:underline">
+      <a href="/docs?audience=operate" className="text-base text-accent-link hover:underline">
         Read documentation without console access
       </a>
 
@@ -68,7 +69,7 @@ export function FirstContact({ next }: { next?: string }) {
         <div className="flex items-center gap-2">
           <span
             aria-hidden="true"
-            className={`size-1.5 rounded-full ${scope.local ? "bg-success" : "bg-warning"}`}
+            className={cn("size-1.5 rounded-full", scope.local ? "bg-success" : "bg-warning")}
           />
           <span className="font-mono text-sm text-text-2">{scope.label}</span>
         </div>

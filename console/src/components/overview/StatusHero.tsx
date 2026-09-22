@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { queries } from "@/lib/queries";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+import { cn } from "@/lib/utils";
 
 // Readiness is what /health/ready answers: the gateway is ready, it is not,
 // or the console has not heard from it yet.
@@ -63,7 +64,7 @@ export function StatusHero() {
   return (
     <div className="mb-2">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 className="text-xl font-semibold tracking-[-0.01em] text-text-1">
+        <h1 className="text-xl font-semibold text-text-1">
           {TITLES[readiness]}
         </h1>
         <span
@@ -71,7 +72,7 @@ export function StatusHero() {
           data-readiness={readiness}
           className="flex shrink-0 items-center gap-1.5 text-xs text-text-2"
         >
-          <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${badge.dot}`} />
+          <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", badge.dot)} />
           {badge.label}
         </span>
       </div>

@@ -27,9 +27,10 @@ function CircuitChip({ state }: { state: string | undefined }) {
   const value = state ?? "unknown";
   return (
     <span
-      className={`inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
-        CIRCUIT_TONES[value] ?? "bg-bg-raised text-text-3"
-      }`}
+      className={cn(
+        "inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium",
+        CIRCUIT_TONES[value] ?? "bg-bg-raised text-text-3",
+      )}
     >
       {value.replaceAll("_", " ")}
     </span>
@@ -71,9 +72,10 @@ function RoutingChip({ routing }: { routing: ProviderOfferingStatus["routing"] }
   const state = routing?.state ?? "unknown";
   return (
     <span
-      className={`inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
-        ROUTING_TONES[state] ?? "bg-bg-raised text-text-3"
-      }`}
+      className={cn(
+        "inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium",
+        ROUTING_TONES[state] ?? "bg-bg-raised text-text-3",
+      )}
     >
       {state.replaceAll("_", " ")}
     </span>
@@ -177,7 +179,7 @@ export function PolicySummary({
               {fact.href ? (
                 <ExternalLink
                   href={fact.href}
-                  className="break-all text-accent-link transition-colors duration-150 ease-standard hover:underline"
+                  className="break-all"
                 >
                   {fact.value}
                 </ExternalLink>
@@ -395,7 +397,7 @@ export function HealthPanel({
         return (
           <p
             data-testid="reachable-summary"
-            className={`text-sm ${reach.unroutable > 0 ? "text-warning" : "text-text-3"}`}
+            className={cn("text-sm", reach.unroutable > 0 ? "text-warning" : "text-text-3")}
           >
             <span className="tabular-nums">
               {formatCount(reach.routable)} of {formatCount(reach.known)}

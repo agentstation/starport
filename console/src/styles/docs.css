@@ -13,11 +13,13 @@
 .documentation h1 {
   font-size: 1.875rem;
   line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
 .documentation h2 {
   font-size: 1.375rem;
   line-height: 1.4;
+  letter-spacing: -0.01em;
   scroll-margin-top: 2rem;
 }
 

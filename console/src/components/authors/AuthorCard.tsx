@@ -81,16 +81,17 @@ export function AuthorLinks({ author }: { author: CatalogAuthor }) {
   const links = authorExternalLinks(author);
   if (links.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3 text-xs">
       {links.map((link) => (
         <ExternalLink
           key={link.label}
           href={link.href}
           icon={LINK_MARKS[link.label]}
           iconClassName="size-3 shrink-0"
+          variant="quiet"
           // relative lifts these above the card's stretched detail link,
           // which would otherwise swallow the click.
-          className="relative text-xs text-text-3 transition-colors duration-150 ease-standard hover:text-text-1"
+          className="relative"
         >
           {link.label}
         </ExternalLink>

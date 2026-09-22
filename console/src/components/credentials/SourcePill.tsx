@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+
 // SourcePill is the one-word status a credential source wears (DESIGN.md:
 // pills report lifecycle). The vocabulary is deliberately small: Active is
 // the source requests use, Applied is stored but shadowed by an earlier
@@ -26,7 +28,10 @@ export function SourcePill({
   return (
     <span
       title={title}
-      className={`inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${TONES[tone]}`}
+      className={cn(
+        "inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium",
+        TONES[tone],
+      )}
     >
       {label}
     </span>

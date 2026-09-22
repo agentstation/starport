@@ -30,6 +30,7 @@ import {
   type LogoStyle,
 } from "@/lib/logoStyle";
 import { onThemeChange, savedTheme, setTheme, type ThemeChoice } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -119,7 +120,7 @@ function ConnectionSection() {
             aria-label="Gateway API key"
             autoComplete="off"
             spellCheck={false}
-            className={`${INPUT_CLASS} w-full pr-9 font-mono`}
+            className={cn(INPUT_CLASS, "w-full pr-9 font-mono")}
           />
           <button
             type="button"
@@ -207,11 +208,10 @@ function AppearanceSection() {
             role="radio"
             aria-checked={choice === value}
             onClick={() => setTheme(value)}
-            className={`flex h-8 items-center gap-1.5 rounded-xs px-3 text-sm transition-colors duration-150 ease-standard ${
-              choice === value
-                ? "bg-bg-hover text-text-1"
-                : "text-text-3 hover:text-text-2"
-            }`}
+            className={cn(
+              "flex h-8 items-center gap-1.5 rounded-xs px-3 text-sm transition-colors duration-150 ease-standard",
+              choice === value ? "bg-bg-hover text-text-1" : "text-text-3 hover:text-text-2",
+            )}
           >
             <Icon className="size-4" />
             {label}
@@ -236,11 +236,10 @@ function AppearanceSection() {
               role="radio"
               aria-checked={logoChoice === value}
               onClick={() => setLogoStyle(value)}
-              className={`flex h-8 items-center rounded-xs px-3 text-sm transition-colors duration-150 ease-standard ${
-                logoChoice === value
-                  ? "bg-bg-hover text-text-1"
-                  : "text-text-3 hover:text-text-2"
-              }`}
+              className={cn(
+                "flex h-8 items-center rounded-xs px-3 text-sm transition-colors duration-150 ease-standard",
+                logoChoice === value ? "bg-bg-hover text-text-1" : "text-text-3 hover:text-text-2",
+              )}
             >
               {label}
             </button>
@@ -352,7 +351,7 @@ function SourceSection() {
         href="https://github.com/agentstation/starport"
         icon={GitHubMark}
         iconClassName="size-4 shrink-0"
-        className="h-9 rounded-sm px-3 text-sm text-text-2 transition-colors duration-150 ease-standard hover:bg-bg-hover"
+        variant="button"
       >
         agentstation/starport
       </ExternalLink>
@@ -364,7 +363,7 @@ function SettingsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-semibold tracking-[-0.01em]">Settings</h1>
+        <h1 className="text-xl font-semibold">Settings</h1>
         <p className="mt-1 text-sm text-text-3">
           Connection, the gateway as configured, appearance, and local chat data.
         </p>
