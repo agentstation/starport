@@ -10,6 +10,7 @@ import { accessMessage, ApiError, refreshCatalog } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { shortGenerationID } from "@/lib/format";
 import { announce, errorText, report } from "@/lib/mutations";
+import { cn } from "@/lib/utils";
 
 // manifestSentence says what a missing manifest means for the reader. The
 // server's reason names the cause; the sentence leads with the effect,
@@ -42,7 +43,10 @@ function Badge({
   return (
     <span
       title={title}
-      className={`inline-flex h-5 items-center rounded-xs px-1.5 text-xs font-medium ${tones[tone]}`}
+      className={cn(
+        "inline-flex h-5 items-center rounded-xs px-1.5 text-xs font-medium",
+        tones[tone],
+      )}
     >
       {children}
     </span>
@@ -125,16 +129,23 @@ export function FreshnessBar() {
       <div className="flex shrink-0 items-center gap-1.5">
         {data && (
           <Popover open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <PopoverTrigger className="h-7 rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1 data-popup-open:bg-bg-hover data-popup-open:text-text-1">
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  className="h-7 rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1 data-popup-open:bg-bg-hover data-popup-open:text-text-1"
+                />
+              }
+            >
               Details
             </PopoverTrigger>
             <PopoverContent
               align="end"
               aria-label="Catalog details"
               data-testid="freshness-details"
-              className="w-80 text-xs"
+              className="w-80"
             >
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
                 <dt className="text-text-4">generation</dt>
                 <dd className="break-all font-mono text-text-2">
                   {data.generation_id ?? "—"}
@@ -188,9 +199,8 @@ export function FreshnessBar() {
           label="Refresh catalog"
           onClick={() => refresh.mutate()}
           disabled={refresh.isPending}
-          className="size-7 rounded-xs text-text-3 hover:bg-bg-hover hover:text-text-1 disabled:opacity-50"
         >
-          <RefreshCw className={`size-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
+          <RefreshCw className={cn("size-3.5", refresh.isPending && "animate-spin")} />
         </IconButton>
       </div>
       {changesOpen && <ChangesPanel onClose={() => setChangesOpen(false)} />}

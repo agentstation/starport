@@ -42,7 +42,7 @@ function JobsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-[-0.01em]">Jobs</h1>
+        <h1 className="text-xl font-semibold">Jobs</h1>
         <p className="mt-1 text-sm text-text-3">
           Work this gateway keeps running after it answers: a video that
           renders for minutes, or a batch of stored requests. Submit one,

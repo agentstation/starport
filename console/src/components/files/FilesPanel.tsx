@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Upload } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { DestructiveButton, GhostButton, PrimaryButton } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
@@ -22,6 +22,7 @@ import { queries } from "@/lib/queries";
 import { formatBytes, formatUnixTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import { announce, report } from "@/lib/mutations";
+import { cn } from "@/lib/utils";
 
 // A stored file belongs to the account whose credential asked for it. The
 // routes scope every answer to the caller, so this panel shows one account's
@@ -90,8 +91,8 @@ export function StoredTotal({
           aria-valuenow={used}
         >
           <div
-            className={`h-full ${share >= 1 ? "bg-error" : "bg-text-3"}`}
-            style={{ width: `${Math.round(share * 100)}%` }}
+            className={cn("h-full w-(--meter)", share >= 1 ? "bg-error" : "bg-text-3")}
+            style={{ "--meter": `${Math.round(share * 100)}%` } as CSSProperties}
           />
         </div>
       )}

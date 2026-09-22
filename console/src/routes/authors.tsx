@@ -123,7 +123,7 @@ function AuthorsPage() {
 function Header({ count }: { count: number }) {
   return (
     <div className="flex flex-col gap-1">
-      <h1 className="text-xl font-semibold tracking-[-0.01em]">Authors</h1>
+      <h1 className="text-xl font-semibold">Authors</h1>
       <p className="text-sm text-text-3">
         {count > 0
           ? `${count} model authors in the current catalog snapshot.`

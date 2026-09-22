@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -51,12 +51,15 @@ export function TableSkeleton({
   columns?: number;
   className?: string;
 }) {
-  const grid = { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` };
+  const grid = { "--grid-template": `repeat(${columns}, minmax(0, 1fr))` } as CSSProperties;
   return (
     <LoadingStatus
       className={cn("overflow-hidden rounded-md border border-border-1 bg-bg-panel", className)}
     >
-      <div className="grid gap-6 border-b border-border-1 px-4 py-3" style={grid}>
+      <div
+        className="grid grid-cols-(--grid-template) gap-6 border-b border-border-1 px-4 py-3"
+        style={grid}
+      >
         {Array.from({ length: columns }, (_, column) => (
           <Skeleton key={column} className="h-3 w-16" />
         ))}
@@ -64,7 +67,7 @@ export function TableSkeleton({
       {Array.from({ length: rows }, (_, row) => (
         <div
           key={row}
-          className="grid gap-6 border-b border-border-1 px-4 py-3.5 last:border-b-0"
+          className="grid grid-cols-(--grid-template) gap-6 border-b border-border-1 px-4 py-3.5 last:border-b-0"
           style={grid}
         >
           {Array.from({ length: columns }, (_, column) => (

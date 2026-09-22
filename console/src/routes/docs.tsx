@@ -43,7 +43,7 @@ function DocsPage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-[-0.01em]">Documentation</h1>
+        <h1 className="text-xl font-semibold">Documentation</h1>
         <p className="mt-1 text-sm text-text-3">
           How to call, manage, and run the Starport gateway.
         </p>
@@ -95,7 +95,7 @@ function CodeBlock({ text }: { text: string }) {
 function DocSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3 border-t border-border-1 pt-5 first:border-t-0 first:pt-0">
-      <h2 className="text-base font-semibold tracking-[-0.01em] text-text-1">{title}</h2>
+      <h2 className="text-base font-semibold text-text-1">{title}</h2>
       <div className="flex flex-col gap-3 text-base leading-relaxed text-text-2">
         {children}
       </div>

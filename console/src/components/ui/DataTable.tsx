@@ -255,10 +255,13 @@ export function DataTable<TData extends RowData>({
     activate(row);
   };
 
+  // A virtual row is absolutely placed inside the body: the virtualizer
+  // hands it a height and an offset, which reach the row as custom
+  // properties so the row keeps static utility classes.
   const renderRow = (
     row: Row<DataTableFeatures, TData>,
     index: number,
-    style?: CSSProperties,
+    placement?: { size: number; start: number },
   ) => (
     <div
       role="row"
@@ -270,12 +273,19 @@ export function DataTable<TData extends RowData>({
       onClick={interactive ? onRowClick(row) : undefined}
       onKeyDown={interactive ? onRowKeyDown(row) : undefined}
       className={cn(
-        "group grid min-h-10 items-center border-b border-border-1 transition-colors duration-150 ease-standard last:border-b-0 hover:bg-bg-hover",
+        "group grid min-h-10 grid-cols-(--grid-template) items-center border-b border-border-1 transition-colors duration-150 ease-standard last:border-b-0 hover:bg-bg-hover",
+        placement && "absolute inset-x-0 top-0 h-(--row-height) translate-y-(--row-y)",
         interactive &&
           "cursor-pointer outline-none focus-visible:bg-bg-hover focus-visible:[box-shadow:inset_2px_0_0_var(--color-accent)]",
         row.getIsSelected() && "bg-accent-tint/40",
       )}
-      style={{ gridTemplateColumns: template, ...style }}
+      style={
+        {
+          "--grid-template": template,
+          "--row-height": placement ? `${placement.size}px` : undefined,
+          "--row-y": placement ? `${placement.start - scrollMargin}px` : undefined,
+        } as CSSProperties
+      }
     >
       {row.getAllCells().map((cell) => {
         const meta = cell.column.columnDef.meta;
@@ -313,8 +323,8 @@ export function DataTable<TData extends RowData>({
             role="row"
             key={headerGroup.id}
             aria-rowindex={1}
-            className="grid h-10 items-center border-b border-border-1"
-            style={{ gridTemplateColumns: template, minWidth }}
+            className="grid h-10 min-w-(--min-width) grid-cols-(--grid-template) items-center border-b border-border-1"
+            style={{ "--grid-template": template, "--min-width": `${minWidth}px` } as CSSProperties}
           >
             {headerGroup.headers.map((header) => {
               const column = header.column;
@@ -395,21 +405,19 @@ export function DataTable<TData extends RowData>({
           className="overflow-x-auto"
         >
           <div
-            className={virtual ? "relative" : undefined}
-            style={{ minWidth, height: virtual ? virtualizer.getTotalSize() : undefined }}
+            className={cn("min-w-(--min-width)", virtual && "relative h-(--list-height)")}
+            style={
+              {
+                "--min-width": `${minWidth}px`,
+                "--list-height": virtual ? `${virtualizer.getTotalSize()}px` : undefined,
+              } as CSSProperties
+            }
           >
             {virtual
               ? virtualizer.getVirtualItems().map((item) => {
                   const row = rows[item.index];
                   if (!row) return null;
-                  return renderRow(row, item.index, {
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: item.size,
-                    transform: `translateY(${item.start - scrollMargin}px)`,
-                  });
+                  return renderRow(row, item.index, item);
                 })
               : rows.map((row, index) => renderRow(row, index))}
           </div>

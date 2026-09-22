@@ -1,5 +1,6 @@
 import type { CredentialField } from "@/lib/api";
 import { INPUT_CLASS } from "@/components/ui/Form";
+import { cn } from "@/lib/utils";
 
 // The catalog declares what a provider's credential is made of, so neither
 // credential plane assumes an "api key". This module owns that contract for
@@ -77,7 +78,7 @@ export function CredentialFieldInputs({
           autoComplete="off"
           spellCheck={false}
           aria-label={field.id}
-          className={`${INPUT_CLASS} font-mono`}
+          className={cn(INPUT_CLASS, "font-mono")}
         />
       ))}
     </>

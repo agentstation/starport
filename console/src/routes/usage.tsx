@@ -2,7 +2,7 @@ import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-qu
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { BarChart3, Download, Search } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Area,
   AreaChart,
@@ -49,12 +49,14 @@ import {
 import { RANGE_LABELS, RANGE_SECONDS, rangeOf } from "@/lib/timeRange";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import { bucketize, describeBuckets, type Bucket } from "@/lib/usageBuckets";
+import { cn } from "@/lib/utils";
 
 const PAGE_LIMIT = 200;
 // Pages fetched eagerly so the charts and counts cover the window, not
 // just the first screen. Beyond this the counts report themselves as
 // partial with a "+" suffix.
 const AUTO_PAGES = 5;
+// Each virtual row is `h-10` in the list below; keep the two in step.
 const ROW_HEIGHT = 40;
 
 const STATUSES = ["ok", "error", "cancelled"] as const;
@@ -742,7 +744,7 @@ function UsagePage() {
             aria-label="Filter by model"
             value={modelDraft}
             onChange={(event) => setModelDraft(event.target.value)}
-            className={`${INPUT_CLASS} w-56 pl-8`}
+            className={cn(INPUT_CLASS, "w-56 pl-8")}
           />
         </div>
         <input
@@ -751,7 +753,7 @@ function UsagePage() {
           aria-label="Filter by provider"
           value={providerDraft}
           onChange={(event) => setProviderDraft(event.target.value)}
-          className={`${INPUT_CLASS} w-32`}
+          className={cn(INPUT_CLASS, "w-32")}
         />
         {admin && (
           <input
@@ -760,7 +762,7 @@ function UsagePage() {
             aria-label="Filter by key ID"
             value={keyDraft}
             onChange={(event) => setKeyDraft(event.target.value)}
-            className={`${INPUT_CLASS} w-40 font-mono`}
+            className={cn(INPUT_CLASS, "w-40 font-mono")}
           />
         )}
         <input
@@ -769,7 +771,7 @@ function UsagePage() {
           aria-label="Filter by request ID"
           value={requestDraft}
           onChange={(event) => setRequestDraft(event.target.value)}
-          className={`${INPUT_CLASS} w-44 font-mono`}
+          className={cn(INPUT_CLASS, "w-44 font-mono")}
         />
         <Select
           uiSize="sm"
@@ -1131,7 +1133,7 @@ function UsagePage() {
             className="text-sm max-sm:overflow-x-auto"
           >
             <div role="rowgroup" className="sticky top-0 z-10 bg-bg-canvas">
-              <div role="row" className={`${grid} h-8 border-b border-border-1`}>
+              <div role="row" className={cn(grid, "h-8 border-b border-border-1")}>
                 <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Time</div>
                 <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Model</div>
                 {admin && (
@@ -1151,8 +1153,8 @@ function UsagePage() {
             <div
               ref={listRef}
               role="rowgroup"
-              className="relative"
-              style={{ height: virtualizer.getTotalSize() }}
+              className="relative h-(--list-height)"
+              style={{ "--list-height": `${virtualizer.getTotalSize()}px` } as CSSProperties}
             >
               {virtualizer.getVirtualItems().map((item) => {
                 const record = records[item.index];
@@ -1169,11 +1171,15 @@ function UsagePage() {
                         setSelected(record);
                       }
                     }}
-                    className={`${grid} absolute inset-x-0 cursor-pointer border-b border-border-1 transition-colors duration-150 ease-standard hover:bg-bg-hover`}
-                    style={{
-                      height: ROW_HEIGHT,
-                      transform: `translateY(${item.start - (listRef.current?.offsetTop ?? 0)}px)`,
-                    }}
+                    className={cn(
+                      grid,
+                      "absolute inset-x-0 h-10 translate-y-(--row-y) cursor-pointer border-b border-border-1 transition-colors duration-150 ease-standard hover:bg-bg-hover",
+                    )}
+                    style={
+                      {
+                        "--row-y": `${item.start - (listRef.current?.offsetTop ?? 0)}px`,
+                      } as CSSProperties
+                    }
                   >
                     <div
                       role="cell"

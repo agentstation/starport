@@ -18,7 +18,7 @@ function bucketize(
   records: ActivityRecord[],
   value: (record: ActivityRecord) => number,
 ): number[] {
-  const buckets = new Array<number>(24).fill(0);
+  const buckets = Array.from({ length: 24 }, () => 0);
   const now = Date.now();
   const hour = 3_600_000;
   for (const record of records) {

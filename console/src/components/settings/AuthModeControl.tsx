@@ -12,6 +12,7 @@ import {
   type AuthMode,
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
+import { cn } from "@/lib/utils";
 
 const CHOICES: {
   mode: AuthMode["mode"];
@@ -98,11 +99,10 @@ export function AuthModeControl() {
               setFailure("");
               setPending(mode);
             }}
-            className={`flex h-8 items-center gap-1.5 rounded-xs px-3 text-sm transition-colors duration-150 ease-standard disabled:cursor-not-allowed disabled:opacity-50 ${
-              data.mode === mode
-                ? "bg-bg-hover text-text-1"
-                : "text-text-3 hover:text-text-2"
-            }`}
+            className={cn(
+              "flex h-8 items-center gap-1.5 rounded-xs px-3 text-sm transition-colors duration-150 ease-standard disabled:cursor-not-allowed disabled:opacity-50",
+              data.mode === mode ? "bg-bg-hover text-text-1" : "text-text-3 hover:text-text-2",
+            )}
           >
             <Icon className="size-4" />
             {label}

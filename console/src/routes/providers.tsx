@@ -23,6 +23,7 @@ import { oneOf, optionalString } from "@/lib/search";
 import { providerLabel } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import { announce, errorText, report } from "@/lib/mutations";
+import { cn } from "@/lib/utils";
 
 const SORT_KEYS = ["status", "name", "models"] as const;
 type SortKey = (typeof SORT_KEYS)[number];
@@ -219,9 +220,10 @@ function ProvidersPage() {
             label="Refresh provider status"
             onClick={() => refresh.mutate()}
             disabled={refresh.isPending}
-            className="size-8 rounded-sm border border-border-2 bg-bg-raised text-text-2 hover:bg-bg-hover disabled:opacity-50"
+            variant="outline"
+            size="md"
           >
-            <RefreshCw className={`size-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
+            <RefreshCw className={cn("size-3.5", refresh.isPending && "animate-spin")} />
           </IconButton>
         </div>
       </div>
@@ -256,7 +258,7 @@ function ProvidersPage() {
 function Header() {
   return (
     <div>
-      <h1 className="text-xl font-semibold tracking-[-0.01em]">Providers</h1>
+      <h1 className="text-xl font-semibold">Providers</h1>
       <p className="mt-1 text-sm text-text-3">
         Upstream services this gateway can route to, and whether it can reach
         them.

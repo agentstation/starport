@@ -15,6 +15,7 @@ import {
   providerLabel,
 } from "@/lib/format";
 import { operationsOf } from "@/lib/modelFilter";
+import { cn } from "@/lib/utils";
 
 // --- Actions: Open in chat seeds the composer's model; Compare lands
 // in chat with compare mode seeded from the same model.
@@ -132,7 +133,10 @@ export function CapabilityChips({ model }: { model: Model }) {
           {chips.map((chip) => (
             <span
               key={chip}
-              className={`inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${TIER_TONES[tier]}`}
+              className={cn(
+                "inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium",
+                TIER_TONES[tier],
+              )}
             >
               {chip}
             </span>
@@ -282,9 +286,10 @@ export function OfferingTable({
                 <td className="px-4 py-2.5">
                   {circuit ? (
                     <span
-                      className={`inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
-                        CIRCUIT_TONES[circuit] ?? "bg-bg-raised text-text-3"
-                      }`}
+                      className={cn(
+                        "inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium",
+                        CIRCUIT_TONES[circuit] ?? "bg-bg-raised text-text-3",
+                      )}
                     >
                       {circuit.replaceAll("_", " ")}
                     </span>

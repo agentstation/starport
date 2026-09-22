@@ -36,6 +36,7 @@ import {
 import { formatNanoUSD } from "@/lib/format";
 import { queries } from "@/lib/queries";
 import { report } from "@/lib/mutations";
+import { cn } from "@/lib/utils";
 
 // TeamDetailPanel governs one team: who is on the roster and which accounts
 // the team grants. Both lists are the gateway's — every edit travels before
@@ -211,7 +212,7 @@ export function TeamDetailPanel({
                       onChange={(event) => setDraftBudget(event.target.value)}
                       placeholder="unmetered"
                       aria-label="Team spend budget (USD)"
-                      className={`${INPUT_CLASS} w-32`}
+                      className={cn(INPUT_CLASS, "w-32")}
                     />
                     <Select
                       value={draftInterval}

@@ -353,7 +353,7 @@ function ColumnCard({
             <IconButton
               label={`Stop ${column.model}`}
               onClick={onStop}
-              className="size-6 rounded-sm text-text-3 hover:bg-bg-hover hover:text-text-1"
+              size="xs"
             >
               <Square aria-hidden="true" className="size-3" fill="currentColor" />
             </IconButton>
@@ -361,7 +361,7 @@ function ColumnCard({
             <IconButton
               label={`Retry ${column.model}`}
               onClick={onRetry}
-              className="size-6 rounded-sm text-text-3 hover:bg-bg-hover hover:text-text-1"
+              size="xs"
             >
               <RefreshCcw aria-hidden="true" className="size-3" />
             </IconButton>
@@ -420,7 +420,7 @@ export function CompareView({
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center px-4">
         <div className="max-w-md text-center">
-          <h1 className="mb-3 text-2xl font-semibold tracking-[-0.01em]">
+          <h1 className="mb-3 text-2xl font-semibold">
             Compare models
           </h1>
           <p className="text-sm leading-relaxed text-text-3">

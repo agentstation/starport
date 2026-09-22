@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { report } from "@/lib/mutations";
+import { cn } from "@/lib/utils";
 
 // CopyButton copies text, says "Copied" for two seconds where a screen
 // reader hears it, and reports a copy the browser refused.
@@ -39,9 +40,10 @@ export function CopyButton({
             type="button"
             onClick={copy}
             aria-label={name}
-            className={`flex h-7 shrink-0 items-center gap-1.5 rounded-xs px-1.5 text-xs transition-colors duration-150 ease-standard hover:bg-bg-hover ${
-              copied ? "text-success" : "text-text-3 hover:text-text-2"
-            }`}
+            className={cn(
+              "flex h-7 shrink-0 items-center gap-1.5 rounded-xs px-1.5 text-xs transition-colors duration-150 ease-standard hover:bg-bg-hover",
+              copied ? "text-success" : "text-text-3 hover:text-text-2",
+            )}
           />
         }
       >

@@ -38,6 +38,7 @@ import {
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import { announce, report } from "@/lib/mutations";
+import { cn } from "@/lib/utils";
 
 // The key under edit lives in the address, so a reload or a shared link
 // opens the same panel. The create, secret, and delete dialogs stay local:
@@ -112,12 +113,19 @@ export function ScopePills({ scopes }: { scopes: string[] }) {
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger
-              aria-label={`${rest.length} more scopes: ${rest.join(", ")}`}
-              className="inline-flex h-5 items-center rounded-xs bg-bg-raised px-1.5 font-mono text-xs text-text-2"
+              render={
+                <button
+                  type="button"
+                  aria-label={`${rest.length} more scopes: ${rest.join(", ")}`}
+                  className="inline-flex h-5 items-center rounded-xs bg-bg-raised px-1.5 font-mono text-xs text-text-2"
+                />
+              }
             >
               +{rest.length}
             </TooltipTrigger>
-            <TooltipContent className="max-w-sm font-mono">{rest.join(", ")}</TooltipContent>
+            <TooltipContent className="max-w-sm">
+              <span className="font-mono">{rest.join(", ")}</span>
+            </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}
@@ -319,7 +327,7 @@ function LimitsFields({
             value={draft.reqLimit}
             onChange={(event) => set({ reqLimit: event.target.value })}
             placeholder="unlimited"
-            className={`${INPUT_CLASS} w-32`}
+            className={cn(INPUT_CLASS, "w-32")}
           />
           <Select
             value={draft.reqWindow}
@@ -344,7 +352,7 @@ function LimitsFields({
             value={draft.spend}
             onChange={(event) => set({ spend: event.target.value })}
             placeholder="unlimited"
-            className={`${INPUT_CLASS} w-32`}
+            className={cn(INPUT_CLASS, "w-32")}
           />
           <Select
             value={draft.spendInterval}
@@ -363,7 +371,7 @@ function LimitsFields({
             value={draft.tokens}
             onChange={(event) => set({ tokens: event.target.value })}
             placeholder="unlimited"
-            className={`${INPUT_CLASS} w-32`}
+            className={cn(INPUT_CLASS, "w-32")}
           />
           <Select
             value={draft.tokensInterval}
@@ -974,7 +982,7 @@ function KeysPage() {
 function Header() {
   return (
     <div>
-      <h1 className="text-xl font-semibold tracking-[-0.01em]">API keys</h1>
+      <h1 className="text-xl font-semibold">API keys</h1>
       <p className="mt-1 text-sm text-text-3">
         Gateway keys for your apps. A key authenticates a caller and carries
         its scopes and limits; it never holds a provider credential.

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { queries } from "@/lib/queries";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+import { cn } from "@/lib/utils";
 
 // StatusHero is the gateway identity strip: readiness, origin, version,
 // storage, uptime, and model count.
@@ -41,9 +42,10 @@ export function StatusHero() {
     <div className="mb-6 flex items-center gap-3">
       <span
         aria-hidden="true"
-        className={`size-2.5 rounded-full ${
-          health.isPending ? "bg-text-4" : ready ? "bg-success" : "bg-error"
-        }`}
+        className={cn(
+          "size-2.5 rounded-full",
+          health.isPending ? "bg-text-4" : ready ? "bg-success" : "bg-error",
+        )}
       />
       <div>
         <div className="text-lg font-semibold text-text-1">

@@ -29,7 +29,7 @@ export default function SmallScreenNav({
           render={
             <IconButton
               label="Open navigation"
-              className="size-11 rounded-sm text-text-2 hover:bg-bg-hover hover:text-text-1"
+              size="lg"
             />
           }
         >
@@ -43,7 +43,8 @@ export default function SmallScreenNav({
       <IconButton
         label="Search"
         onClick={onSearch}
-        className="ml-auto size-11 rounded-sm text-text-2 hover:bg-bg-hover hover:text-text-1"
+        size="lg"
+        className="ml-auto"
       >
         <SearchIcon aria-hidden="true" className="size-4" />
       </IconButton>

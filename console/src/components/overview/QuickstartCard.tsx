@@ -41,9 +41,9 @@ export function QuickstartCard() {
         Quickstart
       </CardTitle>
       <Tabs value={current} onValueChange={(value) => setCurrent(String(value))}>
-        <TabsList aria-label="Snippet language" className="gap-0">
+        <TabsList aria-label="Snippet language" size="sm">
           {Object.keys(all).map((name) => (
-            <TabsTrigger key={name} value={name} className="h-8 px-2.5 text-xs">
+            <TabsTrigger key={name} value={name}>
               {name}
             </TabsTrigger>
           ))}

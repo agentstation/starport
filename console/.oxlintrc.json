@@ -1,0 +1,50 @@
+{
+  // shadcn lint (https://github.com/shadcn-ui/lint) under oxlint. The
+  // rules enforce the DESIGN.md contract: a component owns its color,
+  // typography, spacing, shape, and motion; a call site adds layout
+  // alone; every value comes from a token; a dynamic value reaches the
+  // page as a CSS custom property, never an inline style. Components in
+  // src/components/ui are where the styling lives, so the restyle,
+  // arbitrary-value, and static-class rules do not run there.
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": ["@shadcn/lint"],
+  "ignorePatterns": ["src/routeTree.gen.ts"],
+  "settings": {
+    "shadcn": {
+      "note": "See DESIGN.md (Components, Implementation mapping) and .agents/skills/shadcn/rules/styling.md."
+    }
+  },
+  "rules": {
+    "shadcn/no-restyle": [
+      "error",
+      {
+        "allow": ["layout"],
+        "contracts": [
+          // RelativeTime is a bare <time>: the caller sets its size and tone.
+          { "pattern": "^RelativeTime$", "allow": ["layout", "typography", "color"] },
+          // Overlay panels and tab panels take their own inner padding and gap.
+          { "pattern": "^(PopoverContent|SheetContent|DialogContent|TabsContent)$", "allow": ["layout", "spacing"] },
+          // LoadingStatus is a live region wrapper; the caller lays out its children.
+          { "pattern": "^LoadingStatus$", "allow": ["layout", "spacing"] },
+          // A Skeleton takes the shape of the content it stands in for.
+          { "pattern": "^Skeleton$", "allow": ["layout", "shape"] }
+        ]
+      }
+    ],
+    "shadcn/no-raw-colors": "error",
+    "shadcn/no-arbitrary-values": ["error", { "allow": ["layout"] }],
+    "shadcn/no-inline-styles": "error",
+    "shadcn/no-unknown-classes": "error",
+    "shadcn/require-static-classes": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/components/ui/**"],
+      "rules": {
+        "shadcn/no-restyle": "off",
+        "shadcn/no-arbitrary-values": "off",
+        "shadcn/require-static-classes": "off"
+      }
+    }
+  ]
+}

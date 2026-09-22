@@ -157,7 +157,7 @@ function TeamsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-[-0.01em]">Teams</h1>
+          <h1 className="text-xl font-semibold">Teams</h1>
           <p className="mt-1 text-sm text-text-3">
             Grant an account to a team once and everyone on its roster reaches
             it, including whoever joins later.

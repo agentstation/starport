@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { GhostButton } from "@/components/ui/Form";
@@ -84,8 +84,14 @@ export function BatchProgress({ counts }: { counts: Batch["request_counts"] }) {
         aria-valuetext={`${completed} completed, ${failed} failed, ${total} total`}
         className="flex h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-border-3"
       >
-        <span className="block h-full bg-success" style={{ width: `${percent(completed)}%` }} />
-        <span className="block h-full bg-error" style={{ width: `${percent(failed)}%` }} />
+        <span
+          className="block h-full w-(--meter) bg-success"
+          style={{ "--meter": `${percent(completed)}%` } as CSSProperties}
+        />
+        <span
+          className="block h-full w-(--meter) bg-error"
+          style={{ "--meter": `${percent(failed)}%` } as CSSProperties}
+        />
       </span>
       <span className="text-xs tabular-nums text-text-3">
         {completed} of {total} completed

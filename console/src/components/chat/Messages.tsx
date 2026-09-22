@@ -36,6 +36,7 @@ import type { GeneratedMedia } from "@/lib/attachments";
 import { turnAttachments } from "@/lib/chatStore";
 import type { ChatMessage } from "@/lib/chatStore";
 import { formatCount, formatMs, formatNanoUSD } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const PLUGINS = { code, math, mermaid };
 
@@ -73,7 +74,7 @@ function ActionIcon({
   return (
     <IconButton
       label={label}
-      className={`rounded-sm p-1.5 text-text-3 hover:bg-bg-hover hover:text-text-2 ${className ?? ""}`}
+      className={className}
       {...props}
     >
       {children}
@@ -129,9 +130,8 @@ function RetryMenu({
               <DropdownMenuItem
                 key={model}
                 onClick={() => onRetry(model)}
-                className="truncate font-mono text-xs"
               >
-                {model}
+                <span className="min-w-0 truncate font-mono text-xs">{model}</span>
               </DropdownMenuItem>
             ))}
           </>
@@ -177,7 +177,7 @@ export function ReasoningFold({
         className="flex items-center gap-1 text-sm text-text-3 transition-colors duration-150 ease-standard hover:text-text-2"
       >
         <ChevronRight aria-hidden="true"
-          className={`size-3.5 transition-transform duration-150 ${open ? "rotate-90" : ""}`}
+          className={cn("size-3.5 transition-transform duration-150", open && "rotate-90")}
         />
         {active && <Loader2 aria-hidden="true" className="size-3 animate-spin" />}
         {label}

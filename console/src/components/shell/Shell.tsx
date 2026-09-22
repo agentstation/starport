@@ -42,6 +42,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { queries } from "@/lib/queries";
 import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 import { SMALL_SCREEN, useMediaQuery } from "@/lib/useMediaQuery";
+import { cn } from "@/lib/utils";
 
 // The small-screen top bar carries the sheet machinery, which a desktop
 // first paint does not need.
@@ -142,7 +143,7 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
             type="button"
             onClick={flip}
             aria-label={theme === "dark" ? "Dark theme — switch to light" : "Light theme — switch to dark"}
-            className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
+            className={cn(FOOTER_ITEM, collapsed && "justify-center px-0")}
           />
         }
       >
@@ -162,7 +163,7 @@ function GatewayStatus({ collapsed }: { collapsed: boolean }) {
   const label = health.isPending ? "Connecting" : ok ? "Gateway healthy" : "Gateway unreachable";
   return (
     <div
-      className={`flex h-9 items-center gap-2.5 px-3 ${collapsed ? "justify-center px-0" : ""}`}
+      className={cn("flex h-9 items-center gap-2.5 px-3", collapsed && "justify-center px-0")}
       title={label}
     >
       {/* The dot sits inside an icon-sized box so it lines up with the
@@ -170,9 +171,10 @@ function GatewayStatus({ collapsed }: { collapsed: boolean }) {
       <span className="flex size-4 shrink-0 items-center justify-center">
         <span
           aria-hidden="true"
-          className={`size-2 rounded-full ${
-            health.isPending ? "bg-text-4" : ok ? "bg-success" : "bg-error"
-          }`}
+          className={cn(
+            "size-2 rounded-full",
+            health.isPending ? "bg-text-4" : ok ? "bg-success" : "bg-error",
+          )}
         />
       </span>
       {!collapsed && (
@@ -248,10 +250,10 @@ function SidebarBody({
   const rowHeight = inSheet ? "h-11" : "h-9";
   return (
     <>
-      <div className={`flex h-14 items-center gap-2.5 ${collapsed ? "justify-center px-0" : "px-4"}`}>
+      <div className={cn("flex h-14 items-center gap-2.5", collapsed ? "justify-center px-0" : "px-4")}>
         <StarMark />
         {!collapsed && (
-          <span className="text-sm font-semibold tracking-[0.08em]">STARPORT</span>
+          <span className="text-sm font-semibold tracking-wordmark">STARPORT</span>
         )}
       </div>
 
@@ -262,14 +264,19 @@ function SidebarBody({
             onNavigate?.();
             openCommandPalette();
           }}
-          className={`flex ${rowHeight} w-full items-center gap-2.5 rounded-sm border border-border-1 bg-bg-raised px-3 text-text-4 transition-colors duration-150 ease-standard hover:border-border-2 hover:text-text-2 ${collapsed ? "justify-center px-0" : ""}`}
+          className={cn(
+            "flex",
+            rowHeight,
+            "w-full items-center gap-2.5 rounded-sm border border-border-1 bg-bg-raised px-3 text-text-4 transition-colors duration-150 ease-standard hover:border-border-2 hover:text-text-2",
+            collapsed && "justify-center px-0",
+          )}
         >
           <SearchIcon className="size-4 shrink-0" />
           {!collapsed && (
             <>
               <span className="text-sm">Search</span>
               {!inSheet && (
-                <kbd className="ml-auto rounded-xs border border-border-1 px-1.5 py-0.5 font-sans text-[10px] tracking-[0.08em]">
+                <kbd className="ml-auto rounded-xs border border-border-1 px-1.5 py-0.5 font-sans text-2xs tracking-caps">
                   ⌘ K
                 </kbd>
               )}
@@ -285,7 +292,7 @@ function SidebarBody({
               (collapsed ? (
                 <div aria-hidden="true" className="mx-2 my-2 border-t border-border-1" />
               ) : section.label ? (
-                <p className="px-3 pb-1 pt-4 text-[10px] font-medium uppercase tracking-[0.08em] text-text-4">
+                <p className="px-3 pb-1 pt-4 text-2xs font-medium uppercase tracking-caps text-text-4">
                   {section.label}
                 </p>
               ) : (
@@ -303,7 +310,12 @@ function SidebarBody({
                   onClick={onNavigate}
                   activeOptions={{ exact: item.to === "/" }}
                   activeProps={{ "aria-current": "page" }}
-                  className={`relative flex ${rowHeight} items-center gap-2.5 rounded-sm px-3 text-base font-medium transition-colors duration-150 ease-standard ${collapsed ? "justify-center px-0" : ""}`}
+                  className={cn(
+                    "relative flex",
+                    rowHeight,
+                    "items-center gap-2.5 rounded-sm px-3 text-base font-medium transition-colors duration-150 ease-standard",
+                    collapsed && "justify-center px-0",
+                  )}
                   inactiveProps={{
                     className: "text-text-3 hover:bg-bg-hover hover:text-text-2",
                   }}
@@ -334,7 +346,7 @@ function SidebarBody({
           href="https://github.com/agentstation/starport"
           target="_blank"
           rel="noreferrer"
-          className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
+          className={cn(FOOTER_ITEM, collapsed && "justify-center px-0")}
         >
           <GitHubMark className="size-4 shrink-0" />
           {!collapsed && (
@@ -354,7 +366,7 @@ function SidebarBody({
                   aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                   aria-expanded={!collapsed}
                   aria-controls={SIDEBAR_ID}
-                  className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
+                  className={cn(FOOTER_ITEM, collapsed && "justify-center px-0")}
                 />
               }
             >
@@ -404,7 +416,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <TooltipProvider>
-    <div className={`flex min-h-screen bg-bg-canvas text-text-1 ${small ? "flex-col" : ""}`}>
+    <div className={cn("flex min-h-screen bg-bg-canvas text-text-1", small && "flex-col")}>
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-sm focus:border focus:border-border-2 focus:bg-bg-raised focus:px-3 focus:py-2 focus:text-sm focus:text-text-1"
@@ -422,7 +434,7 @@ export function Shell({ children }: { children: ReactNode }) {
             brand={
               <>
                 <StarMark />
-                <span className="text-sm font-semibold tracking-[0.08em]">STARPORT</span>
+                <span className="text-sm font-semibold tracking-wordmark">STARPORT</span>
               </>
             }
             body={
@@ -438,9 +450,10 @@ export function Shell({ children }: { children: ReactNode }) {
       ) : (
         <aside
           id={SIDEBAR_ID}
-          className={`fixed inset-y-0 left-0 flex flex-col border-r border-border-1 bg-bg-panel transition-[width] duration-150 ease-standard ${
-            collapsed ? "w-16" : "w-60"
-          }`}
+          className={cn(
+            "fixed inset-y-0 left-0 flex flex-col border-r border-border-1 bg-bg-panel transition-width duration-150 ease-standard",
+            collapsed ? "w-16" : "w-60",
+          )}
         >
           <SidebarBody
             collapsed={collapsed}
@@ -458,9 +471,10 @@ export function Shell({ children }: { children: ReactNode }) {
             "--app-banner": aboveMain,
           } as React.CSSProperties
         }
-        className={`min-w-0 flex-1 transition-[margin] duration-150 ease-standard ${
-          small ? "" : collapsed ? "ml-16" : "ml-60"
-        }`}
+        className={cn(
+          "min-w-0 flex-1 transition-margin duration-150 ease-standard",
+          !small && (collapsed ? "ml-16" : "ml-60"),
+        )}
       >
         {openGateway && <OpenGatewayBanner />}
         {pathname === "/chat" ? (

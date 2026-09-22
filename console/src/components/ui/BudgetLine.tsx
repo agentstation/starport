@@ -1,5 +1,8 @@
+import type { CSSProperties } from "react";
+
 import { RelativeTime } from "@/components/ui/RelativeTime";
 import type { BudgetUsage } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 // BudgetLine is the one meter for a budget on any holder: a key, an
 // account, or a team. It shows what the current window has left against a
@@ -44,12 +47,15 @@ export function BudgetLine({
         className="h-1 w-12 shrink-0 overflow-hidden rounded-full bg-border-3"
       >
         <span
-          className={`block h-full ${exhausted ? "bg-error" : fraction > 0.8 ? "bg-warning" : "bg-success"}`}
-          style={{ width: `${percent}%` }}
+          className={cn(
+            "block h-full w-(--meter)",
+            exhausted ? "bg-error" : fraction > 0.8 ? "bg-warning" : "bg-success",
+          )}
+          style={{ "--meter": `${percent}%` } as CSSProperties}
         />
       </span>
       <span
-        className={`text-xs tabular-nums ${exhausted ? "text-error" : "text-text-3"}`}
+        className={cn("text-xs tabular-nums", exhausted ? "text-error" : "text-text-3")}
       >
         {exhausted ? `${unit} exhausted` : `${render(remaining)} left`}
       </span>

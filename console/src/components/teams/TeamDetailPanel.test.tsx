@@ -263,7 +263,7 @@ test("draws the budget meter at 80 percent", () => {
   expect(meter.getAttribute("aria-valuenow")).toBe("8000000000");
   expect(meter.getAttribute("aria-valuemax")).toBe("10000000000");
   expect(meter.getAttribute("aria-valuetext")).toBe("$8 of $10, 80%");
-  expect((meter.firstElementChild as HTMLElement).style.width).toBe("80%");
+  expect((meter.firstElementChild as HTMLElement).style.getPropertyValue("--meter")).toBe("80%");
   expect(screen.getByText("$2 left")).toBeTruthy();
   expect(screen.getByText(/resets/)).toBeTruthy();
 });
