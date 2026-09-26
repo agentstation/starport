@@ -105,11 +105,11 @@ func (m RuntimeMigration) bindStore(ctx context.Context, store storage.KVStore, 
 	if errors.Is(err, os.ErrNotExist) {
 		encoded, err = store.Get(ctx, key)
 		if errors.Is(err, storage.ErrNotFound) {
-			identity, err := migrationStoreIdentity(ctx, store, true)
+			identity, err := m.storeIdentity(ctx, store, settings, true)
 			if err != nil {
 				return err
 			}
-			accepted, err := NewGenerationStore(store)
+			accepted, err := OpenAcceptedStore(ctx, store, m.recoveryDB, settings.DeploymentID)
 			if err != nil {
 				return err
 			}
@@ -186,14 +186,14 @@ func (m RuntimeMigration) verifyStoreReceipt(ctx context.Context, store storage.
 	if receipt.StoreSelection != m.StoreSelection || receipt.StoreID == "" || receipt.Version != 1 || receipt.Request != m.request(settings) {
 		return fmt.Errorf("runtime migration catalog binding differs from the selected operation")
 	}
-	identity, err := migrationStoreIdentity(ctx, store, false)
+	identity, err := m.storeIdentity(ctx, store, settings, false)
 	if err != nil {
 		return err
 	}
 	if identity != receipt.StoreID {
 		return fmt.Errorf("runtime migration catalog store identity differs from the host journal")
 	}
-	accepted, err := NewGenerationStore(store)
+	accepted, err := OpenAcceptedStore(ctx, store, m.recoveryDB, settings.DeploymentID)
 	if err != nil {
 		return err
 	}
@@ -220,4 +220,19 @@ func (m RuntimeMigration) verifyStoreReceipt(ctx context.Context, store storage.
 		return fmt.Errorf("read retained migration catalog: %w", err)
 	}
 	return validateAcceptedOrder(original.Manifest, current.Manifest)
+}
+
+func (m RuntimeMigration) storeIdentity(ctx context.Context, store storage.KVStore, settings Settings, create bool) (string, error) {
+	fleet, err := openRecoveryFleet(ctx, store, m.recoveryDB, settings.DeploymentID)
+	if err != nil {
+		return "", err
+	}
+	if fleet == nil {
+		return migrationStoreIdentity(ctx, store, create)
+	}
+	data, err := json.Marshal(fleet.identity, json.Deterministic(true))
+	if err != nil {
+		return "", err
+	}
+	return "fleet:" + payloadDigest(data), nil
 }
