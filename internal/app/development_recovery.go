@@ -30,7 +30,12 @@ type developmentRecoveryReport struct {
 }
 
 func recoverDevelopmentScratch(ctx context.Context, temporary string) (report developmentRecoveryReport, resultErr error) {
-	parent, err := os.Open(temporary) //nolint:gosec // The host selects its operating system temporary directory.
+	root, err := os.OpenRoot(temporary)
+	if err != nil {
+		return report, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
+	parent, err := root.Open(".")
 	if err != nil {
 		return report, err
 	}
