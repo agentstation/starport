@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 // Pill reports a lifecycle state: a file that finished landing, a job that
 // completed, a key that expired. DESIGN.md keeps the two state idioms apart.
@@ -27,7 +28,10 @@ export function Pill({
   return (
     <span
       title={title}
-      className={`inline-flex h-5 items-center whitespace-nowrap rounded-full px-2 text-xs font-medium ${TONES[tone]}`}
+      className={cn(
+        "inline-flex h-5 items-center whitespace-nowrap rounded-full px-2 text-xs font-medium",
+        TONES[tone],
+      )}
     >
       {children}
     </span>

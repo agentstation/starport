@@ -237,6 +237,15 @@
   --text-2xl: 32px;
   --text-2xl--line-height: 38px;
   --text-2xl--letter-spacing: -0.02em;
+  /* Micro step (DESIGN.md scale, 2xs): keyboard hints and uppercase
+   * micro-labels only. Nothing a reader must read sits at this size. */
+  --text-2xs: 10px;
+  --text-2xs--line-height: 14px;
+
+  /* Tracking (DESIGN.md typography). The lg, xl, and 2xl steps above carry
+   * their own letter-spacing, so a title never restates it. */
+  --tracking-caps: 0.04em;
+  --tracking-wordmark: 0.08em;
 
   --radius-*: initial;
   --radius-xs: 4px;

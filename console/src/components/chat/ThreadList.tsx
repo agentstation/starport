@@ -5,6 +5,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { DestructiveButton, GhostButton } from "@/components/ui/Form";
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Conversation } from "@/lib/chatStore";
+import { cn } from "@/lib/utils";
 
 // ThreadList is the chat sidebar: search, then conversations grouped
 // by pinned state and recency (legacy grouping carried over).
@@ -99,17 +100,19 @@ function ThreadRow({
 
   return (
     <div
-      className={`group relative flex h-8 items-center rounded-sm transition-colors duration-150 ease-standard ${
-        active ? "bg-bg-hover" : "hover:bg-bg-hover"
-      }`}
+      className={cn(
+        "group relative flex h-8 items-center rounded-sm transition-colors duration-150 ease-standard",
+        active ? "bg-bg-hover" : "hover:bg-bg-hover",
+      )}
     >
       <button
         type="button"
         onClick={onOpen}
         aria-current={active ? "true" : undefined}
-        className={`h-full min-w-0 flex-1 truncate px-2 text-left text-sm ${
-          active ? "text-text-1" : "text-text-2"
-        }`}
+        className={cn(
+          "h-full min-w-0 flex-1 truncate px-2 text-left text-sm",
+          active ? "text-text-1" : "text-text-2",
+        )}
       >
         {conversation.title || "Untitled"}
       </button>
@@ -117,7 +120,7 @@ function ThreadRow({
         <IconButton
           label={conversation.pinned ? "Unpin conversation" : "Pin conversation"}
           onClick={onTogglePin}
-          className="rounded-xs p-1 text-text-4 hover:text-text-2"
+          size="xs"
         >
           {conversation.pinned ? (
             <PinOff aria-hidden="true" className="size-3.5" />
@@ -131,14 +134,15 @@ function ThreadRow({
             setDraft(conversation.title);
             setEditing(true);
           }}
-          className="rounded-xs p-1 text-text-4 hover:text-text-2"
+          size="xs"
         >
           <Pencil aria-hidden="true" className="size-3.5" />
         </IconButton>
         <IconButton
           label="Delete conversation"
           onClick={onDelete}
-          className="rounded-xs p-1 text-text-4 hover:text-error"
+          variant="destructive"
+          size="xs"
         >
           <Trash2 aria-hidden="true" className="size-3.5" />
         </IconButton>

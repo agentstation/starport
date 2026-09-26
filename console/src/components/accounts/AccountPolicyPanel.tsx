@@ -158,7 +158,7 @@ function ModelNarrowing({
               onChange={(event) => setFilter(event.target.value)}
               placeholder="Filter models…"
               aria-label={`Filter ${provider.name || provider.id} models`}
-              className="h-7 rounded-xs border border-border-1 bg-bg-base px-2 text-xs text-text-1"
+              className="h-7 rounded-xs border border-border-2 bg-bg-raised px-2 text-xs text-text-1"
             />
           )}
           <div className="flex max-h-40 flex-col gap-1 overflow-y-auto">

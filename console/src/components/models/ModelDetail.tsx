@@ -17,6 +17,7 @@ import {
   shortGenerationID,
 } from "@/lib/format";
 import { operationsOf } from "@/lib/modelFilter";
+import { cn } from "@/lib/utils";
 
 // --- Actions: Open in chat seeds the composer's model; Compare lands
 // in chat with compare mode seeded from the same model.
@@ -134,7 +135,10 @@ export function CapabilityChips({ model }: { model: Model }) {
           {chips.map((chip) => (
             <span
               key={chip}
-              className={`inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${TIER_TONES[tier]}`}
+              className={cn(
+                "inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium",
+                TIER_TONES[tier],
+              )}
             >
               {chip}
             </span>

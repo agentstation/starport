@@ -25,7 +25,7 @@ function FactList({ facts }: { facts: Fact[] }) {
             <span className="font-mono">{fact.value}</span>
             {fact.detail && <span className="ml-2 text-text-3">{fact.detail}</span>}
           </dd>
-          <dd className="col-start-2 break-words font-mono text-[0.875rem] text-text-2 @2xl:col-start-3 @2xl:text-right">
+          <dd className="col-start-2 break-words font-mono text-base text-text-2 @2xl:col-start-3 @2xl:text-right">
             {fact.variable}
           </dd>
         </div>

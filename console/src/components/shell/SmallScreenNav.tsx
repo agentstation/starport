@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { IconButton } from "@/components/ui/IconButton";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 
 // SmallScreenNav is the top bar the shell renders below the breakpoint: a
 // trigger for the navigation sheet, the brand, a status control, and a search
@@ -33,7 +34,7 @@ export default function SmallScreenNav({
           render={
             <IconButton
               label="Open navigation"
-              className="size-11 rounded-sm text-text-2 hover:bg-bg-hover hover:text-text-1"
+              size="lg"
             />
           }
         >
@@ -52,7 +53,8 @@ export default function SmallScreenNav({
       <IconButton
         label="Search"
         onClick={onSearch}
-        className={`size-11 rounded-sm text-text-2 hover:bg-bg-hover hover:text-text-1 ${status ? "" : "ml-auto"}`}
+        size="lg"
+        className={cn(!status && "ml-auto")}
       >
         <SearchIcon aria-hidden="true" className="size-4" />
       </IconButton>

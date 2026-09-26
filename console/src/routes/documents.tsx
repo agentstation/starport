@@ -17,7 +17,7 @@ function DocumentsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-[-0.01em]">Documents</h1>
+        <h1 className="text-xl font-semibold">Documents</h1>
         <p className="mt-1 text-sm text-text-3">
           A chat request that names the file-parser plugin has its attachments
           read before the model sees them. This page shows which engine read

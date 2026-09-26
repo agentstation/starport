@@ -26,6 +26,7 @@ import { queries } from "@/lib/queries";
 import { formatMs, formatUnixTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import { announce, report } from "@/lib/mutations";
+import { cn } from "@/lib/utils";
 
 // A video job is the one piece of work in this gateway that outlives the
 // request that started it. Everything else on this console answers inside one
@@ -325,7 +326,7 @@ export function JobsPanel() {
           value={prompt}
           placeholder="Describe the video"
           onChange={(event) => setPrompt(event.target.value)}
-          className={`${INPUT_CLASS} min-w-64 flex-1`}
+          className={cn(INPUT_CLASS, "min-w-64 flex-1")}
         />
         <PrimaryButton
           onClick={() => submit.mutate()}

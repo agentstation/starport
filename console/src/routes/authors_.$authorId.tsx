@@ -132,7 +132,7 @@ function AuthorDetailPage() {
         />
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-baseline gap-2.5">
-            <h1 className="text-xl font-semibold tracking-[-0.01em]">
+            <h1 className="text-xl font-semibold">
               {authorLabel(record)}
             </h1>
             <span className="font-mono text-xs text-text-4">{record.id}</span>

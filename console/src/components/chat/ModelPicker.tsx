@@ -8,6 +8,7 @@ import { formatContext, formatPricePair, providerLabel } from "@/lib/format";
 import { chattableModels } from "@/lib/modelFilter";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 // ModelPicker is the chat model combobox (DESIGN.md): search, pinned
 // models first, presets, then provider groups. Rows show capability
@@ -256,9 +257,10 @@ export function ModelPicker({
                   aria-selected={selected}
                   onMouseEnter={() => setCursor(rowIndex)}
                   onClick={() => onSelect(item.id)}
-                  className={`group flex cursor-pointer items-start gap-2 px-3 py-1.5 ${
-                    active ? "bg-bg-hover" : ""
-                  }`}
+                  className={cn(
+                    "group flex cursor-pointer items-start gap-2 px-3 py-1.5",
+                    active && "bg-bg-hover",
+                  )}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
@@ -296,11 +298,10 @@ export function ModelPicker({
                         aria-label={
                           favorites.has(item.id) ? "Unpin model" : "Pin model"
                         }
-                        className={`rounded-xs p-0.5 transition-colors duration-150 ease-standard ${
-                          favorites.has(item.id)
-                            ? "text-accent"
-                            : "text-text-3 opacity-0 hover:text-text-2 group-hover:opacity-100"
-                        }`}
+                        className={cn(
+                          "rounded-xs p-0.5 transition-colors duration-150 ease-standard",
+                          favorites.has(item.id) ? "text-accent" : "text-text-3 opacity-0 hover:text-text-2 group-hover:opacity-100",
+                        )}
                       >
                         <Star aria-hidden="true"
                           className="size-3.5"

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 // Card surface (DESIGN.md): panel background, hairline border, 8px radius.
 export function Card({
@@ -9,7 +10,7 @@ export function Card({
   className?: string;
 }) {
   return (
-    <div className={`rounded-md border border-border-1 bg-bg-panel p-5 ${className}`}>
+    <div className={cn("rounded-md border border-border-1 bg-bg-panel p-5", className)}>
       {children}
     </div>
   );

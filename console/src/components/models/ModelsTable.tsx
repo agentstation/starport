@@ -6,6 +6,7 @@ import { DataTable, dataColumns } from "@/components/ui/DataTable";
 import type { Model } from "@/lib/api";
 import { formatContext, formatPricePair } from "@/lib/format";
 import { operationsOf } from "@/lib/modelFilter";
+import { cn } from "@/lib/utils";
 
 const helper = dataColumns<Model>();
 
@@ -182,9 +183,10 @@ function ModelCell({ model }: { model: Model }) {
       to="/models/$modelId"
       params={{ modelId: model.id }}
       onClick={(event) => event.stopPropagation()}
-      className={`block min-w-0 truncate ${
-        named ? "text-sm text-text-1" : "font-mono text-xs text-text-1"
-      }`}
+      className={cn(
+        "block min-w-0 truncate",
+        named ? "text-sm text-text-1" : "font-mono text-xs text-text-1",
+      )}
     >
       {named ? model.name : model.id}
     </Link>

@@ -124,7 +124,7 @@ function MembersPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-[-0.01em]">Members</h1>
+        <h1 className="text-xl font-semibold">Members</h1>
         <p className="mt-1 text-sm text-text-3">
           The users an identity provider resolved for this gateway. Open one to
           grant an account directly, or grant through a team.

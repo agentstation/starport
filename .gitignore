@@ -150,3 +150,7 @@ Desktop.ini
 .claude/settings.local.json
 
 # Test files and temporary documentation
+
+# Agent skill icons: binary files the review gate cannot read. The skill
+# CLI reinstalls them on update; the skill works without them.
+.agents/skills/*/assets/*.png

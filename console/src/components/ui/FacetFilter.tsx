@@ -2,6 +2,7 @@ import { Check, ChevronDown, Search, X } from "lucide-react";
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 // FacetFilter is the console's searchable multi-select: a trigger
 // chip that opens a popover with a quick-search input and a checkable
@@ -106,11 +107,10 @@ export function FacetFilter({
       }}
     >
       <div
-        className={`flex h-8 max-w-56 items-center rounded-sm border text-xs transition-colors duration-150 ease-standard ${
-          selected.length > 0
-            ? "border-border-3 bg-bg-raised text-text-1"
-            : "border-border-1 bg-bg-panel text-text-2 hover:border-border-2"
-        }`}
+        className={cn(
+          "flex h-8 max-w-56 items-center rounded-sm border text-xs transition-colors duration-150 ease-standard",
+          selected.length > 0 ? "border-border-3 bg-bg-raised text-text-1" : "border-border-1 bg-bg-panel text-text-2 hover:border-border-2",
+        )}
       >
         <PopoverTrigger className="flex h-full min-w-0 items-center gap-1.5 rounded-sm px-2.5 outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
           <span className="truncate">{summary}</span>
@@ -184,17 +184,16 @@ export function FacetFilter({
               >
                 <span
                   aria-hidden="true"
-                  className={`flex size-3.5 shrink-0 items-center justify-center rounded-xs border ${
-                    checked
-                      ? "border-accent bg-accent text-accent-ink"
-                      : "border-border-3"
-                  }`}
+                  className={cn(
+                    "flex size-3.5 shrink-0 items-center justify-center rounded-xs border",
+                    checked ? "border-accent bg-accent text-accent-ink" : "border-border-3",
+                  )}
                 >
                   {checked && <Check className="size-2.5" strokeWidth={3} />}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{option.label}</span>
                 {option.count !== undefined && (
-                  <span className="shrink-0 font-mono text-[10px] tabular-nums text-text-3">
+                  <span className="shrink-0 font-mono text-2xs tabular-nums text-text-3">
                     {option.count}
                   </span>
                 )}

@@ -438,7 +438,7 @@ function AccountsPage() {
 function Header() {
   return (
     <div>
-      <h1 className="text-xl font-semibold tracking-[-0.01em]">Accounts</h1>
+      <h1 className="text-xl font-semibold">Accounts</h1>
       <p className="mt-1 text-sm text-text-3">
         The accounts this gateway governs. An account owns its keys, its
         spending ceiling, and the provider credentials it brings for itself.

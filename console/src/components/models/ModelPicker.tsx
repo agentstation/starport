@@ -5,6 +5,7 @@ import { INPUT_CLASS } from "@/components/ui/Form";
 import { TokenInput } from "@/components/ui/TokenInput";
 import { queries } from "@/lib/queries";
 import { chattableModels } from "@/lib/modelFilter";
+import { cn } from "@/lib/utils";
 
 const MAX_SUGGESTIONS = 8;
 
@@ -129,12 +130,12 @@ export function ModelPicker({
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
-        className={`${INPUT_CLASS} w-full font-mono`}
+        className={cn(INPUT_CLASS, "w-full font-mono")}
       />
       {open && suggestions.length > 0 && (
         <ul
           role="listbox"
-          className="absolute inset-x-0 top-full z-10 mt-1 max-h-64 overflow-y-auto rounded-sm border border-border-2 bg-bg-raised py-1 shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+          className="absolute inset-x-0 top-full z-10 mt-1 max-h-64 overflow-y-auto rounded-sm border border-border-2 bg-bg-raised py-1 shadow-overlay"
         >
           {suggestions.map((modelId, index) => (
             <li key={modelId} role="option" aria-selected={index === cursor}>
@@ -142,9 +143,10 @@ export function ModelPicker({
                 type="button"
                 onClick={() => pick(modelId)}
                 onMouseEnter={() => setCursor(index)}
-                className={`block w-full px-3 py-1.5 text-left font-mono text-xs text-text-2 ${
-                  index === cursor ? "bg-bg-hover text-text-1" : ""
-                }`}
+                className={cn(
+                  "block w-full px-3 py-1.5 text-left font-mono text-xs text-text-2",
+                  index === cursor && "bg-bg-hover text-text-1",
+                )}
               >
                 {modelId}
               </button>

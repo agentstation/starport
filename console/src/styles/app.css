@@ -22,3 +22,13 @@
  * utilities (shiki dark palette) must follow that attribute, not the OS
  * preference. */
 @custom-variant dark (&:where(html:not([data-theme="light"]), html:not([data-theme="light"]) *));
+
+/* Shell geometry (DESIGN.md motion): the sidebar animates its width and
+ * the main column its margin. Nothing else on either element animates,
+ * so neither takes transition-all. */
+@utility transition-width {
+  transition-property: width;
+}
+@utility transition-margin {
+  transition-property: margin;
+}

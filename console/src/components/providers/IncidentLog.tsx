@@ -5,6 +5,7 @@ import { ExternalLink } from "@/components/ui/ExternalLink";
 import { RelativeTime } from "@/components/ui/RelativeTime";
 import type { ObservedIncidentTransition, ProviderIncidentLog } from "@/lib/api";
 import { formatCount, formatRelativeTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 // The section shows the newest incidents and folds the rest behind one
 // control, so a rough quarter does not push the offerings table off screen.
@@ -25,9 +26,10 @@ function SeverityChip({ indicator }: { indicator: string | undefined }) {
   const label = indicator || "incident";
   return (
     <span
-      className={`inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
-        SEVERITY_TONES[label] ?? "bg-bg-raised text-text-3"
-      }`}
+      className={cn(
+        "inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium",
+        SEVERITY_TONES[label] ?? "bg-bg-raised text-text-3",
+      )}
     >
       {label}
     </span>
@@ -73,12 +75,11 @@ function IncidentEntry({
       <div className="flex items-start gap-2">
         <SeverityChip indicator={incident.indicator} />
         {incident.url ? (
-          <ExternalLink
-            href={incident.url}
-            className="min-w-0 text-sm font-medium text-text-1 transition-colors duration-150 ease-standard hover:text-accent-link"
-          >
-            {incident.title}
-          </ExternalLink>
+          <span className="min-w-0 text-sm font-medium">
+            <ExternalLink href={incident.url} variant="plain">
+              {incident.title}
+            </ExternalLink>
+          </span>
         ) : (
           <span className="min-w-0 text-sm font-medium text-text-1">
             {incident.title}
@@ -229,7 +230,6 @@ export function IncidentLog({
               <ExternalLink
                 href={statusPageUrl}
                 icon={Activity}
-                className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
               >
                 Check its status page
               </ExternalLink>

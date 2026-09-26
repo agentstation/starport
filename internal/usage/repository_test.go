@@ -11,7 +11,11 @@ import (
 )
 
 // Keep real-store fixtures inside retention as the calendar advances.
-var testBase = time.Now().UTC().Truncate(24 * time.Hour).Add(12 * time.Hour)
+// Noon keeps nearby records in the same day, week, and month windows.
+var testBase = func() time.Time {
+	now := time.Now().UTC()
+	return time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC)
+}()
 
 func testRecord(keyID, requestID string, at time.Time) Record {
 	return Record{

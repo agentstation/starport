@@ -157,7 +157,7 @@ func (p *workosPath) complete(
 		return acquiredIdentity{}, errors.New("WorkOS callback carries no code")
 	}
 	token, err := p.client.SSO().GetProfileAndToken(
-		r.Context(), &workos.SSOGetProfileAndTokenParams{Code: code})
+		r.Context(), &workos.SSOGetProfileAndTokenParams{Code: workos.String(code)})
 	if err != nil {
 		return acquiredIdentity{}, fmt.Errorf("exchange WorkOS code: %w", err)
 	}

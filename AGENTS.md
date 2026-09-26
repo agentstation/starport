@@ -104,6 +104,7 @@ bash scripts/verify-console-polish.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
 bash scripts/smoke-first-run.sh
+pnpm -C console check
 go test ./...
 go vet ./...
 make lint
@@ -204,6 +205,15 @@ guardrail surfaces, team budgets, the semantic cache, preset revisions,
 the agent surface (the catalog verbs and the embedded skill), and the
 IDENTITY-001 repair in the `internal/apikey` hash index. It is terminal
 at 33 conditions (`ENR-V01` through `ENR-V33`) and runs in CI.
+
+A console change runs `pnpm -C console lint` and fixes every error before the
+other checks. The lint enforces the ownership rule in `DESIGN.md`: a component
+under `console/src/components/ui` owns its styling, a call site adds layout
+alone, and a dynamic value is a CSS custom property, not an inline style. Add
+a variant or a size to the component; do not disable a rule at a call site.
+The shadcn skill lives at `.agents/skills/shadcn` (canonical, pinned by
+`skills-lock.json`; `.claude/skills/shadcn` is a symlink). Read it before a
+console change.
 
 Use branches with the `codex/` prefix unless the task gives another name. Use
 pull requests as the primary repository update method.

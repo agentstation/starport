@@ -116,7 +116,7 @@ function ModelDetailPage() {
           )}
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex flex-wrap items-baseline gap-2.5">
-              <h1 className="text-xl font-semibold tracking-[-0.01em]">{name}</h1>
+              <h1 className="text-xl font-semibold">{name}</h1>
               {model.open_weights && (
                 <span className="inline-flex h-5 items-center rounded-xs bg-bg-raised px-1.5 text-xs text-text-3">
                   open weights

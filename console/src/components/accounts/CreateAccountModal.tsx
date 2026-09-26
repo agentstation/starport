@@ -16,6 +16,7 @@ import {
   type CredentialStrategy,
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
+import { cn } from "@/lib/utils";
 
 // CreateAccountModal names a new account, and optionally the account
 // template it starts from. Picking a template sends only the template's id:
@@ -82,7 +83,7 @@ export function CreateAccountModal({
                 placeholder="acme"
                 autoComplete="off"
                 spellCheck={false}
-                className={`${INPUT_CLASS} font-mono`}
+                className={cn(INPUT_CLASS, "font-mono")}
               />
             </Field>
             <Field label="Name" hint="What a person calls this account. Optional.">

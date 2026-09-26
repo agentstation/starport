@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { EntityLogo } from "@/components/catalog/EntityLogo";
 import type { ProviderCatalogEntry, ProviderRuntimeStatus } from "@/lib/api";
 import { formatCount, formatRelativeTime, providerLabel } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 // One status vocabulary (DESIGN.md): the dot reports liveness — the health
 // rollup is the card's single always-present status, and the same badge
@@ -33,9 +34,10 @@ export function CredentialPill({
           ? `environment credential · updated ${formatRelativeTime(credential.updated_at)}`
           : "environment credential"
       }
-      className={`inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
-        CREDENTIAL_TONES[state] ?? "bg-bg-raised text-text-3"
-      }`}
+      className={cn(
+        "inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium",
+        CREDENTIAL_TONES[state] ?? "bg-bg-raised text-text-3",
+      )}
     >
       {label}
     </span>
@@ -117,7 +119,7 @@ export function HealthBadge({ health }: { health: ProviderHealth }) {
     >
       <span
         aria-hidden="true"
-        className={`size-2 shrink-0 rounded-full ${HEALTH_DOTS[health.state]}`}
+        className={cn("size-2 shrink-0 rounded-full", HEALTH_DOTS[health.state])}
       />
       {health.label}
     </span>

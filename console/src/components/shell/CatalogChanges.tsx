@@ -14,6 +14,7 @@ import {
   formatUSD,
   shortGenerationID,
 } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 // Diff prices arrive as per-million numbers already. An absent side is
 // unknown, and an unknown price renders the dash, never $0.
@@ -142,7 +143,7 @@ export function CatalogChangesSection() {
         </SectionTitle>
         <ul className="flex flex-col gap-1">
           {ids.map((id) => (
-            <li key={id} className={`font-mono text-xs ${tone}`}>
+            <li key={id} className={cn("font-mono text-xs", tone)}>
               {id}
             </li>
           ))}
