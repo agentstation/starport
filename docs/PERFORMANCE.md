@@ -90,6 +90,27 @@ It excludes TLS, DNS, active maintenance loops, retries, and shared backends.
 It does not establish production percentiles, cold-start performance, or performance under saturation.
 The production qualification must exercise those conditions separately.
 
+## Catalog selection
+
+Starport builds static route candidates and definition/offering indexes before snapshot publication.
+Exact-model selection copies matching candidates and applies current provider availability, latency, and caller policy.
+Discovery checks disclosure policy before it copies each definition or offering.
+Neither path fetches provider inventories or external secrets.
+
+The registry reserves capacity before durable catalog acceptance.
+At most four current, retained, or prepared runtime generations can occupy that capacity.
+Starport refuses an update at capacity without terminating admitted requests.
+Current authority permission still controls new attempts.
+
+Run the synthetic and embedded catalog benchmarks:
+
+```bash
+go test -run '^$' -bench 'Benchmark(CatalogExactModel|EmbeddedCatalogSelection)$' -benchmem ./internal/router
+```
+
+These component benchmarks measure selection allocations and duration.
+They do not qualify complete HTTP request overhead.
+
 ## Production engineering targets
 
 The versioned [performance profile](performance-targets-v1.json) defines targets for the planned production release.
@@ -137,3 +158,124 @@ It also names large-input, long-stream, retry, refresh, outage, saturation, slow
 Native functional archive checks cover all six published platforms.
 Initial numeric qualification covers Linux x64 and ARM64, macOS ARM64, and Windows x64.
 Other latency claims require a profile revision and evidence.
+
+## Advisory fleet exchange
+
+Shared health and latency use one background worker each. App.Run starts them.
+App.Close cancels and joins them before it closes storage.
+Inference callbacks update or read process memory without shared-storage calls.
+Periodic publication coalesces observations without a per-request queue.
+
+By default, each worker exchanges state every five seconds and gives an exchange two seconds.
+Peer scans select at most 1,024 replica keys.
+A document can contain at most 4,096 records and one MiB of encoded data.
+A refresh decodes at most four MiB of accepted documents.
+These bounds apply after the storage adapter returns a value.
+The workers retain at most 4,096 peer records each.
+
+The default peer lifetime is one minute. Fresh source publications renew unchanged health hints.
+Expired latency hints return no measurement.
+Expired health hints restore local evidence or remove the peer restriction.
+Cold replicas use local state while their worker reads peers.
+
+Local breaker transitions remain immediate during shared-storage failure.
+Health publications contain local observations, so replicas do not renew each other's stale evidence.
+
+These hints do not grant catalog permission or replace required budget and credential checks.
+The callback tests establish storage isolation. They do not qualify production HTTP percentiles.
+
+
+## Optional cache component measurements
+
+Run cache read and fill measurements separately from the full HTTP benchmark:
+
+```bash
+go test -run '^$' -bench '^BenchmarkOptionalCacheWork$' -benchmem -benchtime=100ms -count=3 ./internal/app
+```
+
+The benchmark reports local hit and miss cost, model and extraction fill cost, and drops per call.
+Fill measurements include caller serialization, admission, and test assertions. Allocation counts can include concurrent worker activity.
+The payload sizes are 1 KiB, 256 KiB, and 4 MiB. Oversized extraction records skip serialization and report a drop.
+
+These measurements exclude HTTP, permission checks, providers, and shared transport. They report averages, not production latency percentiles.
+High fill rates can cause optional drops. This load does not estimate a deployment's cache hit ratio.
+
+
+The typed discovery benchmark compares direct decoding with the removed map round trip:
+
+```bash
+go test -run '^$' -bench '^BenchmarkModelCacheDecode$' -benchmem -benchtime=100ms -count=3 ./internal/app
+```
+
+Both variants read the same production local cache. The control decodes a map, encodes it, then decodes the response type.
+The direct path decodes the response type once. Neither variant qualifies HTTP latency or shared-service behavior.
+
+## Optional cache capacity
+
+Local cache accounting charges the retained byte-buffer capacity.
+Ristretto adds its per-entry cost. These charges do not include all process
+heap, cache metadata, caller encoding, or concurrent request state.
+
+Run the concurrent component exercise:
+
+```bash
+go test -race -count=3 -run '^TestConcurrentOptionalCacheCapacity$' -v ./internal/cache
+```
+
+The exercise uses 32 callers and 4,096 keys per response, model, and extraction
+cache. Each local cache has a two MiB cost limit. It checks both fill queues
+during load, verifies store costs after draining, and verifies shutdown.
+It reports retained heap after collection and total allocation volume.
+Those measurements cover this synthetic workload, not default-size or full
+gateway capacity. Production heap and RSS qualification remains in CSP22.
+
+## Stream completion
+
+Completed stream caching reconstructs text, reasoning, and tool arguments with
+per-choice string builders. The retained event and byte limits still apply
+before reconstruction. EOF reconstruction and record encoding run on the caller.
+Storage fill admission uses the bounded cache queue.
+
+```bash
+go test -run '^$' -bench '^BenchmarkBoundedStreamCompletion$' -benchmem -count=3 ./internal/response/cache
+```
+
+This component benchmark uses 64 events that fit the production retention limit.
+It measures reconstruction alone. It excludes record encoding, cache admission,
+HTTP delivery, and shared storage.
+
+## Shared cache outage check
+
+The real-service fault test pauses all Valkey commands for one second.
+Use a disposable instance because this pause affects every client of that service:
+
+```bash
+TEST_SHARED_CACHE_FAULT_URL=valkey://127.0.0.1:6379 \
+  go test -race -run '^TestSharedCachePausedServiceDeadlineAndRecovery$' -v ./internal/cache
+```
+
+The test warms an entry, issues 32 concurrent reads and optional fills during the
+pause, and verifies recovery of the original entry. Cache reads must finish
+before the caller's independent deadline. The test reports read-plus-fill
+timings under race detection. These samples do not qualify production
+percentiles, provider delivery, or a network partition.
+
+## Default cache memory qualification
+
+The full-size component test fills and churns the default 256 MiB response,
+16 MiB model, and 16 MiB extraction budgets. It records heap after collection
+and after shutdown, including metadata that cache cost counters omit.
+
+```bash
+TEST_DEFAULT_CACHE_CAPACITY=1 go test -race -run '^TestDefaultCacheMemoryBudget$' -v ./internal/cache
+```
+
+Normal runs skip this allocation-heavy check unless the operator sets that environment flag.
+The acceptance verifier reports that skip as unverified. This test measures
+cache memory alone. Full gateway heap, RSS, concurrent streams, and encoding
+remain part of production resource qualification.
+
+The performance profile uses the accepted 60-second authorization lifetime
+and two-second revocation propagation target. Gateway authorization uses
+elapsed time that includes suspend. Catalog receipts retain their own clock
+contract. A clock failure blocks only operations that require that clock.

@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -271,6 +270,7 @@ func TestOperatorErrorDoesNotTrustExternalErrors(t *testing.T) {
 func TestLoaderResolvesRelativePathsFromConfigDirectory(t *testing.T) {
 	paths := PathsForConfigDir(t.TempDir())
 	environment := map[string]string{
+		"STARPORT_RELATIVE_PATH_BASE":              "config",
 		"STARPORT_STORAGE_BADGER_PATH":             "state",
 		"STARPORT_CATALOG_WORKSPACE_PATH":          "catalog",
 		"STARPORT_SECURITY_TLS_CERT_PATH":          "tls/cert.pem",
@@ -378,7 +378,6 @@ func TestDevelopmentLoaderUsesProcessSettingsAndGuardedRuntime(t *testing.T) {
 			"OPENAI_API_KEY":                           "process-secret",
 			"STARPORT_SERVER_HOST":                     "0.0.0.0",
 			"STARPORT_SERVER_PORT":                     "18994",
-			"STARPORT_STORAGE_MODE":                    "valkey",
 			"STARPORT_SECURITY_MASTER_KEY":             "short",
 			"STARPORT_SECURITY_ENABLE_TLS":             "true",
 			"STARPORT_LOGGING_OUTPUT":                  "file",
@@ -412,56 +411,42 @@ func TestDevelopmentLoaderUsesProcessSettingsAndGuardedRuntime(t *testing.T) {
 	}
 }
 
-// TestDevelopmentLoaderNeedsNoHomeDirectory proves that a development gateway
-// loads with no home directory and no state root, because its catalog state
-// is session scratch and never resolves against the user state root. A
-// serving gateway in the same process refuses to load and names the settings.
+// TestDevelopmentLoaderNeedsNoHomeDirectory checks caller-owned roots without a user home.
 func TestDevelopmentLoaderNeedsNoHomeDirectory(t *testing.T) {
 	t.Setenv(stateHomeEnvironment, "")
 	setHomeDirectory(t, "")
-	loader := NewLoader().
-		WithPaths(PathsForConfigDir(t.TempDir())).
-		WithEnvironment(map[string]string{}).
-		WithEnvFiles()
-
+	paths := PathsForConfigDir(t.TempDir())
+	loader := NewLoader().WithPaths(paths).WithEnvironment(nil).WithEnvFiles()
 	cfg, err := loader.LoadDevelopment(t.Context())
 	if err != nil {
-		t.Fatalf("load development config without a home directory: %v", err)
+		t.Fatal(err)
 	}
 	if cfg.Catalog.StateDirectory != "" || !cfg.Catalog.StateDirectoryIsScratch() {
-		t.Fatalf("development catalog state directory = %q, want scratch", cfg.Catalog.StateDirectory)
+		t.Fatal("development state must use scratch")
 	}
-
-	_, err = loader.Load(t.Context())
+	persistent, err := loader.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persistent.Catalog.StateDirectory != paths.RuntimeDir {
+		t.Fatal("explicit roots must not require a home directory")
+	}
+	_, err = NewLoader().WithEnvironment(nil).WithEnvFiles().Load(t.Context())
 	if err == nil {
-		t.Fatal("a serving gateway loaded without a home directory or a state root")
-	}
-	// The operator-facing message carries no value, so the cause names the
-	// settings.
-	cause := errors.Unwrap(err)
-	if cause == nil || !strings.Contains(cause.Error(), stateDirectoryEnvironment) {
-		t.Fatalf("serving load cause %v does not name %s", cause, stateDirectoryEnvironment)
+		t.Fatal("platform defaults require native root inputs")
 	}
 }
 
-// TestDevelopmentLoaderKeepsAnOperatorStateDirectory proves that an operator
-// value survives the development contract, so a session that names a
-// directory retains its catalog state there.
-func TestDevelopmentLoaderKeepsAnOperatorStateDirectory(t *testing.T) {
-	stateDirectory := t.TempDir()
-	loader := NewLoader().
-		WithPaths(PathsForConfigDir(t.TempDir())).
-		WithEnvironment(map[string]string{
-			"STARPORT_CATALOG_STATE_DIR": stateDirectory,
-		}).
-		WithEnvFiles()
-
-	cfg, err := loader.LoadDevelopment(t.Context())
-	if err != nil {
-		t.Fatalf("load development config: %v", err)
+func TestDevelopmentLoaderRefusesAnOperatorStateDirectory(t *testing.T) {
+	stateDirectory := filepath.Join(t.TempDir(), "untouched")
+	cfg, err := NewLoader().WithPaths(PathsForConfigDir(t.TempDir())).WithEnvironment(map[string]string{
+		"STARPORT_CATALOG_STATE_DIR": stateDirectory,
+	}).LoadDevelopment(t.Context())
+	if err == nil || cfg != nil {
+		t.Fatal("development accepted persistent catalog state")
 	}
-	if cfg.Catalog.StateDirectory != stateDirectory || cfg.Catalog.StateDirectoryIsScratch() {
-		t.Fatalf("development catalog state directory = %q, scratch %t", cfg.Catalog.StateDirectory, cfg.Catalog.StateDirectoryIsScratch())
+	if _, err := os.Stat(stateDirectory); !os.IsNotExist(err) {
+		t.Fatal("development accessed persistent catalog state")
 	}
 }
 
@@ -507,4 +492,41 @@ func TestLoaderReadsStandardOTLPEndpoint(t *testing.T) {
 	if cfg.Telemetry.TracesEndpoint != "" {
 		t.Errorf("TracesEndpoint = %q, want empty without OTLP environment", cfg.Telemetry.TracesEndpoint)
 	}
+}
+
+func TestCatalogLookupUsesCheckedFilesAndPreservesEmptyValues(t *testing.T) {
+	root := t.TempDir()
+	dotenv := filepath.Join(root, "operator.env")
+	if err := os.WriteFile(dotenv, []byte("STARPORT_CATALOG_OPENAI_API_KEY=file-key\nSELECTED_CATALOG_KEY=file-reference-key\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := NewLoader().WithPaths(PathsForConfigDir(root)).WithEnvironment(map[string]string{"STARPORT_CATALOG_OPENAI_API_KEY": ""}).WithEnvFiles(dotenv).Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, present := cfg.LookupDeployment("STARPORT_CATALOG_OPENAI_API_KEY"); !present || value != "" {
+		t.Fatal("empty process selection did not override checked file")
+	}
+	if value, present := cfg.LookupDeployment("SELECTED_CATALOG_KEY"); !present || value != "file-reference-key" {
+		t.Fatal("catalog lookup lost checked file values")
+	}
+	if len(cfg.Providers) != 0 {
+		t.Fatal("loading catalog configuration resolved inference material")
+	}
+	if got := cfg.CatalogCredentialPolicyDirectory(); got != filepath.Join(root, "state", "credentials", "catalog", "default") {
+		t.Fatalf("unexpected catalog policy path: %s", got)
+	}
+	manifest, err := cfg.FileManifest("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range manifest.Files {
+		if file.ID == "credential-policy" {
+			if file.Location.Path != cfg.CatalogCredentialPolicyDirectory() || file.Policy.Access != "owner-only" || file.Location.Origin != cfg.EffectivePaths().Origins["state"].Origin {
+				t.Fatal("credential policy diagnostic disagrees with runtime")
+			}
+			return
+		}
+	}
+	t.Fatal("credential policy missing from file inventory")
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -165,21 +166,21 @@ func TestAJobPollReadsTheProviderAnswer(t *testing.T) {
 		Credential: testAPIMaterial("test-key"),
 	}
 
-	submitted, err := connector.SubmitJob(context.Background(), &JobSubmission{
+	submitted, err := connector.SubmitJob(context.Background(), approveConnectorFixture(t, &JobSubmission{
 		MediaTarget: target,
 		Prompt:      "a boat leaving a harbour",
-	})
+	}))
 	require.NoError(t, err)
 	require.Equal(t, "video_77", submitted.ID)
 	require.Equal(t, jobs.JobStateQueued, submitted.State)
 
 	reference := &ProviderJobRef{MediaTarget: target, ProviderJobID: submitted.ID}
-	polled, err := connector.PollJob(context.Background(), reference)
+	polled, err := connector.PollJob(context.Background(), approveConnectorFixture(t, reference))
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateFailed, polled.State)
 	require.Equal(t, "the prompt was refused", polled.Reason)
 
-	cancelled, err := connector.CancelJob(context.Background(), reference)
+	cancelled, err := connector.CancelJob(context.Background(), approveConnectorFixture(t, reference))
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateCancelled, cancelled.State)
 
@@ -241,14 +242,14 @@ func TestAFailedJobAlwaysStatesAReason(t *testing.T) {
 
 			connector, err := NewOpenAIConnector(mediaTestConfig(server.URL + "/v1"))
 			require.NoError(t, err)
-			polled, err := connector.PollJob(context.Background(), &ProviderJobRef{
+			polled, err := connector.PollJob(context.Background(), approveConnectorFixture(t, &ProviderJobRef{
 				MediaTarget: MediaTarget{
 					Model:      "provider/video",
 					Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL + "/v1/videos"},
 					Credential: testAPIMaterial("test-key"),
 				},
 				ProviderJobID: "v1",
-			})
+			}))
 			require.NoError(t, err)
 			require.Equal(t, jobs.JobStateFailed, polled.State)
 			require.Equal(t, test.want, polled.Reason)
@@ -282,10 +283,10 @@ func TestAJobRejectionNormalizesLikeAChatRejection(t *testing.T) {
 	credential := testAPIMaterial("test-key")
 	chatFailure := chatCallFailure(t, connector, endpoint, credential)
 
-	_, err = connector.SubmitJob(context.Background(), &JobSubmission{
+	_, err = connector.SubmitJob(context.Background(), approveConnectorFixture(t, &JobSubmission{
 		MediaTarget: MediaTarget{Model: "provider/video", Endpoint: endpoint, Credential: credential},
 		Prompt:      "a boat leaving a harbour",
-	})
+	}))
 	normalized := NormalizeFailure("openai", err)
 	require.Equal(t, failure.RateLimit, normalized.Kind())
 	require.Equal(t, chatFailure.Kind(), normalized.Kind())
@@ -309,13 +310,13 @@ func TestASubmissionThatCannotSucceedNeverReachesTheWire(t *testing.T) {
 		Credential: testAPIMaterial("test-key"),
 	}
 
-	_, err = connector.SubmitJob(context.Background(), &JobSubmission{MediaTarget: target})
+	_, err = connector.SubmitJob(context.Background(), approveConnectorFixture(t, &JobSubmission{MediaTarget: target}))
 	require.ErrorIs(t, err, ErrInvalidMediaRequest)
 
-	_, err = connector.PollJob(context.Background(), &ProviderJobRef{MediaTarget: target})
+	_, err = connector.PollJob(context.Background(), approveConnectorFixture(t, &ProviderJobRef{MediaTarget: target}))
 	require.ErrorIs(t, err, ErrInvalidMediaRequest)
 
-	_, err = connector.CancelJob(context.Background(), &ProviderJobRef{MediaTarget: target})
+	_, err = connector.CancelJob(context.Background(), approveConnectorFixture(t, &ProviderJobRef{MediaTarget: target}))
 	require.ErrorIs(t, err, ErrInvalidMediaRequest)
 }
 
@@ -334,7 +335,7 @@ func TestASubmissionSendsOnlyRequestFields(t *testing.T) {
 
 	connector, err := NewOpenAIConnector(mediaTestConfig(server.URL + "/v1"))
 	require.NoError(t, err)
-	_, err = connector.SubmitJob(context.Background(), &JobSubmission{
+	_, err = connector.SubmitJob(context.Background(), approveConnectorFixture(t, &JobSubmission{
 		MediaTarget: MediaTarget{
 			Model:      "provider/video",
 			Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL + "/v1/videos"},
@@ -342,11 +343,38 @@ func TestASubmissionSendsOnlyRequestFields(t *testing.T) {
 		},
 		Prompt:  "a boat leaving a harbour",
 		Seconds: "8",
-	})
+	}))
 	require.NoError(t, err)
 	require.Equal(t, map[string]any{
 		"model":   "provider/video",
 		"prompt":  "a boat leaving a harbour",
 		"seconds": "8",
 	}, body)
+}
+
+func TestJobRequestsPreserveApprovedQuery(t *testing.T) {
+	var targets []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targets = append(targets, r.Method+" "+r.URL.RequestURI())
+		require.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
+		if strings.HasSuffix(r.URL.Path, "/content") {
+			_, _ = w.Write([]byte("video"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"video_77","status":"completed"}`))
+	}))
+	defer server.Close()
+	connector, err := NewOpenAIConnector(mediaTestConfig(server.URL))
+	require.NoError(t, err)
+	defer connector.Close()
+	reference := approveConnectorFixture(t, &ProviderJobRef{MediaTarget: MediaTarget{Model: "video-model", Endpoint: InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL + "/v1/videos?api-version=1"}, Credential: testAPIMaterial("test-key")}, ProviderJobID: "video_77"})
+	_, err = connector.PollJob(t.Context(), reference)
+	require.NoError(t, err)
+	_, err = connector.CancelJob(t.Context(), reference)
+	require.NoError(t, err)
+	asset, err := connector.FetchJobAsset(t.Context(), &JobAssetRef{ProviderJobRef: *reference, MaxBytes: 100})
+	require.NoError(t, err)
+	require.NotNil(t, asset)
+	require.Equal(t, []string{"GET /v1/videos/video_77?api-version=1", "DELETE /v1/videos/video_77?api-version=1", "GET /v1/videos/video_77/content?api-version=1"}, targets)
 }

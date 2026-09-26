@@ -38,3 +38,19 @@ func (s *RoutableSnapshot) CheckNewAttempt() *failure.Failure {
 	}
 	return failure.New(failure.GatewayUnavailable, "Catalog permission is unavailable.", true, failure.ProviderDetails{}, nil)
 }
+
+// AttemptPermissionStatus separates new catalog admission from admitted stream completion.
+type AttemptPermissionStatus struct {
+	// NewAttemptsAllowed reports catalog permission, not credential or budget eligibility.
+	NewAttemptsAllowed bool `json:"new_attempts_allowed"`
+	// AdmittedStreamsMayFinish reports that catalog withdrawal does not cancel admitted streams.
+	AdmittedStreamsMayFinish bool `json:"admitted_streams_may_finish"`
+}
+
+// AttemptPermissionStatus records the current catalog permission and stream policy.
+func (s *RoutableSnapshot) AttemptPermissionStatus() AttemptPermissionStatus {
+	return AttemptPermissionStatus{
+		NewAttemptsAllowed:       s.AllowsNewAttempt(),
+		AdmittedStreamsMayFinish: true,
+	}
+}

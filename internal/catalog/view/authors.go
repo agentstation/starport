@@ -5,6 +5,7 @@ import (
 
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/disclosure"
 )
 
 // AuthorInfo represents one catalog author or organization.
@@ -98,4 +99,40 @@ func authorModelIDs(catalog *starmapcatalogs.Catalog, authorID starmapcatalogs.A
 	}
 	sort.Strings(ids)
 	return ids
+}
+
+// AuthorsForViewer projects authors with permitted routable model membership.
+func AuthorsForViewer(snapshot *runtimecatalog.RoutableSnapshot, policy disclosure.Policy) []AuthorInfo {
+	result := make([]AuthorInfo, 0)
+	for _, author := range Authors(snapshot) {
+		author = permittedAuthor(snapshot, author, policy)
+		if len(author.Models) > 0 {
+			result = append(result, author)
+		}
+	}
+	return result
+}
+
+// AuthorByIDForViewer refuses authors without permitted model membership.
+func AuthorByIDForViewer(snapshot *runtimecatalog.RoutableSnapshot, id string, policy disclosure.Policy) (AuthorInfo, bool) {
+	author, found := AuthorByID(snapshot, id)
+	if !found {
+		return AuthorInfo{}, false
+	}
+	author = permittedAuthor(snapshot, author, policy)
+	if len(author.Models) == 0 {
+		return AuthorInfo{}, false
+	}
+	return author, true
+}
+
+func permittedAuthor(snapshot *runtimecatalog.RoutableSnapshot, author AuthorInfo, policy disclosure.Policy) AuthorInfo {
+	models := make([]string, 0, len(author.Models))
+	for _, id := range author.Models {
+		if len(permittedRoutes(snapshot.RoutesForDefinition(starmapcatalogs.ModelDefinitionID(id)), policy)) > 0 {
+			models = append(models, id)
+		}
+	}
+	author.Models = models
+	return author
 }

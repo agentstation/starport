@@ -4,12 +4,14 @@ import (
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
+	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/usage"
@@ -42,6 +44,7 @@ type Controllers struct {
 	Members              *MembersController
 	ProviderOperations   *ProviderOperationsController
 	Catalog              *CatalogController
+	Discovery            *DiscoveryController
 	Files                *FilesController
 	Videos               *VideosController
 	OpenRouterVideos     *VideosController
@@ -56,14 +59,18 @@ type Controllers struct {
 
 // Config holds configuration for creating handlers
 type Config struct {
-	Service            proxy.Proxy
-	ProviderKeys       keyring.ProviderKeys
-	APIKeys            apikey.Repository
-	Accounts           account.Repository
-	Usage              usage.Repository
-	ProviderOperations ProviderOperations
-	Catalog            CatalogOperations
-	Presets            presets.Repository
+	Readiness           func() bool
+	AuthorizationStatus func() authorization.Status
+	Service             proxy.Proxy
+	ProviderKeys        keyring.ProviderKeys
+	APIKeys             apikey.Repository
+	Accounts            account.Repository
+	Usage               usage.Repository
+	ProviderOperations  ProviderOperations
+	Catalog             CatalogOperations
+	DiscoveryRegistry   connectors.LeasingRegistry
+	DiscoveryViewer     DiscoveryViewerReader
+	Presets             presets.Repository
 	// Templates serves the account-template surface. A nil repository
 	// degrades those routes to 503, the way an absent preset store does.
 	Templates account.TemplateRepository
@@ -133,7 +140,7 @@ type Config struct {
 // NewControllers creates a new controller collection
 func NewControllers(cfg Config) *Controllers {
 	collections := &Controllers{
-		Health:               NewHealthController(cfg.ServiceName, orUnstamped(cfg.Build.Version)),
+		Health:               NewHealthController(cfg.ServiceName, orUnstamped(cfg.Build.Version), cfg.Readiness),
 		Chat:                 NewChatController(cfg.Service),
 		OpenRouterChat:       NewOpenRouterChatController(cfg.Service),
 		Responses:            NewResponsesController(cfg.Service),
@@ -160,6 +167,7 @@ func NewControllers(cfg Config) *Controllers {
 		Members:            NewMembersController(cfg.Identity, cfg.Usage),
 		ProviderOperations: NewProviderOperationsController(cfg.ProviderOperations),
 		Catalog:            NewCatalogController(cfg.Catalog),
+		Discovery:          NewDiscoveryController(cfg.DiscoveryRegistry, cfg.DiscoveryViewer),
 		Files:              NewFilesController(cfg.Files, cfg.FileUploadBound),
 		Videos:             NewVideosController(cfg.Service, cfg.Jobs),
 		OpenRouterVideos:   NewOpenRouterVideosController(cfg.Service, cfg.Jobs),
@@ -175,6 +183,7 @@ func NewControllers(cfg Config) *Controllers {
 	// The recorder rides a package-private field instead of each constructor,
 	// because every mutating controller shares the one trail and a nil trail
 	// simply records nothing.
+	collections.Admin.authorizationStatus = cfg.AuthorizationStatus
 	collections.Admin.audit = cfg.Audit
 	collections.Admin.events = cfg.Events
 	collections.Accounts.audit = cfg.Audit

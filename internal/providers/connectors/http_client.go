@@ -32,7 +32,7 @@ func newProviderHTTPClient(config ProviderConfig) *http.Client {
 	}).DialContext
 
 	return &http.Client{
-		Transport: transport,
+		Transport: newDispatchTransport(transport),
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},

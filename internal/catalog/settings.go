@@ -2,10 +2,12 @@ package catalog
 
 import (
 	"context"
+	"maps"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/agentstation/starmap"
+	catalogconfig "github.com/agentstation/starmap/pkg/catalogs/config"
 	"github.com/agentstation/starmap/pkg/catalogs/permission/hostclock"
 	"github.com/agentstation/starmap/pkg/catalogs/permission/hostclock/profile"
 	protocol "github.com/agentstation/starmap/pkg/catalogs/remote"
@@ -25,6 +27,19 @@ const cascadeFallbackAfterFailures = 3
 // It mirrors the canonical Starmap settings with plain Go types.
 // The configuration package names no Starmap options. This package owns the translation.
 type Settings struct {
+	// CredentialPolicyDirectory retains private acquisition policy decisions. Empty selects an ephemeral resolver.
+	CredentialPolicyDirectory string
+	// BaselineDirectory selects the host-owned immutable embedded export.
+	BaselineDirectory string
+	// SourceCacheDirectory selects the host-owned parent for source caches and checkouts.
+	SourceCacheDirectory string
+	// InstanceID and DeploymentID bind the runtime directory to this Starport process.
+	InstanceID   string
+	DeploymentID string
+
+	// Values retains the canonical settings that have no gateway-specific projection.
+	Values map[string]string
+
 	// PermissionClock contains the canonical host bounds. The runtime owns its monitor.
 	PermissionClock profile.Config
 
@@ -67,7 +82,7 @@ type Settings struct {
 	// SourceMaxHops bounds the publication chain.
 	SourceMaxHops int
 
-	// AcquisitionEnabled decides whether this instance observes providers.
+	// AcquisitionEnabled controls automatic observations. Explicit refresh still checks network and authority policy.
 	AcquisitionEnabled bool
 
 	// AcquisitionInterval is the period between provider observations.
@@ -111,54 +126,17 @@ func (s Settings) starmapOptions() ([]runtime.Option, error) {
 	if err != nil {
 		return nil, err
 	}
-	options := []runtime.Option{
-		runtime.WithCatalogSource(s.Source),
-		runtime.WithSourceStartupPolicy(s.SourceStartupPolicy),
-		runtime.WithSourceAuthority(s.SourceAuthorityID, s.SourcePolicyID),
-		runtime.WithSourcePollInterval(s.SourcePollInterval),
-		runtime.WithSourceMaxAge(s.SourceMaxAge),
-		runtime.WithSourceMaxHops(s.SourceMaxHops),
-		runtime.WithAcquisitionEnabled(s.AcquisitionEnabled),
-		runtime.WithStartupSpread(s.StartupSpread),
-		runtime.WithTransferIdleTimeout(s.TransferIdleTimeout),
-		runtime.WithTransferMaxDuration(s.TransferMaxDuration),
+	parsed, err := catalogconfig.Parse(s.catalogValues())
+	if err != nil {
+		return nil, err
 	}
+	owner := s.directoryOwner()
+	if err := owner.Validate(); err != nil {
+		return nil, err
+	}
+	options := append(parsed.Options(), runtime.WithDirectoryOwner(owner))
 	if monitor != nil {
 		options = append(options, runtime.WithPermissionClockMonitor(monitor))
-	}
-	if url := strings.TrimSpace(s.SourceURL); url != "" {
-		options = append(options, runtime.WithSourceURL(url))
-	}
-	if key := strings.TrimSpace(s.SourceAPIKey); key != "" {
-		options = append(options, runtime.WithSourceAPIKey(key))
-	}
-	if repository := strings.TrimSpace(s.SourceRepository); repository != "" {
-		options = append(options, runtime.WithSourceRepository(repository))
-	}
-	if channel := strings.TrimSpace(s.SourceChannel); channel != "" {
-		options = append(options, runtime.WithSourceChannel(channel))
-	}
-	if workflow := strings.TrimSpace(s.SourceSignerWorkflow); workflow != "" {
-		options = append(options, runtime.WithSourceSignerWorkflow(workflow))
-	}
-	if token := strings.TrimSpace(s.SourceToken); token != "" {
-		options = append(options, runtime.WithSourceToken(token))
-	}
-	if s.AcquisitionInterval > 0 {
-		options = append(options, runtime.WithAcquisitionInterval(s.AcquisitionInterval))
-	}
-	if s.RefreshTimeout > 0 {
-		options = append(options, runtime.WithRefreshTimeout(s.RefreshTimeout))
-	}
-	if path := strings.TrimSpace(s.WorkspacePath); path != "" {
-		options = append(options, runtime.WithClientOptions(starmap.WithCatalogPath(path)))
-	}
-
-	// The state directory is never the workspace path. A workspace can sit on
-	// a volume a fleet shares, and a shared identity seed would give two
-	// instances one lease holder, which fences nothing.
-	if directory := strings.TrimSpace(s.StateDirectory); directory != "" {
-		options = append(options, runtime.WithStateDirectory(directory))
 	}
 
 	// Record the listen address without changing the durable runtime identity.
@@ -166,6 +144,49 @@ func (s Settings) starmapOptions() ([]runtime.Option, error) {
 		options = append(options, runtime.WithListenAddress(address))
 	}
 	return options, nil
+}
+
+// catalogValues projects typed host values into the shared parser.
+// Explicit zero and false values always replace the corresponding defaults.
+func (s Settings) catalogValues() map[string]string {
+	values := maps.Clone(s.Values)
+	if values == nil {
+		values = make(map[string]string)
+	}
+	for name, value := range map[string]string{
+		catalogconfig.Source:              s.Source,
+		catalogconfig.SourceAPIKey:        s.SourceAPIKey,
+		catalogconfig.SourceToken:         s.SourceToken,
+		catalogconfig.SourcePollInterval:  s.SourcePollInterval.String(),
+		catalogconfig.SourceStartupPolicy: s.SourceStartupPolicy,
+		catalogconfig.SourceMaxAge:        s.SourceMaxAge.String(),
+		catalogconfig.SourceMaxHops:       strconv.Itoa(s.SourceMaxHops),
+		catalogconfig.AcquisitionEnabled:  strconv.FormatBool(s.AcquisitionEnabled),
+		catalogconfig.AcquisitionInterval: s.AcquisitionInterval.String(),
+		catalogconfig.StartupSpread:       s.StartupSpread.String(),
+		catalogconfig.TransferIdleTimeout: s.TransferIdleTimeout.String(),
+		catalogconfig.TransferMaxDuration: s.TransferMaxDuration.String(),
+		catalogconfig.RefreshTimeout:      s.RefreshTimeout.String(),
+	} {
+		values[name] = value
+	}
+	for name, value := range map[string]string{
+		catalogconfig.SourceURL:            s.SourceURL,
+		catalogconfig.SourceRepository:     s.SourceRepository,
+		catalogconfig.SourceChannel:        s.SourceChannel,
+		catalogconfig.SourceSignerWorkflow: s.SourceSignerWorkflow,
+		catalogconfig.SourceAuthorityID:    s.SourceAuthorityID,
+		catalogconfig.SourcePolicyID:       s.SourcePolicyID,
+		catalogconfig.WorkspacePath:        s.WorkspacePath,
+		catalogconfig.StateDirectory:       s.StateDirectory,
+	} {
+		if value == "" {
+			delete(values, name)
+		} else {
+			values[name] = value
+		}
+	}
+	return values
 }
 
 // cascadeSource builds the Starmap cascade source of a deployment that reads
@@ -204,4 +225,15 @@ func (s Settings) cascadeSource(ctx context.Context) (*remote.Source, error) {
 		MaxHops: s.SourceMaxHops,
 		MaxAge:  s.SourceMaxAge,
 	})
+}
+
+func (s Settings) directoryOwner() runtime.DirectoryOwner {
+	instance, deployment := s.InstanceID, s.DeploymentID
+	if instance == "" {
+		instance = "default"
+	}
+	if deployment == "" {
+		deployment = "local"
+	}
+	return runtime.DirectoryOwner{Product: "starport", Deployment: deployment, Instance: instance}
 }

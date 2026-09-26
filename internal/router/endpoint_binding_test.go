@@ -54,6 +54,7 @@ type endpointBindingFixture struct {
 type bindingAttempt struct {
 	endpoint        string
 	materialVersion string
+	material        credentials.Material
 }
 
 func newEndpointBindingFixture(t *testing.T) *endpointBindingFixture {
@@ -74,7 +75,7 @@ func newEndpointBindingFixture(t *testing.T) *endpointBindingFixture {
 	) (*connectors.ChatResponse, error) {
 		fixture.mu.Lock()
 		fixture.seen = append(fixture.seen, bindingAttempt{
-			endpoint: request.Endpoint.URL, materialVersion: request.Credential.Version(),
+			endpoint: request.Endpoint.URL, materialVersion: request.Credential.Version(), material: request.Credential,
 		})
 		fixture.mu.Unlock()
 		return &connectors.ChatResponse{ID: "response", Model: request.Model}, nil
@@ -199,7 +200,7 @@ func endpointBindingMaterial(
 ) credentials.Material {
 	return credentials.NewMaterial(profile, map[catalogs.ProviderCredentialFieldID]string{
 		"api-key": version + "-key", "base-url": baseURL, "project": project,
-	}, credentials.MaterialMetadata{Version: version})
+	}, credentials.MaterialMetadata{Version: version, Handle: version})
 }
 
 type bindingMaterialSource struct {

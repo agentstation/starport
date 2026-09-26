@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/disclosure"
 	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
@@ -22,7 +22,7 @@ import (
 
 // CacheManager interface defines the cache operations used by the proxy
 type CacheManager interface {
-	GetModel(ctx context.Context, key string) (any, bool, error)
+	GetModel(ctx context.Context, key string, target any) (bool, error)
 	SetModel(ctx context.Context, key string, value any) error
 	GetResponse(ctx context.Context, key string) ([]byte, bool, error)
 	SetResponse(ctx context.Context, key string, response []byte) error
@@ -117,7 +117,7 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 		}
 		resp.CacheStatus = CacheStatusHit
 		resp.CacheAge = cacheAge(cachedAt)
-		if refusal := cachePermissionFailure(runtime); refusal != nil {
+		if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 			return nil, refusal
 		}
 		return resp, nil
@@ -138,7 +138,7 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 				resp.CacheStatus = CacheStatusHit
 				resp.CacheAge = cacheAge(cachedAt)
 				resp.CacheSimilarity = similarity
-				if refusal := cachePermissionFailure(runtime); refusal != nil {
+				if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 					return nil, refusal
 				}
 				return resp, nil
@@ -155,9 +155,8 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 	// Mark as cache miss
 	resp.CacheStatus = CacheStatusMiss
 
-	// Cache the response after the upstream request completes. This is
-	// intentionally synchronous so cache writes remain owned by the request
-	// path and race tests can reason about completion deterministically.
+	// Submit optional cache work after the upstream request completes.
+	// Encoding runs here. The byte store can defer or drop the fill.
 	cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	canonical, conversionErr := chatResponseToCanonical(resp)
@@ -247,10 +246,10 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 		if err != nil {
 			return finish(s.service.ProcessChatCompletionStream(ctx, req))
 		}
-		if refusal := cachePermissionFailure(runtime); refusal != nil {
+		if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 			return finish(nil, refusal)
 		}
-		return finish(newCachedEventStream(events, cachedAt, runtime), nil)
+		return finish(newCachedEventStream(ctx, events, cachedAt, runtime), nil)
 	}
 
 	log.Info().
@@ -265,10 +264,10 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 		if cached, cachedAt, similarity, ok := probe.lookup(ctx, repository); ok {
 			events, err := responsecache.StreamEvents(cached, canonicalRequest.StreamOptions)
 			if err == nil {
-				if refusal := cachePermissionFailure(runtime); refusal != nil {
+				if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 					return finish(nil, refusal)
 				}
-				replay := newCachedEventStream(events, cachedAt, runtime)
+				replay := newCachedEventStream(ctx, events, cachedAt, runtime)
 				replay.similarity = similarity
 				return finish(replay, nil)
 			}
@@ -328,7 +327,7 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 		resp := embeddingResponseFromCanonical(cachedResp)
 		resp.CacheStatus = CacheStatusHit
 		resp.CacheAge = cacheAge(cachedAt)
-		if refusal := cachePermissionFailure(runtime); refusal != nil {
+		if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
 			return nil, refusal
 		}
 		return resp, nil
@@ -420,58 +419,22 @@ func (s *cachedService) ProcessTranscription(
 }
 
 func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMsg string, fetchFunc func() (any, error)) (any, error) {
-	// Try to get from cache
-	cached, found, err := s.cacheManager.GetModel(ctx, cacheKey)
+	var target any
+	switch cacheMsg {
+	case "models":
+		target = &ModelsResponse{CacheStatus: CacheStatusHit}
+	case "providers":
+		target = &ProvidersResponse{CacheStatus: CacheStatusHit}
+	default:
+		return fetchFunc()
+	}
+	found, err := s.cacheManager.GetModel(ctx, cacheKey, target)
 	if err != nil {
 		log.Warn().Err(err).Msgf("%s cache get error", cacheMsg)
 		return fetchFunc()
 	}
-
 	if found {
-		// The cache returns a generic map, we need to convert it back to the proper type
-		// Try to convert from map to the appropriate response type
-		if mapData, ok := cached.(map[string]any); ok {
-			// Marshal back to JSON then unmarshal to proper type
-			jsonData, err := json.Marshal(mapData)
-			if err != nil {
-				log.Warn().Err(err).Msg("failed to marshal cached data")
-				return fetchFunc()
-			}
-
-			// Determine the type based on cache key and unmarshal
-			switch {
-			case strings.HasPrefix(cacheKey, "models:list:"):
-				var resp ModelsResponse
-				if err := json.Unmarshal(jsonData, &resp); err != nil {
-					log.Warn().Err(err).Msg("failed to unmarshal models response")
-					return fetchFunc()
-				}
-				resp.CacheStatus = CacheStatusHit
-				return &resp, nil
-			case strings.HasPrefix(cacheKey, "providers:list:"):
-				var resp ProvidersResponse
-				if err := json.Unmarshal(jsonData, &resp); err != nil {
-					log.Warn().Err(err).Msg("failed to unmarshal providers response")
-					return fetchFunc()
-				}
-				resp.CacheStatus = CacheStatusHit
-				return &resp, nil
-			}
-		}
-
-		// If it's already the correct type (shouldn't happen with current cache implementation)
-		switch v := cached.(type) {
-		case *ModelsResponse:
-			v.CacheStatus = CacheStatusHit
-			return v, nil
-		case *ProvidersResponse:
-			v.CacheStatus = CacheStatusHit
-			return v, nil
-		}
-
-		// If we can't handle the cached data, fetch fresh
-		log.Warn().Msgf("unexpected cache type for %s: %T", cacheKey, cached)
-		return fetchFunc()
+		return target, nil
 	}
 
 	// Fetch from service
@@ -497,26 +460,38 @@ func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMs
 	return resp, nil
 }
 
-// ListModels with caching
-func (s *cachedService) ListModels(ctx context.Context) (*ModelsResponse, error) {
-	if !s.cacheConfig.EnableModelCache {
-		return s.service.ListModels(ctx)
-	}
+// readCachedCatalogList binds lookup and delivery to current catalog permission.
+func (s *cachedService) readCachedCatalogList(ctx context.Context, kind string, fetch func(context.Context) (any, error)) (response any, err error) {
 	ctx, runtime, owned := s.runtimeContext(ctx)
 	if owned {
 		defer runtime.Release()
 	}
 	if s.runtime != nil && runtime == nil {
+		return fetch(ctx)
+	}
+	ctx = bindDiscoverySnapshot(ctx, runtime)
+	if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
+		return nil, refusal
+	}
+	defer func() {
+		if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
+	key := kind + ":list:" + s.discoveryCacheIdentity(ctx) + ":" + disclosure.CacheScope(ctx)
+	return s.cacheListResponse(ctx, key, kind, func() (any, error) { return fetch(ctx) })
+}
+
+// ListModels with caching
+func (s *cachedService) ListModels(ctx context.Context) (*ModelsResponse, error) {
+	if !s.cacheConfig.EnableModelCache {
 		return s.service.ListModels(ctx)
 	}
-	cacheKey := "models:list:" + s.catalogGeneration(ctx)
-
-	resp, err := s.cacheListResponse(ctx, cacheKey, "models",
-		func() (any, error) { return s.service.ListModels(ctx) })
+	response, err := s.readCachedCatalogList(ctx, "models", func(bound context.Context) (any, error) { return s.service.ListModels(bound) })
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*ModelsResponse), nil
+	return response.(*ModelsResponse), nil
 }
 
 // ListAuthors delegates to the wrapped service. Author projections read
@@ -541,25 +516,15 @@ func (s *cachedService) ListProviders(ctx context.Context) (*ProvidersResponse, 
 	if !s.cacheConfig.EnableProviderCache {
 		return s.service.ListProviders(ctx)
 	}
-	ctx, runtime, owned := s.runtimeContext(ctx)
-	if owned {
-		defer runtime.Release()
-	}
-	if s.runtime != nil && runtime == nil {
-		return s.service.ListProviders(ctx)
-	}
-	cacheKey := "providers:list:" + s.catalogGeneration(ctx)
-
-	resp, err := s.cacheListResponse(ctx, cacheKey, "providers",
-		func() (any, error) { return s.service.ListProviders(ctx) })
+	response, err := s.readCachedCatalogList(ctx, "providers", func(bound context.Context) (any, error) { return s.service.ListProviders(bound) })
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*ProvidersResponse), nil
+	return response.(*ProvidersResponse), nil
 }
 
 // GetModelEndpoints with caching
-func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error) {
+func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (response *ModelEndpointsResponse, err error) {
 	if !s.cacheConfig.EnableModelCache {
 		return s.service.GetModelEndpoints(ctx, modelID)
 	}
@@ -570,21 +535,31 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 	if s.runtime != nil && runtime == nil {
 		return s.service.GetModelEndpoints(ctx, modelID)
 	}
+	ctx = bindDiscoverySnapshot(ctx, runtime)
+	if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
+		return nil, refusal
+	}
+	defer func() {
+		if refusal := cachePermissionFailure(ctx, runtime); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
 
-	cacheKey := fmt.Sprintf("model:endpoints:%s:%s", s.catalogGeneration(ctx), modelID)
+	if runtime != nil {
+		if err := checkEndpointDisclosure(ctx, discoverySnapshot(ctx, runtime), modelID); err != nil {
+			return nil, err
+		}
+	}
+	cacheKey := fmt.Sprintf("model:endpoints:%s:%s:%s", s.discoveryCacheIdentity(ctx), disclosure.CacheScope(ctx), modelID)
 
-	// Try to get from cache using GetModel
-	cached, found, err := s.cacheManager.GetModel(ctx, cacheKey)
+	var cached ModelEndpointsResponse
+	found, err := s.cacheManager.GetModel(ctx, cacheKey, &cached)
 	if err != nil {
 		log.Warn().Err(err).Msg("model endpoints cache get error")
 		return s.service.GetModelEndpoints(ctx, modelID)
 	}
-
 	if found {
-		// Type assert to ModelEndpointsResponse
-		if cachedResp, ok := cached.(*ModelEndpointsResponse); ok {
-			return cachedResp, nil
-		}
+		return &cached, nil
 	}
 
 	resp, err := s.service.GetModelEndpoints(ctx, modelID)
@@ -646,6 +621,15 @@ func (s *cachedService) generateEmbeddingsCacheKey(
 		Request:           req.Request,
 		Policy:            cachePolicy("", nil, req.APIKeyConfig),
 	})
+}
+
+func (s *cachedService) discoveryCacheIdentity(ctx context.Context) string {
+	if runtime := connectors.RuntimeLeaseFromContext(ctx); runtime != nil {
+		if snapshot := discoverySnapshot(ctx, runtime); snapshot != nil {
+			return snapshot.DiscoveryCacheIdentity()
+		}
+	}
+	return s.generation
 }
 
 func (s *cachedService) catalogGeneration(ctx context.Context) string {
@@ -751,7 +735,10 @@ func cacheAge(cachedAt time.Time) int {
 	return int(age / time.Second)
 }
 
-func cachePermissionFailure(runtime connectors.RuntimeLease) *failure.Failure {
+func cachePermissionFailure(ctx context.Context, runtime connectors.RuntimeLease) *failure.Failure {
+	if err := inference.CheckPermission(ctx); err != nil {
+		return failure.New(failure.GatewayUnavailable, "Authorization is unavailable.", true, failure.ProviderDetails{}, nil)
+	}
 	if runtime == nil {
 		return nil
 	}
@@ -760,6 +747,7 @@ func cachePermissionFailure(runtime connectors.RuntimeLease) *failure.Failure {
 
 // cachedEventStream replays canonical events from one completed result.
 type cachedEventStream struct {
+	permission        inference.Permission
 	snapshot          *runtimecatalog.RoutableSnapshot
 	permissionFailure *failure.Failure
 	events            []inference.StreamEvent
@@ -770,7 +758,7 @@ type cachedEventStream struct {
 	similarity float64
 }
 
-func newCachedEventStream(events []inference.StreamEvent, cachedAt time.Time, runtime connectors.RuntimeLease) *cachedEventStream {
+func newCachedEventStream(ctx context.Context, events []inference.StreamEvent, cachedAt time.Time, runtime connectors.RuntimeLease) *cachedEventStream {
 	clones := make([]inference.StreamEvent, len(events))
 	for index, event := range events {
 		clones[index] = event.Clone()
@@ -779,12 +767,18 @@ func newCachedEventStream(events []inference.StreamEvent, cachedAt time.Time, ru
 	if runtime != nil {
 		snapshot = runtime.Snapshot()
 	}
-	return &cachedEventStream{events: clones, cachedAt: cachedAt, snapshot: snapshot}
+	return &cachedEventStream{permission: inference.RequestPermission(ctx), events: clones, cachedAt: cachedAt, snapshot: snapshot}
 }
 
 func (s *cachedEventStream) Read() (*inference.StreamEvent, error) {
 	if s.permissionFailure != nil {
 		return nil, s.permissionFailure
+	}
+	if s.position == 0 && s.permission != nil {
+		if err := s.permission.Check(); err != nil {
+			s.permissionFailure = failure.New(failure.GatewayUnavailable, "Authorization is unavailable.", true, failure.ProviderDetails{}, nil)
+			return nil, s.permissionFailure
+		}
 	}
 	if s.position == 0 && s.snapshot != nil {
 		s.permissionFailure = s.snapshot.CheckNewAttempt()
@@ -814,10 +808,11 @@ type cachingStreamWrapper struct {
 	stream     ChatCompletionStreamResponse
 	repository responsecache.Repository
 	cacheKey   string
-	events     []inference.StreamEvent
+	cacheMu    sync.Mutex
+	buffer     responsecache.StreamBuffer
 	cached     bool
-	// afterCache runs once after a successful store, so a semantic probe
-	// can record its vector beside the entry the store just wrote.
+	// afterCache submits a semantic vector after the exact fill submission.
+	// Lookup requires the exact entry, even if either fill is pending or dropped.
 	afterCache func(ctx context.Context, exactKey string)
 }
 
@@ -828,29 +823,38 @@ func newCachingStreamWrapper(
 ) *cachingStreamWrapper {
 	return &cachingStreamWrapper{
 		stream: stream, repository: repository, cacheKey: cacheKey,
-		events: make([]inference.StreamEvent, 0),
 	}
 }
 
 func (w *cachingStreamWrapper) Read() (*inference.StreamEvent, error) {
 	event, err := w.stream.Read()
+	w.cacheMu.Lock()
+	defer w.cacheMu.Unlock()
 	if event != nil {
-		w.events = append(w.events, event.Clone())
+		w.buffer.Add(*event)
 	}
-	if err == io.EOF && !w.cached && len(w.events) > 0 {
+	if err == io.EOF && !w.cached && len(w.buffer.Events()) > 0 {
 		w.cached = true
 		w.cacheResponse()
+	}
+	if err != nil {
+		w.buffer.Discard()
 	}
 	return event, err
 }
 
-func (w *cachingStreamWrapper) Close() error                         { return w.stream.Close() }
+func (w *cachingStreamWrapper) Close() error {
+	w.cacheMu.Lock()
+	w.buffer.Discard()
+	w.cacheMu.Unlock()
+	return w.stream.Close()
+}
 func (w *cachingStreamWrapper) GetCacheStatus() string               { return CacheStatusMiss }
 func (w *cachingStreamWrapper) GetCacheAge() int                     { return 0 }
 func (w *cachingStreamWrapper) Unwrap() ChatCompletionStreamResponse { return w.stream }
 
 func (w *cachingStreamWrapper) cacheResponse() {
-	response, err := responsecache.CompleteStream(w.events)
+	response, err := responsecache.CompleteStream(w.buffer.Events())
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to reconstruct canonical cached stream")
 		return

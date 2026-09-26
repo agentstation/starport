@@ -1,0 +1,215 @@
+package catalog
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
+	catalogconfig "github.com/agentstation/starmap/pkg/catalogs/config"
+	"github.com/agentstation/starmap/pkg/sources"
+	"github.com/agentstation/starport/internal/storage"
+	"github.com/stretchr/testify/require"
+)
+
+func TestRuntimeAcquiresSelectedMetadataSource(t *testing.T) {
+	var calls atomic.Int64
+	payload := metadataSourcePayloadWithRetainedRecord(t)
+	prior := http.DefaultTransport
+	http.DefaultTransport = metadataTransport(func(request *http.Request) (*http.Response, error) {
+		if request.URL.String() != "https://models.dev/api.json" {
+			return nil, fmt.Errorf("unexpected network request: %s", request.URL.Host)
+		}
+		calls.Add(1)
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(payload)), Request: request}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = prior })
+	settings := acquisitionCatalogSettings(t, "https://provider.invalid")
+	writeMetadataBaseline(t, settings.SourceURL)
+	settings.SourceCacheDirectory = filepath.Join(t.TempDir(), "source-cache")
+	settings.AcquisitionEnabled = false
+	settings.Values = map[string]string{catalogconfig.AcquisitionSources: string(sources.ModelsDevHTTPID)}
+	storePath := filepath.Join(t.TempDir(), "badger")
+	openStore := func() *storage.BadgerStore {
+		t.Helper()
+		store, err := storage.OpenBadger(storage.BadgerConfig{
+			Path: storePath, SyncWrites: true, NumVersions: 1, NumLevelZero: 5, MemTableSize: 64 << 20,
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, store.Close()) })
+		return store
+	}
+	store := openStore()
+	connected, err := OpenRuntime(t.Context(), store, settings, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, connected.Close(context.Background())) })
+	require.Zero(t, calls.Load(), "disabled automatic acquisition must remain passive")
+	first, err := connected.Refresh(t.Context())
+	require.NoError(t, err)
+	require.NotEmpty(t, first.Acquisition.SourceObservations)
+	for _, observation := range first.Acquisition.SourceObservations {
+		require.EqualValues(t, sources.ModelsDevHTTPID, observation.Source)
+		require.EqualValues(t, sources.ObservationStatusSucceeded, observation.Status)
+	}
+	initial, err := connected.CurrentCandidate(t.Context())
+	require.NoError(t, err)
+	baseline, err := connected.candidates.Get(t.Context(), initial.State.GenerationID)
+	require.NoError(t, err)
+	baselineProvider, err := initial.State.Catalog.Provider("openai")
+	require.NoError(t, err)
+	require.Contains(t, baselineProvider.Models, "retained-only")
+	// A complete first observation attributes the record to this source.
+	// The next response omits it without granting removal permission.
+	payload = metadataSourcePayload(t)
+	// Evict the transport cache so the collector reads the changed response.
+	require.NoError(t, os.Remove(filepath.Join(settings.SourceCacheDirectory, "models.dev", "api.json")))
+	priorCalls := calls.Load()
+	report, err := connected.Refresh(t.Context())
+	require.NoError(t, err)
+	require.Greater(t, calls.Load(), priorCalls, "selected non-provider source must reach its collector")
+	stored, err := os.ReadFile(filepath.Join(settings.SourceCacheDirectory, "models.dev", "api.json"))
+	require.NoError(t, err)
+	require.JSONEq(t, string(payload), string(stored))
+	require.NotEmpty(t, report.Acquisition.SourceObservations)
+	for _, observation := range report.Acquisition.SourceObservations {
+		require.EqualValues(t, sources.ModelsDevHTTPID, observation.Source)
+		require.EqualValues(t, sources.ObservationStatusDegraded, observation.Status, "this fixture omits previously attributed baseline records")
+	}
+	candidate, err := connected.CurrentCandidate(t.Context())
+	require.NoError(t, err)
+	updatedProvider, err := candidate.State.Catalog.Provider("openai")
+	require.NoError(t, err)
+	for id := range baselineProvider.Models {
+		require.Contains(t, updatedProvider.Models, id, "source omissions must retain baseline models")
+	}
+	require.NoError(t, connected.Accept(t.Context(), candidate))
+	accepted, err := connected.accepted.Get(t.Context(), candidate.State.GenerationID)
+	require.NoError(t, err)
+	expected := append([]catalogs.SourceObservationLink(nil), report.Acquisition.SourceObservations...)
+	// The omitted record retains its original observation receipt.
+	expected = append(expected, baseline.Manifest.SourceObservations...)
+	require.ElementsMatch(t, expected, accepted.Manifest.SourceObservations)
+	require.NoError(t, connected.Close(t.Context()))
+	require.NoError(t, store.Close())
+	store = openStore()
+	beforeRestart := calls.Load()
+	settings.Values[catalogconfig.NetworkMode] = "offline"
+	reopened, err := OpenRuntime(t.Context(), store, settings, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, reopened.Close(context.Background())) })
+	require.Equal(t, candidate.State.GenerationID, reopened.ControlPlane().Current().GenerationID())
+	require.Equal(t, beforeRestart, calls.Load())
+	retained, err := reopened.accepted.Get(t.Context(), candidate.State.GenerationID)
+	require.NoError(t, err)
+	require.Equal(t, accepted.Manifest.SourceObservations, retained.Manifest.SourceObservations)
+	require.Equal(t, accepted.Payload, retained.Payload)
+}
+
+func TestMetadataCollectorConstructionIsPassiveAndChecksPaths(t *testing.T) {
+	cache := filepath.Join(t.TempDir(), "cache")
+	settings := Settings{SourceCacheDirectory: cache}
+	_, err := settings.metadataCollector()
+	require.NoError(t, err)
+	require.NoDirExists(t, cache)
+	settings.WorkspacePath = filepath.Join(cache, "workspace")
+	_, err = settings.metadataCollector()
+	require.Error(t, err)
+	require.NoDirExists(t, cache)
+	settings = Settings{SourceCacheDirectory: "relative"}
+	_, err = settings.metadataCollector()
+	require.Error(t, err)
+}
+
+func TestMetadataAcquisitionRespectsOfflineAndEmptySelection(t *testing.T) {
+	for _, mode := range []string{"offline", "empty-selection"} {
+		t.Run(mode, func(t *testing.T) {
+			var calls atomic.Int64
+			prior := http.DefaultTransport
+			http.DefaultTransport = metadataTransport(func(*http.Request) (*http.Response, error) {
+				calls.Add(1)
+				return nil, fmt.Errorf("network is forbidden")
+			})
+			t.Cleanup(func() { http.DefaultTransport = prior })
+			settings := identityTestSettings(filepath.Join(t.TempDir(), "state"), "", "")
+			settings.SourceCacheDirectory = filepath.Join(t.TempDir(), "cache")
+			settings.Values = map[string]string{catalogconfig.AcquisitionSources: string(sources.ModelsDevHTTPID)}
+			if mode == "offline" {
+				settings.Values[catalogconfig.NetworkMode] = "offline"
+			} else {
+				settings.Values[catalogconfig.AcquisitionSources] = ""
+			}
+			connected, err := OpenRuntime(t.Context(), storage.NewMockStore(), settings, nil)
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, connected.Close(context.Background())) })
+			_, err = connected.Refresh(t.Context())
+			if mode == "offline" {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Zero(t, calls.Load())
+			require.NoDirExists(t, settings.SourceCacheDirectory)
+		})
+	}
+}
+
+type metadataTransport func(*http.Request) (*http.Response, error)
+
+func (f metadataTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
+func metadataSourcePayload(t *testing.T) []byte {
+	t.Helper()
+	providers := make(map[string]any)
+	for _, provider := range []string{"openai", "anthropic", "google", "xai", "groq"} {
+		models := make(map[string]any)
+		for index := range 20 {
+			id := fmt.Sprintf("fixture-model-%02d", index)
+			if index == 0 {
+				id = "gpt-image-2"
+			}
+			models[id] = map[string]any{"id": id, "name": "Fixture model", "description": strings.Repeat("Source metadata fixture. ", 100), "limit": map[string]any{"context": 32768, "output": 4096}}
+		}
+		providers[provider] = map[string]any{"id": provider, "name": provider, "models": models}
+	}
+	payload, err := json.Marshal(providers)
+	require.NoError(t, err)
+	return payload
+}
+
+func metadataSourcePayloadWithRetainedRecord(t *testing.T) []byte {
+	t.Helper()
+	var providers map[string]map[string]any
+	require.NoError(t, json.Unmarshal(metadataSourcePayload(t), &providers))
+	models := providers["openai"]["models"].(map[string]any)
+	models["retained-only"] = map[string]any{"id": "retained-only", "name": "Retained source record", "limit": map[string]any{"context": 32768, "output": 4096}}
+	payload, err := json.Marshal(providers)
+	require.NoError(t, err)
+	return payload
+}
+
+func writeMetadataBaseline(t *testing.T, path string) {
+	t.Helper()
+	baseline := acquisitionLifecycleCatalog(t, "https://provider.invalid")
+	builder, err := catalogs.NewBuilderFrom(baseline)
+	require.NoError(t, err)
+	provider, err := baseline.Provider("openai")
+	require.NoError(t, err)
+	retained := *provider.Models["fixture-chat"]
+	retained.ID = "retained-only"
+	require.NoError(t, builder.SetProviderModel("openai", retained))
+	catalog, err := builder.Build()
+	require.NoError(t, err)
+	payload, err := catalogs.EncodeCatalogPayload(catalog)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, payload, 0600))
+}

@@ -31,11 +31,11 @@ const batchIDParam = "batch_id"
 const maxBatchListLimit = 100
 
 // BatchAdmission is the identity one batch line presents to the governor.
-// The values are captured at submission, because the line runs long after the
-// submitting request and its context are gone.
+// Submission fixes ownership. Each line resolves current policy before execution.
 type BatchAdmission struct {
-	AccountID string
-	KeyID     string
+	Reauthorize requestctx.AuthorizationRefresh
+	AccountID   string
+	KeyID       string
 	// TeamID is the team the submitting key is attributed to, or empty for a
 	// teamless key. The governor meters the team's spend budget with it.
 	TeamID        string
@@ -49,7 +49,7 @@ type BatchAdmission struct {
 // holds. A rate refusal waits inside the governor rather than failing the
 // line: a batch is background work, and pacing is the point of the limit.
 type BatchGovernor interface {
-	AdmitLine(ctx context.Context, admission BatchAdmission) error
+	AdmitLine(ctx context.Context, admission BatchAdmission) (context.Context, error)
 }
 
 // BatchBudgetError reports a line refused because a budget for the current
@@ -124,27 +124,19 @@ func (h *BatchesController) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiKeyConfig, err := h.getAPIKeyRoutingConfig(ctx)
-	if err != nil {
-		h.writeCredentialStrategyError(w, err)
-		return
-	}
-
 	// The identifier is minted here rather than inside the service, because
 	// the line runner has to stamp it on every usage record it draws and the
 	// runner is built before the record exists.
 	batchID := jobs.NewBatchID()
 	runner := &batchLineRunner{
-		service:      h.service,
-		governor:     h.governor,
-		admission:    batchAdmissionFrom(r),
-		endpoint:     request.Endpoint,
-		batchID:      batchID,
-		apiKey:       h.getAPIKey(ctx),
-		accountID:    account,
-		keyID:        h.getAPIKeyID(ctx),
-		teamID:       h.getTeamID(ctx),
-		apiKeyConfig: apiKeyConfig,
+		service:   h.service,
+		governor:  h.governor,
+		admission: batchAdmissionFrom(r),
+		endpoint:  request.Endpoint,
+		batchID:   batchID,
+		accountID: account,
+		keyID:     h.getAPIKeyID(ctx),
+		teamID:    h.getTeamID(ctx),
 	}
 	batch, err := h.batches.Submit(ctx, jobs.BatchSubmission{
 		ID:               batchID,
@@ -226,20 +218,14 @@ func (h *BatchesController) ready(w http.ResponseWriter) bool {
 	return true
 }
 
-// batchAdmissionFrom captures the submitting caller's identity and limits.
-// Both travel in the request context from authentication, so the capture
-// reaches no storage.
+// batchAdmissionFrom captures ownership and the resolver, without reading storage.
 func batchAdmissionFrom(r *http.Request) BatchAdmission {
 	admission := BatchAdmission{
-		AccountID: requestctx.AccountIDOrDefault(r.Context()),
-	}
-	if record, ok := requestctx.GetAccountRecord(r.Context()); ok && record != nil {
-		admission.AccountLimits = record.Limits
+		AccountID:   requestctx.AccountIDOrDefault(r.Context()),
+		Reauthorize: requestctx.GetAuthorizationRefresh(r.Context()),
 	}
 	if apiKey, ok := requestctx.GetAPIKeyModel(r.Context()); ok && apiKey != nil {
 		admission.KeyID = apiKey.ID
-		admission.TeamID = apiKey.TeamID
-		admission.KeyLimits = apiKey.Limits
 	}
 	return admission
 }
@@ -342,7 +328,6 @@ type batchLineRunner struct {
 	admission    BatchAdmission
 	endpoint     string
 	batchID      string
-	apiKey       string
 	accountID    string
 	keyID        string
 	teamID       string
@@ -360,19 +345,34 @@ func (r *batchLineRunner) RunLine(ctx context.Context, _ int, line []byte) ([]by
 			http.StatusBadRequest, errorTypeInvalidRequest, err.Error(), nil), true
 	}
 
-	if r.governor != nil {
-		if err := r.governor.AdmitLine(ctx, r.admission); err != nil {
-			var budget *BatchBudgetError
-			if errors.As(err, &budget) {
-				return r.failureLine(decoded.CustomID, requestID,
-					http.StatusPaymentRequired, errorTypePermission, budget.Message, nil), true
-			}
-			return r.failureLine(decoded.CustomID, requestID,
-				http.StatusInternalServerError, errorTypeServer, err.Error(), nil), true
-		}
+	if r.governor == nil {
+		return r.failureLine(decoded.CustomID, requestID, http.StatusServiceUnavailable, errorTypeServer, "Batch authorization is unavailable.", nil), true
 	}
+	ctx, err = r.governor.AdmitLine(ctx, r.admission)
+	if err != nil {
+		var budget *BatchBudgetError
+		if errors.As(err, &budget) {
+			return r.failureLine(decoded.CustomID, requestID, http.StatusPaymentRequired, errorTypePermission, budget.Message, nil), true
+		}
+		status, kind, message, param := errorShape(err)
+		return r.failureLine(decoded.CustomID, requestID, status, kind, message, param), true
+	}
+	if ctx == nil {
+		return r.failureLine(decoded.CustomID, requestID, http.StatusServiceUnavailable, errorTypeServer, "Batch authorization is unavailable.", nil), true
+	}
+	// A per-line copy prevents concurrent lines from sharing mutable projections.
+	current := *r
+	handler := BaseHandler{}
+	config, err := handler.getAPIKeyRoutingConfig(ctx)
+	if err != nil {
+		return r.failureLine(decoded.CustomID, requestID, http.StatusServiceUnavailable, errorTypeServer, "Authorization is unavailable.", nil), true
+	}
+	current.apiKeyConfig = config
+	current.accountID = handler.getAccountID(ctx)
+	current.keyID = handler.getAPIKeyID(ctx)
+	current.teamID = handler.getTeamID(ctx)
 
-	body, err := r.execute(ctx, requestID, decoded.Body)
+	body, err := current.execute(ctx, requestID, decoded.Body)
 	if err != nil {
 		status, errorType, message, param := errorShape(err)
 		return r.failureLine(decoded.CustomID, requestID, status, errorType, message, param), true
@@ -405,7 +405,6 @@ func (r *batchLineRunner) execute(
 		response, err := r.service.ProcessEmbeddings(ctx, &proxy.EmbeddingsRequest{
 			Request:      decoded,
 			BatchID:      r.batchID,
-			APIKey:       r.apiKey,
 			AccountID:    r.accountID,
 			KeyID:        r.keyID,
 			TeamID:       r.teamID,
@@ -449,7 +448,6 @@ func (r *batchLineRunner) chat(
 	response, err := r.service.ProcessChatCompletion(ctx, &proxy.ChatCompletionRequest{
 		Request:      decoded,
 		BatchID:      r.batchID,
-		APIKey:       r.apiKey,
 		AccountID:    r.accountID,
 		KeyID:        r.keyID,
 		TeamID:       r.teamID,

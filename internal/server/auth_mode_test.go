@@ -52,7 +52,7 @@ func TestDisabledAuthenticationServesInferenceWithoutAKey(t *testing.T) {
 // carry a complete caller or those seams meet a state they never see in
 // production and behave differently in a mode operators actually run.
 func TestDisabledAuthenticationMetersTheAnonymousKey(t *testing.T) {
-	middleware := NewAuthMiddleware(nil)
+	middleware := NewAuthMiddleware(nil, defaultAuthAccounts(t))
 	middleware.Govern(authmode.NewPolicy(authmode.Setting{Mode: authmode.Disabled}), nil)
 
 	resolved, status := authenticate(t, middleware, "")
@@ -74,6 +74,8 @@ func TestDisabledAuthenticationIgnoresAPresentedKey(t *testing.T) {
 	accounts, err := account.Open(store)
 	require.NoError(t, err)
 	ctx := context.Background()
+	_, err = accounts.EnsureDefault(ctx)
+	require.NoError(t, err)
 	_, err = accounts.Create(ctx, account.Account{ID: "acme", Name: "Acme", Active: true})
 	require.NoError(t, err)
 

@@ -94,6 +94,7 @@ type Dependencies struct {
 	LoadConfig       ConfigLoader
 	ResolvePaths     PathResolver
 	Diagnose         Diagnoser
+	MigrateRuntime   RuntimeMigrator
 	// Desktop reaches the operator's machine. It is not validated: a machine
 	// with no browser and no clipboard still runs every command, because each
 	// one prints the link it would otherwise have handed over.
@@ -318,7 +319,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 	auth := newAuthCommand(deps, usageError)
 	ui := newUICommand(deps, usageError)
 
-	commands := []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand}
+	commands := []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand, newMigrationCommand(deps, usageError)}
 	commands = append(commands, deps.ExtraCommands...)
 	commands = append(commands, version, man, help)
 	root := &urfavecli.Command{

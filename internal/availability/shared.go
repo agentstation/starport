@@ -36,6 +36,9 @@ const (
 
 	sharedHealthKeyPrefix = "provider-health:instance:"
 	sharedScanLimit       = 1024
+	sharedExchangeTimeout = 2 * time.Second
+	sharedDocumentLimit   = 1 << 20
+	sharedRecordLimit     = 4096
 )
 
 // SharedConfig bounds the distributed health exchange.
@@ -91,8 +94,7 @@ type sharedRecord struct {
 }
 
 // UseSharedStore turns on distributed health publication. The tracker writes
-// its state under its own instance key on every transition and merges peer
-// state during Refresh. Local state wins recency conflicts.
+// local observations through RunShared. Inference callbacks use memory only.
 func (t *Tracker) UseSharedStore(store KVStore, config SharedConfig) error {
 	if store == nil {
 		return ErrInvalidSharedStore
@@ -108,17 +110,17 @@ func (t *Tracker) UseSharedStore(store KVStore, config SharedConfig) error {
 }
 
 // sharedDocumentLocked projects the local records into this replica's
-// publication, or nil when no shared store is configured.
+// publication. It returns nil without a store or above the record limit.
 func (t *Tracker) sharedDocumentLocked() *sharedDocument {
-	if t.shared == nil {
+	if t.shared == nil || len(t.localRecords) > sharedRecordLimit {
 		return nil
 	}
 	doc := &sharedDocument{
 		InstanceID: t.sharedConfig.InstanceID,
 		UpdatedAt:  t.clock.Now(),
-		Records:    make([]sharedRecord, 0, len(t.records)),
+		Records:    make([]sharedRecord, 0, len(t.localRecords)),
 	}
-	for offering, entry := range t.records {
+	for offering, entry := range t.localRecords {
 		doc.Records = append(doc.Records, sharedRecord{
 			ProviderID:         offering.ProviderID,
 			ProviderModelID:    offering.ProviderModelID,
@@ -139,8 +141,8 @@ func (t *Tracker) sharedDocumentLocked() *sharedDocument {
 }
 
 // writeShared publishes one replica document with the configured TTL.
-func (t *Tracker) writeShared(doc *sharedDocument) {
-	if doc == nil {
+func (t *Tracker) writeShared(ctx context.Context, doc *sharedDocument) {
+	if doc == nil || len(doc.Records) > sharedRecordLimit {
 		return
 	}
 	t.mu.Lock()
@@ -151,8 +153,8 @@ func (t *Tracker) writeShared(doc *sharedDocument) {
 		return
 	}
 	data, err := json.Marshal(doc)
-	if err == nil {
-		err = store.SetWithTTL(context.Background(), sharedHealthKeyPrefix+doc.InstanceID, data, ttl)
+	if err == nil && len(data) <= sharedDocumentLimit {
+		err = store.SetWithTTL(ctx, sharedHealthKeyPrefix+doc.InstanceID, data, ttl)
 	}
 	if err != nil {
 		t.recordSharedError(err)
@@ -175,6 +177,7 @@ func (t *Tracker) mergePeerState(ctx context.Context) {
 	}
 	t.lastPeerFetch = now
 	own := t.sharedConfig.InstanceID
+	ttl := t.sharedConfig.TTL
 	t.mu.Unlock()
 
 	keys, err := store.ScanWithPrefix(ctx, sharedHealthKeyPrefix, sharedScanLimit)
@@ -185,40 +188,62 @@ func (t *Tracker) mergePeerState(ctx context.Context) {
 	if len(keys) == 0 {
 		return
 	}
-	values, err := store.BatchGet(ctx, keys)
-	if err != nil {
-		t.recordSharedError(err)
-		return
+	if len(keys) > sharedScanLimit {
+		keys = keys[:sharedScanLimit]
 	}
-	documents := make([]sharedDocument, 0, len(values))
-	for _, raw := range values {
-		var doc sharedDocument
-		if json.Unmarshal(raw, &doc) != nil || doc.InstanceID == own {
+	documents := make([]sharedDocument, 0)
+	recordsRead := 0
+	remainingBytes := 4 * sharedDocumentLimit
+	for _, key := range keys {
+		if ctx.Err() != nil {
+			return
+		}
+		values, err := store.BatchGet(ctx, []string{key})
+		if err != nil {
+			t.recordSharedError(err)
+			return
+		}
+		raw := values[key]
+		if len(raw) > sharedDocumentLimit || len(raw) > remainingBytes {
 			continue
 		}
+		var doc sharedDocument
+		if json.Unmarshal(raw, &doc) != nil || doc.InstanceID == own ||
+			key != sharedHealthKeyPrefix+doc.InstanceID || doc.UpdatedAt.After(now) ||
+			doc.UpdatedAt.IsZero() || now.Sub(doc.UpdatedAt) >= ttl ||
+			len(doc.Records) > sharedRecordLimit-recordsRead {
+			continue
+		}
+		remainingBytes -= len(raw)
+		recordsRead += len(doc.Records)
 		documents = append(documents, doc)
-	}
-	if len(documents) == 0 {
-		return
 	}
 
 	t.mu.Lock()
 	changed := false
 	for _, doc := range documents {
 		for _, record := range doc.Records {
-			changed = t.adoptRecordLocked(record) || changed
+			if record.UpdatedAt.IsZero() || record.UpdatedAt.After(doc.UpdatedAt) {
+				continue
+			}
+			adopted := t.adoptRecordLocked(record)
+			if adopted || t.matchesPeerRecordLocked(record) {
+				offering := Offering{ProviderID: record.ProviderID, ProviderModelID: record.ProviderModelID}
+				expiry := doc.UpdatedAt.Add(ttl)
+				if expiry.After(t.peerExpires[offering]) {
+					t.peerExpires[offering] = expiry
+				}
+			}
+			changed = adopted || changed
 		}
 	}
 	var snapshot Snapshot
-	var ownDoc *sharedDocument
 	if changed {
 		snapshot = t.changedSnapshotLocked()
-		ownDoc = t.sharedDocumentLocked()
 	}
 	t.mu.Unlock()
 	if changed {
 		t.publish(snapshot)
-		t.writeShared(ownDoc)
 	}
 }
 
@@ -232,6 +257,12 @@ func (t *Tracker) adoptRecordLocked(record sharedRecord) bool {
 	switch record.State {
 	case StateHealthy, StateOpen, StateHalfOpen, StateUnavailable:
 	default:
+		return false
+	}
+	if local, exists := t.localRecords[offering]; exists && !local.updatedAt.Before(record.UpdatedAt) {
+		return false
+	}
+	if _, exists := t.peerExpires[offering]; !exists && len(t.peerExpires) >= sharedRecordLimit {
 		return false
 	}
 	existing := t.records[offering]
@@ -259,4 +290,82 @@ func (t *Tracker) recordSharedError(err error) {
 	t.mu.Lock()
 	t.lastError = err
 	t.mu.Unlock()
+}
+
+// RunShared exchanges advisory health until cancellation. Only one worker runs.
+func (t *Tracker) RunShared(ctx context.Context) {
+	if !t.sharedRunning.CompareAndSwap(false, true) {
+		return
+	}
+	defer t.sharedRunning.Store(false)
+	t.mu.Lock()
+	interval := t.sharedConfig.RefreshInterval
+	store := t.shared
+	t.mu.Unlock()
+	if store == nil {
+		return
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		t.exchangeShared(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (t *Tracker) exchangeShared(ctx context.Context) {
+	t.Refresh(ctx)
+	ctx, cancel := context.WithTimeout(ctx, sharedExchangeTimeout)
+	defer cancel()
+	t.mu.Lock()
+	doc := t.sharedDocumentLocked()
+	t.mu.Unlock()
+	t.writeShared(ctx, doc)
+	t.mergePeerState(ctx)
+}
+
+func (t *Tracker) rememberLocalLocked(offering Offering) {
+	delete(t.peerExpires, offering)
+	t.localRecords[offering] = *t.records[offering]
+}
+
+func (t *Tracker) expirePeerLocked(offering Offering, now time.Time) bool {
+	expiry, exists := t.peerExpires[offering]
+	if !exists || now.Before(expiry) {
+		return false
+	}
+	delete(t.peerExpires, offering)
+	if local, exists := t.localRecords[offering]; exists {
+		t.records[offering] = &local
+	} else {
+		delete(t.records, offering)
+	}
+	return true
+}
+
+func (t *Tracker) expirePeersLocked(now time.Time) bool {
+	changed := false
+	for offering := range t.peerExpires {
+		changed = t.expirePeerLocked(offering, now) || changed
+	}
+	return changed
+}
+
+// matchesPeerRecordLocked permits renewal of unchanged peer evidence.
+func (t *Tracker) matchesPeerRecordLocked(record sharedRecord) bool {
+	offering := Offering{ProviderID: record.ProviderID, ProviderModelID: record.ProviderModelID}
+	if _, peer := t.peerExpires[offering]; !peer {
+		return false
+	}
+	existing := t.records[offering]
+	return existing != nil && existing.updatedAt.Equal(record.UpdatedAt) &&
+		existing.state == record.State && string(existing.failureKind) == record.FailureKind &&
+		existing.consecutiveFailure == record.ConsecutiveFailure && existing.openUntil.Equal(record.OpenUntil)
 }

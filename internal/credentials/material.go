@@ -12,15 +12,19 @@ import (
 // values. The values are private so serializers and generic formatters cannot
 // expose them.
 type Material struct {
-	profile  catalogs.ProviderCredentialProfile
-	values   map[catalogs.ProviderCredentialFieldID]string
-	metadata MaterialMetadata
+	profile          catalogs.ProviderCredentialProfile
+	values           map[catalogs.ProviderCredentialFieldID]string
+	metadata         MaterialMetadata
+	validity         *MaterialValidity
+	destination      materialDestination
+	destinationBound bool
 }
 
 // MaterialMetadata describes one resolved credential lifecycle. Version is
 // opaque and contains no source path or credential value.
 type MaterialMetadata struct {
 	Version   string
+	Handle    string
 	ExpiresAt time.Time
 	Lease     *Lease
 }
@@ -44,6 +48,15 @@ func NewMaterial(
 	}
 }
 
+// SecretBytes reports the retained field-value bytes without exposing values.
+func (m Material) SecretBytes() int {
+	size := 0
+	for key, value := range m.values {
+		size += len(key) + len(value)
+	}
+	return size
+}
+
 // Empty reports whether the material contains no selected profile.
 func (m Material) Empty() bool { return m.profile.ID == "" }
 
@@ -57,6 +70,9 @@ func (m Material) Value(fieldID catalogs.ProviderCredentialFieldID) (string, boo
 	value, exists := m.values[fieldID]
 	return value, exists
 }
+
+// Handle returns the source-owned credential identity without its value.
+func (m Material) Handle() string { return m.metadata.Handle }
 
 // Version returns the resolver-owned opaque material version.
 func (m Material) Version() string { return m.metadata.Version }

@@ -221,6 +221,10 @@ func newSession(executor *Executor, plan *routing.Plan) *session {
 
 func (s *session) begin(ctx context.Context) (routing.Attempt, int, error) {
 	for {
+		if err := inference.CheckPermission(ctx); err != nil {
+			s.releaseAvailability()
+			return routing.Attempt{}, -1, failure.New(failure.GatewayUnavailable, "Authorization is unavailable.", true, failure.ProviderDetails{}, nil)
+		}
 		if err := ctx.Err(); err != nil {
 			s.releaseAvailability()
 			return routing.Attempt{}, -1, s.cancelError(err)

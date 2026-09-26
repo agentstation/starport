@@ -17,28 +17,35 @@ import (
 
 // Config represents the complete application configuration
 type Config struct {
+	paths             Paths
+	fileInputs        []configurationFile
 	Server            ServerConfig            `env:",prefix=SERVER_"`
 	Storage           StorageConfig           `env:",prefix=STORAGE_"`
 	Catalog           CatalogConfig           `env:",prefix=CATALOG_"`
 	CredentialSources CredentialSourcesConfig `env:",prefix=CREDENTIAL_SOURCES_"`
-	Providers         ProvidersConfig
-	RateLimiting      RateLimitingConfig  `env:",prefix=RATE_LIMITING_"`
-	Security          SecurityConfig      `env:",prefix=SECURITY_"`
-	Logging           LoggingConfig       `env:",prefix=LOGGING_"`
-	Cache             CacheConfig         `env:",prefix=CACHE_"`
-	Files             FilesConfig         `env:",prefix=FILES_"`
-	Jobs              JobsConfig          `env:",prefix=JOBS_"`
-	Console           ConsoleConfig       `env:",prefix=CONSOLE_"`
-	Identity          IdentityConfig      `env:",prefix=IDENTITY_"`
-	Telemetry         TelemetryConfig     `env:",prefix=TELEMETRY_"`
-	Audit             AuditConfig         `env:",prefix=AUDIT_"`
-	Events            EventsConfig        `env:",prefix=EVENTS_"`
-	Guardrails        GuardrailsConfig    `env:",prefix=GUARDRAILS_"`
-	SemanticCache     SemanticCacheConfig `env:",prefix=SEMANTIC_CACHE_"`
+	// InferenceDestinationApprovals holds the applied deployment policy.
+	// Nil selects pinned installation defaults. An explicit empty set denies all destinations.
+	// The configuration authority supplies this value, never catalog refresh.
+	InferenceDestinationApprovals *credentials.DestinationApprovals `json:"-"`
+	Providers                     ProvidersConfig
+	RateLimiting                  RateLimitingConfig  `env:",prefix=RATE_LIMITING_"`
+	Security                      SecurityConfig      `env:",prefix=SECURITY_"`
+	Logging                       LoggingConfig       `env:",prefix=LOGGING_"`
+	Cache                         CacheConfig         `env:",prefix=CACHE_"`
+	Files                         FilesConfig         `env:",prefix=FILES_"`
+	Jobs                          JobsConfig          `env:",prefix=JOBS_"`
+	Console                       ConsoleConfig       `env:",prefix=CONSOLE_"`
+	Identity                      IdentityConfig      `env:",prefix=IDENTITY_"`
+	Telemetry                     TelemetryConfig     `env:",prefix=TELEMETRY_"`
+	Audit                         AuditConfig         `env:",prefix=AUDIT_"`
+	Events                        EventsConfig        `env:",prefix=EVENTS_"`
+	Guardrails                    GuardrailsConfig    `env:",prefix=GUARDRAILS_"`
+	SemanticCache                 SemanticCacheConfig `env:",prefix=SEMANTIC_CACHE_"`
 
-	providerEnvironment  environmentLookup
-	credentialResolver   *credentials.Resolver
-	credentialResolverMu *sync.Mutex
+	providerEnvironment        environmentLookup
+	credentialResolver         *credentials.Resolver
+	credentialResolverMu       *sync.Mutex
+	inferencePolicyInitialized bool
 
 	// authModeFromFlag records that a command-line flag, and not the
 	// environment, stated the authentication mode. It is unexported so the
@@ -353,7 +360,16 @@ type LoggingConfig struct {
 
 // CacheConfig defines cache settings
 type CacheConfig struct {
-	Enabled bool `env:"ENABLED,default=true"`
+	ChatEnabled        bool   `env:"CHAT_ENABLED,default=true"`
+	EmbeddingsEnabled  bool   `env:"EMBEDDINGS_ENABLED,default=true"`
+	ModelsEnabled      bool   `env:"MODELS_ENABLED,default=true"`
+	ProvidersEnabled   bool   `env:"PROVIDERS_ENABLED,default=true"`
+	ExtractionsEnabled bool   `env:"EXTRACTIONS_ENABLED,default=true"`
+	CAFile             string `env:"CA_FILE"`
+	Enabled            bool   `env:"ENABLED,default=true"`
+	Backend            string `env:"BACKEND,default=local"`
+	URL                string `env:"URL" redact:"url"`
+	AllowInsecure      bool   `env:"ALLOW_INSECURE,default=false"`
 }
 
 // ConsoleConfig defines settings for the embedded web console
@@ -366,6 +382,14 @@ func (c *Config) Validate() error {
 	c.prepareCredentialResolver()
 	// Validate server config
 	if err := c.Server.Validate(); err != nil {
+		return err
+	}
+
+	durableCacheURL := ""
+	if c.Storage.Mode == storageModeValkey {
+		durableCacheURL = c.Storage.Valkey.URL
+	}
+	if err := c.Cache.Validate(durableCacheURL); err != nil {
 		return err
 	}
 

@@ -2,11 +2,14 @@ package config
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
-	"path/filepath"
+	"maps"
 
+	"github.com/agentstation/starmap/pkg/productpaths"
+	"github.com/agentstation/starmap/pkg/productpaths/policy"
 	"github.com/joho/godotenv"
 	"github.com/sethvargo/go-envconfig"
 
@@ -51,9 +54,8 @@ func newLoadFailure(message string, cause error) error {
 // NewLoader creates a loader for the process environment and platform paths.
 func NewLoader() *Loader {
 	return &Loader{
-		prefix:       "STARPORT_",
-		environment:  envconfig.OsLookuper(),
-		resolvePaths: PlatformPaths,
+		prefix:      "STARPORT_",
+		environment: envconfig.OsLookuper(),
 	}
 }
 
@@ -81,19 +83,16 @@ func (l *Loader) WithPaths(paths Paths) *Loader {
 	return l
 }
 
-// Override is one decision a caller made outside the environment, applied
-// after configuration sources are read and before validation runs. A command
-// line flag is the reason it exists: a flag has to meet exactly the same
-// validation an environment value meets, or the checks that read it prove
-// nothing about the flag.
+// Override applies a caller decision after the loader reads configuration sources.
+// Validation checks overrides and environment values with the same rules.
+// Command-line flags use this contract.
 type Override func(*Config)
 
-// DisableAuthentication turns off the gateway API key check. It carries the
-// same weight as STARPORT_SECURITY_AUTH_MODE=disabled, including the exposure
-// tripwire that refuses a non-loopback bind address.
-// It also records that a flag, not the environment, decided: the two write the
-// same field, and a mode an operator stored from the console yields to either,
-// so startup has to be able to name which one it is honoring.
+// DisableAuthentication disables the gateway API key check.
+// It has the same authority as STARPORT_SECURITY_AUTH_MODE=disabled.
+// The exposure rule still refuses a non-loopback bind without explicit permission.
+// A flag or environment value overrides the mode saved through the console.
+// This override records the flag origin so startup can report the selected authority.
 func DisableAuthentication() Override {
 	return func(cfg *Config) {
 		cfg.Security.AuthMode = AuthModeDisabled
@@ -102,8 +101,8 @@ func DisableAuthentication() Override {
 }
 
 // AllowRemoteWithoutAuthentication acknowledges that an unauthenticated
-// gateway may bind an address the network can reach. Alone it changes nothing;
-// it only lifts the tripwire that DisableAuthentication would otherwise trip.
+// gateway may bind an address the network can reach. Alone it changes nothing.
+// It permits the remote address when DisableAuthentication disables authentication.
 func AllowRemoteWithoutAuthentication() Override {
 	return func(cfg *Config) { cfg.Security.AllowRemoteNoAuth = true }
 }
@@ -111,24 +110,57 @@ func AllowRemoteWithoutAuthentication() Override {
 // Load resolves configuration sources, applies defaults and any overrides, and
 // validates the result.
 func (l *Loader) Load(ctx context.Context, overrides ...Override) (*Config, error) {
-	return l.load(ctx, nil, overrides)
+	return l.load(ctx, false, overrides)
 }
 
 // LoadDevelopment reads process settings, applies the guarded development
 // runtime contract and any overrides, and validates the result.
 func (l *Loader) LoadDevelopment(ctx context.Context, overrides ...Override) (*Config, error) {
-	return l.load(ctx, func(cfg *Config) { cfg.ConfigureDevelopmentRuntime() }, overrides)
+	return l.load(ctx, true, overrides)
 }
 
-func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Override) (*Config, error) {
-	paths, err := l.resolvePaths()
+func (l *Loader) load(ctx context.Context, development bool, overrides []Override) (*Config, error) {
+	if development {
+		if err := rejectDevelopmentEnvironment(l.environment); err != nil {
+			return nil, newLoadFailure(err.Error(), err)
+		}
+		// Development reads no saved configuration, including explicitly selected files.
+		selected := *l
+		selected.envFiles = []string{}
+		l = &selected
+	}
+	paths, err := l.bootstrapPaths()
 	if err != nil {
 		return nil, newLoadFailure("configuration paths could not be resolved", err)
 	}
 
-	lookuper, err := l.sourceLookuper(paths)
+	lookuper, err := l.sourceLookuper(ctx, paths)
 	if err != nil {
 		return nil, newLoadFailure("configuration sources could not be read", err)
+	}
+
+	selected := lookuper.(catalogSettingsLookuper)
+	paths, err = l.managedPaths(paths, lookuper, selected.pathLayers)
+	if err != nil {
+		return nil, newLoadFailure("configuration paths could not be resolved", err)
+	}
+	base, err := relativeBase(lookuper)
+	if err != nil {
+		return nil, newLoadFailure("relative path base is invalid", err)
+	}
+	paths.RelativePathBase, paths.RelativePathBaseOrigin = base, pathOriginDefault
+	for index, source := range selected.sources {
+		if _, present := source.Lookup("STARPORT_RELATIVE_PATH_BASE"); present {
+			paths.RelativePathBaseOrigin = selected.pathLayers[index].Name
+			break
+		}
+	}
+
+	raw := envconfig.MultiLookuper(selected.sources...)
+	for _, key := range []string{badgerPathEnvironment, sqlitePathEnvironment, stateDirectoryEnvironment, filesPathEnvironment} {
+		if value, present := raw.Lookup(key); present && value == "" {
+			return nil, newLoadFailure(key+" requires a nonempty path", fmt.Errorf("%s requires a nonempty path", key))
+		}
 	}
 
 	// A removed setting fails startup before anything reads a value. A
@@ -141,11 +173,15 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 	}
 
 	cfg := defaultConfig(paths)
-	if err := envconfig.ProcessWith(ctx, &envconfig.Config{
-		Target:   cfg,
-		Lookuper: envconfig.PrefixLookuper(l.prefix, lookuper),
-	}); err != nil {
-		return nil, newLoadFailure("configuration values could not be decoded", err)
+	if development {
+		cfg.Storage.Badger.Path, cfg.Storage.SQL.SQLite.Path, cfg.Files.Path = "", "", ""
+	}
+	if err := l.decode(ctx, cfg, lookuper); err != nil {
+		return nil, err
+	}
+
+	if selected, ok := lookuper.(catalogSettingsLookuper); ok {
+		cfg.Catalog.canonicalValues = maps.Clone(selected.values)
 	}
 	cfg.Catalog.PermissionClock, err = loadPermissionClock(lookuper)
 	if err != nil {
@@ -163,25 +199,36 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 	} else if endpoint, ok := lookuper.Lookup("OTEL_EXPORTER_OTLP_ENDPOINT"); ok && endpoint != "" {
 		cfg.Telemetry.TracesEndpoint = endpoint
 	}
-	if prepare != nil {
-		prepare(cfg)
+	if development {
+		// No source selects Valkey. Remove its unused environment defaults.
+		cfg.Storage.Valkey = ValkeyConfig{}
 	}
-	// Overrides land last so an explicit flag beats both the environment and
-	// the development contract, and first so validation still judges them.
+	// Overrides retain precedence over loaded values and pass the same validation.
+	pathOrigins := loadedPathOrigins(cfg, selected)
 	for _, override := range overrides {
 		if override != nil {
 			override(cfg)
 		}
 	}
 
-	if err := resolveConfiguredPaths(cfg, paths); err != nil {
+	if development {
+		if err := cfg.ConfigureDevelopmentRuntime(); err != nil {
+			return nil, newLoadFailure(err.Error(), err)
+		}
+		paths.DataDir, paths.StateDir, paths.CacheDir, paths.BaselineDir = "", "", "", ""
+	}
+
+	if err := resolveConfiguredPaths(cfg, &paths, base, pathOrigins); err != nil {
 		return nil, newLoadFailure("configured paths could not be resolved", err)
 	}
-	if err := cfg.Validate(); err != nil {
-		return nil, newLoadFailure("configuration values are invalid", err)
+	if err := validateLoadedConfiguration(cfg, &paths, development); err != nil {
+		return nil, err
 	}
+	cfg.paths = paths
+	cfg.fileInputs = selected.fileInputs
 	cfg.providerEnvironment = lookuper
 	resolverOptions := []credentials.ResolverOption{
+		credentials.WithStarmapFallback(cfg.CredentialSources.AllowStarmapFallback),
 		credentials.WithEnvironmentLookup(lookuper.Lookup),
 		credentials.WithDirectSecretRefreshInterval(cfg.CredentialSources.RemoteRefreshInterval),
 	}
@@ -191,6 +238,21 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 	cfg.credentialResolver = credentials.NewResolver(resolverOptions...)
 
 	return cfg, nil
+}
+
+func validateLoadedConfiguration(cfg *Config, paths *Paths, development bool) error {
+	if err := cfg.Validate(); err != nil {
+		return newLoadFailure("configuration values are invalid", err)
+	}
+	if development {
+		return nil
+	}
+	var err error
+	paths.legacyLocations, err = paths.legacyCandidates()
+	if err != nil {
+		return newLoadFailure("previous configuration paths could not be resolved", err)
+	}
+	return nil
 }
 
 func defaultConfig(paths Paths) *Config {
@@ -204,80 +266,92 @@ func defaultConfig(paths Paths) *Config {
 	}
 }
 
-func (l *Loader) sourceLookuper(paths Paths) (envconfig.Lookuper, error) {
+func (l *Loader) sourceLookuper(ctx context.Context, paths Paths) (envconfig.Lookuper, error) {
 	files := l.envFiles
-	if files == nil {
+	primary := files == nil
+	if primary {
 		files = []string{paths.ConfigFile}
 	}
-
+	access, _ := l.environment.Lookup("STARPORT_CONFIG_ACCESS")
+	checkedAccess, err := policy.Configuration(access, primary && paths.configExplicit)
+	if err != nil {
+		return nil, err
+	}
+	base, err := relativeBase(l.environment)
+	if err != nil {
+		return nil, err
+	}
 	lookupers := []envconfig.Lookuper{catalogClockLookuper{l.environment}}
+	layers := []productpaths.Layer{rootLayer("environment", l.environment)}
+	var inputs []configurationFile
 	for _, file := range files {
-		values, err := godotenv.Read(file)
+		selected, err := selectedLeaf(paths.ConfigDir, file, "go-option", base)
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+		input := configurationFile{location: selected, access: policy.OwnerOnly}
+		if primary {
+			input.primary, input.access = true, checkedAccess
+			input.location = paths.Origins["configuration"]
+			if input.location.Path == "" {
+				input.location = productpaths.Path{Path: selected.Path, Origin: "derived:config"}
+			}
+		}
+		inputs = append(inputs, input)
+		var data []byte
+		if primary {
+			data, err = productpaths.ReadConfiguration(ctx, productpaths.ConfigurationInput{Path: selected.Path, AccessPolicy: access, Explicit: paths.configExplicit, MaxBytes: 1 << 20})
+		} else {
+			data, err = productpaths.ReadDotenv(ctx, selected.Path, 1<<20)
+		}
+		if err != nil {
+			if primary && !paths.configExplicit && errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
-			return nil, fmt.Errorf("read environment file %q: %w", file, err)
+			return nil, fmt.Errorf("read configuration file %q: %w", selected.Path, err)
+		}
+		inputs[len(inputs)-1].digest = sha256.Sum256(data)
+		inputs[len(inputs)-1].loaded = true
+		values, err := godotenv.Unmarshal(string(data))
+		if err != nil {
+			return nil, fmt.Errorf("parse configuration file %q: %w", selected.Path, err)
 		}
 		lookupers = append(lookupers, catalogClockLookuper{envconfig.MapLookuper(values)})
+		layers = append(layers, rootLayer("file:"+selected.Path, envconfig.MapLookuper(values)))
 	}
-	return envconfig.MultiLookuper(lookupers...), nil
+	resolved, err := resolveCatalogLookuper(lookupers)
+	if err != nil {
+		return nil, err
+	}
+	selected := resolved.(catalogSettingsLookuper)
+	selected.pathLayers, selected.sources = layers, lookupers
+	selected.fileInputs = inputs
+	return selected, nil
 }
 
-func resolveConfiguredPaths(cfg *Config, paths Paths) error {
-	var err error
-	if cfg.Storage.Mode == storageModeBadger {
-		cfg.Storage.Badger.Path, err = resolvePath(paths.ConfigDir, cfg.Storage.Badger.Path)
+func resolveConfiguredPaths(cfg *Config, paths *Paths, base string, origins map[string]pathSelectionOrigin) error {
+	for _, selection := range pathSelections(cfg) {
+		loaded, known := origins[selection.name]
+		origin := loaded.origin
+		if !known || loaded.value != *selection.value {
+			origin = pathOriginGoOption
+		}
+		if selection.name == pathRoleRuntime && *selection.value == "" && selection.required {
+			*selection.value = paths.RuntimeDir
+		}
+		if *selection.value == "" && !selection.required {
+			continue
+		}
+		path, err := selectedLeaf(paths.ConfigDir, *selection.value, origin, base)
 		if err != nil {
-			return fmt.Errorf("badger path: %w", err)
+			return fmt.Errorf("%s path: %w", selection.name, err)
 		}
+		*selection.value = path.Path
+		paths.Origins[selection.name] = path
 	}
-	if cfg.Files.SelectedBackend() == BlobBackendFilesystem {
-		if cfg.Files.Path == "" {
-			cfg.Files.Path = paths.FilesDir
-		}
-		cfg.Files.Path, err = resolvePath(paths.ConfigDir, cfg.Files.Path)
-		if err != nil {
-			return fmt.Errorf("files path: %w", err)
-		}
-	}
-	cfg.Catalog.WorkspacePath, err = resolvePath(paths.ConfigDir, cfg.Catalog.WorkspacePath)
-	if err != nil {
-		return fmt.Errorf("catalog workspace path: %w", err)
-	}
-	// The state directory is process-local by contract, so it resolves against
-	// the user state root and never against the configuration directory, which
-	// a fleet can share. A development gateway owns scratch instead, so it
-	// never reaches the user state root.
-	if !cfg.Catalog.StateDirectoryIsScratch() {
-		cfg.Catalog.StateDirectory, err = ResolveStateDirectory(cfg.Catalog.StateDirectory)
-		if err != nil {
-			return fmt.Errorf("catalog state directory: %w", err)
-		}
-	}
-	cfg.Security.TLSCertPath, err = resolvePath(paths.ConfigDir, cfg.Security.TLSCertPath)
-	if err != nil {
-		return fmt.Errorf("TLS certificate path: %w", err)
-	}
-	cfg.Security.TLSKeyPath, err = resolvePath(paths.ConfigDir, cfg.Security.TLSKeyPath)
-	if err != nil {
-		return fmt.Errorf("TLS key path: %w", err)
-	}
-	cfg.Logging.FilePath, err = resolvePath(paths.ConfigDir, cfg.Logging.FilePath)
-	if err != nil {
-		return fmt.Errorf("log file path: %w", err)
-	}
+	paths.BadgerDir, paths.SQLiteFile, paths.FilesDir = cfg.Storage.Badger.Path, cfg.Storage.SQL.SQLite.Path, cfg.Files.Path
+	paths.RuntimeDir, paths.LocalTokenFile = cfg.Catalog.StateDirectory, cfg.Security.LocalTokenPath
 	return nil
-}
-
-func resolvePath(base, value string) (string, error) {
-	if value == "" || filepath.IsAbs(value) {
-		return value, nil
-	}
-	if base == "" {
-		return "", fmt.Errorf("base directory is empty")
-	}
-	return filepath.Join(base, value), nil
 }
 
 // LoadWithDefaults loads configuration from the standard sources.
@@ -289,4 +363,14 @@ func LoadWithDefaults(ctx context.Context, overrides ...Override) (*Config, erro
 // file and applies the guarded development runtime contract.
 func LoadDevelopment(ctx context.Context, overrides ...Override) (*Config, error) {
 	return NewLoader().WithEnvFiles().LoadDevelopment(ctx, overrides...)
+}
+
+func (l *Loader) decode(ctx context.Context, cfg *Config, lookuper envconfig.Lookuper) error {
+	if err := envconfig.ProcessWith(ctx, &envconfig.Config{Target: cfg, Lookuper: envconfig.PrefixLookuper(l.prefix, lookuper)}); err != nil {
+		return newLoadFailure("configuration values could not be decoded", err)
+	}
+	if cfg.CredentialSources.Managed == (ManagedMaterialConfig{}) {
+		return newLoadFailure("managed credential limits are invalid", errors.New("managed credential limits must be positive"))
+	}
+	return nil
 }

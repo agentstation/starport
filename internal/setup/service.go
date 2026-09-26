@@ -3,26 +3,20 @@ package setup
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/joho/godotenv"
 
 	"github.com/agentstation/starport/internal/apikey"
+	"github.com/agentstation/starport/internal/authorization/revision"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/storage"
-)
-
-const (
-	configFileMode = 0o600
-	privateDirMode = 0o700
 )
 
 var (
@@ -55,12 +49,12 @@ type Request struct {
 
 // Result contains initialized paths and the one-time gateway credential.
 type Result struct {
-	APIKeyName   string
-	ConfigFile   string
-	DataDir      string
-	APIKey       string
-	apiKeyID     string
-	configDigest [sha256.Size]byte
+	APIKeyName string
+	ConfigFile string
+	DataDir    string
+	APIKey     string
+	apiKeyID   string
+	recovery   *setupJournal
 }
 
 // Service initializes one local configuration and API key store.
@@ -68,6 +62,7 @@ type Service struct {
 	paths             config.Paths
 	openStore         func(string) (storage.KVStore, error)
 	generateMasterKey func() (string, error)
+	checkpoint        func(string) error
 }
 
 // New returns a local setup service for the supplied managed paths.
@@ -81,11 +76,26 @@ func New(paths config.Paths) *Service {
 
 // Initialize creates local configuration and one named gateway apikey.
 // It never replaces an existing configuration file or API key store.
-func (s *Service) Initialize(ctx context.Context, request Request) (Result, error) {
+func (s *Service) Initialize(ctx context.Context, request Request) (_ Result, resultErr error) {
 	if err := s.validate(request); err != nil {
 		return Result{}, err
 	}
 	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	if err := s.paths.CheckLegacyPaths(ctx); err != nil {
+		return Result{}, err
+	}
+	guard, err := lockDatabase(ctx, s.paths)
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, guard.close()) }()
+	if err := guard.bindSetup(ctx, s.paths); err != nil {
+		return Result{}, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, guard.finishSetup(s.paths)) }()
+	if err := s.recoverAcrossRoots(ctx); err != nil {
 		return Result{}, err
 	}
 	state, err := Inspect(s.paths)
@@ -94,131 +104,38 @@ func (s *Service) Initialize(ctx context.Context, request Request) (Result, erro
 	}
 	switch state {
 	case StateReady:
-		return Result{}, fmt.Errorf("%w: %q", ErrAlreadyInitialized, s.paths.ConfigDir)
+		return Result{}, fmt.Errorf("%w: %q", ErrAlreadyInitialized, s.paths.ConfigFile)
 	case StatePartial:
-		return Result{}, fmt.Errorf("%w: inspect %q before retrying", ErrPartialState, s.paths.ConfigDir)
+		return Result{}, fmt.Errorf("%w: inspect %q before retrying", ErrPartialState, s.paths.ConfigFile)
 	case StateAbsent:
 	}
-
-	masterKey, err := s.generateMasterKey()
-	if err != nil {
-		return Result{}, fmt.Errorf("generate security master key: %w", err)
-	}
-	contents, err := localConfig(masterKey)
+	prepared, err := s.prepareAcrossRoots(ctx, request)
 	if err != nil {
 		return Result{}, err
 	}
-
-	parentDir := filepath.Dir(s.paths.ConfigDir)
-	if err := os.MkdirAll(parentDir, privateDirMode); err != nil {
-		return Result{}, fmt.Errorf("create configuration parent directory: %w", err)
-	}
-	stagingDir, err := os.MkdirTemp(parentDir, "."+filepath.Base(s.paths.ConfigDir)+"-init-")
-	if err != nil {
-		return Result{}, fmt.Errorf("create setup staging directory: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(stagingDir) }()
-
-	stagedPaths := config.PathsForConfigDir(stagingDir)
-	if err := os.MkdirAll(stagedPaths.DataDir, privateDirMode); err != nil {
-		return Result{}, fmt.Errorf("create staged data directory: %w", err)
-	}
-	issued, err := s.createAPIKey(ctx, stagedPaths.BadgerDir, request.APIKeyName)
-	if err != nil {
-		return Result{}, err
-	}
-	if err := ctx.Err(); err != nil {
-		return Result{}, err
-	}
-	if err := writeExclusive(stagedPaths.ConfigFile, contents); err != nil {
-		return Result{}, fmt.Errorf("write staged configuration file: %w", err)
-	}
-	for _, directory := range []string{stagedPaths.BadgerDir, stagedPaths.DataDir, stagedPaths.ConfigDir} {
-		if err := syncDirectory(directory); err != nil {
-			return Result{}, fmt.Errorf("sync staged setup directory %q: %w", directory, err)
-		}
-	}
-	if err := renameNoReplace(stagingDir, s.paths.ConfigDir); err != nil {
-		current, inspectErr := Inspect(s.paths)
-		if inspectErr == nil && current == StateReady {
-			return Result{}, fmt.Errorf("%w: %q", ErrAlreadyInitialized, s.paths.ConfigDir)
-		}
-		if inspectErr == nil && current == StatePartial {
-			return Result{}, fmt.Errorf("%w: inspect %q before retrying", ErrPartialState, s.paths.ConfigDir)
-		}
-		return Result{}, fmt.Errorf("install initialized state: %w", err)
-	}
-
-	result := Result{
-		APIKeyName: request.APIKeyName,
-		ConfigFile: s.paths.ConfigFile, DataDir: s.paths.DataDir, APIKey: issued.Secret,
-		apiKeyID: issued.APIKey.ID, configDigest: sha256.Sum256(contents),
-	}
-	if err := syncDirectory(parentDir); err != nil {
-		return result, fmt.Errorf("sync installed setup directory: %w", err)
-	}
-	return result, nil
+	defer func() { resultErr = errors.Join(resultErr, prepared.writer.close()) }()
+	return prepared.publish(ctx)
 }
 
-// Rollback removes local state if the command cannot return the initialization result.
-func (s *Service) Rollback(ctx context.Context, result Result) error {
-	if s == nil || result.ConfigFile != s.paths.ConfigFile || result.DataDir != s.paths.DataDir ||
-		result.apiKeyID == "" {
+// Rollback removes unchanged setup state if the command cannot return its result.
+func (s *Service) Rollback(ctx context.Context, result Result) (resultErr error) {
+	if s == nil || validateSetupPaths(s.paths) != nil {
 		return ErrRollbackRefused
 	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	state, err := Inspect(s.paths)
+	guard, err := lockDatabase(ctx, s.paths)
 	if err != nil {
-		return err
+		return errors.Join(ErrRollbackRefused, err)
 	}
-	if state != StateReady {
-		return fmt.Errorf("%w: setup state is %s", ErrRollbackRefused, state)
+	defer func() { resultErr = errors.Join(resultErr, guard.close()) }()
+	if err := guard.bindSetup(ctx, s.paths); err != nil {
+		return errors.Join(ErrRollbackRefused, err)
 	}
-	parentDir := filepath.Dir(s.paths.ConfigDir)
-	rollbackDir, err := os.MkdirTemp(parentDir, "."+filepath.Base(s.paths.ConfigDir)+"-rollback-")
-	if err != nil {
-		return fmt.Errorf("reserve setup rollback path: %w", err)
-	}
-	if err := os.Remove(rollbackDir); err != nil {
-		return fmt.Errorf("prepare setup rollback path: %w", err)
-	}
-	if err := renameNoReplace(s.paths.ConfigDir, rollbackDir); err != nil {
-		return fmt.Errorf("isolate initialized state for rollback: %w", err)
-	}
-	rollbackPaths := config.PathsForConfigDir(rollbackDir)
-	if err := s.validateRollbackState(ctx, rollbackPaths, result); err != nil {
-		return s.restoreRollback(rollbackDir, err)
-	}
-	if err := os.RemoveAll(rollbackDir); err != nil {
-		return fmt.Errorf("remove rolled-back setup state: %w", err)
-	}
-	if err := syncDirectory(parentDir); err != nil {
-		return fmt.Errorf("sync rolled-back setup directory: %w", err)
-	}
-	return nil
+	defer func() { resultErr = errors.Join(resultErr, guard.finishSetup(s.paths)) }()
+	return s.rollbackAcrossRoots(ctx, result)
 }
 
-func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths, result Result) error {
-	contents, err := os.ReadFile(paths.ConfigFile)
-	if err != nil {
-		return fmt.Errorf("read isolated configuration for rollback: %w", err)
-	}
-	if sha256.Sum256(contents) != result.configDigest {
-		return fmt.Errorf("%w: configuration changed after initialization", ErrRollbackRefused)
-	}
-	state, err := Inspect(paths)
-	if err != nil {
-		return err
-	}
-	if state != StateReady {
-		return fmt.Errorf("%w: isolated setup state is %s", ErrRollbackRefused, state)
-	}
-	if err := validateRollbackLayout(paths); err != nil {
-		return err
-	}
-	store, err := s.openStore(paths.BadgerDir)
+func (s *Service) validateRollbackRecords(ctx context.Context, directory, apiKeyID string) error {
+	store, err := s.openStore(directory)
 	if err != nil {
 		return fmt.Errorf("open isolated API key store for rollback: %w", err)
 	}
@@ -229,6 +146,7 @@ func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths,
 	}
 	keys, scanErr := store.ScanWithPrefix(ctx, "", 0)
 	records, listErr := repository.List(ctx, 2, 0)
+	stamp, revisionErr := revision.NewKV(store, nil).Read(ctx)
 	closeErr := store.Close()
 	if scanErr != nil {
 		return errors.Join(fmt.Errorf("inspect isolated storage keys for rollback: %w", scanErr), closeErr)
@@ -239,59 +157,21 @@ func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths,
 	if closeErr != nil {
 		return fmt.Errorf("close initialized API key store for rollback: %w", closeErr)
 	}
-	if len(records) != 1 || records[0].APIKey.ID != result.apiKeyID {
+	if len(records) != 1 || records[0].APIKey.ID != apiKeyID {
 		return fmt.Errorf("%w: API key storage changed after initialization", ErrRollbackRefused)
 	}
-	if len(keys) != 4 {
-		return fmt.Errorf("%w: storage contains %d records, want 4", ErrRollbackRefused, len(keys))
+	if revisionErr != nil || stamp.Sequence != 1 {
+		return errors.Join(ErrRollbackRefused, fmt.Errorf("authorization state changed after initialization"), revisionErr)
+	}
+	if len(keys) != 5 {
+		return fmt.Errorf("%w: storage contains %d records, want 5", ErrRollbackRefused, len(keys))
 	}
 	for _, key := range keys {
-		if !strings.HasPrefix(key, apikey.StoragePrefix) {
+		if key != revision.StorageKey && !strings.HasPrefix(key, apikey.StoragePrefix) {
 			return fmt.Errorf("%w: storage contains application state", ErrRollbackRefused)
 		}
 	}
 	return nil
-}
-
-func validateRollbackLayout(paths config.Paths) error {
-	entries, err := os.ReadDir(paths.ConfigDir)
-	if err != nil {
-		return fmt.Errorf("inspect isolated configuration directory for rollback: %w", err)
-	}
-	if len(entries) != 2 || !hasDirectoryEntry(entries, filepath.Base(paths.ConfigFile), false) ||
-		!hasDirectoryEntry(entries, filepath.Base(paths.DataDir), true) {
-		return fmt.Errorf("%w: configuration directory contains application state", ErrRollbackRefused)
-	}
-	dataEntries, err := os.ReadDir(paths.DataDir)
-	if err != nil {
-		return fmt.Errorf("inspect isolated data directory for rollback: %w", err)
-	}
-	if len(dataEntries) != 1 || !hasDirectoryEntry(dataEntries, filepath.Base(paths.BadgerDir), true) {
-		return fmt.Errorf("%w: data directory contains application state", ErrRollbackRefused)
-	}
-	return nil
-}
-
-func hasDirectoryEntry(entries []fs.DirEntry, name string, directory bool) bool {
-	for _, entry := range entries {
-		if entry.Name() == name && entry.IsDir() == directory {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *Service) restoreRollback(rollbackDir string, cause error) error {
-	if err := renameNoReplace(rollbackDir, s.paths.ConfigDir); err != nil {
-		return errors.Join(
-			cause,
-			fmt.Errorf("restore refused setup state from %q: %w", rollbackDir, err),
-		)
-	}
-	if err := syncDirectory(filepath.Dir(s.paths.ConfigDir)); err != nil {
-		return errors.Join(cause, fmt.Errorf("sync restored setup state: %w", err))
-	}
-	return cause
 }
 
 func (s *Service) validate(request Request) error {
@@ -300,37 +180,13 @@ func (s *Service) validate(request Request) error {
 		s.paths.DataDir == "" || s.paths.BadgerDir == "" {
 		return ErrPathsRequired
 	}
-	expected := config.PathsForConfigDir(s.paths.ConfigDir)
-	if !filepath.IsAbs(s.paths.ConfigDir) || s.paths != expected {
-		return ErrPathsRequired
+	if err := validateSetupPaths(s.paths); err != nil {
+		return err
 	}
 	if err := (apikey.APIKey{ID: "validation", Name: request.APIKeyName, Hash: "validation", Scopes: []string{"*"}}).Validate(); err != nil {
 		return fmt.Errorf("API key name: %w", err)
 	}
 	return nil
-}
-
-// Inspect reads the managed local setup state without changing it.
-func Inspect(paths config.Paths) (State, error) {
-	_, err := os.Lstat(paths.ConfigDir)
-	if errors.Is(err, fs.ErrNotExist) {
-		return StateAbsent, nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("inspect configuration directory: %w", err)
-	}
-	configExists, err := pathExists(paths.ConfigFile)
-	if err != nil {
-		return "", fmt.Errorf("inspect configuration file: %w", err)
-	}
-	storeExists, err := pathExists(paths.BadgerDir)
-	if err != nil {
-		return "", fmt.Errorf("inspect API key store: %w", err)
-	}
-	if configExists && storeExists {
-		return StateReady, nil
-	}
-	return StatePartial, nil
 }
 
 func (s *Service) createAPIKey(
@@ -371,10 +227,9 @@ func InitializeAPIKey(
 	if len(records) != 0 {
 		return apikey.IssueResult{}, ErrAlreadyInitialized
 	}
-	// The initial key names no account, so it resolves to the canonical account at
-	// read time. Setup deliberately writes nothing but API key records, and the
-	// gateway ensures the canonical account at boot, so this path needs no account
-	// checker: it never accepts a caller-supplied account to check.
+	// The initial key names no account. Reads resolve it to the canonical account.
+	// Setup writes only API key records. The gateway creates the canonical account
+	// at boot. This path accepts no caller-supplied account and needs no account checker.
 	issuer, err := apikey.NewIssuer(repository)
 	if err != nil {
 		return apikey.IssueResult{}, fmt.Errorf("open API key issuer: %w", err)
@@ -436,36 +291,4 @@ func pathExists(path string) (bool, error) {
 		return false, nil
 	}
 	return false, err
-}
-
-func writeExclusive(path string, contents []byte) (err error) {
-	root, err := os.OpenRoot(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := root.Close(); err == nil && closeErr != nil {
-			err = closeErr
-		}
-	}()
-	name := filepath.Base(path)
-	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, configFileMode)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := file.Close(); err == nil && closeErr != nil {
-			err = closeErr
-		}
-		if err != nil {
-			_ = root.Remove(name)
-		}
-	}()
-	if err := file.Chmod(configFileMode); err != nil {
-		return err
-	}
-	if _, err := file.Write(contents); err != nil {
-		return err
-	}
-	return file.Sync()
 }

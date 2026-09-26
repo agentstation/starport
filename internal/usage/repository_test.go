@@ -10,12 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// testBase is noon today in UTC. A record's counters expire at their window
-// end plus the retention, an absolute instant the store compares against the
-// wall clock, so a fixture on a fixed calendar date ages out of retention and
-// every total reads zero once that date is a month old. Noon keeps the fixture
-// and the records a few minutes after it inside one day, week, and month
-// window, and two days earlier is always a different window.
+// Keep real-store fixtures inside retention as the calendar advances.
+// Noon keeps nearby records in the same day, week, and month windows.
 var testBase = func() time.Time {
 	now := time.Now().UTC()
 	return time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC)
@@ -259,10 +255,8 @@ func TestPutRejectsInvalidRecords(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidScope)
 }
 
-// TestAccountCounterSumsEveryKeyItHolds proves the storage guarantee the
-// account meter rests on. An account cap has to count every key the account
-// holds, and a key counter cannot answer for it: two keys under one account
-// each stay well under their own totals while the account total is their sum.
+// TestAccountCounterSumsEveryKeyItHolds proves that the account meter includes every key.
+// Individual key totals cannot replace their sum when enforcing an account cap.
 func TestAccountCounterSumsEveryKeyItHolds(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		ctx := context.Background()
@@ -295,9 +289,8 @@ func TestAccountCounterSumsEveryKeyItHolds(t *testing.T) {
 	})
 }
 
-// TestTeamCounterSumsEveryAttributedKey proves the team counter set: a team
-// sums every key attributed to it across accounts, a teamless record advances
-// no team counter, and one team's traffic never reaches another's.
+// TestTeamCounterSumsEveryAttributedKey proves team aggregation across keys and accounts.
+// A teamless record advances no team counter. One team's traffic never reaches another's.
 func TestTeamCounterSumsEveryAttributedKey(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		ctx := context.Background()
@@ -337,9 +330,8 @@ func TestTeamCounterSumsEveryAttributedKey(t *testing.T) {
 	})
 }
 
-// TestListByAccountSpansEveryKey covers the per-provider rollup's read path:
-// records are key-indexed, so an account query has to scan and filter rather
-// than address a namespace, and it must still return every key's records.
+// TestListByAccountSpansEveryKey covers the per-provider aggregation read path.
+// The repository indexes records by key. An account query scans and filters those records to return every account key's records.
 func TestListByAccountSpansEveryKey(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		ctx := context.Background()

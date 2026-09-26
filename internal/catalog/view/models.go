@@ -7,17 +7,31 @@ import (
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/disclosure"
 )
 
 // Models projects every routable model definition in the snapshot. A nil
 // snapshot projects to nil.
 func Models(snapshot *runtimecatalog.RoutableSnapshot) []ModelInfo {
+	return models(snapshot, nil)
+}
+
+// ModelsForViewer projects permitted routable models.
+func ModelsForViewer(snapshot *runtimecatalog.RoutableSnapshot, policy disclosure.Policy) []ModelInfo {
+	return models(snapshot, policy)
+}
+
+func models(snapshot *runtimecatalog.RoutableSnapshot, policy runtimecatalog.DisclosurePolicy) []ModelInfo {
 	if snapshot == nil {
 		return nil
 	}
 	definitions := snapshot.Definitions()
 	models := make([]ModelInfo, 0, len(definitions))
 	for _, definition := range definitions {
+		routes := permittedRoutes(snapshot.RoutesForDefinition(definition.ID), policy)
+		if len(routes) == 0 {
+			continue
+		}
 		created := definition.CreatedAt.Unix()
 		if !definition.Metadata.ReleaseDate.IsZero() {
 			created = definition.Metadata.ReleaseDate.Unix()
@@ -32,7 +46,15 @@ func Models(snapshot *runtimecatalog.RoutableSnapshot) []ModelInfo {
 			Created: created,
 			OwnedBy: ownedBy,
 		}
-		enrichModelInfo(snapshot, definition, &model)
+		enrichModelInfo(snapshot, definition, routes, &model)
+		if policy != nil && model.Lineage != nil {
+			if !policy.AllowsDefinition(starmapcatalogs.ModelDefinitionID(model.Lineage.Parent)) {
+				model.Lineage.Parent = ""
+			}
+			if !policy.AllowsDefinition(starmapcatalogs.ModelDefinitionID(model.Lineage.Root)) {
+				model.Lineage.Root = ""
+			}
+		}
 		models = append(models, model)
 	}
 	return models
@@ -41,6 +63,7 @@ func Models(snapshot *runtimecatalog.RoutableSnapshot) []ModelInfo {
 func enrichModelInfo(
 	snapshot *runtimecatalog.RoutableSnapshot,
 	definition starmapcatalogs.ModelDefinition,
+	routes []runtimecatalog.Route,
 	model *ModelInfo,
 ) {
 	if snapshot == nil || model == nil {
@@ -78,7 +101,6 @@ func enrichModelInfo(
 		open := *definition.Weights.Open
 		model.OpenWeights = &open
 	}
-	routes := snapshot.RoutesForDefinition(definition.ID)
 	if len(routes) == 0 {
 		return
 	}

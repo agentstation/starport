@@ -41,14 +41,14 @@ func TestTheModerationTransportSpeaksTheOpenAIWire(t *testing.T) {
 	defer server.Close()
 
 	moderator := productionModerator(t, server.URL)
-	response, err := moderator.Moderate(context.Background(), &ModerationRequest{
+	response, err := moderator.Moderate(context.Background(), approveConnectorFixture(t, &ModerationRequest{
 		MediaTarget: MediaTarget{
 			Model:      "omni-moderation-latest",
 			Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL},
 			Credential: testAPIMaterial("moderation-key"),
 		},
 		Inputs: []string{"I want to hurt someone."},
-	})
+	}))
 	require.NoError(t, err)
 
 	require.Equal(t, "omni-moderation-latest", sent["model"])
@@ -97,14 +97,14 @@ func TestAModerationAnswerWithTheWrongResultCountIsRefused(t *testing.T) {
 	defer server.Close()
 
 	moderator := productionModerator(t, server.URL)
-	_, err := moderator.Moderate(context.Background(), &ModerationRequest{
+	_, err := moderator.Moderate(context.Background(), approveConnectorFixture(t, &ModerationRequest{
 		MediaTarget: MediaTarget{
 			Model:      "omni-moderation-latest",
 			Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL},
 			Credential: testAPIMaterial("moderation-key"),
 		},
 		Inputs: []string{"one", "two"},
-	})
+	}))
 	require.ErrorContains(t, err, "0 moderation results for 2 inputs")
 }
 
@@ -121,13 +121,13 @@ func TestAnEmptyModerationRequestNeverReachesTheProvider(t *testing.T) {
 	defer server.Close()
 
 	moderator := productionModerator(t, server.URL)
-	_, err := moderator.Moderate(context.Background(), &ModerationRequest{
+	_, err := moderator.Moderate(context.Background(), approveConnectorFixture(t, &ModerationRequest{
 		MediaTarget: MediaTarget{
 			Model:      "omni-moderation-latest",
 			Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL},
 			Credential: testAPIMaterial("moderation-key"),
 		},
-	})
+	}))
 	require.ErrorIs(t, err, ErrInvalidMediaRequest)
 }
 

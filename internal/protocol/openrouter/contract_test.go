@@ -73,7 +73,10 @@ func TestOpenRouterProtocolContract(t *testing.T) {
 		}))
 		require.NoError(t, err)
 		require.Contains(t, string(usageOnly), `"choices":[]`)
-		require.Contains(t, string(usageOnly), `"system_fingerprint":null`)
+		require.NotContains(t, string(usageOnly), `"system_fingerprint"`)
+		fingerprintChunk, err := json.Marshal(EncodeStream(inference.StreamEvent{ID: "chatcmpl-test", Model: "openai/gpt-4.1", SystemFingerprint: "fp_provider"}))
+		require.NoError(t, err)
+		require.Contains(t, string(fingerprintChunk), `"system_fingerprint":"fp_provider"`)
 
 		errorChunk, err := json.Marshal(EncodeStreamError(inference.StreamEvent{ID: "chatcmpl-test", Model: "openai/gpt-4.1"}, 502, "Provider stream failed", map[string]any{"error_type": "provider_error"}))
 		require.NoError(t, err)

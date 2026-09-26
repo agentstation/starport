@@ -64,8 +64,9 @@ func runContext(
 		LoadConfig: func(loadCtx context.Context) (*config.Config, error) {
 			return config.LoadWithDefaults(loadCtx)
 		},
-		ResolvePaths: config.PlatformPaths,
-		Diagnose:     diagnosis.Run,
+		ResolvePaths:   config.PlatformPaths,
+		Diagnose:       diagnosis.Run,
+		MigrateRuntime: app.MigrateRuntime,
 	})
 	if err == nil {
 		return 0
@@ -157,6 +158,9 @@ func initializeConfiguredStorage(
 	cfg, err := config.LoadWithDefaults(ctx)
 	if err != nil {
 		return starportcli.InitResult{}, fmt.Errorf("load configured storage: %w", err)
+	}
+	if err := cfg.CheckLegacyPaths(ctx); err != nil {
+		return starportcli.InitResult{}, err
 	}
 	storageConfig := cfg.Storage.RuntimeStorage()
 	if storageConfig.Type == storage.StorageTypeBadger {

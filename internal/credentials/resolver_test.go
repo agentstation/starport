@@ -472,7 +472,8 @@ func TestCredentialRefreshRevokesDisappearedMaterial(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, configured, err := handle.Resolve(t.Context()); err != nil || !configured {
+	issued, configured, err := handle.Resolve(t.Context())
+	if err != nil || !configured {
 		t.Fatalf("prime material = %t, %v", configured, err)
 	}
 	delete(values, "OPENAI_API_KEY")
@@ -481,6 +482,9 @@ func TestCredentialRefreshRevokesDisappearedMaterial(t *testing.T) {
 	}
 	if _, err := handle.CachedMaterial(t.Context()); !errors.Is(err, ErrProviderNotConfigured) {
 		t.Fatalf("disappeared cached material error = %v", err)
+	}
+	if err := issued.CheckValidity(time.Now()); !errors.Is(err, ErrMaterialRevoked) {
+		t.Fatalf("disappeared material remains valid for dispatch: %v", err)
 	}
 }
 

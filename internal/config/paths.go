@@ -2,70 +2,227 @@ package config
 
 import (
 	"fmt"
-	"os"
+	"maps"
 	"path/filepath"
+
+	"github.com/agentstation/starmap/pkg/productpaths"
+	"github.com/agentstation/starport/internal/deployment"
+	"github.com/sethvargo/go-envconfig"
 )
 
-const applicationDirectory = "starport"
+const pathOriginGoOption = "go-option"
+const pathOriginDefault = "default"
+const pathRoleConfiguration = "configuration"
 
+const pathRoleSQLite = "sqlite"
+const pathRoleBadger = "badger"
+const pathRoleFiles = "files"
+const pathRoleBaseline = "baseline"
+const pathRoleRuntime = "runtime"
 const configDirectoryEnvironment = "STARPORT_CONFIG_DIR"
+const dataDirectoryEnvironment = "STARPORT_DATA_DIR"
 
-// Paths contains the platform-owned files and directories that Starport uses.
+// Paths contains resolved files, roots, and their selection origins.
 type Paths struct {
-	ConfigDir  string `json:"config_dir"`
-	ConfigFile string `json:"config_file"`
-	DataDir    string `json:"data_dir"`
-	BadgerDir  string `json:"badger_dir"`
-	// SQLiteFile holds the embedded relational database. It sits in the data
-	// directory beside the Badger store: the same machine state, the other
-	// shape.
-	SQLiteFile string `json:"sqlite_file"`
-	// FilesDir roots the filesystem blob backend. It sits in the data
-	// directory beside the record store, because the bytes are state this
-	// machine holds rather than a decision an operator wrote down.
-	FilesDir string `json:"files_dir"`
-	// LocalTokenFile holds this machine's local admin token. It sits in the
-	// data directory rather than beside the configuration file, because it is
-	// state this machine generated and not a decision an operator wrote down.
-	LocalTokenFile string `json:"local_token_file"`
-	// WelcomeStampFile records that this machine has been told how to open the
-	// console. It exists so the greeting prints once: an operator who has run
-	// the gateway before is not a new operator, and a banner that repeats every
-	// start is one an experienced reader learns to skip past the day they
-	// needed it.
-	WelcomeStampFile string `json:"welcome_stamp_file"`
+	RelativePathBase       string                       `json:"relative_path_base"`
+	RelativePathBaseOrigin string                       `json:"relative_path_base_origin"`
+	ConfigDir              string                       `json:"config_dir"`
+	ConfigFile             string                       `json:"config_file"`
+	DataDir                string                       `json:"data_dir"`
+	StateDir               string                       `json:"state_dir"`
+	CacheDir               string                       `json:"cache_dir"`
+	RuntimeDir             string                       `json:"runtime_dir"`
+	BaselineDir            string                       `json:"baseline_dir"`
+	BadgerDir              string                       `json:"badger_dir"`
+	SQLiteFile             string                       `json:"sqlite_file"`
+	FilesDir               string                       `json:"files_dir"`
+	LocalTokenFile         string                       `json:"local_token_file"`
+	WelcomeStampFile       string                       `json:"welcome_stamp_file"`
+	InstanceID             string                       `json:"instance_id"`
+	DeploymentID           string                       `json:"deployment_id"`
+	Origins                map[string]productpaths.Path `json:"origins"`
+	configExplicit         bool
+	legacyLocations        []LegacyPath
 }
 
-// PlatformPaths resolves the current user's Starport paths.
+// PlatformPaths resolves product settings from the environment without reading files.
 func PlatformPaths() (Paths, error) {
-	if configured := os.Getenv(configDirectoryEnvironment); configured != "" {
-		if !filepath.IsAbs(configured) {
-			return Paths{}, fmt.Errorf("%s must be an absolute path", configDirectoryEnvironment)
-		}
-		return PathsForConfigDir(configured), nil
-	}
-	root, err := os.UserConfigDir()
+	loader := NewLoader()
+	paths, err := loader.bootstrapPaths()
 	if err != nil {
-		return Paths{}, fmt.Errorf("resolve user configuration directory: %w", err)
+		return Paths{}, err
 	}
-	if root == "" {
-		return Paths{}, fmt.Errorf("user configuration directory is empty")
+	paths, err = loader.managedPaths(paths, loader.environment, []productpaths.Layer{rootLayer("environment", loader.environment)})
+	if err == nil {
+		paths.legacyLocations, err = paths.legacyCandidates()
 	}
-	return PathsForConfigDir(filepath.Join(root, applicationDirectory)), nil
+	return paths, err
 }
 
-// PathsForConfigDir derives all managed paths from one configuration directory.
+// PathsForConfigDir selects a caller-owned layout below one absolute directory.
+// Platform defaults use separate native roots instead.
 func PathsForConfigDir(configDir string) Paths {
 	configDir = filepath.Clean(configDir)
-	dataDir := filepath.Join(configDir, "data")
-	return Paths{
-		ConfigDir:        configDir,
-		ConfigFile:       filepath.Join(configDir, "config.env"),
-		DataDir:          dataDir,
-		BadgerDir:        filepath.Join(dataDir, "badger"),
-		SQLiteFile:       filepath.Join(dataDir, "sqlite", "starport.db"),
-		FilesDir:         filepath.Join(dataDir, "files"),
-		LocalTokenFile:   filepath.Join(dataDir, "local-admin-token.json"),
-		WelcomeStampFile: filepath.Join(dataDir, "welcomed"),
+	roots := productpaths.Roots{}
+	for root, path := range map[productpaths.Root]string{
+		productpaths.Config: configDir,
+		productpaths.Data:   filepath.Join(configDir, "data"),
+		productpaths.State:  filepath.Join(configDir, "state"),
+		productpaths.Cache:  filepath.Join(configDir, "cache"),
+	} {
+		roots[root] = productpaths.Path{Path: path, Origin: pathOriginGoOption}
 	}
+	return pathsFromRoots(roots)
+}
+
+func pathsFromRoots(roots productpaths.Roots) Paths {
+	configDir, dataDir := roots[productpaths.Config].Path, roots[productpaths.Data].Path
+	stateDir := roots[productpaths.State].Path
+	origins := make(map[string]productpaths.Path, len(roots))
+	for root, path := range roots {
+		origins[string(root)] = path
+	}
+	return Paths{
+		ConfigDir: configDir, ConfigFile: filepath.Join(configDir, "config.env"),
+		DataDir: dataDir, StateDir: stateDir, CacheDir: roots[productpaths.Cache].Path,
+		RuntimeDir:  filepath.Join(stateDir, "catalog", "runtime", "default"),
+		BaselineDir: filepath.Join(dataDir, "catalog", "baseline"),
+		BadgerDir:   filepath.Join(dataDir, "badger"), SQLiteFile: filepath.Join(dataDir, "sqlite", "starport.db"),
+		FilesDir: filepath.Join(dataDir, "files"), LocalTokenFile: filepath.Join(dataDir, "local-admin-token.json"),
+		WelcomeStampFile: filepath.Join(dataDir, "welcomed"), InstanceID: "default", DeploymentID: "local", Origins: origins,
+	}
+}
+
+func rootLayer(name string, source envconfig.Lookuper) productpaths.Layer {
+	values := make(map[productpaths.Root]string)
+	for root, key := range map[productpaths.Root]string{
+		productpaths.Home: "STARPORT_HOME", productpaths.Config: configDirectoryEnvironment,
+		productpaths.Data: dataDirectoryEnvironment, productpaths.State: "STARPORT_STATE_ROOT", productpaths.Cache: "STARPORT_CACHE_DIR",
+	} {
+		if value, present := source.Lookup(key); present {
+			values[root] = value
+		}
+	}
+	return productpaths.Layer{Name: name, Values: values}
+}
+
+func (l *Loader) bootstrapPaths() (Paths, error) {
+	var paths Paths
+	if l.resolvePaths != nil {
+		selected, err := l.resolvePaths()
+		if err != nil {
+			return Paths{}, err
+		}
+		paths = selected
+		paths.Origins = maps.Clone(selected.Origins)
+		if paths.Origins == nil {
+			paths.Origins = make(map[string]productpaths.Path)
+		}
+	} else {
+		root, err := productpaths.ResolveRoot(productpaths.Config, productpaths.UserDefaults(productpaths.Starport), rootLayer("environment", l.environment))
+		if err != nil {
+			return Paths{}, err
+		}
+		paths.ConfigDir, paths.ConfigFile = root.Path, filepath.Join(root.Path, "config.env")
+		paths.Origins = map[string]productpaths.Path{string(productpaths.Config): root}
+	}
+	if !filepath.IsAbs(paths.ConfigDir) {
+		return Paths{}, fmt.Errorf("configuration root must be absolute")
+	}
+	if file, present := l.environment.Lookup("STARPORT_CONFIG_FILE"); present {
+		base, err := relativeBase(l.environment)
+		if err != nil {
+			return Paths{}, err
+		}
+		path, err := selectedLeaf(paths.ConfigDir, file, "environment", base)
+		if err != nil {
+			return Paths{}, fmt.Errorf("STARPORT_CONFIG_FILE: %w", err)
+		}
+		paths.ConfigFile, paths.configExplicit = path.Path, true
+		paths.Origins[pathRoleConfiguration] = path
+	}
+	return paths, nil
+}
+
+func (l *Loader) managedPaths(bootstrap Paths, source envconfig.Lookuper, layers []productpaths.Layer) (Paths, error) {
+	if l.resolvePaths != nil {
+		layers = append([]productpaths.Layer{{Name: pathOriginGoOption, Values: map[productpaths.Root]string{
+			productpaths.Data: bootstrap.DataDir, productpaths.State: bootstrap.StateDir, productpaths.Cache: bootstrap.CacheDir,
+		}}}, layers...)
+	}
+	// The selected file cannot move the configuration root that selected it.
+	layers = append([]productpaths.Layer{{Name: "bootstrap", Values: map[productpaths.Root]string{productpaths.Config: bootstrap.ConfigDir}}}, layers...)
+	roots, err := productpaths.Resolve(productpaths.UserDefaults(productpaths.Starport), layers...)
+	if err != nil {
+		return Paths{}, err
+	}
+	roots[productpaths.Config] = bootstrap.Origins[string(productpaths.Config)]
+	if roots[productpaths.Config].Path == "" {
+		roots[productpaths.Config] = productpaths.Path{Path: bootstrap.ConfigDir, Origin: pathOriginGoOption}
+	}
+	paths := pathsFromRoots(roots)
+	paths.ConfigFile, paths.configExplicit = bootstrap.ConfigFile, bootstrap.configExplicit
+	if origin, ok := bootstrap.Origins[pathRoleConfiguration]; ok {
+		paths.Origins[pathRoleConfiguration] = origin
+	}
+	if l.resolvePaths != nil {
+		paths.BadgerDir, paths.SQLiteFile, paths.FilesDir = bootstrap.BadgerDir, bootstrap.SQLiteFile, bootstrap.FilesDir
+		paths.LocalTokenFile, paths.WelcomeStampFile = bootstrap.LocalTokenFile, bootstrap.WelcomeStampFile
+	}
+	if value, present := source.Lookup("STARPORT_INSTANCE_ID"); present {
+		paths.InstanceID = value
+	}
+	if err := productpaths.ValidateInstanceID(paths.InstanceID); err != nil {
+		return Paths{}, err
+	}
+	if value, present := source.Lookup("STARPORT_DEPLOYMENT_ID"); present {
+		paths.DeploymentID = value
+	}
+	if err := deployment.ValidateID(paths.DeploymentID); err != nil {
+		return Paths{}, fmt.Errorf("STARPORT_DEPLOYMENT_ID: %w", err)
+	}
+	paths.RuntimeDir = filepath.Join(paths.StateDir, "catalog", "runtime", paths.InstanceID)
+	return paths, nil
+}
+
+func relativeBase(source envconfig.Lookuper) (string, error) {
+	value, _ := source.Lookup("STARPORT_RELATIVE_PATH_BASE")
+	if value != "" && value != "config" {
+		return "", fmt.Errorf("STARPORT_RELATIVE_PATH_BASE must be empty or config")
+	}
+	return value, nil
+}
+
+func selectedLeaf(configDir, value, origin, base string) (productpaths.Path, error) {
+	if !filepath.IsAbs(value) && base != "config" {
+		return productpaths.Path{}, fmt.Errorf("use an absolute path or set STARPORT_RELATIVE_PATH_BASE=config after resolving the previous location")
+	}
+	return productpaths.Leaf(productpaths.Path{Path: configDir}, value, origin)
+}
+
+// EffectivePaths returns a copy of the resolved product layout.
+func (c *Config) EffectivePaths() Paths {
+	if c == nil {
+		return Paths{}
+	}
+	paths := c.paths
+	paths.Origins = maps.Clone(paths.Origins)
+	return paths
+}
+
+// CatalogCredentialPolicyDirectory selects persistent acquisition policy history.
+// Development sessions use the current policy without persistent history.
+func (c *Config) CatalogCredentialPolicyDirectory() string {
+	if c == nil || c.Catalog.StateDirectoryIsScratch() || c.paths.StateDir == "" {
+		return ""
+	}
+	return filepath.Join(c.paths.StateDir, "credentials", "catalog", c.paths.InstanceID)
+}
+
+// InferenceCredentialPolicyDirectory selects private inference selection history.
+func (c *Config) InferenceCredentialPolicyDirectory() string {
+	if c == nil || c.Catalog.StateDirectoryIsScratch() || c.paths.StateDir == "" {
+		return ""
+	}
+	return filepath.Join(c.paths.StateDir, "credentials", "inference", c.paths.InstanceID)
 }

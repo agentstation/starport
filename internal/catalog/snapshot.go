@@ -1,11 +1,13 @@
 package catalog
 
 import (
+	"crypto/rand"
 	"strings"
 	"time"
 
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starport/internal/routing"
 )
 
 // Route is one immutable, generation-bound provider offering identity.
@@ -102,16 +104,25 @@ type OfferingRoutability struct {
 // RoutableSnapshot projects one Starmap generation and one runtime availability
 // revision into an immutable route set.
 type RoutableSnapshot struct {
-	catalog              *catalogs.Catalog
-	generationID         string
-	payloadChecksum      string
-	generatedAt          time.Time
-	catalogSequence      uint64
-	authorityHead        catalogs.CatalogAuthorityHead
-	permission           catalogAttemptPermission
-	availabilityRevision uint64
-	routes               []Route
-	routability          []OfferingRoutability
+	discoveryCacheIdentity string
+	catalog                *catalogs.Catalog
+	generationID           string
+	payloadChecksum        string
+	generatedAt            time.Time
+	catalogSequence        uint64
+	authorityHead          catalogs.CatalogAuthorityHead
+	permission             catalogAttemptPermission
+	availabilityRevision   uint64
+	discoveryIndex         []discoveryEntry
+	catalogNames           map[string]struct{}
+	routesByID             map[string]int
+	routesByDefinition     map[catalogs.ModelDefinitionID][]int
+	routesByProvider       map[catalogs.ProviderID][]int
+	routableDefinitions    []catalogs.ModelDefinitionID
+	planningCandidates     []routing.Candidate
+	planningByModel        map[string][]int
+	routes                 []Route
+	routability            []OfferingRoutability
 }
 
 func newRoutableSnapshot(
@@ -119,18 +130,27 @@ func newRoutableSnapshot(
 	availabilityRevision uint64,
 	routes []Route,
 	routability []OfferingRoutability,
-) *RoutableSnapshot {
-	return &RoutableSnapshot{
-		catalog:              state.Catalog,
-		generationID:         state.GenerationID,
-		payloadChecksum:      state.PayloadChecksum,
-		generatedAt:          state.GeneratedAt,
-		catalogSequence:      state.Sequence,
-		authorityHead:        state.AuthorityHead,
-		availabilityRevision: availabilityRevision,
-		routes:               cloneRoutes(routes),
-		routability:          append([]OfferingRoutability(nil), routability...),
+) (*RoutableSnapshot, error) {
+	index, err := buildDiscoveryIndex(state.Catalog)
+	if err != nil {
+		return nil, err
 	}
+	snapshot := &RoutableSnapshot{
+		discoveryCacheIdentity: rand.Text(),
+		catalog:                state.Catalog,
+		discoveryIndex:         index,
+		generationID:           state.GenerationID,
+		payloadChecksum:        state.PayloadChecksum,
+		generatedAt:            state.GeneratedAt,
+		catalogSequence:        state.Sequence,
+		authorityHead:          state.AuthorityHead,
+		availabilityRevision:   availabilityRevision,
+		routes:                 cloneRoutes(routes),
+		routability:            append([]OfferingRoutability(nil), routability...),
+	}
+	snapshot.buildRouteIndexes()
+	snapshot.buildPlanningCandidates()
+	return snapshot, nil
 }
 
 // OfferingRoutability returns the planning verdict for every offering in the
@@ -213,13 +233,7 @@ func (s *RoutableSnapshot) RoutesForProvider(providerID catalogs.ProviderID) []R
 	if s == nil {
 		return nil
 	}
-	routes := make([]Route, 0)
-	for _, route := range s.routes {
-		if route.ProviderID == providerID {
-			routes = append(routes, cloneRoute(route))
-		}
-	}
-	return routes
+	return s.copyIndexedRoutes(s.routesByProvider[providerID])
 }
 
 // RoutesForDefinition returns routable offerings for one canonical model.
@@ -227,13 +241,7 @@ func (s *RoutableSnapshot) RoutesForDefinition(definitionID catalogs.ModelDefini
 	if s == nil {
 		return nil
 	}
-	routes := make([]Route, 0)
-	for _, route := range s.routes {
-		if route.DefinitionID == definitionID {
-			routes = append(routes, cloneRoute(route))
-		}
-	}
-	return routes
+	return s.copyIndexedRoutes(s.routesByDefinition[definitionID])
 }
 
 // Definitions returns caller-owned Starmap definitions that have a routable offering.
@@ -241,44 +249,32 @@ func (s *RoutableSnapshot) Definitions() []catalogs.ModelDefinition {
 	if s == nil || s.catalog == nil {
 		return nil
 	}
-	definitions := make([]catalogs.ModelDefinition, 0)
-	seen := make(map[catalogs.ModelDefinitionID]struct{})
-	for _, route := range s.routes {
-		if _, exists := seen[route.DefinitionID]; exists {
-			continue
-		}
-		definition, err := s.catalog.Definition(route.DefinitionID)
+	definitions := make([]catalogs.ModelDefinition, 0, len(s.routableDefinitions))
+	for _, id := range s.routableDefinitions {
+		definition, err := s.catalog.Definition(id)
 		if err != nil {
 			continue
 		}
-		seen[route.DefinitionID] = struct{}{}
 		definitions = append(definitions, definition)
 	}
 	return definitions
 }
 
-// Names reports whether this generation holds one model name at all. It reads
-// every offering the generation carries and not the routable subset, because a
-// name whose provider has no credential today is still a name the catalog
-// holds. A caller that used the routable set here would answer a configuration
-// gap with "no such model" and send an operator looking for a typo.
-//
-// It accepts the same two spellings ResolveRoute accepts: a provider-scoped
-// route ID and a canonical definition ID.
+// Names reports whether accepted membership contains a model name.
+// It includes offerings without a ready adapter and canonical definitions.
+// A credential or adapter gap does not remove accepted membership.
 func (s *RoutableSnapshot) Names(modelID string) bool {
 	if s == nil || strings.TrimSpace(modelID) == "" {
 		return false
 	}
-	for _, offering := range s.routability {
-		if string(offering.ProviderID)+"/"+string(offering.ProviderModelID) == modelID {
-			return true
-		}
-	}
-	if s.catalog == nil {
+	var valid bool
+	modelID, valid = s.ResolveAlias(modelID)
+	if !valid {
 		return false
 	}
-	_, err := s.catalog.Definition(catalogs.ModelDefinitionID(modelID))
-	return err == nil
+
+	_, present := s.catalogNames[modelID]
+	return present
 }
 
 // ResolveRoute resolves a provider-scoped route ID or a canonical definition
@@ -287,15 +283,17 @@ func (s *RoutableSnapshot) ResolveRoute(modelID string) (Route, bool) {
 	if s == nil || strings.TrimSpace(modelID) == "" {
 		return Route{}, false
 	}
-	for _, route := range s.routes {
-		if route.ID() == modelID {
-			return cloneRoute(route), true
-		}
+	var valid bool
+	modelID, valid = s.ResolveAlias(modelID)
+	if !valid {
+		return Route{}, false
 	}
-	for _, route := range s.routes {
-		if string(route.DefinitionID) == modelID {
-			return cloneRoute(route), true
-		}
+
+	if index, exists := s.routesByID[modelID]; exists {
+		return cloneRoute(s.routes[index]), true
+	}
+	if indexes := s.routesByDefinition[catalogs.ModelDefinitionID(modelID)]; len(indexes) > 0 {
+		return cloneRoute(s.routes[indexes[0]]), true
 	}
 	return Route{}, false
 }
@@ -308,14 +306,18 @@ func (s *RoutableSnapshot) ResolveOperation(
 	if s == nil || strings.TrimSpace(modelID) == "" {
 		return Route{}, false
 	}
-	for _, route := range s.routes {
-		if route.ID() == modelID && route.Supports(operation) {
-			return cloneRoute(route), true
-		}
+	var valid bool
+	modelID, valid = s.ResolveAlias(modelID)
+	if !valid {
+		return Route{}, false
 	}
-	for _, route := range s.routes {
-		if string(route.DefinitionID) == modelID && route.Supports(operation) {
-			return cloneRoute(route), true
+
+	if index, exists := s.routesByID[modelID]; exists && s.routes[index].Supports(operation) {
+		return cloneRoute(s.routes[index]), true
+	}
+	for _, index := range s.routesByDefinition[catalogs.ModelDefinitionID(modelID)] {
+		if s.routes[index].Supports(operation) {
+			return cloneRoute(s.routes[index]), true
 		}
 	}
 	return Route{}, false
@@ -366,10 +368,8 @@ func (s *RoutableSnapshot) LowestSearchUnitPrice(modelID string) (float64, bool)
 		return 0, false
 	}
 	lowest, found := 0.0, false
-	for _, route := range s.routes {
-		if string(route.DefinitionID) != modelID && route.ID() != modelID {
-			continue
-		}
+	for _, index := range s.matchingRouteIndexes(modelID) {
+		route := s.routes[index]
 		if !route.Supports(catalogs.ProviderOperationRerank) {
 			continue
 		}
@@ -455,4 +455,13 @@ func cloneRoute(route Route) Route {
 		copyRoute.PromptCache = &value
 	}
 	return copyRoute
+}
+
+// DiscoveryCacheIdentity names this immutable runtime view across process lifetimes.
+// Adapter changes create a new view even when the catalog generation is unchanged.
+func (s *RoutableSnapshot) DiscoveryCacheIdentity() string {
+	if s == nil {
+		return ""
+	}
+	return s.discoveryCacheIdentity
 }

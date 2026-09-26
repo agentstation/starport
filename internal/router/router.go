@@ -15,6 +15,7 @@ import (
 
 	"github.com/agentstation/starport/internal/availability"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
@@ -65,7 +66,7 @@ type modelRouter struct {
 	outcomes       execution.OutcomePublisher
 	credentialGate OperatorCredentialGate
 	storedKeys     StoredCredentialResolver
-	sharedHealth   availability.KVStore
+	destinations   *credentials.DestinationApprovals
 
 	// Advanced routing features
 	config                       Config
@@ -81,6 +82,15 @@ type OperatorCredentialGate interface {
 // Option configures the transitional router composition.
 type Option func(*modelRouter)
 
+// WithDestinationApprovals supplies the applied inference approval set.
+// A nil set selects an explicit deny-all policy.
+func WithDestinationApprovals(approvals *credentials.DestinationApprovals) Option {
+	if approvals == nil {
+		approvals = &credentials.DestinationApprovals{}
+	}
+	return func(r *modelRouter) { r.destinations = approvals }
+}
+
 // WithCatalog supplies the shared generation-consistent routable snapshot.
 func WithCatalog(catalogPlane *runtimecatalog.ControlPlane) Option {
 	return func(r *modelRouter) {
@@ -95,12 +105,12 @@ func WithAvailability(tracker *availability.Tracker) Option {
 	}
 }
 
-// WithSharedHealthStore supplies the distributed store that replicas share.
-// The latency tracker publishes its snapshots there and reads peer
-// measurements back. Without it every measurement stays process-local.
-func WithSharedHealthStore(store availability.KVStore) Option {
+// WithLatencyTracker supplies the lifecycle-owned latency view.
+func WithLatencyTracker(tracker LatencyTracker) Option {
 	return func(r *modelRouter) {
-		r.sharedHealth = store
+		if tracker != nil {
+			r.latencyTracker = tracker
+		}
 	}
 }
 
@@ -130,8 +140,8 @@ func WithOperatorCredentialGate(gate OperatorCredentialGate) Option {
 // New creates a new model router with all features enabled by default
 func New(registry connectors.Registry, opts ...Option) ModelRouter {
 	config := Config{
-		LatencyAlpha:           0.2,
-		LatencyWindowSize:      5,
+		LatencyAlpha:           defaultLatencyAlpha,
+		LatencyWindowSize:      defaultLatencyWindowSize,
 		EnableCostOptimization: true,
 		EnableStickySessions:   true,
 		SessionTTL:             30 * time.Minute,
@@ -149,9 +159,6 @@ func New(registry connectors.Registry, opts ...Option) ModelRouter {
 	}
 	for _, opt := range opts {
 		opt(router)
-	}
-	if router.sharedHealth != nil {
-		router.latencyTracker = NewSharedLatencyTracker(latencyTracker, router.sharedHealth)
 	}
 	if router.availability == nil {
 		tracker, err := availability.New(router.config.Availability, nil, router.catalog)
@@ -229,6 +236,9 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		return nil, ErrNoModelsAvailable
 	}
 	if owned {
+		ctx = connectors.ContextWithRuntimeLease(ctx, runtime)
+	}
+	if owned {
 		defer runtime.Release()
 	}
 	plan, err := r.planRoute(ctx, req, runtime)
@@ -240,7 +250,7 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 	}
 	strategy, accountID, byokGate := credentialRequestPolicy(req)
 	credentialPolicy, err := newCredentialPolicy(
-		strategy, accountID, byokGate, runtime, r.storedKeys, r.credentialGate,
+		strategy, accountID, byokGate, runtime, r.storedKeys, r.credentialGate, r.destinations,
 	)
 	if err != nil {
 		return nil, err

@@ -128,7 +128,7 @@ func TestBudgetWithinLimitAllowsAndReportsRemaining(t *testing.T) {
 	assert.Equal(t, "900", rec.Header().Get("X-Starport-Budget-Tokens-Remaining"))
 }
 
-func TestBudgetStorageErrorFailsOpen(t *testing.T) {
+func TestBudgetStorageErrorRefuses(t *testing.T) {
 	server := &Server{
 		cfg:   &Config{},
 		usage: stubUsageTotals{err: errors.New("aggregate read failed")},
@@ -147,8 +147,9 @@ func TestBudgetStorageErrorFailsOpen(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, budgetTestRequest(apiKey))
 
-	require.Equal(t, http.StatusOK, rec.Code)
-	assert.True(t, called, "storage failure must fail open")
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.False(t, called)
+	assert.Equal(t, "1", rec.Header().Get("Retry-After"))
 }
 
 // recordingEmitter keeps every event the middleware pushes. It records
@@ -337,9 +338,8 @@ func TestTeamBudgetJoinsKeyBudgetAndTightestReports(t *testing.T) {
 	assert.Equal(t, "200000000", rec.Header().Get("X-Starport-Budget-Spend-Remaining"))
 }
 
-// A team budget read failure meters nothing and allows the request: the same
-// fail-open answer a broken usage read gives (D6).
-func TestTeamBudgetReadErrorFailsOpen(t *testing.T) {
+// Unknown required team policy refuses admission.
+func TestTeamBudgetReadErrorRefuses(t *testing.T) {
 	server := &Server{
 		cfg:   &Config{},
 		usage: scopedUsageTotals{},
@@ -357,8 +357,9 @@ func TestTeamBudgetReadErrorFailsOpen(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, budgetTestRequest(teamBudgetKey("key-a", "team-platform")))
 
-	require.Equal(t, http.StatusOK, rec.Code)
-	assert.True(t, called, "a team budget read failure must fail open")
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.False(t, called)
+	assert.Equal(t, "1", rec.Header().Get("Retry-After"))
 }
 
 func TestBudgetMiddlewarePassesKeysWithoutBudgets(t *testing.T) {

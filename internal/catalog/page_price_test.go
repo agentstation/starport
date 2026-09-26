@@ -73,7 +73,7 @@ func pagePricedSnapshot(t *testing.T, prices map[string]*float64) *RoutableSnaps
 		})
 	}
 	catalog := pagePricedCatalog(t, prices)
-	return newRoutableSnapshot(starmap.CatalogState{Catalog: catalog}, 0, routes, nil)
+	return mustRoutableSnapshot(t, starmap.CatalogState{Catalog: catalog}, 0, routes, nil)
 }
 
 // TestAModelsPagePriceIsTheOneItsOfferingPublishes is the price the meter

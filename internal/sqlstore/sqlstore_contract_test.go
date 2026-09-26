@@ -17,8 +17,8 @@ import (
 // remembered.
 //
 // The network backends follow the Valkey precedent: they join the run when
-// the environment names a server, and the run reports them skipped
-// (UNVERIFIED) otherwise.
+// the environment names a server. Without a named server, a local pass
+// qualifies SQLite only.
 func contractConfigs(t *testing.T) map[string]Config {
 	t.Helper()
 	configs := map[string]Config{
@@ -28,23 +28,12 @@ func contractConfigs(t *testing.T) map[string]Config {
 		},
 	}
 	if url := os.Getenv("TEST_POSTGRES_URL"); url != "" {
-		configs["postgres"] = Config{Type: TypePostgres, Postgres: PostgresConfig{URL: url}}
+		configs["postgres"] = isolatedContractConfig(t, Config{Type: TypePostgres, Postgres: PostgresConfig{URL: url}})
 	}
 	if dsn := os.Getenv("TEST_MYSQL_DSN"); dsn != "" {
-		configs["mysql"] = Config{Type: TypeMySQL, MySQL: MySQLConfig{DSN: dsn}}
+		configs["mysql"] = isolatedContractConfig(t, Config{Type: TypeMySQL, MySQL: MySQLConfig{DSN: dsn}})
 	}
 	return configs
-}
-
-// resetBackend clears the contract's tables so a shared network server
-// starts every test from the state a fresh SQLite file starts from.
-func resetBackend(t *testing.T, ctx context.Context, db *DB) {
-	t.Helper()
-	for _, table := range []string{"sqlstore_meta", "schema_migrations", "probe"} {
-		if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
-			t.Fatalf("reset %s: %v", table, err)
-		}
-	}
 }
 
 func TestContractOpenMigrateReadWrite(t *testing.T) {
@@ -56,7 +45,6 @@ func TestContractOpenMigrateReadWrite(t *testing.T) {
 				t.Fatalf("Open: %v", err)
 			}
 			defer db.Close()
-			resetBackend(t, ctx, db)
 
 			if err := db.Migrate(ctx); err != nil {
 				t.Fatalf("Migrate: %v", err)
@@ -109,7 +97,6 @@ func TestContractTransactionRollback(t *testing.T) {
 				t.Fatalf("Open: %v", err)
 			}
 			defer db.Close()
-			resetBackend(t, ctx, db)
 			if err := db.Migrate(ctx); err != nil {
 				t.Fatalf("Migrate: %v", err)
 			}

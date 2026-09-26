@@ -66,11 +66,8 @@ func TestAuthenticatedRequestCarriesItsAccountCredentialStrategy(t *testing.T) {
 	assert.Equal(t, account.StrategyBYOKOnly, strategy)
 }
 
-// TestUnreadableAccountStillServesTheRequest states the availability call. The
-// key authenticated, so a storage fault on the account record must not take a
-// working deployment offline; the request falls back to the default policy,
-// which is the one the operator gets by not choosing.
-func TestUnreadableAccountStillServesTheRequest(t *testing.T) {
+// TestUnreadableAccountRefusesTheRequest prevents unknown policy from granting access.
+func TestUnreadableAccountRefusesTheRequest(t *testing.T) {
 	store := storage.NewMockStore()
 	apiKeys, err := apikey.Open(store)
 	require.NoError(t, err)
@@ -84,15 +81,12 @@ func TestUnreadableAccountStillServesTheRequest(t *testing.T) {
 
 	failing := failingAccountReader{err: errors.New("store unavailable")}
 	strategy, status := resolveStrategy(t, NewAuthMiddleware(apiKeys, failing), secret)
-	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, account.StrategyOperatorFirst, strategy,
-		"an unreadable account resolves to the default policy, not to no policy")
+	require.Equal(t, http.StatusServiceUnavailable, status)
+	assert.Empty(t, strategy)
 
-	// A deployment wired without an account reader behaves the same way, so the
-	// fallback is one behavior and not two.
 	strategy, status = resolveStrategy(t, NewAuthMiddleware(apiKeys), secret)
-	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, account.StrategyOperatorFirst, strategy)
+	require.Equal(t, http.StatusServiceUnavailable, status)
+	assert.Empty(t, strategy)
 }
 
 type failingAccountReader struct{ err error }

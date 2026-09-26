@@ -166,6 +166,9 @@ func WithDirectSecretRefreshInterval(interval time.Duration) ResolverOption {
 // Resolver owns inference credential source selection, caching, refresh, and
 // single-flight work. It contains no provider roster.
 type Resolver struct {
+	environmentPolicy           EnvironmentPolicy
+	starmapFallback             bool
+	selectionPolicy             SelectionPolicyStore
 	lookup                      EnvironmentLookup
 	sources                     map[ReferenceBackend]ReferenceSource
 	cloudChains                 map[catalogs.ProviderAuthenticationPrimitive]CloudChain
@@ -192,7 +195,8 @@ type resolutionCall struct {
 func NewResolver(options ...ResolverOption) *Resolver {
 	lookup := EnvironmentLookup(os.LookupEnv)
 	resolver := &Resolver{
-		lookup: lookup,
+		environmentPolicy: InferencePolicyCurrent,
+		lookup:            lookup,
 		sources: map[ReferenceBackend]ReferenceSource{
 			ReferenceBackendEnvironment: environmentSource{lookup: lookup},
 			ReferenceBackendFile:        fileSource{},
@@ -250,6 +254,9 @@ func (r *Resolver) Provider(
 			return nil, &ReferenceError{Field: "backend", Message: "is not supported"}
 		}
 	}
+	if err := validateSecretVersionScope(policies); err != nil {
+		return nil, err
+	}
 	copiedPolicies := make(map[catalogs.ProviderCredentialFieldID]ReferencePolicy, len(policies))
 	for fieldID, policy := range policies {
 		copiedPolicies[fieldID] = policy
@@ -290,8 +297,8 @@ func (h *ProviderHandle) ResolveLocal(ctx context.Context) (Material, bool, erro
 	return h.resolve(ctx, false, false, false)
 }
 
-// CachedSource returns a request-time source that performs no external I/O.
-// Background reconciliation owns source refresh.
+// CachedSource returns material from memory without external reads.
+// The background worker refreshes sources.
 func (h *ProviderHandle) CachedSource() MaterialSource {
 	return cachedProviderSource{handle: h}
 }
@@ -322,8 +329,8 @@ func (h *ProviderHandle) CachedMaterial(ctx context.Context) (Material, error) {
 	return material, nil
 }
 
-// Refresh forces one source resolution and atomically replaces cached
-// material only after success.
+// Refresh resolves sources again. Success replaces cached material atomically.
+// Terminal failures invalidate it. Transient failures retain usable prior material.
 func (h *ProviderHandle) Refresh(ctx context.Context) (Material, bool, error) {
 	return h.resolve(ctx, true, true, true)
 }
@@ -337,7 +344,7 @@ func (h *ProviderHandle) Revoke() error {
 	}
 	h.resolver.mu.Lock()
 	h.resolver.epochs[h.identity]++
-	delete(h.resolver.cache, h.identity)
+	h.resolver.revokeCached(h.identity)
 	h.resolver.mu.Unlock()
 	return nil
 }
@@ -409,15 +416,30 @@ func (r *Resolver) resolve(
 			resolveErr = ErrMaterialRevoked
 			retryForWaiters = false
 		}
+		if resolveErr == nil && configured {
+			previous := r.cache[handle.identity]
+			validity := previous.Validity()
+			expiry, _ := material.ExpiresAt()
+			if validity == nil || previous.Version() != material.Version() {
+				validity.Revoke()
+				validity = NewMaterialValidity(expiry)
+			} else {
+				validity = validity.Renew(expiry)
+			}
+			material = material.WithValidity(validity)
+		}
 		call.material = material
 		call.configured = configured
 		call.err = resolveErr
 		call.retryForWaiters = retryForWaiters
+		if call.err != nil && !MayRetainMaterial(call.err) {
+			r.revokeCached(handle.identity)
+		}
 		if call.err == nil {
 			if call.configured {
 				r.cache[handle.identity] = call.material
 			} else {
-				delete(r.cache, handle.identity)
+				r.revokeCached(handle.identity)
 			}
 		}
 		delete(r.inflight, handle.identity)
@@ -427,7 +449,13 @@ func (r *Resolver) resolve(
 	}
 }
 
-func (r *Resolver) resolveUncached(
+// revokeCached runs with the resolver mutex held.
+func (r *Resolver) revokeCached(identity string) {
+	r.cache[identity].Validity().Revoke()
+	delete(r.cache, identity)
+}
+
+func (r *Resolver) resolveProfiles(
 	ctx context.Context,
 	handle *ProviderHandle,
 	allowCloudChain bool,
@@ -496,7 +524,7 @@ func (r *Resolver) resolveUncached(
 		if !complete || !observedProfile {
 			continue
 		}
-		return builder.build(r, profile), true, nil
+		return builder.build(r, handle.provider.ID, profile), true, nil
 	}
 	return Material{}, false, nil
 }
@@ -620,20 +648,17 @@ func (r *Resolver) resolveAmbientField(
 	providerID catalogs.ProviderID,
 	field catalogs.ProviderCredentialField,
 ) (resolvedField, bool, bool, error) {
-	candidates := append([]string(nil), field.Environment...)
-	derived, err := catalogs.DerivedCredentialEnvironmentName(
-		starportCredentialProduct,
-		providerID,
-		field.ID,
-	)
+	candidates, err := r.environmentCandidates(providerID, field)
 	if err != nil {
 		return resolvedField{}, false, false, err
 	}
-	candidates = append(candidates, derived)
 	for _, name := range candidates {
 		value, exists := r.lookup(name)
-		if !exists || value == "" {
+		if !exists || (r.environmentPolicy == InferencePolicyLegacy && value == "") {
 			continue
+		}
+		if r.emptySelection(value) {
+			return resolvedField{}, false, true, &SelectedValueError{Environment: name, ProviderID: providerID, FieldID: field.ID}
 		}
 		if err := validateResolvedField(field, value); err != nil {
 			return resolvedField{}, false, true, &SelectedValueError{
@@ -738,7 +763,7 @@ func (b *materialBuilder) add(fieldID catalogs.ProviderCredentialFieldID, resolv
 	}
 }
 
-func (b *materialBuilder) build(resolver *Resolver, profile catalogs.ProviderCredentialProfile) Material {
+func (b *materialBuilder) build(resolver *Resolver, provider catalogs.ProviderID, profile catalogs.ProviderCredentialProfile) Material {
 	fieldIDs := make([]string, 0, len(b.values))
 	for fieldID := range b.values {
 		fieldIDs = append(fieldIDs, string(fieldID))
@@ -751,7 +776,7 @@ func (b *materialBuilder) build(resolver *Resolver, profile catalogs.ProviderCre
 		versionParts = append(versionParts, fieldValue, b.versions[fieldID], b.values[fieldID])
 	}
 	return NewMaterial(profile, b.values, MaterialMetadata{
-		Version: resolver.opaqueVersion(versionParts...), ExpiresAt: b.expires, Lease: b.lease,
+		Version: resolver.opaqueVersion(versionParts...), Handle: string(provider), ExpiresAt: b.expires, Lease: b.lease,
 	})
 }
 
@@ -770,10 +795,7 @@ func materialUsable(material Material, now time.Time) bool {
 	if material.Empty() {
 		return false
 	}
-	if expiresAt, exists := material.ExpiresAt(); exists && !now.Before(expiresAt) {
-		return false
-	}
-	return true
+	return material.CheckValidity(now) == nil
 }
 
 func defaultChainPrimitive(primitive catalogs.ProviderAuthenticationPrimitive) bool {

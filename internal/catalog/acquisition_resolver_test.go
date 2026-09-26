@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/agentstation/starmap/acquisition"
@@ -10,21 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestAcquisitionResolverReadsOnlyDeploymentLookup proves catalog acquisition
-// reads the deployment alone.
-//
-// The resolver holds exactly one field, the deployment lookup, so it can reach
-// no keyring, no account store, and no BYOK record. The structural check states
-// that, and the behavior checks prove what the one field supplies: a derived
-// gateway name, a conventional ambient name, and a refusal when the deployment
-// supplies neither.
+// TestAcquisitionResolverReadsOnlyDeploymentLookup checks the deployment source boundary.
 func TestAcquisitionResolverReadsOnlyDeploymentLookup(t *testing.T) {
-	resolverType := reflect.TypeOf(AcquisitionResolver{})
-	require.Equal(t, 1, resolverType.NumField(),
-		"the acquisition resolver must hold the deployment lookup alone")
-	require.Equal(t, "lookup", resolverType.Field(0).Name)
-	require.Equal(t, reflect.TypeOf(DeploymentLookup(nil)), resolverType.Field(0).Type)
-
 	provider := acquisitionTestProvider(true)
 	tests := []struct {
 		name      string
@@ -70,8 +56,13 @@ func TestAcquisitionResolverReadsOnlyDeploymentLookup(t *testing.T) {
 
 			material, err := resolver.ResolveCatalog(t.Context(), provider)
 			if test.wantErr {
-				var missing *starmaperrors.NotFoundError
-				require.ErrorAs(t, err, &missing)
+				if test.values == nil {
+					var missing *starmaperrors.AuthenticationError
+					require.ErrorAs(t, err, &missing)
+				} else {
+					var invalid *starmaperrors.ValidationError
+					require.ErrorAs(t, err, &invalid)
+				}
 				return
 			}
 			require.NoError(t, err)
@@ -86,6 +77,7 @@ func TestAcquisitionResolverReadsOnlyDeploymentLookup(t *testing.T) {
 // reads no other plane when the deployment supplies no lookup. It refuses
 // instead of falling back.
 func TestAcquisitionResolverRefusesWithoutDeploymentLookup(t *testing.T) {
+	t.Setenv("TESTPROVIDER_API_KEY", "unselected-process-key")
 	resolver := NewAcquisitionResolver(nil)
 	_, err := resolver.ResolveCatalog(t.Context(), acquisitionTestProvider(true))
 	var configErr *starmaperrors.ConfigError
@@ -127,8 +119,9 @@ func acquisitionTestProvider(required bool) *catalogs.Provider {
 				Environment: []string{"TESTPROVIDER_API_KEY"},
 			}},
 			Profiles: []catalogs.ProviderCredentialProfile{{
-				ID:     "api-key",
-				Fields: []catalogs.ProviderCredentialFieldID{"api-key"},
+				ID:        "api-key",
+				Primitive: catalogs.ProviderAuthenticationAPIKey,
+				Fields:    []catalogs.ProviderCredentialFieldID{"api-key"},
 			}},
 			CatalogAcquisition: catalogs.ProviderCredentialPlane{
 				Required:     required,

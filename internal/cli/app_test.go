@@ -405,11 +405,11 @@ func TestConfigShowJSONRedactsSecrets(t *testing.T) {
 	}
 }
 
-func TestConfigPathsJSONUsesInjectedResolver(t *testing.T) {
+func TestConfigPathsJSONUsesLoadedConfiguration(t *testing.T) {
 	deps, stdout, _ := testDependencies()
-	want := config.PathsForConfigDir("/test/config")
-	deps.ResolvePaths = func() (config.Paths, error) {
-		return want, nil
+	want := config.PathsForConfigDir(t.TempDir())
+	deps.LoadConfig = func(ctx context.Context) (*config.Config, error) {
+		return config.NewLoader().WithPaths(want).WithEnvironment(nil).WithEnvFiles().Load(ctx)
 	}
 	if err := Run(context.Background(), []string{"starport", "config", "paths", "--json"}, deps); err != nil {
 		t.Fatal(err)
@@ -441,6 +441,7 @@ func TestConfigValidateUsesInjectedLoader(t *testing.T) {
 func TestConfigInspectionDoesNotExposeLoaderErrors(t *testing.T) {
 	for _, command := range [][]string{
 		{"starport", "config", "show"},
+		{"starport", "config", "paths"},
 		{"starport", "config", "validate"},
 	} {
 		deps, _, _ := testDependencies()

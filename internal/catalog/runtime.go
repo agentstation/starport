@@ -63,6 +63,11 @@ type catalogStateIdentity struct {
 	payloadChecksum string
 }
 
+type runtimeCollectors struct {
+	providers runtime.Acquirer
+	metadata  runtime.SourceAcquirer
+}
+
 // OpenRuntime composes one connected Starmap runtime over Starport's durable
 // storage. It starts the source and acquisition schedules and returns.
 //
@@ -74,27 +79,49 @@ func OpenRuntime(
 	settings Settings,
 	lookup DeploymentLookup,
 ) (*Runtime, error) {
-	var acquirer runtime.Acquirer
-	if settings.AcquisitionEnabled {
-		built, err := acquisition.NewAcquirer(
-			acquisition.WithAcquirerCredentialResolver(NewAcquisitionResolver(lookup)),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("open Starmap acquisition: %w", err)
-		}
-		acquirer = built
+	if _, err := settings.starmapOptions(); err != nil {
+		return nil, fmt.Errorf("configure Starmap runtime: %w", err)
 	}
-	return openRuntime(ctx, store, settings, acquirer)
+	if err := settings.ValidateStorageSelection(ctx); err != nil {
+		return nil, err
+	}
+	state, err := settings.credentialPolicy(ctx, store)
+	if err != nil {
+		return nil, err
+	}
+	resolver := newAcquisitionResolver(ctx, lookup, state)
+	if resolver.err != nil {
+		return nil, fmt.Errorf("open catalog credential policy: %w", resolver.err)
+	}
+	providers, err := acquisition.NewAcquirer(
+		acquisition.WithAcquirerCredentialResolver(resolver),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("open Starmap acquisition: %w", err)
+	}
+	metadata, err := settings.metadataCollector()
+	if err != nil {
+		return nil, fmt.Errorf("open Starmap metadata acquisition: %w", err)
+	}
+	return openRuntime(ctx, store, settings, runtimeCollectors{providers: providers, metadata: metadata})
 }
 
-// openRuntime composes the connected runtime over one acquirer. It holds the
-// whole composition, so the exported entry point states the credential plane
-// alone and no caller repeats the wiring.
+// openRuntime composes the connected runtime with host-supplied provider and metadata collectors.
 func openRuntime(
 	ctx context.Context,
 	store storage.KVStore,
 	settings Settings,
-	acquirer runtime.Acquirer,
+	collectors runtimeCollectors,
+) (*Runtime, error) {
+	return openRuntimeWithMigration(ctx, store, settings, collectors, nil)
+}
+
+func openRuntimeWithMigration(
+	ctx context.Context,
+	store storage.KVStore,
+	settings Settings,
+	collectors runtimeCollectors,
+	migration *runtime.DirectoryMigrationRequest,
 ) (*Runtime, error) {
 	if ctx == nil {
 		return nil, errors.New("catalog runtime context is required")
@@ -102,6 +129,17 @@ func openRuntime(
 	options, err := settings.starmapOptions()
 	if err != nil {
 		return nil, fmt.Errorf("configure Starmap runtime: %w", err)
+	}
+	if migration != nil {
+		options = append(options, runtime.WithPublishedDirectoryMigration(*migration))
+	}
+	if err := settings.ValidateStorageSelection(ctx); err != nil {
+		return nil, err
+	}
+	if settings.BaselineDirectory != "" {
+		if _, err := starmap.ExportEmbeddedBaseline(ctx, settings.BaselineDirectory); err != nil {
+			return nil, fmt.Errorf("persist embedded catalog baseline: %w", err)
+		}
 	}
 	acceptedStore, err := NewGenerationStore(store)
 	if err != nil {
@@ -133,8 +171,11 @@ func openRuntime(
 		}
 		options = append(options, runtime.WithSource(cascade))
 	}
-	if acquirer != nil {
-		options = append(options, runtime.WithAcquirer(acquirer))
+	if collectors.providers != nil {
+		options = append(options, runtime.WithAcquirer(collectors.providers))
+	}
+	if collectors.metadata != nil {
+		options = append(options, runtime.WithSourceAcquirer(collectors.metadata))
 	}
 	connected, err := runtime.Open(ctx, options...)
 	if err != nil {

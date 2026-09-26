@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,6 +83,28 @@ func (v *ValkeyStore) Get(ctx context.Context, key string) ([]byte, error) {
 	}
 
 	return val, nil
+}
+
+// GetBounded atomically checks length before returning a payload from Valkey.
+func (v *ValkeyStore) GetBounded(ctx context.Context, key string, maxBytes int) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, ErrInvalidReadLimit
+	}
+	const script = `if redis.call('EXISTS', KEYS[1]) == 0 then return false end
+if redis.call('STRLEN', KEYS[1]) > tonumber(ARGV[1]) then return redis.error_reply('STARPORT_VALUE_TOO_LARGE') end
+return redis.call('GET', KEYS[1])`
+	cmd := v.client.B().Eval().Script(script).Numkeys(1).Key(key).Arg(strconv.Itoa(maxBytes)).Build()
+	value, err := v.client.Do(ctx, cmd).AsBytes()
+	if valkey.IsValkeyNil(err) {
+		return nil, ErrNotFound
+	}
+	if err != nil && err.Error() == "STARPORT_VALUE_TOO_LARGE" {
+		return nil, ErrValueTooLarge
+	}
+	if err != nil {
+		return nil, fmt.Errorf("bounded storage read: %w", err)
+	}
+	return value, nil
 }
 
 // Set stores a value with a key

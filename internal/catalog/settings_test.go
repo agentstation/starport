@@ -34,7 +34,7 @@ func identityTestSettings(state, workspace, address string) Settings {
 func instanceIdentity(t *testing.T, settings Settings) string {
 	t.Helper()
 	runtime, err := openRuntime(
-		t.Context(), storage.NewMockStore(), settings, nil,
+		t.Context(), storage.NewMockStore(), settings, runtimeCollectors{},
 	)
 	require.NoError(t, err)
 	identity := runtime.Status().InstanceIdentity
@@ -97,11 +97,11 @@ func entryNames(directory string) ([]string, error) {
 func TestRuntimeRejectsConcurrentStateDirectoryUse(t *testing.T) {
 	state := filepath.Join(t.TempDir(), "state")
 	settings := identityTestSettings(state, t.TempDir(), "127.0.0.1:8080")
-	first, err := openRuntime(t.Context(), storage.NewMockStore(), settings, nil)
+	first, err := openRuntime(t.Context(), storage.NewMockStore(), settings, runtimeCollectors{})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, first.Close(t.Context())) })
 	settings.ListenAddress = "127.0.0.1:9090"
-	second, err := openRuntime(t.Context(), storage.NewMockStore(), settings, nil)
+	second, err := openRuntime(t.Context(), storage.NewMockStore(), settings, runtimeCollectors{})
 	if second != nil {
 		require.NoError(t, second.Close(t.Context()))
 	}

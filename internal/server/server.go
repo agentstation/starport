@@ -12,6 +12,7 @@ import (
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
+	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
@@ -19,6 +20,7 @@ import (
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
@@ -71,7 +73,8 @@ type Server struct {
 	controllers *controllers.Controllers
 
 	// Middleware
-	auth *AuthMiddleware
+	auth              *AuthMiddleware
+	discoveryRegistry connectors.LeasingRegistry
 
 	// authPolicy is the running authentication mode. It is the server's copy
 	// of one shared value: the middleware reads it per request and the console
@@ -81,19 +84,26 @@ type Server struct {
 
 // Dependencies contains ready application ports for the HTTP adapter.
 type Dependencies struct {
-	Service            proxy.Proxy
-	APIKeys            apikey.Repository
-	Accounts           account.Repository
-	ProviderKeys       keyring.ProviderKeys
-	RateLimits         ratelimit.Repository
-	ProviderOperations controllers.ProviderOperations
-	Console            console.PageServer
+	// Readiness checks common admission prerequisites without external I/O.
+	Readiness           func() bool
+	AuthorizationStatus func() authorization.Status
+	Authorization       *authorization.Cache
+	PermissionClock     authorization.Clock
+	Service             proxy.Proxy
+	APIKeys             apikey.Repository
+	Accounts            account.Repository
+	ProviderKeys        keyring.ProviderKeys
+	RateLimits          ratelimit.Repository
+	ProviderOperations  controllers.ProviderOperations
+	Console             console.PageServer
 	// Usage serves recorded request activity. A nil repository degrades
 	// the activity and metrics endpoints to 503, loudly.
 	Usage usage.Repository
 	// Catalog serves snapshot freshness, diffs, and forced acquisition. A
 	// nil port degrades the catalog endpoints to 503, loudly.
 	Catalog controllers.CatalogOperations
+	// DiscoveryRegistry retains the accepted generation for catalog discovery.
+	DiscoveryRegistry connectors.LeasingRegistry
 	// Presets serves stored preset management. A nil repository degrades
 	// the preset endpoints to 503, loudly.
 	Presets presets.Repository
@@ -185,6 +195,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 	}
 
 	s := &Server{
+		discoveryRegistry:  dependencies.DiscoveryRegistry,
 		router:             chi.NewRouter(),
 		cfg:                config,
 		service:            dependencies.Service,
@@ -199,14 +210,8 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		events:             dependencies.Events,
 	}
 	if teams := dependencies.Identity.Teams; teams != nil {
-		// A key attributed to a team that no longer exists meters nothing:
-		// the attribution outlived the team, and refusing such a key would
-		// let a team deletion take its keys' traffic down.
 		s.teamBudgets = func(ctx context.Context, teamID string) (*limits.TeamBudget, error) {
 			record, err := teams.GetByID(ctx, teamID)
-			if errors.Is(err, identity.ErrTeamNotFound) {
-				return nil, nil
-			}
 			if err != nil {
 				return nil, err
 			}
@@ -218,39 +223,49 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Source: config.AuthModeSource,
 	})
 	s.auth = NewAuthMiddleware(s.apiKeys, s.accounts)
+	if dependencies.Authorization != nil {
+		if dependencies.PermissionClock == nil {
+			return nil, authorization.ErrUnavailable
+		}
+		s.auth.UseAuthorization(dependencies.Authorization, dependencies.PermissionClock)
+	}
 	s.auth.Govern(s.authPolicy, config.UnauthenticatedScopes)
 	s.auth.AcceptSessions(dependencies.LocalGate)
 
 	handlerConfig := controllers.Config{
-		Service:            s.service,
-		ProviderKeys:       s.providerKeys,
-		APIKeys:            s.apiKeys,
-		Accounts:           s.accounts,
-		Usage:              dependencies.Usage,
-		ProviderOperations: s.providerOperations,
-		Catalog:            dependencies.Catalog,
-		Presets:            dependencies.Presets,
-		Templates:          dependencies.Templates,
-		Files:              dependencies.Files,
-		Jobs:               dependencies.Jobs,
-		Batches:            dependencies.Batches,
-		BatchGovernor:      s.batchGovernor(),
-		FileUploadBound:    config.MaxFileUploadSize,
-		FileBackend:        dependencies.FileBackend,
-		ServiceName:        "starport",
-		Build:              config.Build,
-		Deployment:         dependencies.Deployment,
-		Webhooks:           dependencies.Webhooks,
-		AuthPolicy:         s.authPolicy,
-		AuthModeStore:      config.AuthModeStore,
-		AuthModeBindHost:   config.Host,
-		AllowRemoteNoAuth:  config.AllowRemoteNoAuth,
-		Console:            dependencies.Console,
-		LocalGate:          dependencies.LocalGate,
-		IdentityAuth:       dependencies.IdentityAuth,
-		Identity:           dependencies.Identity,
-		Audit:              dependencies.Audit,
-		Events:             dependencies.Events,
+		Readiness:           dependencies.Readiness,
+		AuthorizationStatus: dependencies.AuthorizationStatus,
+		Service:             s.service,
+		ProviderKeys:        s.providerKeys,
+		APIKeys:             s.apiKeys,
+		Accounts:            s.accounts,
+		Usage:               dependencies.Usage,
+		ProviderOperations:  s.providerOperations,
+		Catalog:             dependencies.Catalog,
+		DiscoveryRegistry:   dependencies.DiscoveryRegistry,
+		DiscoveryViewer:     s.auth.discoveryViewer,
+		Presets:             dependencies.Presets,
+		Templates:           dependencies.Templates,
+		Files:               dependencies.Files,
+		Jobs:                dependencies.Jobs,
+		Batches:             dependencies.Batches,
+		BatchGovernor:       s.batchGovernor(),
+		FileUploadBound:     config.MaxFileUploadSize,
+		FileBackend:         dependencies.FileBackend,
+		ServiceName:         "starport",
+		Build:               config.Build,
+		Deployment:          dependencies.Deployment,
+		Webhooks:            dependencies.Webhooks,
+		AuthPolicy:          s.authPolicy,
+		AuthModeStore:       config.AuthModeStore,
+		AuthModeBindHost:    config.Host,
+		AllowRemoteNoAuth:   config.AllowRemoteNoAuth,
+		Console:             dependencies.Console,
+		LocalGate:           dependencies.LocalGate,
+		IdentityAuth:        dependencies.IdentityAuth,
+		Identity:            dependencies.Identity,
+		Audit:               dependencies.Audit,
+		Events:              dependencies.Events,
 	}
 	s.controllers = controllers.NewControllers(handlerConfig)
 

@@ -31,6 +31,9 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 	if err != nil {
 		return nil, ErrNoModelsAvailable
 	}
+	if owned {
+		ctx = connectors.ContextWithRuntimeLease(ctx, runtime)
+	}
 	plan, err := r.planRoute(ctx, req, runtime)
 	if err != nil {
 		if owned {
@@ -43,7 +46,7 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 	}
 	strategy, accountID, byokGate := credentialRequestPolicy(req)
 	credentialPolicy, err := newCredentialPolicy(
-		strategy, accountID, byokGate, runtime, r.storedKeys, r.credentialGate,
+		strategy, accountID, byokGate, runtime, r.storedKeys, r.credentialGate, r.destinations,
 	)
 	if err != nil {
 		if owned {

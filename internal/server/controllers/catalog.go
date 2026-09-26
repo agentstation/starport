@@ -10,7 +10,10 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/disclosure"
+	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/protocol/openrouter"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/server/dto"
 )
 
@@ -76,6 +79,19 @@ func (h *CatalogController) Summary(w http.ResponseWriter, r *http.Request) {
 		writeCatalogUnavailable(w)
 		return
 	}
+	if policy, scoped := disclosure.FromContext(r.Context()); scoped {
+		lease := connectors.RuntimeLeaseFromContext(r.Context())
+		if lease == nil {
+			writeCatalogUnavailable(w)
+			return
+		}
+		var valid bool
+		summary, valid = view.SummaryForViewer(summary, lease.Snapshot(), policy)
+		if !valid {
+			writeCatalogUnavailable(w)
+			return
+		}
+	}
 	if err := dto.WriteJSON(w, http.StatusOK, summary); err != nil {
 		log.Error().Err(err).Msg("failed to write the catalog summary")
 	}
@@ -92,6 +108,19 @@ func (h *CatalogController) Changes(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeCatalogError(w, err, "Catalog changes are unavailable.")
 		return
+	}
+	if policy, scoped := disclosure.FromContext(r.Context()); scoped {
+		lease := connectors.RuntimeLeaseFromContext(r.Context())
+		if lease == nil {
+			writeCatalogUnavailable(w)
+			return
+		}
+		var valid bool
+		diff, valid = view.ChangesForViewer(diff, lease.Snapshot(), policy)
+		if !valid {
+			writeCatalogUnavailable(w)
+			return
+		}
 	}
 	if err := dto.WriteJSON(w, http.StatusOK, diff); err != nil {
 		log.Error().Err(err).Msg("failed to write catalog changes")

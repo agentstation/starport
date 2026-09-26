@@ -27,10 +27,28 @@ export function joinFacet(values: string[]): string | undefined {
   return values.length > 0 ? values.join(",") : undefined;
 }
 
-// providerOf mirrors the gateway's model ID shape: "<author>/<model>".
-export function providerOf(model: Model): string {
+// authorPrefix reads the author from a canonical model ID.
+function authorPrefix(model: Model): string {
   const slash = model.id.indexOf("/");
   return slash > 0 ? model.id.slice(0, slash) : "";
+}
+
+// servingProviderCounts counts each model once per offering provider.
+export function servingProviderCounts(
+  models: Model[],
+): { provider: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const model of models) {
+    const providers = new Set(
+      (model.offerings ?? []).map((offering) => offering.provider).filter(Boolean),
+    );
+    for (const provider of providers) {
+      counts.set(provider, (counts.get(provider) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([provider, count]) => ({ provider, count }));
 }
 
 // authorIdsOf returns the declared authors, falling back to the id
@@ -40,7 +58,7 @@ export function authorIdsOf(model: Model): string[] {
     .map((author) => author.id)
     .filter(Boolean);
   if (declared.length > 0) return declared;
-  const prefix = providerOf(model);
+  const prefix = authorPrefix(model);
   return prefix ? [prefix] : [];
 }
 
@@ -172,17 +190,9 @@ function passes(raw: string | undefined, test: (value: string) => boolean): bool
 }
 
 export function matches(model: Model, search: ModelsSearch): boolean {
-  // The provider filter matches the providers that actually serve the
-  // model (its offerings), not just the id prefix — a canonical model
-  // like meta/llama-… routes through providers the prefix never names.
   if (
-    !passes(
-      search.provider,
-      (provider) =>
-        providerOf(model) === provider ||
-        (model.offerings ?? []).some(
-          (offering) => offering.provider === provider,
-        ),
+    !passes(search.provider, (provider) =>
+      (model.offerings ?? []).some((offering) => offering.provider === provider),
     )
   ) {
     return false;

@@ -104,7 +104,7 @@ func TestRuntimeSnapshotPermissionStopsAfterClose(t *testing.T) {
 	r, err := openRuntime(t.Context(), authoritySnapshotBadger(t, t.TempDir()), Settings{
 		Source: "embedded", SourceStartupPolicy: "prefer_local", SourceMaxHops: 8,
 		TransferIdleTimeout: time.Minute, TransferMaxDuration: time.Minute,
-	}, nil)
+	}, runtimeCollectors{})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, r.Close(context.Background())) })
 	reader, ok := any(r.ControlPlane().Current()).(attemptPermissionReader)
@@ -117,11 +117,11 @@ func TestRuntimeSnapshotPermissionStopsAfterClose(t *testing.T) {
 func TestAuthoritySnapshotNeedsPermissionOwner(t *testing.T) {
 	state := runtimeTestState(t, authoritySnapshotGeneration(t))
 	state.AuthorityHead = authoritySnapshotGeneration(t).Manifest.AuthorityHead
-	snapshot := newRoutableSnapshot(state, 0, nil, nil)
+	snapshot := mustRoutableSnapshot(t, state, 0, nil, nil)
 	reader, ok := any(snapshot).(attemptPermissionReader)
 	require.True(t, ok)
 	require.False(t, reader.AllowsNewAttempt())
 	state.AuthorityHead = catalogs.CatalogAuthorityHead{}
-	require.True(t, any(newRoutableSnapshot(state, 0, nil, nil)).(attemptPermissionReader).AllowsNewAttempt())
+	require.True(t, any(mustRoutableSnapshot(t, state, 0, nil, nil)).(attemptPermissionReader).AllowsNewAttempt())
 	require.False(t, any((*RoutableSnapshot)(nil)).(attemptPermissionReader).AllowsNewAttempt())
 }

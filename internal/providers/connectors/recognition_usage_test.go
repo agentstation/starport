@@ -77,10 +77,10 @@ func TestGoogleRecognitionRetainsUsageWithoutCandidates(t *testing.T) {
 	connector, err := NewGoogleAIStudioConnector(ProviderConfig{BaseURL: server.URL})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, connector.Close()) })
-	response, err := connector.RecognizeDocument(t.Context(), &RecognitionRequest{
+	response, err := connector.RecognizeDocument(t.Context(), approveConnectorFixture(t, &RecognitionRequest{
 		MediaTarget: MediaTarget{Model: "document", Credential: testGoogleMaterial("test-key"), Endpoint: InferenceEndpoint{Type: catalogs.EndpointTypeGoogle, URL: server.URL + "/recognize"}},
 		Document:    UploadedFile{Bytes: []byte("document"), MediaType: "application/pdf"}, Pages: 1,
-	})
+	}))
 	require.NoError(t, err)
 	require.Empty(t, response.Pages)
 	canonical, err := RecognitionResponseToInference(response)

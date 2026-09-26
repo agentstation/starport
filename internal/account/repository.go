@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/agentstation/starport/internal/policyrecord"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/agentstation/starport/internal/authorization/revision"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -54,8 +56,9 @@ type Repository interface {
 }
 
 type repository struct {
-	store storage.KVStore
-	now   func() time.Time
+	authority *revision.KV
+	store     storage.KVStore
+	now       func() time.Time
 }
 
 type accountRecord struct {
@@ -65,11 +68,15 @@ type accountRecord struct {
 }
 
 // Open returns a storage-backed account repository.
-func Open(store storage.KVStore) (Repository, error) {
+func Open(store storage.KVStore, options ...Option) (Repository, error) {
 	if store == nil {
 		return nil, ErrRepositoryRequired
 	}
-	return &repository{store: store, now: time.Now}, nil
+	r := &repository{store: store, authority: revision.NewKV(store, nil), now: time.Now}
+	for _, option := range options {
+		option(r)
+	}
+	return r, nil
 }
 
 func (r *repository) Create(ctx context.Context, value Account) (Record, error) {
@@ -87,13 +94,13 @@ func (r *repository) Create(ctx context.Context, value Account) (Record, error) 
 	if err := stored.Account.Validate(); err != nil {
 		return Record{}, err
 	}
-	data, err := json.Marshal(stored)
+	data, err := policyrecord.Marshal(stored)
 	if err != nil {
 		return Record{}, fmt.Errorf("encode account record: %w", err)
 	}
 	// A nil ExpectedValue on an absent key creates. On a present key it
 	// conflicts, so two concurrent creates cannot both win.
-	if err := r.store.CompareAndSwap(ctx, accountStorageKey(value.ID), nil, data); err != nil {
+	if err := r.authority.Apply(ctx, []storage.CompareAndSwapMutation{{Key: accountStorageKey(value.ID), ExpectedValue: nil, NewValue: data}}); err != nil {
 		return Record{}, mapConflict("create account", err)
 	}
 	return Record{Revision: stored.Revision, Account: stored.Account}, nil
@@ -131,7 +138,7 @@ func (r *repository) GetByID(ctx context.Context, id string) (Record, error) {
 	if strings.TrimSpace(id) == "" {
 		return Record{}, ErrMissingID
 	}
-	data, err := r.store.Get(ctx, accountStorageKey(id))
+	data, err := r.store.GetBounded(ctx, accountStorageKey(id), policyrecord.MaxBytes)
 	if err != nil {
 		return Record{}, mapReadError("get account", err)
 	}
@@ -222,11 +229,11 @@ func (r *repository) Update(ctx context.Context, value Account, expectedRevision
 		Revision:      current.Revision + 1,
 		Account:       updatedAccount,
 	}
-	updatedData, err := json.Marshal(updated)
+	updatedData, err := policyrecord.Marshal(updated)
 	if err != nil {
 		return Record{}, fmt.Errorf("encode account update: %w", err)
 	}
-	if err := r.store.CompareAndSwap(ctx, accountStorageKey(value.ID), currentData, updatedData); err != nil {
+	if err := r.authority.Apply(ctx, []storage.CompareAndSwapMutation{{Key: accountStorageKey(value.ID), ExpectedValue: currentData, NewValue: updatedData}}); err != nil {
 		return Record{}, mapConflict("update account", err)
 	}
 	return Record{Revision: updated.Revision, Account: updated.Account}, nil
@@ -241,7 +248,7 @@ func (r *repository) Delete(ctx context.Context, id string, expectedRevision uin
 	if id == DefaultID {
 		return ErrDefaultImmutable
 	}
-	data, err := r.store.Get(ctx, accountStorageKey(id))
+	data, err := r.store.GetBounded(ctx, accountStorageKey(id), policyrecord.MaxBytes)
 	if err != nil {
 		return mapReadError("get account for delete", err)
 	}
@@ -252,7 +259,7 @@ func (r *repository) Delete(ctx context.Context, id string, expectedRevision uin
 	if expectedRevision != 0 && stored.Revision != expectedRevision {
 		return ErrConflict
 	}
-	if err := r.store.CompareAndSwap(ctx, accountStorageKey(id), data, nil); err != nil {
+	if err := r.authority.Apply(ctx, []storage.CompareAndSwapMutation{{Key: accountStorageKey(id), ExpectedValue: data, NewValue: nil}}); err != nil {
 		return mapConflict("delete account", err)
 	}
 	return nil
@@ -342,4 +349,12 @@ func mapConflict(action string, err error) error {
 		return ErrConflict
 	}
 	return fmt.Errorf("%s: %w", action, err)
+}
+
+// Option configures the repository's local authorization fence.
+type Option func(*repository)
+
+// WithAuthorizationFence revokes cached permissions before each durable mutation.
+func WithAuthorizationFence(begin func() func()) Option {
+	return func(r *repository) { r.authority = revision.NewKV(r.store, begin) }
 }

@@ -151,32 +151,32 @@ func TestAMediaFailureNormalizesLikeAChatFailure(t *testing.T) {
 
 			mediaCalls := map[string]func() error{
 				"images": func() error {
-					_, err := connector.GenerateImages(context.Background(), &ImagesRequest{
+					_, err := connector.GenerateImages(context.Background(), approveConnectorFixture(t, &ImagesRequest{
 						MediaTarget: MediaTarget{
 							Model: "gpt-image-1", Endpoint: endpoint, Credential: credential,
 						},
 						Prompt: "a cat",
-					})
+					}))
 					return err
 				},
 				"speech": func() error {
-					_, err := connector.SynthesizeSpeech(context.Background(), &SpeechRequest{
+					_, err := connector.SynthesizeSpeech(context.Background(), approveConnectorFixture(t, &SpeechRequest{
 						MediaTarget: MediaTarget{
 							Model: "tts-1", Endpoint: endpoint, Credential: credential,
 						},
 						Input: "hello", Voice: "alloy",
-					})
+					}))
 					return err
 				},
 				"transcription": func() error {
-					_, err := connector.Transcribe(context.Background(), &TranscriptionRequest{
+					_, err := connector.Transcribe(context.Background(), approveConnectorFixture(t, &TranscriptionRequest{
 						// Endpoint and credential match the chat call, so the
 						// only difference between the two paths is the method.
 						MediaTarget: MediaTarget{
 							Model: "whisper-1", Endpoint: endpoint, Credential: credential,
 						},
 						File: UploadedFile{Filename: "clip.wav", Bytes: []byte("RIFF")},
-					})
+					}))
 					return err
 				},
 			}
@@ -199,12 +199,12 @@ func chatCallFailure(
 	credential credentials.Material,
 ) *failure.Failure {
 	t.Helper()
-	_, err := connector.Chat(context.Background(), &ChatRequest{
+	_, err := connector.Chat(context.Background(), approveConnectorFixture(t, &ChatRequest{
 		Model:      "gpt-4",
 		Messages:   []Message{{Role: RoleUser, Content: "hello"}},
 		Endpoint:   endpoint,
 		Credential: credential,
-	})
+	}))
 	require.Error(t, err)
 	return NormalizeFailure("openai", err)
 }
@@ -219,12 +219,12 @@ func TestATranscriptionWithoutAudioFailsBeforeTheWire(t *testing.T) {
 
 	connector, err := NewOpenAIConnector(mediaTestConfig(server.URL + "/v1"))
 	require.NoError(t, err)
-	_, err = connector.Transcribe(context.Background(), &TranscriptionRequest{
+	_, err = connector.Transcribe(context.Background(), approveConnectorFixture(t, &TranscriptionRequest{
 		MediaTarget: MediaTarget{
 			Model:      "whisper-1",
 			Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL + "/v1"},
 			Credential: testAPIMaterial("test-key"),
 		},
-	})
+	}))
 	require.True(t, errors.Is(err, ErrInvalidMediaRequest), "%v", err)
 }

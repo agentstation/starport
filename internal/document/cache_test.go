@@ -341,3 +341,32 @@ func TestTheStoreKeyRevealsNoDocument(t *testing.T) {
 	}
 	require.NotEqual(t, confusable.String(), shifted.String())
 }
+
+func TestCacheSkipsOversizedReadingBeforeStorage(t *testing.T) {
+	clock := newTestClock()
+	store := newMemoryStore(clock)
+	subject, err := document.NewCache(store, clock, time.Hour)
+	require.NoError(t, err)
+	key := document.CacheKey{AccountID: "account", ContentHash: "hash", Engine: "native", Generation: "generation"}
+	require.NoError(t, subject.Put(t.Context(), key, document.Reading{Text: string(make([]byte, 4<<20))}))
+	require.Zero(t, store.writes, "oversized optional extraction must bypass serialization and storage")
+}
+
+func TestCacheInputBudgetIncludesAllFieldsAndEscaping(t *testing.T) {
+	clock := newTestClock()
+	store := newMemoryStore(clock)
+	subject, err := document.NewCache(store, clock, time.Hour)
+	require.NoError(t, err)
+	key := document.CacheKey{AccountID: "a", ContentHash: "h", Engine: "e", Generation: "g"}
+	reading := document.Reading{Text: string(make([]byte, document.MaxCacheInputBytes-4))}
+	require.NoError(t, subject.Put(t.Context(), key, reading))
+	require.Equal(t, 1, store.writes)
+	require.Less(t, len(store.entries[key.String()].value), 4<<20)
+	got, found, err := subject.Get(t.Context(), key)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, reading, got)
+	reading.Offering = "extra"
+	require.NoError(t, subject.Put(t.Context(), key, reading))
+	require.Equal(t, 1, store.writes, "offering bytes must count toward the same input bound")
+}

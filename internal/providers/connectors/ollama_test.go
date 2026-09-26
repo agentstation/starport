@@ -92,7 +92,7 @@ func TestOllamaConnector_Chat(t *testing.T) {
 		MaxTokens:   &[]int{100}[0],
 	}
 
-	resp, err := connector.Chat(ctx, req)
+	resp, err := connector.Chat(ctx, approveConnectorFixture(t, req))
 	if err != nil {
 		t.Fatalf("chat failed: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestOllamaConnector_ChatStream(t *testing.T) {
 		Stream: true,
 	}
 
-	stream, err := connector.ChatStream(ctx, req)
+	stream, err := connector.ChatStream(ctx, approveConnectorFixture(t, req))
 	if err != nil {
 		t.Fatalf("chat stream failed: %v", err)
 	}
@@ -301,7 +301,7 @@ func TestOllamaConnector_ErrorHandling(t *testing.T) {
 		},
 	}
 
-	_, err = connector.Chat(ctx, req)
+	_, err = connector.Chat(ctx, approveConnectorFixture(t, req))
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

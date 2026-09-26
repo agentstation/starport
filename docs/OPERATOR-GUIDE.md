@@ -62,6 +62,21 @@ The model response contains the active Starmap catalog view. It does not prove
 that a provider accepts its resolved credential. The first inference attempt
 provides that evidence.
 
+## Development scratch recovery
+
+`starport dev` keeps Badger and SQLite in memory. Its catalog state and uploaded files use a private `starport-dev-` directory under the operating system temporary directory.
+The directory contains `files/`, `catalog/`, and `cache/`.
+After application construction succeeds, the private `.starport-development/session.json` record binds these directories to their native filesystem identities.
+The session holds `.starport-development/session.lock` until its resources close.
+
+Normal shutdown removes verified scratch state. A later development run can remove abandoned state after the prior process exits.
+Recovery requires a valid ownership record and an exclusive lock. It preserves live sessions, changed identities, unknown files, and unrecognized records.
+Cleanup never selects a directory from its name or process identifier alone.
+
+A recovery warning names preserved directories. Inspect those paths before manual recovery and confirm that no development process uses them.
+Failed or interrupted initialization without a complete ownership record requires manual recovery.
+Each startup scans at most 16,384 temporary entries and examines at most 256 candidate sessions. A limited scan reports `scan_limited`.
+
 ## Authentication Mode
 
 Starport requires a gateway API key on every inference and management route by
@@ -225,6 +240,25 @@ when there is none — and the other identity routes answer 503 naming these
 settings, so a reader learns the deployment has no identity provider rather
 than guessing at an absent feature.
 
+### Identity account selection
+
+An identity session can use only accounts granted to its user or teams.
+Starport selects the account automatically when the grants name exactly one distinct account.
+When the grants name several accounts, send `X-Starport-Account-ID` with each API request.
+Starport returns `409 account_selection_required` when the request supplies no selection.
+An ungranted account returns 403. No grant permits access to the deployment's default account implicitly.
+
+For cross-origin clients, set `STARPORT_SECURITY_ENABLE_CORS=true` and name the console origin in `STARPORT_SECURITY_ALLOWED_ORIGINS`.
+When CORS is active, the server permits the account selection header.
+Session credentials require an explicit origin. The wildcard origin does not permit session credentials.
+
+Identity sessions receive account scopes, without deployment-admin access.
+Removing a user, grant, or team membership invalidates affected authorization.
+Each queued batch line checks current policy before execution. Its account and caller identity remain fixed.
+
+The console account picker remains incomplete in this candidate.
+API clients must supply the selection header when the grants name multiple accounts.
+
 ### Rotation
 
 ```bash
@@ -279,6 +313,64 @@ curl --fail http://localhost:8080/health/live
 curl --fail http://localhost:8080/health/ready
 ```
 
+Liveness reports whether the HTTP process responds.
+Readiness returns `503 not_ready` when common authorization or catalog admission prerequisites are unavailable.
+The probe uses memory. It does not contact providers, read caller records, or renew permissions.
+Successful readiness does not guarantee that a particular account has credentials, permission, or budget.
+
+Local and replicated deployments use host time and monotonic cache expiry for gateway authorization.
+Using Valkey, PostgreSQL, or MySQL does not require native clock qualification.
+Cached permission lasts at most 60 seconds from verification, including time spent loading policy.
+The normal revocation-propagation target is two seconds with a reachable authority. Fleet qualification remains pending.
+
+A known withdrawal immediately restricts affected new requests on the replica that observes it.
+Refresh failure cannot extend a receipt. Expired or invalidated receipts require fresh evidence.
+Already admitted streams may finish.
+
+Host time governs absolute key and session expiry. Operators must keep that clock correct.
+An internal authoritative catalog still requires its qualified clock and permission receipt.
+An authorization cache deadline cannot replace that catalog contract.
+
+Budget windows use the admission authority's time. Strict budgets still refuse unknown capacity.
+A clock-dependent lease protocol must separately establish its required clock bounds.
+
+### Authorization record limits
+
+Each encoded key, account, user, and team record has a 64 KiB limit.
+Key and account reads check stored size before copying the value from Badger or returning it from Valkey.
+SQL user and team reads suppress oversized payloads before the driver receives them.
+An oversized record is an error. It never means that a policy or budget is absent.
+
+Repositories refuse policy writes above the limit. Administrative key, account, and team writes return HTTP 413 with a size diagnostic.
+Reduce record size without removing required access restrictions. The encoded size includes metadata.
+
+The combined cached authorization bundle also has a 64 KiB limit.
+The cache holds at most 1,024 bundles and 16 MiB of encoded policy. These limits do not measure total Go heap usage.
+
+### Authorization recovery diagnostics
+
+Read `GET /api/v1/admin/info` for this replica's `authorization` report.
+It identifies the gateway-policy and identity-policy fences, observed revisions, refresh failures, and recovery codes.
+Valid and invalid bundle counts cover cached callers only. The latest deadline is not permission for a particular caller.
+The report reads bounded memory and cannot renew permission.
+
+Use `GET /api/v1/admin/catalog/status` for catalog-authority diagnostics.
+A verified local-operator console session can read these two endpoints while gateway policy is unavailable.
+This access requires an unexpired session under the current local token. Token rotation ends access.
+
+It permits no inference or mutation. Identity sessions and explicit bearer keys retain their normal policy checks.
+These diagnostic reads do not consume inference budgets.
+
+Revision refresh failure permits existing receipts only until their original deadlines.
+
+| Recovery code | Action |
+| --- | --- |
+| `restore_authority_access_before_receipts_expire` | Restore access to the affected policy store. |
+| `await_mutation_and_reverify` | Wait for the local policy mutation to finish, then verify current policy. |
+| `reinitialize_authority_epoch` | Verify the authoritative store, then restart against its current epoch. |
+
+Verify the intended store before restart. A diagnostic read cannot authorize an epoch transition.
+
 ### Initialize configured storage
 
 Production keeps configuration in environment variables or a secret manager.
@@ -308,6 +400,80 @@ Show each managed path:
 ```bash
 starport config paths
 ```
+
+The report reads the same configuration as `starport serve`. It includes configuration, data, state, cache, runtime, baseline, database, and upload locations.
+The command reads configuration without creating directories or opening databases. The selected storage backends determine which locations the runtime uses.
+Use `starport config paths --json` to include selection origins and relative-path anchors.
+Origins distinguish configuration files, environment values, Starmap fallbacks, root-derived paths, and changed Go overrides.
+
+Use `starport config paths --files` to report file roles, selected backends, access requirements, and recovery rules.
+The report marks inactive database paths as disabled and identifies shared KV, SQL, and object storage without connection credentials.
+Accepted catalog generations use the selected KV backend. Each process keeps its private catalog runtime evidence under the runtime directory.
+The embedded baseline export remains separate from that mutable state.
+
+Workspace entries include adjacent projection receipts, replacement journals, writer locks, candidates, and backups.
+Starmap supplies these file names and access policies to both products. Each entry retains the selected workspace origin.
+Disabled workspaces have no sibling entries. Inventory and inspection do not authorize removal of recovery files.
+
+Use `starport config paths --inspect --json` to add bounded filesystem metadata.
+Set `--max-entries` to change the scan bound from 10,000 entries, up to 100,000 entries.
+Inspection reads no data-file contents, opens no databases, takes no runtime locks, and changes no files.
+It reports access conflicts and unverified access. It does not establish effective access, runtime ownership, readiness, or a consistent backup.
+
+The report records the configuration access policy selected before the loader read the file.
+This prevents a value inside the file from changing its reported access requirement.
+
+Before an upgrade, run `starport config paths --legacy --json` to inspect previous default locations.
+The report lists existing paths that the new defaults would abandon. It reads metadata without opening databases or reading their contents.
+Startup and local initialization refuse these conflicts before creating replacement stores. They preserve the old files, including conflicting or incomplete state.
+
+Older versions keep local data under `<previous-config>/data/` and catalog runtime state under the XDG state root.
+On macOS, the default primary configuration moves from `starport/config.env` to `starport/config/config.env` under Application Support.
+The report names the exact old path, selected path, and configuration selector.
+
+Set explicit paths to retain the previous locations while preparing a verified migration. Changing a selector does not copy files or prove migration completion.
+Runtime ownership checks still apply. A retained runtime from another owner requires ownership migration before use.
+
+Explicit roots and leaf paths keep their selected locations. Development storage and unselected database backends do not inspect legacy data.
+Use `--legacy` separately from `--files` and `--inspect`. This command does not migrate or remove old state.
+
+To move catalog runtime evidence, stop the gateway and use `starport migrate runtime`.
+Keep the same catalog KV backend, deployment, instance, and scheduler identity throughout the move.
+This procedure does not move Badger, SQLite, SQL services, uploaded files, or the authoring workspace.
+
+Run these phases with the same `--operation`, `--source`, `--target`, `--journal`, and `--identity` values:
+
+1. `prepare` records the source inventory and binds the journal to the original catalog KV store.
+2. `stage` copies and verifies private staging files.
+3. `publish` installs the target and retires the source runtime.
+4. Save the absolute target in `STARPORT_CATALOG_STATE_DIR` and the retained identity in `STARPORT_SCHEDULER_IDENTITY` in the primary configuration file.
+5. Save the unchanged KV selection in that file: `STARPORT_STORAGE_MODE` and either the absolute `STARPORT_STORAGE_BADGER_PATH` or `STARPORT_STORAGE_VALKEY_URL`.
+6. For Valkey cluster mode, also save `STARPORT_STORAGE_VALKEY_CLUSTER_MODE`. Keep credentials in their configured secret source.
+7. `complete` verifies the saved configuration, opens the replacement offline, and records completion.
+
+All three path flags require absolute paths. Read the retained scheduler identity from the original runtime status.
+Keep the original runtime selected in configuration through `publish`. Select the target only before `complete`.
+
+Completion verifies the configuration again after opening the replacement. Environment-only target settings cannot complete the move.
+Use `--json` for the phase result. The result reports `journal_directory` and `host_journal_directory` for the selected operation.
+The command does not start the gateway or open SQL.
+
+The explicit journal directory contains Starmap recovery records and Starport's `starport-runtime/<operation-hash>/catalog-binding.json`.
+The catalog KV store retains matching migration checkpoints under `catalog_migration:v1:`.
+Preserve these records and the source files until the migration and recovery procedure permits removal.
+If a phase fails, correct the reported cause and repeat that phase with the same operation values.
+A different catalog store cannot resume the operation, even when it contains the same catalog generation.
+
+The journal also binds the backend selection. A copied database at another path cannot satisfy the original operation.
+
+Source acquisition uses Starport's cache root, including the session cache during development.
+The models.dev HTTP cache uses `models.dev/`. Its managed Git checkout uses `sources/models.dev-git/`.
+`STARPORT_CATALOG_ACQUISITION_SOURCES` selects permitted provider and metadata sources. An explicit empty value disables them all.
+`STARPORT_CATALOG_ACQUISITION_ENABLED=false` stops automatic observations. Explicit refresh can still collect permitted sources.
+Offline mode and internal authority continue to restrict explicit acquisition.
+
+For a file catalog source, use an absolute `STARPORT_CATALOG_SOURCE_URL`.
+Set `STARPORT_RELATIVE_PATH_BASE=config` to anchor relative paths under the configuration root.
 
 Show the effective configuration without secret values:
 
@@ -447,13 +613,28 @@ commands.
 Starmap owns each provider's exact ID, credential fields, ordered conventional
 environment names, authentication profiles, endpoint templates, and service
 metadata. Starport evaluates every catalog provider against that contract. It
-checks conventional names first. It then checks a derived
-`STARPORT_<PROVIDER>_<FIELD>` name. For example, it checks `OPENAI_API_KEY`
-before `STARPORT_OPENAI_API_KEY`.
+checks `STARPORT_<PROVIDER>_<FIELD>` first, then the catalog's conventional
+names. For example, `STARPORT_OPENAI_API_KEY` precedes `OPENAI_API_KEY`.
+An explicitly empty or invalid selected value stops resolution.
 
-Starport selects the first nonempty value in that order. If the selected value
-does not satisfy the catalog field contract, resolution fails. Starport does
-not continue to a later name.
+`STARPORT_CREDENTIAL_SOURCES_ALLOW_STARMAP_FALLBACK=true` permits
+`STARMAP_<PROVIDER>_<FIELD>` as the last inference fallback. The default is
+`false`. Enable it only when the acquisition account may also pay for inference.
+Explicit inference references precede environment discovery.
+
+Retained installations compare the previous conventional-first selection with
+the new selection before migration. Different complete credential profiles
+block that provider until an operator selects explicit references or removes
+the conflicting variables. Other providers can remain available.
+
+Accepted policy versions persist under
+`<state-root>/credentials/inference/<instance-id>/`. These private records
+contain owner and policy identifiers, not credential values. Restart preserves
+accepted decisions. Invalid records refuse initialization. Development scratch
+mode uses ephemeral policy.
+
+Request routing reads cached credential material.
+Credential resolution reads policy files and secret sources.
 
 `starport init` creates gateway security and identity state. It never selects
 or writes provider inference credential material. Runtime credential
@@ -622,6 +803,32 @@ after five minutes refreshes direct-source material. Set
 `STARPORT_CREDENTIAL_SOURCES_REMOTE_REFRESH_INTERVAL` to a different positive
 duration. Starport never logs or serializes the returned material.
 
+Stored account and shared credentials use a separate managed memory cache.
+Warm reads do not fetch encrypted records or derive encryption keys.
+Background refresh checks record revisions and shared grants. Unchanged records reuse decrypted material.
+
+Local changes revoke existing handles. Each handle keeps its original validity deadline after refresh.
+The gateway checks validity before applying credentials and before the HTTP attempt.
+
+Configure these limits with the `STARPORT_CREDENTIAL_SOURCES_MANAGED_` prefix:
+
+| Suffix | Default | Purpose |
+| --- | --- | --- |
+| `ENTRIES` | `1024` | Maximum resident selections |
+| `SECRET_BYTES` | `16777216` | Maximum retained credential field bytes |
+| `CONCURRENT_LOADS` | `4` | Maximum simultaneous source loads |
+| `TENANT_CONCURRENT_LOADS` | `2` | Maximum simultaneous loads per account scope |
+| `VALIDITY` | `5s` | Maximum age of a validated record snapshot |
+| `LOAD_TIMEOUT` | `1s` | Deadline for one source load |
+| `IDLE` | `1m` | Retention limit for unused selections |
+| `REFRESH_INTERVAL` | `1s` | Background refresh scan period |
+
+Validity cannot exceed five minutes. Load timeout and refresh interval must be shorter than validity.
+Idle retention must cover validity. Tenant concurrency cannot exceed global concurrency.
+
+All limits must be positive. Capacity refusals are retryable and do not select another credential role.
+A disconnected replica refuses expired selections. It must read current storage before using them again.
+
 Vertex AI needs a project ID, one location, and Google Application Default
 Credentials:
 
@@ -722,6 +929,29 @@ Catalog-acquisition credentials stay separate from inference credentials.
 `STARPORT_CATALOG_SOURCE_TOKEN` reads a GitHub release. Neither one pays a
 provider. Configuration inspection redacts both values and the source URL.
 
+### Catalog acquisition credentials
+
+Provider acquisition reads the checked configuration sources that the loader selects.
+It checks `STARPORT_CATALOG_<PROVIDER>_<FIELD>`, `STARMAP_<PROVIDER>_<FIELD>`, `STARPORT_<PROVIDER>_<FIELD>`, then conventional names from the catalog.
+An explicit empty or invalid selected value stops fallback.
+Inference credentials and account BYOK records remain outside this resolver.
+
+Select a secret source with `STARPORT_CATALOG_<PROVIDER>_<FIELD>_REFERENCE`.
+For example, `STARPORT_CATALOG_OPENAI_API_KEY_REFERENCE=env:CATALOG_OPENAI_KEY` selects a deployment environment value.
+A `file:` reference selects a private secret file.
+
+Direct secret managers use the Starmap acquisition reference formats.
+An unavailable selected reference stops acquisition for that provider.
+The corresponding `_REFERENCE_FALLBACK_AMBIENT=true` setting permits fallback only when the source reports no configured value.
+It does not permit fallback after authentication, validation, or revocation errors.
+
+Persistent installations retain policy records under `<state root>/credentials/catalog/<instance ID>`.
+The file inventory reports this directory as `credential-policy` with owner-only access.
+On upgrade, different old and new credential profiles cause a provider-specific conflict.
+An explicit catalog reference or removal of the conflicting variable resolves that choice.
+The resolver retains acceptance across restart without storing credential values in policy records.
+Development sessions use the current policy without persistent policy history.
+
 ### The catalog settings
 
 | Name | Default | Valid values | Interactions |
@@ -753,7 +983,21 @@ provider. Configuration inspection redacts both values and the source URL.
 The `require_authority` policy binds catalog permission to one authority and policy identity.
 An embedded catalog can supply diagnostics at cold startup, but it cannot grant inference permission.
 Cached responses and each new provider attempt require permission for the accepted catalog.
-An already admitted stream can finish after permission expires.
+An already admitted stream can finish after permission expires or a known withdrawal.
+New requests, retries, queued batch lines, and cache delivery require current permission.
+
+Completed catalog operations report `permission_at_completion`.
+Its `new_attempts_allowed` field records catalog permission when the operation ended.
+Credentials, budgets, and routing rules can still refuse an attempt.
+
+Its `admitted_streams_may_finish` field reports that catalog withdrawal does not cancel admitted streams.
+These fields also appear after a failed replacement that retains catalog metadata.
+They describe the completed operation. Read current catalog status for current permission.
+
+Starport permits at most four current, retained, or prepared runtime generations.
+An update that reaches this limit reports `runtime_generation_capacity` before durable catalog acceptance.
+Retained requests can finish. Retry the update after a retained request releases its generation.
+A permission withdrawal still blocks new inference while replacement waits for capacity.
 
 Authority mode needs current permission and qualified clock evidence before it permits inference.
 The permission clock defaults to disabled. Select `native` only after qualifying the host time service and its error bounds.
@@ -890,7 +1134,8 @@ generation with no source request.
 | Route | Scope | Meaning |
 | --- | --- | --- |
 | `GET /api/v1/catalog` | `models:read` | The allowlisted reader summary. |
-| `GET /api/v1/catalog/changes` | `models:read` | What the last accepted generation changed. |
+| `GET /api/v1/catalog/discovery` | `models:read` | Permitted model and offering membership, including entries without ready adapters. |
+| `GET /api/v1/catalog/changes` | `models:read` | Permitted changes between accepted generations. |
 | `GET /api/v1/admin/catalog/status` | `admin` | The complete operator view. |
 | `POST /api/v1/admin/catalog/refresh` | `admin` | Start one refresh run. |
 | `GET /api/v1/admin/catalog/refreshes/{run_id}` | `admin` | Read one run. |
@@ -904,6 +1149,34 @@ It carries no source address, no source identity, no publication chain, no
 lease, no run identifier, and no failure reason. Those values reach the admin
 status route alone. A gateway with no catalog answers the safe route with a
 sanitized `503`.
+
+The discovery route uses one accepted generation and the current key and account policy.
+Missing provider credentials do not remove permitted entries.
+It returns model names and descriptions, offering identities, declared operations, lifecycle, availability, and current routable operations.
+Routable operations do not establish permission or usable credentials for the caller. Credential readiness remains `unknown`.
+
+Discovery does not contact providers or secret managers. It reloads identity records before projection and before delivery.
+A policy change, unreadable identity record, or authority withdrawal causes a sanitized `503` response without catalog facts.
+Responses use `Cache-Control: no-store`. Existing compatibility model lists retain their membership contract.
+
+Reader summaries count permitted providers with accepted offerings and permitted routable model definitions.
+The change feed filters model IDs, offerings, and prices through current caller permissions.
+The feed omits historical records outside current permitted membership, including removed private records.
+Use the discovery snapshot to reconcile current membership.
+The reader feed's `semantically_equal` field reports whether its listed changes are empty.
+A generation mismatch produces a sanitized `503` with `Retry-After: 30`.
+
+Canonical aliases use the retained request generation.
+An active alias resolves to its current canonical target, and model details return that target ID.
+The caller still needs permission for the target. Permission for an alias spelling alone does not grant target access.
+An explicitly removed alias returns `404` with `not_found_error` for model details in both API families.
+
+OpenAI places the reason in `error.type`.
+OpenRouter uses `error.metadata.error_type` and numeric `error.code`.
+
+Alias removal affects new requests. A retained request snapshot keeps its earlier mapping, subject to current authority checks.
+Aliases do not expire with time.
+Starport refuses activation when a canonical alias conflicts with an exact provider route.
 
 ### Freshness alert rules
 

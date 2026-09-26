@@ -22,7 +22,7 @@ func sessionHarness(t *testing.T, gate *localauth.Gate) *AuthMiddleware {
 	t.Helper()
 	apiKeys, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	middleware := NewAuthMiddleware(apiKeys)
+	middleware := NewAuthMiddleware(apiKeys, defaultAuthAccounts(t))
 	middleware.AcceptSessions(gate)
 	return middleware
 }

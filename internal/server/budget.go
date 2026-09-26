@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/agentstation/starport/internal/authorization"
 
 	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/limits"
@@ -63,13 +63,12 @@ var budgetDimensions = []budgetDimension{
 
 // enforceBudgets rejects a request with 402 when a budget for its fixed UTC
 // window is exhausted. Both the account budget and the key budget apply: the
-// account counter sums every key the account holds, so neither total answers
-// for the other. A budget read failure allows the request and logs loudly: a
-// broken meter must not take the gateway down (D6).
+// account counter sums every key the account holds. Unknown required policy
+// or usage refuses admission with a retryable response.
 func (s *Server) enforceBudgets(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiKey, ok := requestctx.GetAPIKeyModel(r.Context())
-		if !ok || apiKey == nil || s.usage == nil {
+		if !ok || apiKey == nil {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -80,6 +79,11 @@ func (s *Server) enforceBudgets(next http.Handler) http.Handler {
 		}
 		accountID := requestctx.AccountIDOrDefault(r.Context())
 
+		teamBudget, err := s.readTeamBudget(r.Context(), apiKey.TeamID)
+		if err != nil {
+			writeAuthorizationRefusal(w, r, err)
+			return
+		}
 		now := time.Now().UTC()
 		for _, dimension := range budgetDimensions {
 			rules := limits.BudgetRules(accountLimits, apiKey.Limits, dimension.name)
@@ -88,7 +92,7 @@ func (s *Server) enforceBudgets(next http.Handler) http.Handler {
 			// the account and key rules join each other. A team budget bounds
 			// spend only.
 			if dimension.name == limits.DimensionSpend {
-				if rule, ok := limits.TeamBudgetRule(s.readTeamBudget(r.Context(), apiKey.TeamID)); ok {
+				if rule, ok := limits.TeamBudgetRule(teamBudget); ok {
 					rules = append(rules, rule)
 				}
 			}
@@ -109,22 +113,34 @@ func (s *Server) enforceBudgets(next http.Handler) http.Handler {
 	})
 }
 
-// readTeamBudget reads the spend budget of the team a key is attributed to.
-// It answers nil — no meter — for a teamless key, a deployment with no
-// identity plane, and a read failure alike: the last is the same fail-open
-// answer a broken usage read gives (D6), logged just as loudly.
-func (s *Server) readTeamBudget(ctx context.Context, teamID string) *limits.TeamBudget {
-	if teamID == "" || s.teamBudgets == nil {
-		return nil
+// readTeamBudget uses admitted policy when the request carries a permission bundle.
+// A missing required team or reader cannot establish the absence of a budget.
+func (s *Server) readTeamBudget(ctx context.Context, teamID string) (*limits.TeamBudget, error) {
+	if s.auth != nil && s.auth.authorization != nil {
+		bundle, err := requestctx.Authorization(ctx)
+		if err != nil {
+			return nil, err
+		}
+		team := bundle.Team()
+		if teamID == "" && team == nil {
+			return nil, nil
+		}
+		if team == nil || team.Team.ID != teamID {
+			return nil, authorization.ErrUnavailable
+		}
+		return team.Team.Budget, nil
+	}
+	if teamID == "" {
+		return nil, nil
+	}
+	if s.teamBudgets == nil {
+		return nil, authorization.ErrUnavailable
 	}
 	budget, err := s.teamBudgets(ctx, teamID)
 	if err != nil {
-		log.Error().Err(err).
-			Str("team_id", teamID).
-			Msg("team budget read failed; allowing request")
-		return nil
+		return nil, authorization.ErrUnavailable
 	}
-	return budget
+	return budget, nil
 }
 
 // scopedBudget is one budget meter's reading and the holder that set it.
@@ -166,15 +182,14 @@ func (s *Server) allowBudget(
 
 	for _, rule := range rules {
 		scope := budgetScope(rule.Scope, accountID, keyID, teamID)
+		if s.usage == nil {
+			writeAuthorizationRefusal(w, r, authorization.ErrUnavailable)
+			return scopedBudget{}, false
+		}
 		totals, err := s.usage.Totals(r.Context(), scope, rule.Budget.Interval, now)
 		if err != nil {
-			// Fail open: a budget read failure must not reject traffic.
-			log.Error().Err(err).
-				Str("usage_scope", scope.String()).
-				Str("budget", string(dimension.name)).
-				Str("interval", rule.Budget.Interval).
-				Msg("budget read failed; allowing request")
-			continue
+			writeAuthorizationRefusal(w, r, authorization.ErrUnavailable)
+			return scopedBudget{}, false
 		}
 
 		consumed := dimension.used(totals)

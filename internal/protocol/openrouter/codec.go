@@ -476,7 +476,7 @@ type StreamChunk struct {
 	Provider          string         `json:"provider,omitempty"`
 	Choices           []StreamChoice `json:"choices"`
 	Usage             *Usage         `json:"usage,omitempty"`
-	SystemFingerprint *string        `json:"system_fingerprint"`
+	SystemFingerprint *string        `json:"system_fingerprint,omitempty"`
 }
 
 // StreamChoice is one streamed OpenRouter choice.

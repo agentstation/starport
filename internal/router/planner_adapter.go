@@ -2,12 +2,12 @@ package router
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"time"
-
-	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -50,15 +50,60 @@ func (r *modelRouter) planOperation(
 	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
 		return nil, refusal
 	}
+	var err error
+	request.Models, err = resolveModelAliases(snapshot, request.Models)
+	if err != nil {
+		return nil, err
+	}
+	request.ZeroPriceModels, err = resolveModelAliases(snapshot, request.ZeroPriceModels)
+	if err != nil {
+		return nil, err
+	}
 	request.Operation = operation
 	request.Models, request.AllowAnyModelFallback = splitAutoModel(request.Models)
 	request.AllowModelFallbacks = len(request.Models) > 1
 	input := routing.Snapshot{
 		CatalogGenerationID:  snapshot.GenerationID(),
 		AvailabilityRevision: snapshot.AvailabilityRevision(),
-		Candidates:           r.toPlanningCandidates(snapshot, runtime),
+		Candidates:           r.toPlanningCandidates(snapshot, runtime, request),
 	}
-	return r.routePlanner.Plan(request, input)
+	plan, err := r.routePlanner.Plan(request, input)
+	if errors.Is(err, routing.ErrNoCandidate) && !request.AllowAnyModelFallback && len(request.Models) > 0 {
+		found := false
+		for _, name := range request.Models {
+			if override := request.Account.ModelOverrides[name]; override != "" {
+				name = override
+			}
+			if catalogNamePermitted(snapshot, request.Account, name) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, runtimecatalog.ErrModelNotCatalogued
+		}
+	}
+	return plan, err
+}
+
+func resolveModelAliases(snapshot *runtimecatalog.RoutableSnapshot, names []string) ([]string, error) {
+	result := names
+	copied := false
+	for index, name := range names {
+		resolved, valid := snapshot.ResolveAlias(name)
+		if !valid {
+			return nil, runtimecatalog.ErrModelNotCatalogued
+		}
+		if resolved == name {
+			continue
+		}
+		if !copied {
+			result = slices.Clone(names)
+			copied = true
+		}
+		result[index] = resolved
+	}
+	return result, nil
 }
 
 func splitAutoModel(models []string) ([]string, bool) {
@@ -265,105 +310,35 @@ func cloneModelOverrides(overrides map[string]string) map[string]string {
 func (r *modelRouter) toPlanningCandidates(
 	snapshot *runtimecatalog.RoutableSnapshot,
 	runtime connectors.RuntimeLease,
+	request routing.Request,
 ) []routing.Candidate {
-	routes := snapshot.Routes()
-	providerStates := make(map[string]providerPlanningState)
-	for _, route := range routes {
-		provider := string(route.ProviderID)
-		if _, exists := providerStates[provider]; exists {
-			continue
-		}
-		providerStates[provider] = providerPlanningState{
-			latency:     measuredProviderLatency(r.latencyTracker, provider),
-			unavailable: runtime == nil || runtime.Get(provider) == nil,
+	names := slices.Clone(request.Models)
+	for i, name := range names {
+		if override := request.Account.ModelOverrides[name]; override != "" {
+			names[i] = override
 		}
 	}
-	candidates := make([]routing.Candidate, 0, len(routes))
-	for _, route := range routes {
-		definition, err := snapshot.Definition(route.DefinitionID)
-		if err != nil {
-			continue
-		}
-		offering, err := snapshot.Offering(route)
-		if err != nil {
-			continue
-		}
-		contextWindow := 0
-		maxDocuments := 0
-		if offering.Limits != nil {
-			if offering.Limits.ContextWindow > 0 {
-				contextWindow = boundedInt(offering.Limits.ContextWindow)
+	candidates := snapshot.PlanningCandidates(names, request.AllowAnyModelFallback || len(names) == 0)
+	providerStates := make(map[string]providerPlanningState)
+	for i := range candidates {
+		provider := candidates[i].Route.ProviderID
+		state, exists := providerStates[provider]
+		if !exists {
+			state = providerPlanningState{
+				latency:     measuredProviderLatency(r.latencyTracker, provider),
+				unavailable: runtime == nil || runtime.Get(provider) == nil,
 			}
-			// A document bound belongs to the offering, and two offerings of
-			// one model state different ones. Carrying it here is what lets the
-			// rerank path refuse a list the chosen provider would reject.
-			if offering.Limits.MaxDocuments > 0 {
-				maxDocuments = boundedInt(offering.Limits.MaxDocuments)
-			}
+			providerStates[provider] = state
 		}
-		provider := string(route.ProviderID)
-		providerState := providerStates[provider]
-		candidates = append(candidates, routing.Candidate{
-			Route: routing.Route{
-				CatalogGenerationID: route.CatalogGenerationID,
-				ModelID:             string(route.DefinitionID),
-				ProviderID:          provider,
-				ProviderModelID:     string(route.ProviderModelID),
-			},
-			Operations:      planningOperations(route.Operations),
-			Endpoints:       planningEndpoints(route.Endpoints),
-			PromptCache:     copyPlanningBool(route.PromptCache),
-			Capabilities:    modelCapabilities(definition),
-			InputModalities: modelInputModalities(definition),
-			ContextWindow:   contextWindow,
-			MaxDocuments:    maxDocuments,
-			Cost:            modelCost(offering.Pricing),
-			Latency:         providerState.latency,
-			Unavailable:     providerState.unavailable,
-		})
+		candidates[i].Latency = state.latency
+		candidates[i].Unavailable = state.unavailable
 	}
 	return candidates
-}
-
-func planningOperations(operations []starmapcatalogs.ProviderOperation) []routing.Operation {
-	result := make([]routing.Operation, len(operations))
-	for index, operation := range operations {
-		result[index] = routing.Operation(operation)
-	}
-	return result
-}
-
-func planningEndpoints(endpoints []starmapcatalogs.ProviderOfferingEndpoint) map[routing.Operation]routing.Endpoint {
-	result := make(map[routing.Operation]routing.Endpoint, len(endpoints))
-	for _, endpoint := range endpoints {
-		result[routing.Operation(endpoint.Operation)] = routing.Endpoint{
-			Protocol:  string(endpoint.Type),
-			URL:       endpoint.URL,
-			StreamURL: endpoint.StreamURL,
-		}
-	}
-	return result
-}
-
-func copyPlanningBool(value *bool) *bool {
-	if value == nil {
-		return nil
-	}
-	copyValue := *value
-	return &copyValue
 }
 
 type providerPlanningState struct {
 	latency     *time.Duration
 	unavailable bool
-}
-
-func boundedInt(value int64) int {
-	maxInt := int64(^uint(0) >> 1)
-	if value > maxInt {
-		return int(maxInt)
-	}
-	return int(value)
 }
 
 func normalizeProviders(providers []string) []string {
@@ -379,73 +354,6 @@ func wildcardAsUnrestricted(models []string) []string {
 	return append([]string(nil), models...)
 }
 
-func modelCapabilities(definition starmapcatalogs.ModelDefinition) []string {
-	features := definition.Capabilities.Features
-	if features == nil {
-		return nil
-	}
-	capabilities := make([]string, 0, 6)
-	if features.Tools || features.ToolCalls {
-		capabilities = append(capabilities, "function_calling", "tools")
-	}
-	for _, modality := range features.Modalities.Input {
-		if modality == starmapcatalogs.ModelModalityImage {
-			capabilities = append(capabilities, "vision")
-			break
-		}
-	}
-	if features.Reasoning {
-		capabilities = append(capabilities, "reasoning")
-	}
-	if features.StructuredOutputs {
-		capabilities = append(capabilities, "structured_outputs")
-	}
-	if features.Streaming {
-		capabilities = append(capabilities, "streaming")
-	}
-	return capabilities
-}
-
-// modelInputModalities projects the input modalities the catalog states for
-// one model onto the planner vocabulary. A modality the planner has no name
-// for is dropped rather than guessed, because an invented name would reject
-// every request that carries it.
-func modelInputModalities(definition starmapcatalogs.ModelDefinition) []routing.Modality {
-	features := definition.Capabilities.Features
-	if features == nil {
-		return nil
-	}
-	modalities := make([]routing.Modality, 0, len(features.Modalities.Input))
-	for _, modality := range features.Modalities.Input {
-		if planned, known := planningModality(modality); known {
-			modalities = append(modalities, planned)
-		}
-	}
-	if len(modalities) == 0 {
-		return nil
-	}
-	return modalities
-}
-
-// planningModality translates one catalog modality. Starmap records a
-// document as the pdf modality, and this boundary is the only place that
-// translation lives.
-func planningModality(modality starmapcatalogs.ModelModality) (routing.Modality, bool) {
-	switch modality {
-	case starmapcatalogs.ModelModalityText:
-		return routing.ModalityText, true
-	case starmapcatalogs.ModelModalityImage:
-		return routing.ModalityImage, true
-	case starmapcatalogs.ModelModalityAudio:
-		return routing.ModalityAudio, true
-	case starmapcatalogs.ModelModalityVideo:
-		return routing.ModalityVideo, true
-	case starmapcatalogs.ModelModalityPDF:
-		return routing.ModalityDocument, true
-	}
-	return "", false
-}
-
 // planningModalities carries the request modalities the proxy derived onto
 // the planning request. The names cross the boundary as strings, the same
 // way required capabilities do.
@@ -458,36 +366,6 @@ func planningModalities(names []string) []routing.Modality {
 		modalities = append(modalities, routing.Modality(name))
 	}
 	return modalities
-}
-
-func modelCost(pricing *starmapcatalogs.ModelPricing) *routing.TokenCost {
-	if pricing == nil || pricing.Tokens == nil {
-		return nil
-	}
-	cost := &routing.TokenCost{}
-	known := false
-	if pricing.Tokens.Input != nil {
-		cost.InputPerToken = tokenPrice(pricing.Tokens.Input)
-		known = true
-	}
-	if pricing.Tokens.Output != nil {
-		cost.OutputPerToken = tokenPrice(pricing.Tokens.Output)
-		known = true
-	}
-	if !known {
-		return nil
-	}
-	return cost
-}
-
-func tokenPrice(cost *starmapcatalogs.ModelTokenCost) float64 {
-	if cost == nil {
-		return 0
-	}
-	if cost.PerToken != 0 {
-		return cost.PerToken
-	}
-	return cost.Per1M / 1_000_000
 }
 
 func measuredProviderLatency(tracker LatencyTracker, provider string) *time.Duration {

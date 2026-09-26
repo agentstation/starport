@@ -73,7 +73,7 @@ func (c *StorageConfig) Validate() error {
 	switch c.Mode {
 	case storageModeBadger:
 		return c.Badger.Validate()
-	case "valkey":
+	case storageModeValkey:
 		return c.Valkey.Validate()
 	default:
 		return fmt.Errorf("unsupported storage mode: %s", c.Mode)
@@ -138,7 +138,7 @@ func (c *ValkeyConfig) Validate() error {
 		return fmt.Errorf("valkey URL is invalid")
 	}
 
-	if u.Scheme != "valkey" && u.Scheme != "redis" && u.Scheme != "rediss" {
+	if u.Scheme != storageModeValkey && u.Scheme != "redis" && u.Scheme != "rediss" {
 		return fmt.Errorf("invalid valkey URL scheme: %s", u.Scheme)
 	}
 

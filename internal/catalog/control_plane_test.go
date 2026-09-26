@@ -42,19 +42,10 @@ func TestRoutableSnapshotGenerationConsistency(t *testing.T) {
 }
 
 func TestCatalogActivationIsAtomic(t *testing.T) {
-	client, err := starmap.New()
+	stateA := atomicActivationState(t, "a", 101)
+	stateB := atomicActivationState(t, "b", 202)
+	plane, err := Open(&mutationSource{state: stateA})
 	require.NoError(t, err)
-
-	plane, err := Open(client)
-	require.NoError(t, err)
-
-	base := client.CurrentCatalogState()
-	stateA := base
-	stateA.GenerationID = "generation-a"
-	stateA.Sequence = 101
-	stateB := base
-	stateB.GenerationID = "generation-b"
-	stateB.Sequence = 202
 
 	valid := map[string]uint64{
 		stateA.GenerationID: stateA.Sequence,
@@ -87,12 +78,29 @@ func TestCatalogActivationIsAtomic(t *testing.T) {
 		wantSequence, ok := valid[snapshot.GenerationID()]
 		require.True(t, ok, fmt.Sprintf("unexpected generation %q", snapshot.GenerationID()))
 		require.Equal(t, wantSequence, snapshot.CatalogSequence())
+		definition, err := snapshot.Definition(catalogs.ModelDefinitionID("author/" + snapshot.GenerationID()))
+		require.NoError(t, err)
+		require.Equal(t, snapshot.GenerationID(), definition.Name)
+
 	}
 	writers.Wait()
 	close(errors)
 	for err := range errors {
 		require.NoError(t, err)
 	}
+}
+
+func atomicActivationState(t *testing.T, name string, sequence uint64) starmap.CatalogState {
+	t.Helper()
+	builder := catalogs.NewEmpty()
+	author := catalogs.Author{ID: "author", Name: "Author"}
+	require.NoError(t, builder.SetAuthor(author))
+	require.NoError(t, builder.SetAuthorModel("author", catalogs.Model{
+		ID: name, Name: name, Authors: []catalogs.Author{author},
+	}))
+	source, err := builder.Build()
+	require.NoError(t, err)
+	return starmap.CatalogState{Catalog: source, GenerationID: name, Sequence: sequence}
 }
 
 func TestUnavailableAdapterIsNotAdvertised(t *testing.T) {

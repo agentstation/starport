@@ -15,14 +15,15 @@ import (
 func TestProviderHTTPTransportContract(t *testing.T) {
 	config := ProviderConfig{Timeout: 17 * time.Second, MaxConnections: 23}
 	client := newProviderHTTPClient(config)
-	transport, ok := client.Transport.(*http.Transport)
+	dispatch, ok := client.Transport.(*dispatchTransport)
 	if !ok {
-		t.Fatalf("client transport = %T, want *http.Transport", client.Transport)
+		t.Fatalf("client transport = %T, want *dispatchTransport", client.Transport)
 	}
 
+	transport := dispatch.base
 	if transport.MaxIdleConns != config.MaxConnections ||
 		transport.MaxIdleConnsPerHost != config.MaxConnections ||
-		transport.MaxConnsPerHost != config.MaxConnections {
+		dispatch.maxConnections != config.MaxConnections || transport.MaxConnsPerHost != 0 {
 		t.Fatalf(
 			"connection limits = (%d, %d, %d), want %d",
 			transport.MaxIdleConns,
@@ -115,7 +116,7 @@ func TestConnectorPreservesCallerDeadline(t *testing.T) {
 	deadline := time.Now().Add(30 * time.Second)
 	ctx, cancel := context.WithDeadline(t.Context(), deadline)
 	defer cancel()
-	_, err = connector.Chat(ctx, testChatRequest("openai", "https://provider.invalid/chat/completions"))
+	_, err = connector.Chat(ctx, approveConnectorFixture(t, testChatRequest("openai", "https://provider.invalid/chat/completions")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +166,7 @@ func TestHTTPClientConnectionPooling(t *testing.T) {
 	done := make(chan error, 20)
 	for range 20 {
 		go func() {
-			_, err := connector.Chat(context.Background(), testChatRequest("openai", server.URL+"/chat/completions"))
+			_, err := connector.Chat(context.Background(), approveConnectorFixture(t, testChatRequest("openai", server.URL+"/chat/completions")))
 			done <- err
 		}()
 	}
@@ -198,7 +199,7 @@ func TestHTTPClientSingleAttempt(t *testing.T) {
 	}
 	defer connector.Close()
 
-	if _, err := connector.Chat(context.Background(), testChatRequest("openai", server.URL+"/chat/completions")); err == nil {
+	if _, err := connector.Chat(context.Background(), approveConnectorFixture(t, testChatRequest("openai", server.URL+"/chat/completions"))); err == nil {
 		t.Fatal("Chat() error = nil, want provider error")
 	}
 	if requests := atomic.LoadInt32(&requestCount); requests != 1 {
@@ -224,7 +225,7 @@ func TestHTTPClientTimeouts(t *testing.T) {
 	defer connector.Close()
 
 	start := time.Now()
-	_, err = connector.Chat(context.Background(), testChatRequest("anthropic", server.URL+"/messages"))
+	_, err = connector.Chat(context.Background(), approveConnectorFixture(t, testChatRequest("anthropic", server.URL+"/messages")))
 	if err == nil {
 		t.Fatal("Chat() error = nil, want timeout")
 	}

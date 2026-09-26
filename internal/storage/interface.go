@@ -20,6 +20,10 @@ const (
 var (
 	// ErrNotFound is returned when a key does not exist
 	ErrNotFound = errors.New("key not found")
+	// ErrValueTooLarge refuses a value before copying or returning its payload.
+	ErrValueTooLarge = errors.New("stored value exceeds read limit")
+	// ErrInvalidReadLimit reports a non-positive bounded read limit.
+	ErrInvalidReadLimit = errors.New("invalid storage read limit")
 	// ErrConflict is returned when a write conflict occurs (e.g., CAS mismatch)
 	ErrConflict = errors.New("write conflict")
 	// ErrInvalidKey is returned when an invalid key is provided
@@ -45,6 +49,8 @@ var (
 type KVStore interface {
 	// Basic operations
 	Get(ctx context.Context, key string) ([]byte, error)
+	// GetBounded refuses oversized values without returning partial data.
+	GetBounded(ctx context.Context, key string, maxBytes int) ([]byte, error)
 	Set(ctx context.Context, key string, value []byte) error
 	Delete(ctx context.Context, key string) error
 	Exists(ctx context.Context, key string) (bool, error)

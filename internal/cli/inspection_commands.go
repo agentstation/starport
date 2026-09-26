@@ -2,9 +2,9 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"github.com/agentstation/starmap/pkg/productpaths"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/diagnosis"
 	urfavecli "github.com/urfave/cli/v3"
@@ -35,17 +35,57 @@ func newConfigCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 		},
 	}
 	paths := &urfavecli.Command{
-		Name: "paths", Usage: "Show platform configuration and data paths",
-		OnUsageError: usageError, Flags: []urfavecli.Flag{jsonFlag()},
-		Action: func(_ context.Context, cmd *urfavecli.Command) error {
+		Name: "paths", Usage: "Show effective configuration, storage, and catalog paths",
+		OnUsageError: usageError, Flags: []urfavecli.Flag{
+			jsonFlag(),
+			&urfavecli.BoolFlag{Name: "legacy", Usage: "Inspect prior default locations for upgrade conflicts without changing files"},
+			&urfavecli.BoolFlag{Name: "files", Usage: "Show file roles, storage selection, and access requirements"},
+			&urfavecli.BoolFlag{Name: "inspect", Usage: "Include bounded filesystem metadata without opening databases"},
+			&urfavecli.IntFlag{Name: "max-entries", Value: productpaths.DefaultInspectionEntries, Usage: "Maximum visited entries with --inspect"},
+		},
+		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
 			if err := rejectArguments(cmd); err != nil {
 				return err
 			}
-			resolved, err := deps.ResolvePaths()
-			if err != nil {
-				return runtimeFailure{cause: errors.New("resolve configuration paths: platform paths could not be resolved")}
+			limit := cmd.Int("max-entries")
+			if cmd.Bool("legacy") && (cmd.Bool("files") || cmd.Bool("inspect") || cmd.IsSet("max-entries")) {
+				return usageError(ctx, cmd, fmt.Errorf("legacy cannot combine with files, inspect, or max-entries"), true)
 			}
-			if err := writePaths(cmd.Writer, resolved, cmd.Bool(configFormatJSON)); err != nil {
+			if cmd.IsSet("max-entries") && !cmd.Bool("inspect") || limit < 1 || limit > productpaths.MaximumInspectionEntries {
+				return usageError(ctx, cmd, fmt.Errorf("max-entries requires --inspect and a limit between 1 and %d", productpaths.MaximumInspectionEntries), true)
+			}
+			cfg, err := deps.LoadConfig(ctx)
+			if err != nil {
+				return runtimeFailure{cause: fmt.Errorf("load configuration paths: %w", config.OperatorError(err))}
+			}
+			if cmd.Bool("legacy") {
+				conflicts, err := cfg.LegacyPaths(ctx)
+				if err != nil {
+					return runtimeFailure{cause: err}
+				}
+				if err := writeLegacyPaths(cmd.Writer, conflicts, cmd.Bool(configFormatJSON)); err != nil {
+					return runtimeFailure{cause: err}
+				}
+				return nil
+			}
+			if cmd.Bool("files") || cmd.Bool("inspect") {
+				report, err := cfg.FileManifest(deps.Build.Version)
+				if err != nil {
+					return runtimeFailure{cause: fmt.Errorf("describe product files: %w", err)}
+				}
+				if cmd.Bool("inspect") {
+					observed, err := productpaths.InspectManifest(ctx, report, limit)
+					if err != nil {
+						return runtimeFailure{cause: fmt.Errorf("inspect product files: %w", err)}
+					}
+					report.Inspection = &observed
+				}
+				if err := writeFileManifest(cmd.Writer, report, cmd.Bool(configFormatJSON)); err != nil {
+					return runtimeFailure{cause: fmt.Errorf("write product files: %w", err)}
+				}
+				return nil
+			}
+			if err := writePaths(cmd.Writer, cfg.EffectivePaths(), cmd.Bool(configFormatJSON)); err != nil {
 				return runtimeFailure{cause: fmt.Errorf("write configuration paths: %w", err)}
 			}
 			return nil

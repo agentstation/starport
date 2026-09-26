@@ -30,11 +30,11 @@ func TestExactProviderModelIDIsOpaque(t *testing.T) {
 	connector, err := NewOpenAIConnector(ProviderConfig{BaseURL: server.URL})
 	require.NoError(t, err)
 	defer connector.Close()
-	response, err := connector.Chat(context.Background(), &ChatRequest{Credential: testAPIMaterial("test-key"),
+	response, err := connector.Chat(context.Background(), approveConnectorFixture(t, &ChatRequest{Credential: testAPIMaterial("test-key"),
 		Model:    providerModelID,
 		Messages: []Message{{Role: RoleUser, Content: "hello"}},
 		Endpoint: InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL + "/selected/chat"},
-	})
+	}))
 	require.NoError(t, err)
 	require.Equal(t, providerModelID, response.Model)
 }
@@ -60,7 +60,7 @@ func TestOfferingEndpointSelectsProtocol(t *testing.T) {
 	})
 	require.NoError(t, err)
 	defer connector.Close()
-	response, err := connector.Chat(context.Background(), &ChatRequest{Credential: testAPIMaterial("test-key"),
+	response, err := connector.Chat(context.Background(), approveConnectorFixture(t, &ChatRequest{Credential: testAPIMaterial("test-key"),
 		Model:     providerModelID,
 		Messages:  []Message{{Role: RoleUser, Content: "hello"}},
 		MaxTokens: IntPtr(8),
@@ -68,7 +68,7 @@ func TestOfferingEndpointSelectsProtocol(t *testing.T) {
 			Type: catalogs.EndpointTypeAnthropic,
 			URL:  server.URL + "/selected/anthropic",
 		},
-	})
+	}))
 	require.NoError(t, err)
 	require.Equal(t, providerModelID, response.Model)
 }

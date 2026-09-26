@@ -25,10 +25,11 @@ type StoredCredentialResolver interface {
 }
 
 type credentialPolicy struct {
-	runtime    connectors.RuntimeLease
-	storedKeys StoredCredentialResolver
-	gate       OperatorCredentialGate
-	accountID  string
+	runtime      connectors.RuntimeLease
+	storedKeys   StoredCredentialResolver
+	gate         OperatorCredentialGate
+	accountID    string
+	destinations *credentials.DestinationApprovals
 	// byokProviders gates the BYOK source per provider: nil allows every
 	// provider, an empty list none, a non-empty list only its members. A
 	// gated provider resolves as not-configured, so the policy advances to
@@ -55,13 +56,14 @@ func newCredentialPolicy(
 	runtime connectors.RuntimeLease,
 	storedKeys StoredCredentialResolver,
 	gate OperatorCredentialGate,
+	destinations *credentials.DestinationApprovals,
 ) (*credentialPolicy, error) {
 	parsedStrategy, err := keyring.ParseStrategy(string(strategy))
 	if err != nil {
 		return nil, failure.New(failure.Validation, "The provider credential strategy is invalid.", false, failure.ProviderDetails{}, err)
 	}
 	return &credentialPolicy{
-		runtime: runtime, storedKeys: storedKeys, gate: gate, accountID: accountID,
+		runtime: runtime, storedKeys: storedKeys, gate: gate, accountID: accountID, destinations: destinations,
 		byokProviders: byokProviders,
 		sources:       reachableSources(parsedStrategy, accountID, storedKeys),
 		states:        make(map[string]credentialRouteState),
@@ -179,6 +181,17 @@ func (p *credentialPolicy) resolve(
 			}
 			return credentialSelection{}, providerFailure, execution.AttemptActionFallbackRoute
 		}
+		if p.destinations != nil {
+			approved, approvalErr := p.destinations.Bind(catalogs.ProviderID(route.ProviderID), string(source), material, catalogs.ProviderOperation(route.Operation))
+			if approvalErr != nil {
+				refusal := connectors.NormalizeFailure(route.ProviderID, approvalErr)
+				if p.advance(route, refusal) {
+					return credentialSelection{}, refusal, execution.AttemptActionContinueRoute
+				}
+				return credentialSelection{}, refusal, execution.AttemptActionFallbackRoute
+			}
+			material = approved
+		}
 		execution.RecordCredential(ctx, credentialEvidence(source, material))
 		return credentialSelection{material: material, source: source}, nil, execution.AttemptActionDefault
 	}
@@ -193,6 +206,13 @@ func (p *credentialPolicy) resolve(
 	if notConfigured {
 		if source, ok := p.runtime.(connectors.AnonymousMaterialSource); ok {
 			if material, exists := source.AnonymousMaterial(route.ProviderID); exists {
+				if p.destinations != nil {
+					approved, approvalErr := p.destinations.Bind(catalogs.ProviderID(route.ProviderID), string(keyring.SourceAnonymous), material, catalogs.ProviderOperation(route.Operation))
+					if approvalErr != nil {
+						return credentialSelection{}, connectors.NormalizeFailure(route.ProviderID, approvalErr), execution.AttemptActionFallbackRoute
+					}
+					material = approved
+				}
 				// The attempt is credited to nobody, which is a different
 				// fact from an attempt whose credential went unrecorded. The
 				// owner stays empty so availability still counts the result:
@@ -295,6 +315,8 @@ func (p *credentialPolicy) advance(route routing.Route, previous *failure.Failur
 func credentialResolutionFailure(providerID string, err error) (*failure.Failure, bool) {
 	details := failure.ProviderDetails{Provider: providerID}
 	switch {
+	case credentials.IsSourceError(err, credentials.SourceErrorUnavailable), errors.Is(err, credentials.ErrMaterialExpired), errors.Is(err, credentials.ErrMaterialRevoked), errors.Is(err, keyring.ErrMaterialCapacity), errors.Is(err, keyring.ErrMaterialChanged), errors.Is(err, keyring.ErrMaterialClosed):
+		return failure.New(failure.GatewayUnavailable, "Provider credential material is temporarily unavailable.", true, details, err), false
 	case errors.Is(err, context.Canceled):
 		return failure.New(failure.Canceled, "The request was canceled.", false, details, err), false
 	case errors.Is(err, context.DeadlineExceeded):

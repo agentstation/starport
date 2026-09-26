@@ -19,6 +19,7 @@ import (
 
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
+	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/providers/keyring"
@@ -30,16 +31,17 @@ const systemInfoUnavailable = "unavailable"
 
 // AdminController handles administrative endpoints
 type AdminController struct {
-	apiKeys      apikey.Repository
-	accounts     account.Repository
-	issuer       *apikey.Issuer
-	usageRecords usage.Repository
-	fileBackend  string
-	build        BuildInfo
-	deployment   Deployment
-	webhooks     WebhookReporter
-	audit        AuditRecorder
-	events       EventEmitter
+	authorizationStatus func() authorization.Status
+	apiKeys             apikey.Repository
+	accounts            account.Repository
+	issuer              *apikey.Issuer
+	usageRecords        usage.Repository
+	fileBackend         string
+	build               BuildInfo
+	deployment          Deployment
+	webhooks            WebhookReporter
+	audit               AuditRecorder
+	events              EventEmitter
 }
 
 // BuildInfo is the provenance of the running binary. The linker stamps the
@@ -64,6 +66,9 @@ type DropCounter interface {
 // environment. Every field is a plain value or a live reader, because the
 // surface describes the deployment and not any one request.
 type Deployment struct {
+	// ResponseCache reports bounded optional response work from memory.
+	ResponseCache   func() CacheFillStatus
+	ExtractionCache func() CacheFillStatus
 	// StorageMode names the key-value store: badger or valkey.
 	StorageMode string
 	// RelationalMode names the relational twin: sqlite, postgres, or mysql.
@@ -279,6 +284,9 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	if err != nil {
+		if writePolicySizeRefusal(w, err) {
+			return
+		}
 		if isKeyValidationError(err) {
 			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 			return
@@ -502,6 +510,9 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.apiKeys.Update(ctx, apiKey, record.Revision)
 	writeAudit(ctx, h.audit, "key.update", keyID, err)
 	if err != nil {
+		if writePolicySizeRefusal(w, err) {
+			return
+		}
 		if errors.Is(err, apikey.ErrConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest, "API key changed during update")
 			return
@@ -588,11 +599,17 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 			"files_seconds":      seconds(h.deployment.FileRetention),
 			"job_assets_seconds": seconds(h.deployment.JobAssetRetention),
 		},
-		"webhooks": h.webhookSummary(),
+		"webhooks":         h.webhookSummary(),
+		"response_cache":   h.responseCacheStatus(),
+		"extraction_cache": h.extractionCacheStatus(),
 		providersField: map[string]any{
 			responseCountField: systemInfoUnavailable,
 			fieldStatus:        systemInfoUnavailable,
 		},
+	}
+
+	if h.authorizationStatus != nil {
+		info["authorization"] = h.authorizationStatus()
 	}
 
 	if err := dto.WriteJSON(w, http.StatusOK, info); err != nil {

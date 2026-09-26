@@ -16,7 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Ensure BadgerStore implements the KVStore interface
+// Verify that BadgerStore implements the KVStore interface.
 var _ KVStore = (*BadgerStore)(nil)
 
 // BadgerStore implements the KVStore interface using Badger DB
@@ -47,7 +47,7 @@ func openBadger(config BadgerConfig, readOnly bool) (*BadgerStore, error) {
 	if readOnly && config.InMemory {
 		return nil, errors.New("in-memory badger cannot open read-only")
 	}
-	// Ensure the directory exists
+	// Check or create the persistent directory.
 	if !config.InMemory {
 		if readOnly {
 			if err := badgerReadOnlyPreflight(config.Path, runtime.GOOS); err != nil {
@@ -129,7 +129,22 @@ func badgerOpenError(readOnly bool, err error) error {
 // Basic operations
 
 // Get retrieves a value by key
-func (s *BadgerStore) Get(_ context.Context, key string) ([]byte, error) {
+func (s *BadgerStore) Get(ctx context.Context, key string) ([]byte, error) {
+	return s.getBounded(ctx, key, 0)
+}
+
+// GetBounded checks the stored size before copying the value.
+func (s *BadgerStore) GetBounded(ctx context.Context, key string, maxBytes int) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, ErrInvalidReadLimit
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return s.getBounded(ctx, key, maxBytes)
+}
+
+func (s *BadgerStore) getBounded(_ context.Context, key string, maxBytes int) ([]byte, error) {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
@@ -151,11 +166,14 @@ func (s *BadgerStore) Get(_ context.Context, key string) ([]byte, error) {
 			return err
 		}
 
-		// Check if the key has expired
+		// Reject expired keys.
 		if item.IsDeletedOrExpired() {
 			return ErrNotFound
 		}
 
+		if maxBytes > 0 && item.ValueSize() > int64(maxBytes) {
+			return ErrValueTooLarge
+		}
 		value, err = item.ValueCopy(nil)
 		return err
 	})
@@ -225,7 +243,7 @@ func (s *BadgerStore) Exists(_ context.Context, key string) (bool, error) {
 			return err
 		}
 
-		// Check if the key has expired
+		// Reject expired keys.
 		if item.IsDeletedOrExpired() {
 			return ErrNotFound
 		}
@@ -292,7 +310,7 @@ func (s *BadgerStore) GetTTL(_ context.Context, key string) (time.Duration, erro
 			expTime := time.Unix(int64(expiresAt), 0) // #nosec G115 - expiresAt is always positive
 			ttl = time.Until(expTime)
 			if ttl < 0 {
-				return ErrNotFound // Key has expired
+				return ErrNotFound // The key expired.
 			}
 		}
 
@@ -315,21 +333,44 @@ func (s *BadgerStore) ExpireAt(ctx context.Context, key string, expireAt time.Ti
 		return ErrInvalidKey
 	}
 
-	// Get the current value
-	value, err := s.Get(ctx, key)
-	if err != nil {
-		return err
+	const maxRetries = 100
+	for attempt := range maxRetries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := s.db.Update(func(txn *badger.Txn) error {
+			item, err := txn.Get([]byte(key))
+			if errors.Is(err, badger.ErrKeyNotFound) {
+				return ErrNotFound
+			}
+			if err != nil {
+				return err
+			}
+			if !expireAt.After(time.Now()) {
+				return txn.Delete([]byte(key))
+			}
+			value, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			entry := badger.NewEntry([]byte(key), value)
+			entry.UserMeta = item.UserMeta()
+			entry.ExpiresAt = uint64(expireAt.Unix()) // #nosec G115 -- the future expiry has a positive Unix timestamp.
+			return txn.SetEntry(entry)
+		})
+		if !errors.Is(err, badger.ErrConflict) {
+			return err
+		}
+		backoff := time.Duration(1<<uint(attempt%10)) * time.Microsecond // #nosec G115 -- attempt modulo 10 is nonnegative.
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
-
-	// Calculate TTL
-	ttl := time.Until(expireAt)
-	if ttl <= 0 {
-		// If expiration time has passed, delete the key
-		return s.Delete(ctx, key)
-	}
-
-	// Set with new TTL
-	return s.SetWithTTL(ctx, key, value, ttl)
+	return fmt.Errorf("expire key failed after %d retries: %w", maxRetries, badger.ErrConflict)
 }
 
 // Atomic operations
@@ -396,7 +437,7 @@ func (s *BadgerStore) Increment(_ context.Context, key string, delta int64) (int
 			return newValue, nil
 		}
 
-		// Check if it's a conflict error
+		// Check for a conflict error.
 		if errors.Is(err, badger.ErrConflict) {
 			// Retry with better backoff strategy
 			backoff := time.Duration(1<<uint(i%10)) * time.Microsecond // #nosec G115
@@ -730,7 +771,7 @@ func (s *BadgerStore) Ping(ctx context.Context) error {
 	}
 	s.mu.RUnlock()
 
-	// Try a simple operation to verify the database is working
+	// Test a database write.
 	testKey := "_ping_test_" + fmt.Sprintf("%d", time.Now().UnixNano())
 	if err := s.Set(ctx, testKey, []byte("ping")); err != nil {
 		return err
@@ -776,7 +817,7 @@ func (s *BadgerStore) Backup(_ context.Context, path string) error {
 	}
 	s.mu.RUnlock()
 
-	// Ensure backup directory exists
+	// Create the backup directory if necessary.
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create backup directory: %w", err)
@@ -793,7 +834,7 @@ func (s *BadgerStore) Backup(_ context.Context, path string) error {
 		}
 	}()
 
-	// Perform backup
+	// Write the backup.
 	_, err = s.db.Backup(f, 0)
 	if err != nil {
 		return fmt.Errorf("backup failed: %w", err)

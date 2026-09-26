@@ -2,169 +2,49 @@ package catalog
 
 import (
 	"context"
-	"strings"
 
+	"github.com/agentstation/starmap/acquisition"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/pkg/sources"
 )
 
-// acquisitionCredentialProduct is the product prefix of a derived catalog
-// acquisition name. It is the gateway prefix, so a deployment names an
-// acquisition credential exactly as it names every other gateway setting.
-const acquisitionCredentialProduct = "STARPORT"
-
-// DeploymentLookup reads one deployment environment name. It is the only
-// credential source catalog acquisition reads.
+// DeploymentLookup reads deployment configuration without account or BYOK access.
 type DeploymentLookup func(name string) (string, bool)
 
-// AcquisitionResolver resolves one catalog-acquisition credential from the
-// deployment lookup alone.
-//
-// Catalog acquisition is deployment work, never account work. An account
-// credential pays a provider for that account's inference, and a shared
-// credential the operator grants pays for a group of accounts. Neither one
-// belongs to the process that reads a provider catalog, so this resolver holds
-// exactly one field: the deployment lookup. It can reach no keyring, no
-// account store, and no BYOK record, because it does not hold one.
+// AcquisitionResolver uses Starmap's deployment credential sources and policy.
 type AcquisitionResolver struct {
-	lookup DeploymentLookup
+	resolver sources.ProviderCredentialResolver
+	err      error
+	disabled bool
 }
 
-// NewAcquisitionResolver returns the deployment acquisition resolver. A nil
-// lookup resolves nothing, so every provider becomes ineligible instead of
-// silently reading another credential plane.
+// NewAcquisitionResolver creates an ephemeral acquisition resolver without reading secrets.
+// A nil lookup refuses resolution and never falls back to the process environment.
 func NewAcquisitionResolver(lookup DeploymentLookup) *AcquisitionResolver {
-	return &AcquisitionResolver{lookup: lookup}
+	return newAcquisitionResolver(context.Background(), lookup, nil)
 }
 
-// ResolveCatalog selects the first catalog-acquisition profile whose required
-// fields the deployment supplies. It returns a typed error when the deployment
-// supplies none, and the provider then stays out of the observation run.
-func (r *AcquisitionResolver) ResolveCatalog(
-	_ context.Context,
-	provider *catalogs.Provider,
-) (sources.ProviderCredentialMaterial, error) {
-	if r == nil || r.lookup == nil {
-		return sources.ProviderCredentialMaterial{}, &starmaperrors.ConfigError{
-			Component: "catalog acquisition",
-			Message:   "the deployment credential lookup is required",
-		}
+func newAcquisitionResolver(ctx context.Context, lookup DeploymentLookup, state *acquisition.CredentialPolicyState) *AcquisitionResolver {
+	disabled := lookup == nil
+	if lookup == nil {
+		lookup = func(string) (string, bool) { return "", false }
 	}
-	if provider == nil || provider.Credentials == nil {
-		return sources.ProviderCredentialMaterial{}, &starmaperrors.ValidationError{
-			Field:   "provider.credentials",
-			Message: "is required",
-		}
-	}
-	plane := provider.Credentials.CatalogAcquisition
-	fields := indexCredentialFields(provider.Credentials.Fields)
-	for _, profileID := range plane.Alternatives {
-		profile, found := findCredentialProfile(provider.Credentials.Profiles, profileID)
-		if !found {
-			continue
-		}
-		values, complete := r.resolveProfile(provider.ID, profile, fields)
-		if !complete {
-			continue
-		}
-		return sources.NewProviderCredentialMaterial(
-			profile,
-			values,
-			sources.ProviderCredentialMetadata{Version: "deployment"},
-		), nil
-	}
-	if !plane.Required {
-		return sources.NewProviderCredentialMaterial(
-			catalogs.ProviderCredentialProfile{},
-			nil,
-			sources.ProviderCredentialMetadata{Version: "deployment"},
-		), nil
-	}
-	return sources.ProviderCredentialMaterial{}, &starmaperrors.NotFoundError{
-		Resource: "catalog acquisition credential",
-		ID:       string(provider.ID),
-	}
+	resolver, err := acquisition.OpenCredentialResolver(ctx, acquisition.CredentialResolverConfig{
+		Product: acquisition.CredentialProductStarport, Lookup: lookup, State: state,
+	})
+	return &AcquisitionResolver{resolver: resolver, err: err, disabled: disabled}
 }
 
-// resolveProfile reads every field of one profile. It reports whether the
-// deployment supplied each required field.
-func (r *AcquisitionResolver) resolveProfile(
-	providerID catalogs.ProviderID,
-	profile catalogs.ProviderCredentialProfile,
-	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
-) (map[catalogs.ProviderCredentialFieldID]string, bool) {
-	values := make(map[catalogs.ProviderCredentialFieldID]string, len(profile.Fields))
-	for _, fieldID := range profile.Fields {
-		field := fields[fieldID]
-		value, found := r.readField(providerID, fieldID, field)
-		switch {
-		case found:
-			values[fieldID] = value
-		case field.Default != "":
-			values[fieldID] = field.Default
-		case field.Required:
-			return nil, false
-		}
+// ResolveCatalog resolves acquisition material without inference or account stores.
+func (r *AcquisitionResolver) ResolveCatalog(ctx context.Context, provider *catalogs.Provider) (sources.ProviderCredentialMaterial, error) {
+	if r == nil || r.disabled || r.resolver == nil && r.err == nil {
+		return sources.ProviderCredentialMaterial{}, &starmaperrors.ConfigError{Component: "catalog acquisition", Message: "credential resolver is required"}
 	}
-	return values, true
-}
-
-// readField reads one field. The derived gateway name wins, and the
-// conventional ambient names follow it in catalog order.
-func (r *AcquisitionResolver) readField(
-	providerID catalogs.ProviderID,
-	fieldID catalogs.ProviderCredentialFieldID,
-	field catalogs.ProviderCredentialField,
-) (string, bool) {
-	derived, err := catalogs.DerivedCredentialEnvironmentName(
-		acquisitionCredentialProduct, providerID, fieldID,
-	)
-	if err == nil {
-		if value, found := r.read(derived); found {
-			return value, true
-		}
+	if r.err != nil {
+		return sources.ProviderCredentialMaterial{}, r.err
 	}
-	for _, name := range field.Environment {
-		if value, found := r.read(name); found {
-			return value, true
-		}
-	}
-	return "", false
-}
-
-// read returns one non-empty deployment value.
-func (r *AcquisitionResolver) read(name string) (string, bool) {
-	if strings.TrimSpace(name) == "" {
-		return "", false
-	}
-	value, found := r.lookup(name)
-	if !found || strings.TrimSpace(value) == "" {
-		return "", false
-	}
-	return value, true
-}
-
-func indexCredentialFields(
-	fields []catalogs.ProviderCredentialField,
-) map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField {
-	index := make(map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField, len(fields))
-	for _, field := range fields {
-		index[field.ID] = field
-	}
-	return index
-}
-
-func findCredentialProfile(
-	profiles []catalogs.ProviderCredentialProfile,
-	id catalogs.ProviderCredentialProfileID,
-) (catalogs.ProviderCredentialProfile, bool) {
-	for _, profile := range profiles {
-		if profile.ID == id {
-			return profile, true
-		}
-	}
-	return catalogs.ProviderCredentialProfile{}, false
+	return r.resolver.ResolveCatalog(ctx, provider)
 }
 
 var _ sources.ProviderCredentialResolver = (*AcquisitionResolver)(nil)

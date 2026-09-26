@@ -17,6 +17,8 @@ import (
 )
 
 var (
+	// ErrAmbiguousModelName reports a retired canonical ID that also names an exact provider route.
+	ErrAmbiguousModelName = errors.New("canonical alias conflicts with a provider route")
 	// ErrCatalogSourceRequired reports a missing Starmap catalog source.
 	ErrCatalogSourceRequired = errors.New("catalog source is required")
 	// ErrCatalogRequired means that a Starmap state has no immutable catalog.
@@ -337,7 +339,7 @@ func validateCatalogState(state starmap.CatalogState) error {
 			return ErrCatalogAuthorityMismatch
 		}
 	}
-	return nil
+	return validateAliasRouteNames(state.Catalog)
 }
 
 func deriveRoutableSnapshot(
@@ -423,7 +425,7 @@ func deriveRoutableSnapshot(
 		return routes[left].ProviderModelID < routes[right].ProviderModelID
 	})
 
-	return newRoutableSnapshot(state, availabilityRevision, routes, routability), nil
+	return newRoutableSnapshot(state, availabilityRevision, routes, routability)
 }
 
 // compatibleOfferingService names the operations one offering and one adapter

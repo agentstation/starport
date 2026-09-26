@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/agentstation/starport/internal/failure"
@@ -90,6 +91,9 @@ type Tracker struct {
 	shared        KVStore
 	sharedConfig  SharedConfig
 	lastPeerFetch time.Time
+	sharedRunning atomic.Bool
+	localRecords  map[Offering]entry
+	peerExpires   map[Offering]time.Time
 
 	publishMu         sync.Mutex
 	publishedRevision uint64
@@ -117,10 +121,12 @@ func New(config Config, clock Clock, publisher Publisher) (*Tracker, error) {
 		clock = systemClock{}
 	}
 	return &Tracker{
-		config:    config,
-		clock:     clock,
-		publisher: publisher,
-		records:   make(map[Offering]*entry),
+		config:       config,
+		clock:        clock,
+		publisher:    publisher,
+		records:      make(map[Offering]*entry),
+		localRecords: make(map[Offering]entry),
+		peerExpires:  make(map[Offering]time.Time),
 	}, nil
 }
 
@@ -140,28 +146,24 @@ func (t *Tracker) Acquire(route routing.Route) bool {
 	}
 
 	t.mu.Lock()
+	now := t.clock.Now()
+	changed := t.expirePeerLocked(offering, now)
 	entry, exists := t.records[offering]
-	if !exists || entry.state == StateHealthy {
-		t.mu.Unlock()
-		return true
-	}
-
-	changed := t.refreshEntryLocked(entry, t.clock.Now())
-	admitted := false
-	if entry.state == StateHalfOpen && !entry.probeInFlight {
-		entry.probeInFlight = true
-		admitted = true
+	admitted := !exists || entry.state == StateHealthy
+	if !admitted {
+		changed = t.refreshEntryLocked(entry, now) || changed
+		if entry.state == StateHalfOpen && !entry.probeInFlight {
+			entry.probeInFlight = true
+			admitted = true
+		}
 	}
 	var snapshot Snapshot
-	var doc *sharedDocument
 	if changed {
 		snapshot = t.changedSnapshotLocked()
-		doc = t.sharedDocumentLocked()
 	}
 	t.mu.Unlock()
 	if changed {
 		t.publish(snapshot)
-		t.writeShared(doc)
 	}
 	return admitted
 }
@@ -184,28 +186,24 @@ func (t *Tracker) Release(route routing.Route) {
 }
 
 // Refresh makes expired open offerings eligible for one half-open probe and
-// merges peer state when a shared store is configured.
-func (t *Tracker) Refresh(ctx context.Context) {
+// uses only process memory. The shared worker owns peer refresh.
+func (t *Tracker) Refresh(_ context.Context) {
 	if t == nil {
 		return
 	}
-	t.mergePeerState(ctx)
 	t.mu.Lock()
 	now := t.clock.Now()
-	changed := false
+	changed := t.expirePeersLocked(now)
 	for _, entry := range t.records {
 		changed = t.refreshEntryLocked(entry, now) || changed
 	}
 	var snapshot Snapshot
-	var doc *sharedDocument
 	if changed {
 		snapshot = t.changedSnapshotLocked()
-		doc = t.sharedDocumentLocked()
 	}
 	t.mu.Unlock()
 	if changed {
 		t.publish(snapshot)
-		t.writeShared(doc)
 	}
 }
 
@@ -225,17 +223,17 @@ func (t *Tracker) RecordSuccess(route routing.Route, _ time.Duration) {
 		t.mu.Unlock()
 		return
 	}
-	if entry.state == StateHealthy && entry.consecutiveFailure == 0 && !entry.probeInFlight {
+	_, peer := t.peerExpires[offering]
+	if entry.state == StateHealthy && entry.consecutiveFailure == 0 && !entry.probeInFlight && !peer {
 		t.mu.Unlock()
 		return
 	}
 	*entry = entryValue(StateHealthy)
 	entry.updatedAt = t.clock.Now()
+	t.rememberLocalLocked(offering)
 	snapshot := t.changedSnapshotLocked()
-	doc := t.sharedDocumentLocked()
 	t.mu.Unlock()
 	t.publish(snapshot)
-	t.writeShared(doc)
 }
 
 // RecordFailure applies one normalized failure to the offering state machine.
@@ -287,15 +285,13 @@ func (t *Tracker) RecordFailure(route routing.Route, providerFailure *failure.Fa
 		}
 	}
 	var snapshot Snapshot
-	var doc *sharedDocument
 	if changed {
+		t.rememberLocalLocked(offering)
 		snapshot = t.changedSnapshotLocked()
-		doc = t.sharedDocumentLocked()
 	}
 	t.mu.Unlock()
 	if changed {
 		t.publish(snapshot)
-		t.writeShared(doc)
 	}
 }
 
@@ -313,11 +309,11 @@ func (t *Tracker) Reset(offering Offering) error {
 		return nil
 	}
 	delete(t.records, offering)
+	delete(t.peerExpires, offering)
+	t.localRecords[offering] = entry{state: StateHealthy, updatedAt: t.clock.Now()}
 	snapshot := t.changedSnapshotLocked()
-	doc := t.sharedDocumentLocked()
 	t.mu.Unlock()
 	t.publish(snapshot)
-	t.writeShared(doc)
 	return nil
 }
 

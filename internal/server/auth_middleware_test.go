@@ -149,7 +149,7 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			auth := NewAuthMiddleware(apiKeys)
+			auth := NewAuthMiddleware(apiKeys, defaultAuthAccounts(t))
 
 			// Create a test handler that checks context
 			var gotContext bool
@@ -294,7 +294,7 @@ func TestExtractAPIKey(t *testing.T) {
 func TestAuthMiddleware_RequireAnyScope(t *testing.T) {
 	apiKeys, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	auth := NewAuthMiddleware(apiKeys)
+	auth := NewAuthMiddleware(apiKeys, defaultAuthAccounts(t))
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -380,7 +380,7 @@ func TestAuthIntegrationWithConsole(t *testing.T) {
 	require.NoError(t, err)
 
 	// Now test authentication with this key
-	auth := NewAuthMiddleware(apiKeys)
+	auth := NewAuthMiddleware(apiKeys, defaultAuthAccounts(t))
 
 	// Create a test handler
 	authenticated := false

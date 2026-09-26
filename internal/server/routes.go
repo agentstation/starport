@@ -113,8 +113,8 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		})
 
 		// Models
-		r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.Models.List)
-		r.With(s.requireAnyScope("models:read")).Get("/models/{model}", s.controllers.Models.Get)
+		r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/models", s.controllers.Models.List)
+		r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/models/{model}", s.controllers.Models.Get)
 	})
 
 	// OpenRouter-compatible API (api/v1)
@@ -129,6 +129,10 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.Get("/logos/{kind}/{id}.svg", s.controllers.Logos.Get)
 			r.Get("/auth/mode", s.controllers.Auth.Mode)
 		})
+
+		// Operator diagnostics do not dispatch inference or consume account budgets.
+		r.With(s.requireAPIKey, s.requireAdmin).Get("/admin/info", s.controllers.Admin.SystemInfo)
+		r.With(s.requireAPIKey, s.requireAdmin).Get("/admin/catalog/status", s.controllers.Catalog.Status)
 
 		// Every other route requires an API key.
 		r.Group(func(r chi.Router) {
@@ -166,23 +170,24 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			})
 
 			// Models with enhanced metadata
-			r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.OpenRouterModels.List)
-			r.With(s.requireAnyScope("models:read")).Get("/models/{model}", s.controllers.OpenRouterModels.Get)
-			r.With(s.requireAnyScope("models:read")).Get("/models/{model}/endpoints", s.controllers.OpenRouterModels.GetEndpoints)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/models", s.controllers.OpenRouterModels.List)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/models/{model}", s.controllers.OpenRouterModels.Get)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/models/{model}/endpoints", s.controllers.OpenRouterModels.GetEndpoints)
 
 			// Providers metadata
-			r.With(s.requireAnyScope("models:read")).Get("/providers", s.controllers.Providers.List)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/providers", s.controllers.Providers.List)
 
 			// Catalog authors
-			r.With(s.requireAnyScope("models:read")).Get("/authors", s.controllers.Authors.List)
-			r.With(s.requireAnyScope("models:read")).Get("/authors/{author}", s.controllers.Authors.Get)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/authors", s.controllers.Authors.List)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/authors/{author}", s.controllers.Authors.Get)
 
 			// The safe catalog surface. It serves the allowlisted summary
 			// alone: no source address, no publication chain, no lease, and
 			// no failure reason. The operational view sits behind the admin
 			// scope at /api/v1/admin/catalog/status.
-			r.With(s.requireAnyScope("models:read")).Get("/catalog", s.controllers.Catalog.Summary)
-			r.With(s.requireAnyScope("models:read")).Get("/catalog/changes", s.controllers.Catalog.Changes)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/catalog", s.controllers.Catalog.Summary)
+			r.With(s.requireAnyScope("models:read")).Get("/catalog/discovery", s.controllers.Discovery.List)
+			r.With(s.requireAnyScope("models:read"), s.requireCatalogDisclosure).Get("/catalog/changes", s.controllers.Catalog.Changes)
 
 			// Shared credentials: the operator shares provider credentials
 			// with the deployment's accounts. This needs the admin scope and
@@ -320,7 +325,6 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					})
 
 					// System information
-					r.Get("/info", s.controllers.Admin.SystemInfo)
 					r.Get("/metrics", s.controllers.Admin.Metrics)
 					// The webhook summary: where deliveries go, what they
 					// carry, and what never delivered.
@@ -336,7 +340,6 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					// The catalog operations surface. The refresh accepts
 					// work and answers with the run that carries it, so a
 					// long acquisition never rides one request.
-					r.Get("/catalog/status", s.controllers.Catalog.Status)
 					r.Post("/catalog/refresh", s.controllers.Catalog.Refresh)
 					r.Get("/catalog/refreshes/{run_id}", s.controllers.Catalog.RefreshStatus)
 					r.Delete("/catalog/refreshes/{run_id}", s.controllers.Catalog.CancelRefresh)

@@ -100,7 +100,9 @@ func TestSQLConfigValidatesConnectModes(t *testing.T) {
 // development gateway leaves no file behind.
 func TestConfigureDevelopmentRuntimeSelectsInMemorySQL(t *testing.T) {
 	cfg := &Config{}
-	cfg.ConfigureDevelopmentRuntime()
+	if err := cfg.ConfigureDevelopmentRuntime(); err != nil {
+		t.Fatal(err)
+	}
 	if err := cfg.Storage.SQL.Validate(); err != nil {
 		t.Fatalf("development SQL settings invalid: %v", err)
 	}
@@ -116,7 +118,9 @@ func TestConfigureDevelopmentRuntimeSelectsInMemorySQL(t *testing.T) {
 func TestConfigureDevelopmentRuntimeMarksTheLocalTokenReadOnly(t *testing.T) {
 	cfg := &Config{}
 	cfg.Security.LocalTokenPath = "/somewhere/data/local-admin-token.json"
-	cfg.ConfigureDevelopmentRuntime()
+	if err := cfg.ConfigureDevelopmentRuntime(); err != nil {
+		t.Fatal(err)
+	}
 	if cfg.Security.LocalTokenPath != "/somewhere/data/local-admin-token.json" {
 		t.Errorf("development local token path = %q, want the loader's path preserved", cfg.Security.LocalTokenPath)
 	}

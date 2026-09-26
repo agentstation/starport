@@ -60,7 +60,7 @@ func testPlacedMaterial(
 	return credentials.NewMaterial(
 		profile,
 		map[catalogs.ProviderCredentialFieldID]string{"api-key": value},
-		credentials.MaterialMetadata{Version: "test"},
+		credentials.MaterialMetadata{Version: "test", Handle: "opaque-handle"},
 	)
 }
 
@@ -76,7 +76,7 @@ func testGoogleDefaultMaterial(value string) credentials.Material {
 	return credentials.NewMaterial(
 		profile,
 		map[catalogs.ProviderCredentialFieldID]string{"access-token": value},
-		credentials.MaterialMetadata{Version: "test"},
+		credentials.MaterialMetadata{Version: "test", Handle: "opaque-handle"},
 	)
 }
 
@@ -86,7 +86,7 @@ func testNoAuthenticationMaterial() credentials.Material {
 			ID: "public", Primitive: catalogs.ProviderAuthenticationNone,
 		},
 		nil,
-		credentials.MaterialMetadata{Version: "test"},
+		credentials.MaterialMetadata{Version: "test", Handle: "opaque-handle"},
 	)
 }
 
@@ -145,11 +145,11 @@ func TestConcurrentRequestsUseOnlySelectedCredentialMaterial(t *testing.T) {
 		go func() {
 			defer group.Done()
 			model := fmt.Sprintf("%d", index)
-			_, requestErr := connector.Chat(context.Background(), &ChatRequest{
+			_, requestErr := connector.Chat(context.Background(), approveConnectorFixture(t, &ChatRequest{
 				Model: model, Messages: []Message{{Role: RoleUser, Content: "hello"}},
 				Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL},
 				Credential: testAPIMaterial("token-" + model),
-			})
+			}))
 			if requestErr != nil {
 				t.Errorf("chat %s: %v", model, requestErr)
 			}

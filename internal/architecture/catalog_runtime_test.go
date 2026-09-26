@@ -1,7 +1,6 @@
 package architecture
 
 import (
-	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -95,8 +94,13 @@ func TestTransportAuthenticationRegistriesUsePrimitives(t *testing.T) {
 			ID: "aws", Primitive: catalogs.ProviderAuthenticationAWSDefault,
 		},
 		nil,
-		credentials.MaterialMetadata{Version: "test"},
+		credentials.MaterialMetadata{Version: "test", Handle: "primitive-test"},
 	)
-	err = authentication.Apply(material, request)
-	require.True(t, errors.Is(err, providerauth.ErrPrimitiveUnsupported))
+	require.ErrorIs(t, authentication.Apply(material, request), credentials.ErrDestinationUnapproved)
+	identity := credentials.DestinationIdentity{Provider: "acme", Role: "fixture", Handle: "primitive-test"}
+	operation := catalogs.ProviderOperationChatCompletions
+	grant, err := credentials.NewDestinationGrant(identity, material.Profile(), []credentials.Destination{{Operation: operation, Method: request.Method, URL: request.URL.String()}})
+	require.NoError(t, err)
+	material = material.WithDestinationGrant(grant, identity, operation)
+	require.ErrorIs(t, authentication.Apply(material, request), providerauth.ErrPrimitiveUnsupported)
 }

@@ -340,7 +340,7 @@ func validProductionConfig(t testing.TB) *config.Config {
 			MaxSize: 100, MaxBackups: 3, MaxAge: 7,
 		},
 		Catalog: testCatalogConfig(),
-		Cache:   config.CacheConfig{Enabled: false},
+		Cache:   config.CacheConfig{Enabled: false, ChatEnabled: true, EmbeddingsEnabled: true, ModelsEnabled: true, ProvidersEnabled: true, ExtractionsEnabled: true},
 		Console: config.ConsoleConfig{},
 		// The loader always resolves a path for the filesystem backend, so a
 		// production configuration always carries one.

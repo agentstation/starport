@@ -10,6 +10,7 @@ import (
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/disclosure"
 	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/inference"
@@ -282,12 +283,11 @@ func requiredFeatures(req *ChatCompletionRequest, modalities []string) []string 
 	return features
 }
 
-// modalityRefusal converts a planner modality refusal into a caller-facing
-// validation error. Every other routing failure is a gateway or provider
-// condition and answers 503, but a model that cannot read the media the
-// caller sent is a caller mistake, and a retry against the same model will
-// fail the same way.
-func modalityRefusal(err error) error {
+// planningRefusal maps unsupported operations and modalities to caller errors.
+func planningRefusal(err error) error {
+	if errors.Is(err, routing.ErrOperationUnsupported) {
+		return &ValidationError{Field: fieldModel, Message: err.Error()}
+	}
 	if !errors.Is(err, routing.ErrModalityUnsupported) {
 		return nil
 	}
@@ -380,7 +380,13 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 	// Route the request with fallback
 	result, err := p.router.RouteWithFallback(ctx, routingReq)
 	if err != nil {
-		if refusal := modalityRefusal(err); refusal != nil {
+		if errors.Is(err, runtimecatalog.ErrModelNotCatalogued) {
+			return nil, err
+		}
+		if errors.Is(err, router.ErrNoModelsAvailable) {
+			return nil, &RoutingError{Model: req.Request.Model, Reason: "no models available for routing", Err: err}
+		}
+		if refusal := planningRefusal(err); refusal != nil {
 			return nil, refusal
 		}
 		return nil, &RoutingError{
@@ -496,7 +502,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 
 	stream, err := p.router.RouteStream(ctx, routingReq)
 	if err != nil {
-		if refusal := modalityRefusal(err); refusal != nil {
+		if refusal := planningRefusal(err); refusal != nil {
 			return nil, refusal
 		}
 		return nil, &RoutingError{
@@ -543,9 +549,7 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 		AccountID:         req.AccountID,
 	})
 	if err != nil {
-		return nil, &RoutingError{
-			Model: req.Request.Model, Reason: "failed to route embedding request", Err: err,
-		}
+		return nil, routeFailure(req.Request.Model, err)
 	}
 	response := &EmbeddingsResponse{
 		Response:         result.Response,
@@ -562,7 +566,7 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 }
 
 // ListModels returns models from one retained routable catalog generation.
-func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
+func (p *proxy) ListModels(ctx context.Context) (response *ModelsResponse, err error) {
 	if p == nil || p.registry == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
 	}
@@ -573,9 +577,20 @@ func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
 	if owned {
 		defer runtime.Release()
 	}
-	snapshot := runtime.Snapshot()
+	snapshot := discoverySnapshot(ctx, runtime)
 	if snapshot == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
+	}
+	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+		return nil, refusal
+	}
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
+	if policy, ok := disclosure.FromContext(ctx); ok {
+		return &ModelsResponse{Object: "list", Data: view.ModelsForViewer(snapshot, policy)}, nil
 	}
 	return modelsResponseFromSnapshot(snapshot), nil
 }
@@ -585,7 +600,7 @@ func modelsResponseFromSnapshot(snapshot *runtimecatalog.RoutableSnapshot) *Mode
 }
 
 // ListProviders returns available provider information
-func (p *proxy) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
+func (p *proxy) ListProviders(ctx context.Context) (response *ProvidersResponse, err error) {
 	runtime, owned, err := p.acquireRuntime(ctx)
 	if err != nil {
 		return nil, connectors.ErrRuntimeUnavailable
@@ -593,43 +608,76 @@ func (p *proxy) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
 	if owned {
 		defer runtime.Release()
 	}
-	return &ProvidersResponse{Providers: providerInfosFromRuntime(runtime)}, nil
+	snapshot := discoverySnapshot(ctx, runtime)
+	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+		return nil, refusal
+	}
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
+	if policy, ok := disclosure.FromContext(ctx); ok {
+		return &ProvidersResponse{Providers: view.ProvidersForViewer(snapshot, runtime.RequiresAuthentication, policy)}, nil
+	}
+	return &ProvidersResponse{Providers: view.Providers(snapshot, runtime.RequiresAuthentication)}, nil
 }
 
 // ListAuthors returns catalog author information
-func (p *proxy) ListAuthors(ctx context.Context) (*AuthorsResponse, error) {
+func (p *proxy) ListAuthors(ctx context.Context) (response *AuthorsResponse, err error) {
 	snapshot, release, err := p.acquireSnapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
+	if policy, ok := disclosure.FromContext(ctx); ok {
+		return &AuthorsResponse{Authors: view.AuthorsForViewer(snapshot, policy)}, nil
+	}
 	return &AuthorsResponse{Authors: view.Authors(snapshot)}, nil
 }
 
 // GetAuthor returns one catalog author by ID
-func (p *proxy) GetAuthor(ctx context.Context, authorID string) (*AuthorInfo, error) {
+func (p *proxy) GetAuthor(ctx context.Context, authorID string) (response *AuthorInfo, err error) {
 	snapshot, release, err := p.acquireSnapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
 	author, ok := view.AuthorByID(snapshot, authorID)
+	if policy, scoped := disclosure.FromContext(ctx); scoped {
+		author, ok = view.AuthorByIDForViewer(snapshot, authorID, policy)
+	}
 	if !ok {
-		return nil, &ProviderError{Code: "not_found", Message: "Author not found"}
+		return nil, &ProviderError{Code: resourceNotFoundCode, Message: "Author not found"}
 	}
 	return &author, nil
 }
 
 // GetLogo returns the catalog-carried SVG brand mark for one provider or author.
-func (p *proxy) GetLogo(ctx context.Context, kind view.LogoKind, id string) ([]byte, error) {
+func (p *proxy) GetLogo(ctx context.Context, kind view.LogoKind, id string) (response []byte, err error) {
 	snapshot, release, err := p.acquireSnapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
 	svg, ok := view.Logo(snapshot, kind, id)
 	if !ok {
-		return nil, &ProviderError{Code: "not_found", Message: "Logo not found"}
+		return nil, &ProviderError{Code: resourceNotFoundCode, Message: "Logo not found"}
 	}
 	return svg, nil
 }
@@ -650,14 +698,11 @@ func (p *proxy) acquireSnapshot(ctx context.Context) (*runtimecatalog.RoutableSn
 		release()
 		return nil, nil, runtimecatalog.ErrCatalogRequired
 	}
-	return snapshot, release, nil
-}
-
-func providerInfosFromRuntime(runtime connectors.RuntimeLease) []ProviderInfo {
-	if runtime == nil {
-		return nil
+	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+		release()
+		return nil, nil, refusal
 	}
-	return view.Providers(runtime.Snapshot(), runtime.RequiresAuthentication)
+	return snapshot, release, nil
 }
 
 func cacheTokenPrices(snapshot *runtimecatalog.RoutableSnapshot, modelID string) (float64, float64, bool) {
@@ -692,7 +737,7 @@ func modelTokenPrice(cost *starmapcatalogs.ModelTokenCost) float64 {
 }
 
 // GetModelEndpoints returns provider endpoints for a specific model
-func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error) {
+func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (response *ModelEndpointsResponse, err error) {
 	if p == nil || p.registry == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
 	}
@@ -703,14 +748,39 @@ func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEn
 	if owned {
 		defer runtime.Release()
 	}
-	snapshot := runtime.Snapshot()
+	snapshot := discoverySnapshot(ctx, runtime)
 	if snapshot == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
+	}
+	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+		return nil, refusal
+	}
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
+	if err := checkEndpointDisclosure(ctx, snapshot, modelID); err != nil {
+		return nil, err
+	}
+	if policy, ok := disclosure.FromContext(ctx); ok {
+		return &ModelEndpointsResponse{Model: modelID, Endpoints: view.EndpointsForViewer(snapshot, modelID, policy)}, nil
 	}
 	return &ModelEndpointsResponse{
 		Model:     modelID,
 		Endpoints: view.Endpoints(snapshot, modelID),
 	}, nil
+}
+
+func checkEndpointDisclosure(ctx context.Context, snapshot *runtimecatalog.RoutableSnapshot, modelID string) error {
+	name, valid := snapshot.ResolveAlias(modelID)
+	if !valid || !snapshot.Names(name) {
+		return &ProviderError{Code: resourceNotFoundCode, Message: "Model not found"}
+	}
+	if policy, scoped := disclosure.FromContext(ctx); scoped && !policy.AllowsName(name) {
+		return &ProviderError{Code: resourceNotFoundCode, Message: "Model not found"}
+	}
+	return nil
 }
 
 func (p *proxy) acquireRuntime(

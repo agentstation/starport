@@ -102,6 +102,10 @@ test: ## Run all tests
 	@echo "Running tests..."
 	$(GO) test $(GOFLAGS) ./...
 
+.PHONY: test-authorization-capacity
+test-authorization-capacity: ## Measure authorization heap during concurrent tenant churn
+	TEST_AUTHORIZATION_CAPACITY=1 $(GO) test -json -race -count=1 -timeout 3m -run '^TestAuthorizationTenantChurnCapacity$$' ./internal/authorization
+
 .PHONY: tests
 tests: test ## Alias for test
 
@@ -128,8 +132,8 @@ test-integration: ## Run Valkey integration tests with Docker Compose
 		trap '$(INTEGRATION_COMPOSE) down --volumes --remove-orphans' EXIT INT TERM; \
 		$(INTEGRATION_COMPOSE) up -d --wait valkey; \
 		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/storage -run 'Test(Valkey|KVStoreContract)'; \
-		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/cache -run TestValkey; \
-		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/app -run TestAppWithValkey; \
+		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) TEST_SHARED_CACHE_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/cache -run '^TestSharedCache'; \
+		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) TEST_SHARED_CACHE_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/app -run 'Test(AppWithValkey|SharedCacheCompositionUsesSeparateService)'; \
 		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v \
 			./internal/credentials ./internal/apikey ./internal/presets ./internal/ratelimit \
 			-run RepositoryContract

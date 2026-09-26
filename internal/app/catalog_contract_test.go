@@ -88,10 +88,9 @@ func TestUnsupportedCatalogPrimitivesRemainUnavailable(t *testing.T) {
 	})
 
 	t.Run("authentication", func(t *testing.T) {
-		builder, err := starmap.EmbeddedBuilder()
+		client, err := starmap.New()
 		require.NoError(t, err)
-		catalog, err := builder.Build()
-		require.NoError(t, err)
+		catalog := client.Catalog()
 		provider, err := catalog.Provider(catalogs.ProviderIDOpenAI)
 		require.NoError(t, err)
 		provider.Credentials.Fields = append(provider.Credentials.Fields, catalogs.ProviderCredentialField{

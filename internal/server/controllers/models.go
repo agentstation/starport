@@ -8,6 +8,7 @@ import (
 
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/protocol/openrouter"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/server/dto"
 )
@@ -67,12 +68,20 @@ func (h *ModelsController) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// URL decode provider-scoped model IDs that contain an escaped slash.
-	modelID, err := url.QueryUnescape(modelID)
+	modelID, err := url.PathUnescape(modelID)
 	if err != nil {
 		h.writeInvalidRequest(w, "Invalid model ID")
 		return
 	}
 
+	if lease := connectors.RuntimeLeaseFromContext(ctx); lease != nil {
+		var valid bool
+		modelID, valid = lease.Snapshot().ResolveAlias(modelID)
+		if !valid {
+			h.writeError(w, &proxy.ProviderError{Code: errorCodeNotFound, Message: "Model not found"})
+			return
+		}
+	}
 	// Get all models
 	resp, err := h.service.ListModels(ctx)
 	if err != nil {
@@ -107,7 +116,7 @@ func (h *ModelsController) GetEndpoints(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// URL decode the model ID
-	modelID, err := url.QueryUnescape(modelID)
+	modelID, err := url.PathUnescape(modelID)
 	if err != nil {
 		h.writeInvalidRequest(w, "Invalid model ID")
 		return

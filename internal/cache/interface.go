@@ -1,5 +1,4 @@
-// Package cache provides a multi-layer caching system for LLM responses
-// with in-memory and persistent storage backends.
+// Package cache owns optional local and shared byte caches.
 package cache
 
 import (
@@ -7,46 +6,15 @@ import (
 	"time"
 )
 
-// Cache defines the interface for the caching system.
-// It provides a multi-layer cache with in-memory (hot) and persistent (cold) storage.
-type Cache interface {
-	// Get retrieves a value from the cache.
-	// Returns the value and a boolean indicating if it was found.
-	Get(ctx context.Context, key string) ([]byte, bool, error)
-
-	// Set stores a value in the cache with a TTL.
-	// A zero TTL means the item never expires.
-	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
-
-	// Delete removes a value from the cache.
-	Delete(ctx context.Context, key string) error
-
-	// Exists checks if a key exists in the cache.
-	Exists(ctx context.Context, key string) (bool, error)
-
-	// GetMulti retrieves multiple values from the cache.
-	// Returns a map of key to value for found items.
-	GetMulti(ctx context.Context, keys []string) (map[string][]byte, error)
-
-	// SetMulti stores multiple values in the cache with a TTL.
-	SetMulti(ctx context.Context, items map[string][]byte, ttl time.Duration) error
-
-	// Invalidate removes all items matching the pattern.
-	// Pattern supports wildcards: * matches any sequence of characters.
-	Invalidate(ctx context.Context, pattern string) error
-
-	// Stats returns cache statistics.
-	Stats() Stats
-
-	// Warm pre-loads the cache with frequently accessed data.
-	Warm(ctx context.Context, keys []string) error
-
-	// Close gracefully shuts down the cache.
-	Close() error
-}
-
 // Stats contains cache performance metrics.
 type Stats struct {
+	RetainedEntries int64  `json:"retained_entries,omitzero"`
+	RetainedBytes   int64  `json:"retained_bytes,omitzero"`
+	ActiveFills     int64  `json:"active_fills,omitzero"`
+	DroppedFills    uint64 `json:"dropped_fills,omitzero"`
+	FailedFills     uint64 `json:"failed_fills,omitzero"`
+	CompletedFills  uint64 `json:"completed_fills,omitzero"`
+
 	// Hits is the number of cache hits
 	Hits uint64 `json:"hits"`
 	// Misses is the number of cache misses
@@ -65,72 +33,11 @@ type Stats struct {
 	SizeInBytes int64 `json:"size_in_bytes"`
 }
 
-// Config represents cache configuration
-type Config struct {
-	// MaxSize is the maximum number of items in the in-memory cache
-	MaxSize int64 `env:"MAX_SIZE,default=10000"`
-	// MaxSizeInMB is the maximum memory usage in MB for the in-memory cache
-	MaxSizeInMB int64 `env:"MAX_SIZE_MB,default=256"`
-	// DefaultTTL is the default TTL for cached items
-	DefaultTTL time.Duration `env:"DEFAULT_TTL,default=1h"`
-	// EnableMetrics enables detailed metrics collection
-	EnableMetrics bool `env:"ENABLE_METRICS,default=true"`
-	// WarmupKeys is a list of keys to pre-load on startup
-	WarmupKeys []string `env:"WARMUP_KEYS"`
-}
-
-// Policy defines caching policies for different types of data
-type Policy struct {
-	// TTL is the time-to-live for this type of data
-	TTL time.Duration
-	// MaxSize is the maximum size in bytes for cacheable items
-	MaxSize int64
-	// Compress indicates whether to compress the data
-	Compress bool
-	// SkipCache indicates whether to skip caching entirely
-	SkipCache bool
-}
-
-// PolicyType represents different types of cacheable data
-type PolicyType string
-
-const (
-	// PolicyTypeChatCompletion is for chat completion responses
-	PolicyTypeChatCompletion PolicyType = "chat_completion"
-	// PolicyTypeEmbedding is for embedding responses
-	PolicyTypeEmbedding PolicyType = "embedding"
-	// PolicyTypeModel is for model list responses
-	PolicyTypeModel PolicyType = "model"
-	// PolicyTypeProvider is for provider metadata
-	PolicyTypeProvider PolicyType = "provider"
-)
-
-// DefaultPolicies returns the default caching policies
-func DefaultPolicies() map[PolicyType]Policy {
-	return map[PolicyType]Policy{
-		PolicyTypeChatCompletion: {
-			TTL:       1 * time.Hour,
-			MaxSize:   1024 * 1024, // 1MB
-			Compress:  true,
-			SkipCache: false,
-		},
-		PolicyTypeEmbedding: {
-			TTL:       24 * time.Hour,
-			MaxSize:   512 * 1024, // 512KB
-			Compress:  true,
-			SkipCache: false,
-		},
-		PolicyTypeModel: {
-			TTL:       1 * time.Hour,
-			MaxSize:   256 * 1024, // 256KB
-			Compress:  false,
-			SkipCache: false,
-		},
-		PolicyTypeProvider: {
-			TTL:       6 * time.Hour,
-			MaxSize:   128 * 1024, // 128KB
-			Compress:  false,
-			SkipCache: false,
-		},
-	}
+// ResponseStore owns optional response bytes and their lifecycle.
+// Blocking operations must honor context cancellation.
+type ResponseStore interface {
+	Get(context.Context, string) ([]byte, bool, error)
+	Set(context.Context, string, []byte, time.Duration) error
+	Stats() Stats
+	Close() error
 }

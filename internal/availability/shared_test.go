@@ -93,10 +93,11 @@ func TestSharedStoreConvergesTwoTrackers(t *testing.T) {
 	for range 3 {
 		first.RecordFailure(route, offeringFailure(), time.Second)
 	}
+	first.exchangeShared(t.Context())
 	require.False(t, first.Acquire(route), "the failing replica opens its own breaker")
 	require.True(t, second.Acquire(route), "the peer has not read shared state yet")
 
-	second.Refresh(context.Background())
+	second.exchangeShared(t.Context())
 	require.False(t, second.Acquire(route), "the peer adopts the open breaker on refresh")
 	record := second.Snapshot().Records[0]
 	require.Equal(t, StateOpen, record.State)
@@ -119,9 +120,10 @@ func TestLocalOnlyTrackerKeepsProcessState(t *testing.T) {
 	for range 3 {
 		first.RecordFailure(route, offeringFailure(), time.Second)
 	}
+	first.exchangeShared(t.Context())
 	require.False(t, first.Acquire(route))
 
-	second.Refresh(context.Background())
+	second.exchangeShared(t.Context())
 	require.True(t, second.Acquire(route), "a local-only tracker must not observe a peer breaker")
 	require.Empty(t, second.Snapshot().Records)
 }
@@ -138,13 +140,14 @@ func TestLocalStateWinsRecencyConflicts(t *testing.T) {
 	for range 3 {
 		first.RecordFailure(route, offeringFailure(), time.Second)
 	}
+	first.exchangeShared(t.Context())
 
 	// The peer proved the offering healthy after the breaker opened.
 	second.RecordFailure(route, offeringFailure(), time.Second)
 	clock.Advance(time.Second)
 	second.RecordSuccess(route, time.Second)
 
-	second.Refresh(context.Background())
+	second.exchangeShared(t.Context())
 	require.True(t, second.Acquire(route), "the newer local success outranks the older peer breaker")
 	require.Equal(t, StateHealthy, second.Snapshot().Records[0].State)
 }
@@ -159,16 +162,17 @@ func TestPeerReadsAreBoundedByTheRefreshInterval(t *testing.T) {
 	second := sharedTracker(t, clock, store, "replica-b")
 	route := sharedTestRoute()
 
-	second.Refresh(context.Background())
+	second.exchangeShared(t.Context())
 	for range 3 {
 		first.RecordFailure(route, offeringFailure(), time.Second)
 	}
+	first.exchangeShared(t.Context())
 
-	second.Refresh(context.Background())
+	second.exchangeShared(t.Context())
 	require.True(t, second.Acquire(route), "a refresh inside the interval must not read peers")
 
 	clock.Advance(DefaultSharedRefreshInterval)
-	second.Refresh(context.Background())
+	second.exchangeShared(t.Context())
 	require.False(t, second.Acquire(route), "the refresh after the interval adopts the peer breaker")
 }
 

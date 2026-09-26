@@ -18,6 +18,7 @@ import (
 	"github.com/agentstation/starport/internal/providers"
 	providerauth "github.com/agentstation/starport/internal/providers/auth"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/registry"
 )
 
@@ -37,7 +38,7 @@ func TestSyntheticCatalogProviderInferenceContract(t *testing.T) {
 	material := credentials.NewMaterial(
 		profile,
 		map[catalogs.ProviderCredentialFieldID]string{"api-key": "acme-secret"},
-		credentials.MaterialMetadata{Version: "synthetic"},
+		credentials.MaterialMetadata{Version: "synthetic", Handle: "synthetic-provider"},
 	)
 	source := appStaticMaterialSource{material: material}
 
@@ -84,6 +85,9 @@ func TestSyntheticCatalogProviderInferenceContract(t *testing.T) {
 	require.NoError(t, err)
 	resolved, err := runtimeRegistry.ResolveMaterial(t.Context(), "acme")
 	require.NoError(t, err)
+	identity := credentials.DestinationIdentity{Provider: provider.ID, Role: string(keyring.SourceEnvironment), Handle: resolved.Handle()}
+	grant, err := providers.CompileDestinationGrant(provider, identity, profile.ID, "", nil)
+	require.NoError(t, err)
 
 	routes := plane.Current().RoutesForProvider("acme")
 	chatRoute := requireSyntheticRoute(t, routes, "opaque/chat@001", catalogs.ProviderOperationChatCompletions)
@@ -93,7 +97,7 @@ func TestSyntheticCatalogProviderInferenceContract(t *testing.T) {
 		Model:      string(chatRoute.ProviderModelID),
 		Messages:   []connectors.Message{{Role: connectors.RoleUser, Content: "hello"}},
 		Endpoint:   connectors.InferenceEndpoint{Type: chatEndpoint.Type, URL: chatEndpoint.URL},
-		Credential: resolved,
+		Credential: resolved.WithDestinationGrant(grant, identity, catalogs.ProviderOperationChatCompletions),
 	}
 	response, err := connector.Chat(t.Context(), chatRequest)
 	require.NoError(t, err)
@@ -114,7 +118,7 @@ func TestSyntheticCatalogProviderInferenceContract(t *testing.T) {
 	embedding, err := connector.Embeddings(t.Context(), &connectors.EmbeddingsRequest{
 		Model: string(embeddingRoute.ProviderModelID), Input: "hello",
 		Endpoint:   connectors.InferenceEndpoint{Type: embeddingEndpoint.Type, URL: embeddingEndpoint.URL},
-		Credential: resolved,
+		Credential: resolved.WithDestinationGrant(grant, identity, catalogs.ProviderOperationEmbeddings),
 	})
 	require.NoError(t, err)
 	require.Equal(t, "opaque/embed@002", embedding.Model)
@@ -127,12 +131,13 @@ func (s syntheticCatalogSource) CurrentCatalogState() starmap.CatalogState { ret
 
 func syntheticInferenceCatalog(t *testing.T, baseURL string) *catalogs.Catalog {
 	t.Helper()
-	baselineBuilder, err := starmap.EmbeddedBuilder()
+	client, err := starmap.New()
 	require.NoError(t, err)
-	baseline, err := baselineBuilder.Build()
-	require.NoError(t, err)
-	builder, err := catalogs.NewBuilderFrom(baseline)
-	require.NoError(t, err)
+	baseline := client.Catalog()
+	builder := catalogs.NewEmpty()
+	for _, author := range baseline.Authors().List() {
+		require.NoError(t, builder.SetAuthor(author))
+	}
 
 	provider, err := baseline.Provider(catalogs.ProviderIDOpenAI)
 	require.NoError(t, err)
@@ -142,6 +147,12 @@ func syntheticInferenceCatalog(t *testing.T, baseURL string) *catalogs.Catalog {
 	embeddingSource := provider.Models["text-embedding-3-small"]
 	require.NotNil(t, embeddingSource)
 	embeddingModel := catalogs.DeepCopyModel(*embeddingSource)
+	// Copy only the two definitions. The fixture owns no publication history.
+	for _, record := range baseline.AuthoredModels() {
+		if record.ID() == chatModel.ModelRef || record.ID() == embeddingModel.ModelRef {
+			require.NoError(t, builder.SetAuthorModel(record.AuthorID, record.Model))
+		}
+	}
 	provider.ID = "acme"
 	provider.Aliases = nil
 	provider.Name = "Acme Models"

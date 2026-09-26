@@ -67,6 +67,7 @@ func TestNoAuthProviderRegistersWithoutMaterial(t *testing.T) {
 		found = true
 		require.False(t, activation.RequiresAuth)
 		require.False(t, activation.Anonymous.Empty())
+		require.Equal(t, string(activation.ProviderID), activation.Anonymous.Handle())
 	}
 	require.True(t, found)
 }

@@ -213,7 +213,7 @@ func TestReconcilerCredentialDetailCarriesSourceError(t *testing.T) {
 	states := &credentialStateCapture{}
 	var fail atomic.Bool
 	sourceErr := credentials.NewSourceError(
-		credentials.SourceErrorDenied,
+		credentials.SourceErrorUnavailable,
 		credentials.ReferenceBackendEnvironment,
 	)
 	resolver := &reconcilerTestResolver{resolve: func(
@@ -253,6 +253,7 @@ func TestReconcilerCredentialDetailCarriesSourceError(t *testing.T) {
 	)
 
 	// A failure with nothing configured carries the source error itself.
+	sourceErr = credentials.NewSourceError(credentials.SourceErrorDenied, credentials.ReferenceBackendEnvironment)
 	deniedStates := &credentialStateCapture{}
 	deniedResolver := &reconcilerTestResolver{resolve: func(
 		context.Context,

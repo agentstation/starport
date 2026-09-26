@@ -277,8 +277,14 @@ immutable generation records. The Starmap subscriber advances the verified
 remote head only after protocol and payload verification. Starport advances
 the accepted head only after it constructs and validates the complete catalog,
 connector registry, credential projection, routing view, and cache identity.
-The process publishes that candidate atomically. A rejected candidate leaves
-the accepted head and live runtime unchanged.
+
+The registry reserves one of four runtime generation slots before durable acceptance.
+The process publishes the complete candidate atomically.
+A rejected candidate retains accepted metadata. Current authority still controls new attempts.
+
+The catalog snapshot holds static candidates and definition/offering indexes.
+Request planning copies only matching candidates before it applies current runtime and caller policy.
+Discovery copies facts only after caller disclosure policy permits them.
 
 The subscriber owns remote fetch, SSE, reconnect, catch-up, and liveness. A
 small Starport sampler observes only the subscriber's process-local atomic

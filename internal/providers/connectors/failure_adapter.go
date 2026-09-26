@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/failure"
 )
 
@@ -47,6 +48,8 @@ func NormalizeFailure(provider string, err error) *failure.Failure {
 	}
 
 	switch {
+	case errors.Is(err, credentials.ErrMaterialExpired), errors.Is(err, credentials.ErrMaterialRevoked), errors.Is(err, credentials.ErrDestinationUnapproved):
+		return failure.New(failure.GatewayUnavailable, "Provider credential material is no longer valid.", true, failure.ProviderDetails{Provider: provider}, err)
 	case errors.Is(err, context.Canceled), errors.Is(err, ErrContextCanceled):
 		return failure.New(failure.Canceled, "The request was canceled.", false, failure.ProviderDetails{Provider: provider}, err)
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, ErrTimeout):

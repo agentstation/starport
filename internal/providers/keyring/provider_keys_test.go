@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"testing/synctest"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -15,47 +16,50 @@ import (
 )
 
 func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
-	ctx := t.Context()
-	provider := syntheticCredentialProvider()
-	manager := newSyntheticProviderKeys(t, provider)
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		provider := syntheticCredentialProvider()
+		manager := newSyntheticProviderKeys(t, provider).(*keyManager)
+		defer manager.materials.close()
 
-	for account, secret := range map[string]string{"account-a": "secret-a", "account-b": "secret-b"} {
-		_, err := manager.AddKey(ctx, AccountScope(account), string(provider.ID), map[string]string{"api-key": secret}, nil, false, 0)
+		for account, secret := range map[string]string{"account-a": "secret-a", "account-b": "secret-b"} {
+			_, err := manager.AddKey(ctx, AccountScope(account), string(provider.ID), map[string]string{"api-key": secret}, nil, false, 0)
+			require.NoError(t, err)
+		}
+		_, err := manager.AddSharedCredential(ctx, string(provider.ID), map[string]string{"api-key": "global-secret"}, nil, SharedCredentialParams{})
 		require.NoError(t, err)
-	}
-	_, err := manager.AddSharedCredential(ctx, string(provider.ID), map[string]string{"api-key": "global-secret"}, nil, SharedCredentialParams{})
-	require.NoError(t, err)
 
-	var wait sync.WaitGroup
-	errors := make(chan error, 2)
-	for account, want := range map[string]string{"account-a": "secret-a", "account-b": "secret-b"} {
-		account, want := account, want
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
-			for range 100 {
-				material, resolveErr := manager.ResolveStoredMaterial(ctx, AccountScope(account), provider)
-				if resolveErr != nil {
-					errors <- resolveErr
-					return
+		var wait sync.WaitGroup
+		errors := make(chan error, 2)
+		for account, want := range map[string]string{"account-a": "secret-a", "account-b": "secret-b"} {
+			account, want := account, want
+			wait.Add(1)
+			go func() {
+				defer wait.Done()
+				for range 100 {
+					material, resolveErr := manager.ResolveStoredMaterial(ctx, AccountScope(account), provider)
+					if resolveErr != nil {
+						errors <- resolveErr
+						return
+					}
+					value, exists := material.Value("api-key")
+					if !exists || value != want {
+						errors <- fmt.Errorf("account %s resolved another account's credential", account)
+						return
+					}
 				}
-				value, exists := material.Value("api-key")
-				if !exists || value != want {
-					errors <- fmt.Errorf("account %s resolved another account's credential", account)
-					return
-				}
-			}
-		}()
-	}
-	wait.Wait()
-	close(errors)
-	for resolveErr := range errors {
-		require.NoError(t, resolveErr)
-	}
+			}()
+		}
+		wait.Wait()
+		close(errors)
+		for resolveErr := range errors {
+			require.NoError(t, resolveErr)
+		}
 
-	missing, err := manager.GetKeys(ctx, AccountScope("missing"), string(provider.ID))
-	require.NoError(t, err)
-	require.Empty(t, missing, "an exact account lookup must not merge global material")
+		missing, err := manager.GetKeys(ctx, AccountScope("missing"), string(provider.ID))
+		require.NoError(t, err)
+		require.Empty(t, missing, "an exact account lookup must not merge global material")
+	})
 }
 
 // newSyntheticProviderKeys builds a manager whose validator knows exactly one

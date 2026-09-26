@@ -179,7 +179,7 @@ func TestOpenAIConnector_Chat(t *testing.T) {
 				URL:  server.URL + "/v1/chat/completions",
 			}
 
-			resp, err := connector.Chat(context.Background(), tt.request)
+			resp, err := connector.Chat(context.Background(), approveConnectorFixture(t, tt.request))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Chat() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -231,7 +231,7 @@ func TestOpenAIConnector_ChatStream(t *testing.T) {
 		MaxConnections: 10,
 	})
 
-	stream, err := connector.ChatStream(context.Background(), &ChatRequest{Credential: testAPIMaterial("test-key"),
+	stream, err := connector.ChatStream(context.Background(), approveConnectorFixture(t, &ChatRequest{Credential: testAPIMaterial("test-key"),
 		Model: "gpt-4",
 		Endpoint: InferenceEndpoint{
 			Type: "openai",
@@ -240,7 +240,7 @@ func TestOpenAIConnector_ChatStream(t *testing.T) {
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("ChatStream() error = %v", err)
 	}
@@ -303,14 +303,14 @@ func TestOpenAIConnector_Embeddings(t *testing.T) {
 		MaxConnections: 10,
 	})
 
-	resp, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{Credential: testAPIMaterial("test-key"),
+	resp, err := connector.Embeddings(context.Background(), approveConnectorFixture(t, &EmbeddingsRequest{Credential: testAPIMaterial("test-key"),
 		Model: "text-embedding-ada-002",
 		Input: "Hello world",
 		Endpoint: InferenceEndpoint{
 			Type: "openai",
 			URL:  server.URL + "/v1/embeddings",
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("Embeddings() error = %v", err)
 	}
@@ -396,7 +396,7 @@ func TestOpenAIConnector_ChatStreamErrors(t *testing.T) {
 				MaxConnections: 10,
 			})
 
-			_, err := connector.ChatStream(context.Background(), &ChatRequest{Credential: testAPIMaterial("test-key"),
+			_, err := connector.ChatStream(context.Background(), approveConnectorFixture(t, &ChatRequest{Credential: testAPIMaterial("test-key"),
 				Model: "gpt-3.5-turbo",
 				Endpoint: InferenceEndpoint{
 					Type: "openai",
@@ -405,7 +405,7 @@ func TestOpenAIConnector_ChatStreamErrors(t *testing.T) {
 				Messages: []Message{
 					{Role: "user", Content: "Hello"},
 				},
-			})
+			}))
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ChatStream() error = %v, wantErr %v", err, tt.wantErr)
@@ -432,14 +432,14 @@ func TestOpenAIConnector_EmbeddingsError(t *testing.T) {
 		MaxConnections: 10,
 	})
 
-	_, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{Credential: testAPIMaterial("test-key"),
+	_, err := connector.Embeddings(context.Background(), approveConnectorFixture(t, &EmbeddingsRequest{Credential: testAPIMaterial("test-key"),
 		Model: "invalid-model",
 		Input: "test",
 		Endpoint: InferenceEndpoint{
 			Type: "openai",
 			URL:  server.URL + "/v1/embeddings",
 		},
-	})
+	}))
 
 	if err == nil {
 		t.Error("Expected error for invalid model")

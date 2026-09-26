@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -25,21 +24,24 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 		return nil, ErrNoModelsAvailable
 	}
 	if owned {
+		ctx = connectors.ContextWithRuntimeLease(ctx, runtime)
+	}
+	if owned {
 		defer runtime.Release()
 	}
 
 	planningRequest := embeddingPlanningRequest(req, r.config.EnableCostOptimization)
 	plan, err := r.planOperation(ctx, planningRequest, routing.OperationEmbeddings, runtime, nil)
 	if err != nil {
-		if errors.Is(err, routing.ErrNoCandidate) {
-			return nil, ErrNoModelsAvailable
+		if mapped := routePlanFailure(err); mapped != nil {
+			return nil, mapped
 		}
 		return nil, fmt.Errorf("plan embedding route: %w", err)
 	}
 	credentialPolicy, err := newCredentialPolicy(
 		req.APIKeyConfig.credentialStrategy(), req.AccountID,
 		req.APIKeyConfig.byokProviderGate(),
-		runtime, r.storedKeys, r.credentialGate,
+		runtime, r.storedKeys, r.credentialGate, r.destinations,
 	)
 	if err != nil {
 		return nil, err

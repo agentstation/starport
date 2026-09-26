@@ -37,15 +37,19 @@ func writePaths(writer io.Writer, paths config.Paths, asJSON bool) error {
 	if asJSON {
 		return writeIndentedJSON(writer, paths)
 	}
-	_, err := fmt.Fprintf(
-		writer,
-		"Configuration directory: %s\nConfiguration file: %s\nData directory: %s\nBadger directory: %s\n",
-		paths.ConfigDir,
-		paths.ConfigFile,
-		paths.DataDir,
-		paths.BadgerDir,
-	)
-	return err
+	for _, entry := range []struct{ label, value string }{
+		{"Configuration directory", paths.ConfigDir}, {"Configuration file", paths.ConfigFile},
+		{"Data directory", paths.DataDir}, {"State directory", paths.StateDir}, {"Cache directory", paths.CacheDir},
+		{"Catalog runtime directory", paths.RuntimeDir}, {"Embedded baseline directory", paths.BaselineDir},
+		{"Badger directory", paths.BadgerDir}, {"SQLite file", paths.SQLiteFile}, {"Uploaded files directory", paths.FilesDir},
+		{"Local administrator token file", paths.LocalTokenFile}, {"Welcome stamp file", paths.WelcomeStampFile},
+		{"Deployment", paths.DeploymentID}, {"Instance", paths.InstanceID},
+	} {
+		if _, err := fmt.Fprintf(writer, "%s: %s\n", entry.label, entry.value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeValidation(writer io.Writer, asJSON bool, validationErr error) error {

@@ -84,7 +84,7 @@ func TestBothRerankProtocolsSpeakOneRequest(t *testing.T) {
 
 			reranker := productionReranker(t, testCase.providerID, testCase.endpointType, server.URL)
 			topN := 2
-			response, err := reranker.Rerank(context.Background(), &RerankRequest{
+			response, err := reranker.Rerank(context.Background(), approveConnectorFixture(t, &RerankRequest{
 				MediaTarget: MediaTarget{
 					Model:      "rerank-model",
 					Endpoint:   InferenceEndpoint{Type: testCase.endpointType, URL: server.URL},
@@ -93,7 +93,7 @@ func TestBothRerankProtocolsSpeakOneRequest(t *testing.T) {
 				Query:     "who ships reranking",
 				Documents: rerankTestDocuments,
 				TopN:      &topN,
-			})
+			}))
 			require.NoError(t, err)
 
 			// The provider read its own wire words and none of the other
@@ -132,7 +132,7 @@ func TestVoyageRefusesATokenCapItCannotExpress(t *testing.T) {
 
 	reranker := productionReranker(t, "voyage", catalogs.EndpointTypeVoyage, server.URL)
 	tokenCap := 4096
-	_, err := reranker.Rerank(context.Background(), &RerankRequest{
+	_, err := reranker.Rerank(context.Background(), approveConnectorFixture(t, &RerankRequest{
 		MediaTarget: MediaTarget{
 			Model:      "rerank-2.5",
 			Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeVoyage, URL: server.URL},
@@ -141,7 +141,7 @@ func TestVoyageRefusesATokenCapItCannotExpress(t *testing.T) {
 		Query:                "who ships reranking",
 		Documents:            rerankTestDocuments,
 		MaxTokensPerDocument: &tokenCap,
-	})
+	}))
 	require.ErrorIs(t, err, ErrRerankOptionUnsupported)
 }
 
@@ -158,7 +158,7 @@ func TestARerankResultOutsideTheRequestIsRefused(t *testing.T) {
 	defer server.Close()
 
 	reranker := productionReranker(t, "cohere", catalogs.EndpointTypeCohere, server.URL)
-	_, err := reranker.Rerank(context.Background(), &RerankRequest{
+	_, err := reranker.Rerank(context.Background(), approveConnectorFixture(t, &RerankRequest{
 		MediaTarget: MediaTarget{
 			Model:      "rerank-v3.5",
 			Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeCohere, URL: server.URL},
@@ -166,7 +166,7 @@ func TestARerankResultOutsideTheRequestIsRefused(t *testing.T) {
 		},
 		Query:     "who ships reranking",
 		Documents: rerankTestDocuments,
-	})
+	}))
 	require.ErrorContains(t, err, "rerank result 7 for 3 documents")
 }
 
@@ -223,7 +223,7 @@ func TestARerankRejectionNormalizesLikeAChatRejection(t *testing.T) {
 			defer server.Close()
 
 			reranker := productionReranker(t, testCase.providerID, testCase.endpoint, server.URL)
-			_, err := reranker.Rerank(context.Background(), &RerankRequest{
+			_, err := reranker.Rerank(context.Background(), approveConnectorFixture(t, &RerankRequest{
 				MediaTarget: MediaTarget{
 					Model:      "rerank-model",
 					Endpoint:   InferenceEndpoint{Type: testCase.endpoint, URL: server.URL},
@@ -231,7 +231,7 @@ func TestARerankRejectionNormalizesLikeAChatRejection(t *testing.T) {
 				},
 				Query:     "who ships reranking",
 				Documents: rerankTestDocuments,
-			})
+			}))
 			require.Error(t, err)
 
 			normalized := NormalizeFailure(string(testCase.providerID), err)
@@ -337,11 +337,11 @@ func TestARerankTransportRefusesTheOperationsItDoesNotServe(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = connector.Close() })
 
-	_, chatErr := connector.Chat(context.Background(), &ChatRequest{})
+	_, chatErr := connector.Chat(context.Background(), approveConnectorFixture(t, &ChatRequest{}))
 	require.ErrorIs(t, chatErr, ErrTransportOperationUnsupported)
-	_, streamErr := connector.ChatStream(context.Background(), &ChatRequest{})
+	_, streamErr := connector.ChatStream(context.Background(), approveConnectorFixture(t, &ChatRequest{}))
 	require.ErrorIs(t, streamErr, ErrTransportOperationUnsupported)
-	_, embeddingsErr := connector.Embeddings(context.Background(), &EmbeddingsRequest{})
+	_, embeddingsErr := connector.Embeddings(context.Background(), approveConnectorFixture(t, &EmbeddingsRequest{}))
 	require.ErrorIs(t, embeddingsErr, ErrTransportOperationUnsupported)
 }
 

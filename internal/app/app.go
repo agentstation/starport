@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,7 +26,6 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/guardrails"
@@ -105,6 +103,7 @@ type App struct {
 	jobs                *jobs.Service
 	events              *events.Dispatcher
 	cacheManager        *cache.Manager
+	extractionCache     *cache.BufferedLocalCache
 	transports          *connectors.TransportRegistry
 	authentication      *providerauth.Registry
 	providerReconciler  *providers.Reconciler
@@ -112,6 +111,8 @@ type App struct {
 	incidentHistory     *statuspage.HistoryReader
 	incidentTransitions providerstate.TransitionRepository
 	availability        *availability.Tracker
+	advisory            *advisoryWorkers
+	authorization       *authorizationOwner
 	// build is the provenance the admin and health surfaces report, with
 	// the start time New recorded.
 	build controllers.BuildInfo
@@ -168,6 +169,9 @@ func prepareComposition(cfg *config.Config, options []Option) (buildOptions, err
 	if err := cfg.Validate(); err != nil {
 		return buildOptions{}, fmt.Errorf("validate application config: %w", err)
 	}
+	if err := cfg.CheckLegacyPaths(context.Background()); err != nil {
+		return buildOptions{}, err
+	}
 	if strings.TrimSpace(cfg.Security.MasterKey) == "" {
 		return buildOptions{}, ErrCredentialsRequired
 	}
@@ -223,8 +227,12 @@ type authRuntime struct {
 
 func (b *runtimeBuilder) compose() error {
 	steps := []func() error{
+		b.validateCatalogStorage,
+		b.guardLocalSetup,
 		b.openStorage,
+		b.prepareInferencePolicy,
 		b.openSQLStore,
+		b.openAuthorization,
 		b.openBlob,
 		b.openEvents,
 		b.openConcepts,
@@ -233,6 +241,7 @@ func (b *runtimeBuilder) compose() error {
 		b.buildGateway,
 		b.openConsole,
 		b.openIdentity,
+		b.openAuthorizationCache,
 		b.openHTTPServer,
 	}
 	for _, step := range steps {
@@ -339,7 +348,7 @@ func (b *runtimeBuilder) openConcepts() error {
 		context.Background(),
 		b.application.store,
 		catalogSettings(b.config),
-		runtimecatalog.DeploymentLookup(os.LookupEnv),
+		runtimecatalog.DeploymentLookup(b.config.LookupDeployment),
 	)
 	if err != nil {
 		return fmt.Errorf("open catalog: %w", err)
@@ -470,10 +479,27 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err != nil {
 		return fmt.Errorf("open provider credential validator: %w", err)
 	}
-	b.providerKeys, err = keyring.NewProviderKeys(credentialRepository, masterKey, credentialValidator)
+	managedKeys, err := keyring.NewProviderKeys(credentialRepository, masterKey, credentialValidator, b.config.CredentialSources.Managed.Limits())
 	if err != nil {
 		return fmt.Errorf("open provider key service: %w", err)
 	}
+	b.providerKeys = managedKeys
+	materialContext, stopMaterials := context.WithCancel(context.Background())
+	materialDone := make(chan struct{})
+	go func() {
+		defer close(materialDone)
+		_ = managedKeys.RunMaterialRefresh(materialContext)
+	}()
+	b.application.own("managed credential material", func(ctx context.Context) error {
+		stopMaterials()
+		select {
+		case <-materialDone:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	})
+
 	return nil
 }
 
@@ -484,7 +510,7 @@ func (b *runtimeBuilder) openConcepts() error {
 // mode decides whether a deployment is allowed to hold no key at all.
 func (b *runtimeBuilder) openAccountAccess() error {
 	var err error
-	b.accounts, err = account.Open(b.application.store)
+	b.accounts, err = account.Open(b.application.store, account.WithAuthorizationFence(b.application.authorization.kv.BeginMutation))
 	if err != nil {
 		return fmt.Errorf("open account repository: %w", err)
 	}
@@ -494,7 +520,7 @@ func (b *runtimeBuilder) openAccountAccess() error {
 	if _, err := b.accounts.EnsureDefault(context.Background()); err != nil {
 		return fmt.Errorf("ensure the default account: %w", err)
 	}
-	b.apiKeys, err = apikey.Open(b.application.store)
+	b.apiKeys, err = apikey.Open(b.application.store, apikey.WithAuthorizationFence(b.application.authorization.kv.BeginMutation))
 	if err != nil {
 		return fmt.Errorf("open API key repository: %w", err)
 	}
@@ -600,17 +626,33 @@ func (b *runtimeBuilder) openRegistry() error {
 }
 
 func (b *runtimeBuilder) openCache() error {
-	if b.config.Cache.Enabled {
-		cacheManager, err := b.factories.newCache(cache.ManagerConfig{}, b.application.store)
+	if b.config.Cache.Enabled && (b.config.Cache.ChatEnabled || b.config.Cache.EmbeddingsEnabled || b.config.Cache.ModelsEnabled || b.config.Cache.ProvidersEnabled) {
+		var responseStore cache.ResponseStore
+		managerConfig := cache.ManagerConfig{}
+		if b.config.Cache.Backend == "valkey" && (b.config.Cache.ChatEnabled || b.config.Cache.EmbeddingsEnabled) {
+			shared, err := cache.OpenShared(cache.SharedConfig{URL: b.config.Cache.URL, DeploymentID: b.config.EffectivePaths().DeploymentID, AllowInsecure: b.config.Cache.AllowInsecure, CAFile: b.config.Cache.CAFile})
+			if err != nil {
+				return fmt.Errorf("open shared cache: %w", err)
+			}
+			responseStore = shared
+			managerConfig.Responses.Strategy = "distributed"
+		}
+		cacheManager, err := b.factories.newCache(managerConfig, responseStore)
 		if err != nil {
 			if cacheManager != nil {
 				if closeErr := cacheManager.Close(); closeErr != nil {
 					err = errors.Join(err, fmt.Errorf("close failed cache manager: %w", closeErr))
 				}
 			}
+			if responseStore != nil {
+				_ = responseStore.Close()
+			}
 			return fmt.Errorf("open cache manager: %w", err)
 		}
 		if cacheManager == nil {
+			if responseStore != nil {
+				_ = responseStore.Close()
+			}
 			return errors.New("cache factory returned no cache manager")
 		}
 		b.application.cacheManager = cacheManager
@@ -632,22 +674,33 @@ func (b *runtimeBuilder) buildGateway() error {
 		return fmt.Errorf("open provider availability owner: %w", err)
 	}
 	b.application.availability = availabilityOwner
+	approvals := b.config.InferenceDestinationApprovals
+	if approvals == nil {
+		bundled, err := runtimecatalog.Bundled()
+		if err != nil {
+			return fmt.Errorf("load bundled destination contracts: %w", err)
+		}
+		approvals, err = providers.InstallationDestinationApprovals(bundled)
+		if err != nil {
+			return fmt.Errorf("compile installation destination approvals: %w", err)
+		}
+	}
 	routerOptions := []router.Option{
 		router.WithCatalog(b.application.catalog),
 		router.WithAvailability(availabilityOwner),
 		router.WithOutcomePublisher(b.application.providerStates),
 		router.WithOperatorCredentialGate(b.application.providerStates),
 		router.WithStoredCredentials(b.providerKeys),
+		router.WithDestinationApprovals(approvals),
 	}
-	// A distributed store makes provider health a fleet fact: each replica
-	// publishes its breaker transitions and latency snapshots there and
-	// merges peer state on refresh. An embedded store keeps every replica
-	// process-local, exactly as before.
 	if b.config.Storage.Distributed() && b.application.store != nil {
 		if err := availabilityOwner.UseSharedStore(b.application.store, availability.SharedConfig{}); err != nil {
 			return fmt.Errorf("share provider availability state: %w", err)
 		}
-		routerOptions = append(routerOptions, router.WithSharedHealthStore(b.application.store))
+		latency := router.NewSharedLatencyTracker(nil, b.application.store)
+		routerOptions = append(routerOptions, router.WithLatencyTracker(latency))
+		b.application.advisory = &advisoryWorkers{workers: []func(context.Context){availabilityOwner.RunShared, latency.Run}}
+		b.application.own("advisory exchange", b.application.advisory.Close)
 	}
 	modelRouter := router.New(registryAdapter, routerOptions...)
 	proxyOptions := make([]proxy.Option, 0, 3)
@@ -656,27 +709,19 @@ func (b *runtimeBuilder) buildGateway() error {
 	if b.files != nil {
 		proxyOptions = append(proxyOptions, proxy.WithFiles(storedDocuments{service: b.files}))
 	}
-	// A parser plugin reads an attachment once per account, engine, and
-	// catalog generation. The entries hold text rather than bytes, so they sit
-	// in the key-value store under their own prefix and expire on their own
-	// window.
-	if b.application.store != nil {
-		extractions, err := document.NewCache(
-			cache.NewDistributedCache(b.application.store, storage.KeyPrefixExtraction),
-			nil, 0,
-		)
-		if err != nil {
-			return fmt.Errorf("open extraction cache: %w", err)
-		}
-		proxyOptions = append(proxyOptions, proxy.WithDocumentCache(extractions))
+	extractions, err := b.openExtractionCache()
+	if err != nil {
+		return err
 	}
+	proxyOptions = append(proxyOptions, proxy.WithDocumentCache(extractions))
+
 	if b.application.cacheManager != nil {
 		cacheConfig := &proxy.CacheConfig{
-			EnableChatCache: true, EnableEmbeddingCache: true,
-			EnableModelCache: true, EnableProviderCache: true,
+			EnableChatCache: b.config.Cache.ChatEnabled, EnableEmbeddingCache: b.config.Cache.EmbeddingsEnabled,
+			EnableModelCache: b.config.Cache.ModelsEnabled, EnableProviderCache: b.config.Cache.ProvidersEnabled,
 			CacheControlHeader: "X-Cache-Control",
 		}
-		if b.config.SemanticCache.Enabled {
+		if b.config.SemanticCache.Enabled && b.config.Cache.ChatEnabled {
 			// The embedder calls the finished gateway, late-bound like the
 			// guardrail moderator: the embedding rides the account's own
 			// routing and draws its own usage record.
@@ -835,7 +880,7 @@ func (b *runtimeBuilder) openIdentity() error {
 	if !b.config.Identity.Enabled() {
 		return nil
 	}
-	repositories, err := identity.Open(b.sqlDB)
+	repositories, err := identity.Open(b.sqlDB, identity.WithAuthorizationFence(b.application.authorization.sql.BeginMutation))
 	if err != nil {
 		return fmt.Errorf("open identity repositories: %w", err)
 	}
@@ -900,6 +945,8 @@ func (b *runtimeBuilder) webhookReporter() controllers.WebhookReporter {
 func (b *runtimeBuilder) deployment() controllers.Deployment {
 	cfg := b.config
 	deployment := controllers.Deployment{
+		ResponseCache:     func() controllers.CacheFillStatus { return cacheStatus(b.application.cacheManager.FillStatus()) },
+		ExtractionCache:   func() controllers.CacheFillStatus { return cacheStatus(b.application.extractionCache.FillStatus()) },
 		StorageMode:       cmp.Or(cfg.Storage.Mode, storage.StorageTypeBadger),
 		RelationalMode:    cmp.Or(cfg.Storage.SQL.Mode, sqlstore.TypeSQLite),
 		MetricsMode:       cmp.Or(cfg.Telemetry.Metrics, config.TelemetryMetricsOn),
@@ -922,24 +969,29 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	serverCfg := serverConfig(b.config, b.auth)
 	serverCfg.Build = b.application.build
 	httpServer, err := b.factories.newServer(serverCfg, server.Dependencies{
-		Service: b.gateway, APIKeys: b.apiKeys, Accounts: b.accounts,
-		ProviderKeys: b.providerKeys,
-		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
+		Readiness:           b.application.admissionReady,
+		AuthorizationStatus: b.application.authorizationStatus,
+		Service:             b.gateway, APIKeys: b.apiKeys, Accounts: b.accounts,
+		Authorization:   b.application.authorization.cache,
+		PermissionClock: b.application.authorization.clock,
+		ProviderKeys:    b.providerKeys,
+		RateLimits:      b.rateLimits, ProviderOperations: b.application, Console: b.console,
 		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
-		Templates:    b.templates,
-		Files:        b.files,
-		Jobs:         b.jobs,
-		Batches:      b.batches,
-		FileBackend:  b.fileBackend(),
-		LocalGate:    b.gate,
-		IdentityAuth: b.identityAuthenticator(),
-		Identity:     b.identityRepos,
-		Telemetry:    b.metrics,
-		Tracing:      b.tracing,
-		Audit:        b.audit,
-		Events:       b.eventEmitter(),
-		Webhooks:     b.webhookReporter(),
-		Deployment:   b.deployment(),
+		DiscoveryRegistry: b.application.registry,
+		Templates:         b.templates,
+		Files:             b.files,
+		Jobs:              b.jobs,
+		Batches:           b.batches,
+		FileBackend:       b.fileBackend(),
+		LocalGate:         b.gate,
+		IdentityAuth:      b.identityAuthenticator(),
+		Identity:          b.identityRepos,
+		Telemetry:         b.metrics,
+		Tracing:           b.tracing,
+		Audit:             b.audit,
+		Events:            b.eventEmitter(),
+		Webhooks:          b.webhookReporter(),
+		Deployment:        b.deployment(),
 	})
 	if err != nil {
 		if httpServer != nil {
@@ -1194,6 +1246,14 @@ func (a *App) Run(ctx context.Context) error {
 		}()
 	}
 
+	if a.authorization != nil {
+		a.authorization.monitor.Start(runCtx)
+	}
+
+	if a.advisory != nil {
+		a.advisory.Start(runCtx)
+	}
+
 	serverResult := make(chan error, 1)
 	go func() { serverResult <- a.httpServer.Start() }()
 
@@ -1298,7 +1358,15 @@ func defaultRuntimeFactories() runtimeFactories {
 // identity has to separate two gateway processes on one host.
 func catalogSettings(deployment *config.Config) runtimecatalog.Settings {
 	cfg := deployment.Catalog
+	paths := deployment.EffectivePaths()
+	baseline := paths.BaselineDir
 	return runtimecatalog.Settings{
+		BaselineDirectory:         baseline,
+		CredentialPolicyDirectory: deployment.CatalogCredentialPolicyDirectory(),
+		SourceCacheDirectory:      paths.CacheDir,
+		InstanceID:                paths.InstanceID,
+		DeploymentID:              paths.DeploymentID,
+		Values:                    cfg.CatalogValues(),
 		ListenAddress: net.JoinHostPort(
 			deployment.Server.Host, strconv.Itoa(deployment.Server.Port),
 		),
@@ -1337,7 +1405,7 @@ func (a *App) syncCatalog(ctx context.Context) (runtimecatalog.Candidate, error)
 // activateRuntimeState validates one candidate and advances the routable head.
 // A candidate that fails leaves the accepted head where it is, and the refusal
 // is recorded with its safe cause so the admin surface separates a refused
-// candidate from the generation that still routes.
+// candidate from the retained generation. Catalog permission controls new attempts.
 func (a *App) activateRuntimeState(ctx context.Context, candidate runtimecatalog.Candidate) error {
 	err := a.applyCandidate(ctx, candidate)
 	if err == nil {
@@ -1351,7 +1419,8 @@ func (a *App) activateRuntimeState(ctx context.Context, candidate runtimecatalog
 	log.Warn().
 		Str("reason", string(runtimecatalog.ClassifyOperationFailure(err))).
 		Str("candidate_generation_id", candidate.State.GenerationID).
-		Msg("catalog candidate refused; the accepted head still routes")
+		Bool("new_attempts_allowed", a.catalog.Current().AllowsNewAttempt()).
+		Msg("catalog candidate refused; accepted metadata retained")
 	return err
 }
 
@@ -1595,7 +1664,7 @@ func serverConfig(cfg *config.Config, auth authRuntime) *server.Config {
 		CORS: server.CORSConfig{
 			AllowedOrigins:   allowedOrigins,
 			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key", "X-Starport-Account-ID"},
 			AllowCredentials: allowCredentials, MaxAge: 300,
 		},
 	}

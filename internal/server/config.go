@@ -111,7 +111,7 @@ type CORSConfig struct {
 	AllowedMethods []string `env:"CORS_ALLOWED_METHODS,default=GET,POST,PUT,DELETE,OPTIONS"`
 
 	// AllowedHeaders is list of non simple headers the client is allowed to use with cross-domain requests
-	AllowedHeaders []string `env:"CORS_ALLOWED_HEADERS,default=Accept,Authorization,Content-Type,X-CSRF-Token"`
+	AllowedHeaders []string `env:"CORS_ALLOWED_HEADERS,default=Accept,Authorization,Content-Type,X-CSRF-Token,X-Starport-Account-ID"`
 
 	// ExposedHeaders indicates which headers are safe to expose to the API of a CORS API specification
 	ExposedHeaders []string `env:"CORS_EXPOSED_HEADERS,default="`

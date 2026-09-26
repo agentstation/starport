@@ -18,6 +18,8 @@ import (
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
+	"github.com/agentstation/starport/internal/authorization"
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/server/requestctx"
 )
@@ -153,6 +155,9 @@ func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 
 // CORS returns a configured CORS handler
 func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
+	if len(cfg.AllowedOrigins) == 0 {
+		return func(next http.Handler) http.Handler { return next }
+	}
 	return cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   cfg.AllowedMethods,
@@ -172,8 +177,10 @@ type AccountReader interface {
 
 // AuthMiddleware provides authentication functionality
 type AuthMiddleware struct {
-	apiKeys  apikey.Repository
-	accounts AccountReader
+	authorization   *authorization.Cache
+	permissionClock authorization.Clock
+	apiKeys         apikey.Repository
+	accounts        AccountReader
 	// policy is the live authentication mode. It is read once per request, not
 	// once per router build, because the console can change the mode without a
 	// restart and "disabled" must not come to mean "disabled at boot". A nil
@@ -190,10 +197,8 @@ type AuthMiddleware struct {
 	sessions *localauth.Gate
 }
 
-// NewAuthMiddleware creates a new authentication middleware. The account reader
-// is optional: without it a request still authenticates and runs under the
-// default credential policy, because a key is a valid caller whether or not
-// the deployment can read the account behind it.
+// NewAuthMiddleware binds the key and account authorities. Missing account
+// authority refuses admission until the deployment restores it.
 func NewAuthMiddleware(apiKeys apikey.Repository, accounts ...AccountReader) *AuthMiddleware {
 	middleware := &AuthMiddleware{apiKeys: apiKeys}
 	if len(accounts) > 0 {
@@ -227,8 +232,17 @@ func (m *AuthMiddleware) AcceptSessions(gate *localauth.Gate) {
 // RequireAPIKey validates API key authentication
 func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ctx, ok := m.operatorDiagnosticContext(r); ok {
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
 		if m.policy.Disabled() {
-			next.ServeHTTP(w, r.WithContext(m.anonymousContext(r.Context())))
+			ctx, err := m.anonymousContext(r.Context())
+			if err != nil {
+				writeAccountRefusal(w, r, err)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
@@ -245,6 +259,10 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 			switch {
 			case err == nil:
 				next.ServeHTTP(w, r.WithContext(ctx))
+			case errors.Is(err, errAccountUnavailable), errors.Is(err, errAccountDenied):
+				writeAccountRefusal(w, r, err)
+			case errors.Is(err, identity.ErrAccountSelectionRequired):
+				writeProtocolError(w, r, http.StatusConflict, "account_selection_required", "Select an account with X-Starport-Account-ID")
 			case errors.Is(err, errNoSession):
 				writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Missing API key")
 			default:
@@ -256,6 +274,16 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 		// Hash the provided API key
 		hash := sha256.Sum256([]byte(apiKey))
 		hashStr := hex.EncodeToString(hash[:])
+
+		if m.authorization != nil {
+			ctx, err := m.cachedBearer(r.Context(), apiKey, hashStr)
+			if err != nil {
+				writeAuthorizationRefusal(w, r, err)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
 
 		record, err := m.apiKeys.GetByHash(r.Context(), hashStr)
 		if err != nil {
@@ -289,9 +317,12 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 		// may reach, so both travel and neither stands in for the other.
 		accountID := apiKeyModel.EffectiveAccountID()
 		ctx = requestctx.WithAccountID(ctx, accountID)
-		if record, ok := m.readAccount(ctx, accountID); ok {
-			ctx = requestctx.WithAccountRecord(ctx, record)
+		governing, err := m.readAccount(ctx, accountID)
+		if err != nil {
+			writeAccountRefusal(w, r, err)
+			return
 		}
+		ctx = requestctx.WithAccountRecord(ctx, governing)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -309,16 +340,27 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 // differently — disabling authentication turns the check off rather than
 // making it optional, so a stale or mistyped key cannot quietly move a caller
 // onto another account's limits and credentials.
-func (m *AuthMiddleware) anonymousContext(ctx context.Context) context.Context {
+func (m *AuthMiddleware) anonymousContext(ctx context.Context) (context.Context, error) {
+	if m.authorization != nil {
+		return m.cachedLocal(ctx, authorization.AnonymousSubject, func() error {
+			if !m.policy.Disabled() {
+				return authorization.ErrWithdrawn
+			}
+			return nil
+		})
+	}
+
 	anonymous := m.anonymous
 	ctx = requestctx.WithAPIKeyID(ctx, anonymous.ID)
 	ctx = requestctx.WithAPIKeyModel(ctx, &anonymous)
 	accountID := anonymous.EffectiveAccountID()
 	ctx = requestctx.WithAccountID(ctx, accountID)
-	if record, ok := m.readAccount(ctx, accountID); ok {
-		ctx = requestctx.WithAccountRecord(ctx, record)
+	governing, err := m.readAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
 	}
-	return ctx
+	ctx = requestctx.WithAccountRecord(ctx, governing)
+	return ctx, nil
 }
 
 // errNoSession reports a request that presented no console session at all, as
@@ -354,6 +396,40 @@ func (m *AuthMiddleware) sessionContext(r *http.Request) (context.Context, error
 	if err != nil {
 		return nil, err
 	}
+	if m.authorization != nil {
+		caller := authorization.Identity{Subject: authorization.OperatorSubject}
+		if session.Grant == localauth.GrantIdentity {
+			if len(r.Header.Values("X-Starport-Account-ID")) > 1 {
+				return nil, errAccountDenied
+			}
+			caller = authorization.Identity{Subject: authorization.SessionSubjectPrefix + session.Subject, Tenant: r.Header.Get("X-Starport-Account-ID")}
+		}
+		ctx := requestctx.WithConsoleSession(r.Context(), string(session.Grant), session.Subject)
+		result, err := m.cachedPolicy(ctx, caller, func() error {
+			if err := m.authorization.CheckDeadline(session.ExpiresAt); err != nil {
+				return err
+			}
+			now, healthy := m.permissionClock()
+			if !healthy {
+				return authorization.ErrUnavailable
+			}
+			_, err := m.sessions.Verify(cookie.Value, now)
+			return err
+		})
+		if errors.Is(err, identity.ErrAccountSelectionRequired) {
+			return nil, err
+		}
+		if errors.Is(err, authorization.ErrDenied) || errors.Is(err, account.ErrNotFound) {
+			return nil, errAccountDenied
+		}
+		if err != nil {
+			return nil, errAccountUnavailable
+		}
+		return result, nil
+	}
+	if session.Grant == localauth.GrantIdentity {
+		return nil, errAccountUnavailable
+	}
 	operator := apikey.LocalOperator()
 	// The grant kind and identity subject ride the context so the audit
 	// trail can name the actor behind a console mutation.
@@ -362,30 +438,48 @@ func (m *AuthMiddleware) sessionContext(r *http.Request) (context.Context, error
 	ctx = requestctx.WithAPIKeyModel(ctx, &operator)
 	accountID := operator.EffectiveAccountID()
 	ctx = requestctx.WithAccountID(ctx, accountID)
-	if record, ok := m.readAccount(ctx, accountID); ok {
-		ctx = requestctx.WithAccountRecord(ctx, record)
+	governing, err := m.readAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
 	}
+	ctx = requestctx.WithAccountRecord(ctx, governing)
 	return ctx, nil
 }
 
-// readAccount loads the account behind an authenticated key. A missing or
-// unreadable account never fails the request: the key authenticated, and the
-// governing policy falls back to the default. Refusing here would take a
-// working deployment offline for a storage fault that has a safe default.
-func (m *AuthMiddleware) readAccount(ctx context.Context, accountID string) (*account.Account, bool) {
+var (
+	errAccountUnavailable = errors.New("account authority unavailable")
+	errAccountDenied      = errors.New("account admission denied")
+)
+
+// readAccount requires a known active account before it supplies policy.
+func (m *AuthMiddleware) readAccount(ctx context.Context, accountID string) (*account.Account, error) {
 	if m.accounts == nil || accountID == "" {
-		return nil, false
+		return nil, errAccountUnavailable
 	}
 	record, err := m.accounts.GetByID(ctx, accountID)
-	if err != nil {
-		if !errors.Is(err, account.ErrNotFound) {
-			log.Error().Err(err).Str("account_id", accountID).
-				Msg("Failed to read the account behind an authenticated key")
-		}
-		return nil, false
+	if errors.Is(err, account.ErrNotFound) {
+		return nil, errAccountDenied
 	}
-	governing := record.Account
-	return &governing, true
+	if err != nil {
+		log.Error().Err(err).Str("account_id", accountID).Msg("Account authority read failed")
+		return nil, errAccountUnavailable
+	}
+	if record.Account.ID != accountID || record.Revision == 0 {
+		return nil, errAccountUnavailable
+	}
+	if !record.Account.Active {
+		return nil, errAccountDenied
+	}
+	return &record.Account, nil
+}
+
+func writeAccountRefusal(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, errAccountDenied) || errors.Is(err, authorization.ErrDenied) || errors.Is(err, account.ErrNotFound) {
+		writeProtocolError(w, r, http.StatusForbidden, "permission_error", "Account access denied")
+		return
+	}
+	w.Header().Set("Retry-After", "1")
+	writeProtocolError(w, r, http.StatusServiceUnavailable, "server_error", "Account authority unavailable")
 }
 
 // RequireAccountAccess guards a route addressed by account. A caller reaches

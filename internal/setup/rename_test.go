@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/agentstation/starmap/pkg/productfiles"
 )
 
 func TestRenameNoReplaceRefusesEmptyDestination(t *testing.T) {
@@ -20,7 +22,12 @@ func TestRenameNoReplaceRefusesEmptyDestination(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := renameNoReplace(source, destination); err == nil {
+	directory, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = directory.Close() }()
+	if err := productfiles.PublishDirectory(directory, "source", directory, "destination"); err == nil {
 		t.Fatal("rename replaced an existing empty destination")
 	}
 	if _, err := os.Stat(filepath.Join(source, "sentinel")); err != nil {
