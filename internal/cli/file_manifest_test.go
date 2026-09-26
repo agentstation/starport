@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/agentstation/starmap/pkg/productpaths"
@@ -105,12 +104,9 @@ func TestLegacyPathsCommandUsesEffectiveSelectionWithoutOpeningStores(t *testing
 }
 
 func TestConfigFileManifestReportsPrivateStateAccessConflict(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX mode conflict. Native DACL checks belong to the shared inspector.")
-	}
 	paths := config.PathsForConfigDir(t.TempDir())
 	require.NoError(t, os.MkdirAll(paths.RuntimeDir, 0o700))
-	require.NoError(t, os.Chmod(paths.RuntimeDir, 0o755))
+	grantPrivateStatePublicRead(t, paths.RuntimeDir)
 	loader := config.NewLoader().WithPaths(paths).WithEnvironment(nil).WithEnvFiles()
 	deps, stdout, _ := testDependencies()
 	deps.LoadConfig = func(ctx context.Context) (*config.Config, error) { return loader.Load(ctx) }
