@@ -64,9 +64,10 @@ func runContext(
 		LoadConfig: func(loadCtx context.Context) (*config.Config, error) {
 			return config.LoadWithDefaults(loadCtx)
 		},
-		ResolvePaths:   config.PlatformPaths,
-		Diagnose:       diagnosis.Run,
-		MigrateRuntime: app.MigrateRuntime,
+		ResolvePaths:    config.PlatformPaths,
+		Diagnose:        diagnosis.Run,
+		MigrateRuntime:  app.MigrateRuntime,
+		InitializeFleet: app.InitializeFleet,
 	})
 	if err == nil {
 		return 0

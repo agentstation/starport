@@ -1228,6 +1228,9 @@ STARPORT_STORAGE_VALKEY_URL=valkey://valkey.example:6379
 Use `rediss://` for a TLS Valkey endpoint. Apply the Valkey service's normal
 backup, access-control, and failover procedures.
 
+Follow the [fresh fleet initialization procedure](FLEET_INITIALIZATION.md) before the first shared catalog startup.
+Existing or restored deployments require migration or recovery instead.
+
 ## File Storage
 
 Starport stores a document once and lets a chat request name it. The record
