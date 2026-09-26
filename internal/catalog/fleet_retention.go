@@ -265,7 +265,7 @@ func (m *fleetMaintenance) read(ctx context.Context, blob fleetBlob) (runtime.Fl
 func (m *fleetMaintenance) readHead(ctx context.Context) (runtime.FleetHead, []byte, error) {
 	value, _, err := m.owner.store.ReadWithLifetime(ctx, m.owner.prefix+"head", 4096)
 	if errors.Is(err, storage.ErrNotFound) {
-		return runtime.FleetHead{}, nil, nil
+		return runtime.FleetHead{}, nil, m.owner.checkEmptyHead(ctx)
 	}
 	if err != nil {
 		return runtime.FleetHead{}, nil, err

@@ -70,6 +70,11 @@ func (s *FleetStore) CurrentHead(ctx context.Context) (runtime.FleetHead, error)
 		return runtime.FleetHead{}, err
 	}
 	data, _, err := s.store.ReadWithLifetime(ctx, s.prefix+"head", 4096)
+	if errors.Is(err, storage.ErrNotFound) {
+		if err := s.checkEmptyHead(ctx); err != nil {
+			return runtime.FleetHead{}, err
+		}
+	}
 	if err != nil {
 		return runtime.FleetHead{}, fleetReadError(err, "current")
 	}
@@ -237,8 +242,13 @@ func (s *FleetStore) CommitPublication(ctx context.Context, publication runtime.
 	if err != nil {
 		return runtime.FleetHead{}, err
 	}
+	var initialized []byte
+	if publication.Expected != (runtime.FleetHead{}) {
+		initialized = []byte("fleet-head/1")
+	}
 	err = m.mutate(ctx, []storage.CompareAndSwapMutation{
 		{Key: s.prefix + "lease", ExpectedValue: grant, NewValue: grant},
+		{Key: s.prefix + "head-initialized", ExpectedValue: initialized, NewValue: []byte("fleet-head/1")},
 		{Key: s.prefix + "head", ExpectedValue: previous, NewValue: selected},
 		{Key: s.publicationKey(head), NewValue: record},
 		{Key: s.prefix + "inventory", ExpectedValue: m.encoded, NewValue: inventory},
@@ -269,3 +279,19 @@ func fleetStoreConflict(message string) error {
 }
 
 var _ runtime.FleetStore = (*FleetStore)(nil)
+
+// checkEmptyHead distinguishes an unused publication store from lost or uncertain state.
+func (s *FleetStore) checkEmptyHead(ctx context.Context) error {
+	_, _, err := s.store.ReadWithLifetime(ctx, s.prefix+"head-initialized", 64)
+	if !errors.Is(err, storage.ErrNotFound) {
+		return fleetStoreConflict("initialized catalog head is missing or uncertain; recovery is required")
+	}
+	m := &fleetMaintenance{owner: s}
+	if err := m.load(ctx); err != nil {
+		return err
+	}
+	if len(m.inventory.Entries) != 0 {
+		return fleetStoreConflict("retained catalog publications have no selected head; recovery is required")
+	}
+	return nil
+}

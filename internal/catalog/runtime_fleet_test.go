@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -80,6 +81,10 @@ func TestFleetRuntimePreservesOriginalGrantThroughAcceptance(t *testing.T) {
 	original, err := fleet.Publication(t.Context(), candidate.FleetHead)
 	require.NoError(t, err)
 	require.Equal(t, original.Publication.Grant.Epoch, candidate.Epoch)
+	encoded, err := json.Marshal(original)
+	require.NoError(t, err)
+	t.Logf("retained baseline publication: %d encoded bytes, %d recovery bytes", len(encoded), len(original.Publication.Recovery.Data))
+	require.Less(t, int64(len(encoded))*catalogGenerationIndexCap, int64(fleetRetentionMaxBytes), "the protected receipt window must fit the native byte bound before local acquisition")
 	require.NoError(t, first.Close(t.Context()))
 	closed = true
 	require.NoError(t, os.RemoveAll(root))

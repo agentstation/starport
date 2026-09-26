@@ -55,3 +55,11 @@ The scan limit bounds the number of inspected inventory entries. The input byte 
 Collection reserves the maximum receipt read and complete chunk size before deletion. An insufficient limit refuses the pass before data changes.
 Increase `catalog_retention.input_max_bytes` when the reported cleanup cannot fit the configured bound.
 An interrupted deletion retains a durable pending record. The next collection can resume it.
+
+The first publication atomically records that the catalog head exists.
+A missing head after initialization requires recovery. It cannot authorize another embedded bootstrap.
+Lease acquisition also compares the observed head in its native transaction.
+
+Starmap version 2 recovery retains the complete reconstruction baseline independently of the binary.
+Its compressed record reduces storage while bounding both encoded and decoded input bytes.
+The stored recovery-byte count measures compressed bytes. The full publication count includes JSON framing and encoding overhead.

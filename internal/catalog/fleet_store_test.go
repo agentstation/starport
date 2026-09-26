@@ -323,3 +323,24 @@ func TestFleetStoreLeaseExpiresDuringSelection(t *testing.T) {
 		})
 	}
 }
+
+func TestFleetStoreLostHeadCannotBootstrapAgain(t *testing.T) {
+	fleet, kv, _ := fleetTestStore(t)
+	grant, err := fleet.AcquireLease(t.Context(), "owner", time.Minute)
+	require.NoError(t, err)
+	head, err := fleet.CommitPublication(t.Context(), fleetTestPublication(t, grant, runtime.FleetHead{}, "initialized"))
+	require.NoError(t, err)
+	require.NoError(t, fleet.Release(t.Context(), grant))
+	require.NoError(t, kv.Delete(t.Context(), fleet.prefix+"head"))
+	_, err = fleet.CurrentHead(t.Context())
+	require.Error(t, err)
+	require.NotErrorIs(t, err, starmaperrors.ErrNotFound, "loss of the selected head must require recovery")
+	_, err = fleet.CurrentPublication(t.Context())
+	require.Error(t, err)
+	require.NotErrorIs(t, err, starmaperrors.ErrNotFound)
+	_, err = fleet.AcquireLease(t.Context(), "replacement", time.Minute)
+	require.Error(t, err, "missing head must not permit fresh acquisition")
+	retained, err := fleet.Publication(t.Context(), head)
+	require.NoError(t, err, "recovery must retain the previous publication")
+	require.Equal(t, head, retained.Head)
+}

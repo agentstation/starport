@@ -35,6 +35,17 @@ func (s *FleetStore) AcquireLease(ctx context.Context, holder string, ttl time.D
 	if err := s.checkApproval(ctx); err != nil {
 		return runtime.Lease{}, err
 	}
+	head, err := s.CurrentHead(ctx)
+	if err != nil && !starmaperrors.IsNotFound(err) {
+		return runtime.Lease{}, err
+	}
+	var headValue []byte
+	if head != (runtime.FleetHead{}) {
+		headValue, err = json.Marshal(head)
+		if err != nil {
+			return runtime.Lease{}, err
+		}
+	}
 	current, _, err := s.store.ReadWithLifetime(ctx, s.prefix+"lease", 4096)
 	if err == nil {
 		var held fleetGrant
@@ -74,6 +85,7 @@ func (s *FleetStore) AcquireLease(ctx context.Context, holder string, ttl time.D
 		return runtime.Lease{}, err
 	}
 	err = s.store.CompareAndSwap(ctx, []storage.CompareAndSwapMutation{
+		{Key: s.prefix + "head", ExpectedValue: headValue, NewValue: headValue},
 		{Key: s.prefix + "epoch", ExpectedValue: previous, NewValue: []byte(strconv.FormatUint(lease.Epoch, 10))},
 		{Key: s.prefix + "lease", NewValue: encoded, TTL: ttl},
 	})
