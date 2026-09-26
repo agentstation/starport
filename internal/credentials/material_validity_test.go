@@ -24,3 +24,11 @@ func TestZeroMaterialValidityRefusesUse(t *testing.T) {
 	validity.Revoke()
 	require.ErrorIs(t, validity.Renew(time.Now().Add(time.Minute)).Check(time.Now()), ErrMaterialRevoked)
 }
+
+func TestMaterialWithoutExpiryRemainsRevocable(t *testing.T) {
+	validity := NewMaterialValidity(time.Time{})
+	now := time.Now()
+	require.NoError(t, validity.Check(now))
+	validity.Revoke()
+	require.ErrorIs(t, validity.Check(now), ErrMaterialRevoked)
+}

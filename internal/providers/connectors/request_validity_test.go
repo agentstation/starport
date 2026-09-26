@@ -51,17 +51,18 @@ func TestMaterialValidityFailureDoesNotMarkProviderUnavailable(t *testing.T) {
 
 func TestDispatchRejectsMaterialRevokedWhileWaitingForConnection(t *testing.T) {
 	for _, protocol := range []string{"http1", "http2"} {
-		t.Run(protocol, func(t *testing.T) { testDispatchRevocationDuringConnectionWait(t, protocol, false) })
+		t.Run(protocol, func(t *testing.T) { testDispatchRevocationDuringConnectionWait(t, protocol, false, false) })
+		t.Run(protocol+"/deployment", func(t *testing.T) { testDispatchRevocationDuringConnectionWait(t, protocol, false, true) })
 	}
 }
 
 func TestDispatchRejectsMaterialExpiredWhileWaitingForConnection(t *testing.T) {
 	for _, protocol := range []string{"http1", "http2"} {
-		t.Run(protocol, func(t *testing.T) { testDispatchRevocationDuringConnectionWait(t, protocol, true) })
+		t.Run(protocol, func(t *testing.T) { testDispatchRevocationDuringConnectionWait(t, protocol, true, false) })
 	}
 }
 
-func testDispatchRevocationDuringConnectionWait(t *testing.T, protocol string, expire bool) {
+func testDispatchRevocationDuringConnectionWait(t *testing.T, protocol string, expire, deployment bool) {
 	t.Helper()
 	firstStarted := make(chan struct{})
 	firstHeaders := make(chan struct{})
@@ -103,7 +104,28 @@ func testDispatchRevocationDuringConnectionWait(t *testing.T, protocol string, e
 		ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
 		Placements: []catalogs.ProviderCredentialPlacement{{Field: "api-key", Kind: catalogs.ProviderCredentialPlacementHeader, Name: "Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer}},
 	}, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, credentials.MaterialMetadata{Handle: "opaque-handle"}).WithValidity(validity)
-	material, _ = approvedDestinationMaterial(t, material, http.MethodGet, server.URL)
+	revoke := validity.Revoke
+	if deployment {
+		profile := material.Profile()
+		profile.Fields = []catalogs.ProviderCredentialFieldID{"api-key"}
+		provider := catalogs.Provider{ID: "acme", Name: "Acme", Credentials: &catalogs.ProviderCredentials{
+			Fields:    []catalogs.ProviderCredentialField{{ID: "api-key", Kind: catalogs.ProviderCredentialFieldSecret, Required: true}},
+			Profiles:  []catalogs.ProviderCredentialProfile{profile},
+			Inference: catalogs.ProviderCredentialPlane{Required: true, Alternatives: []catalogs.ProviderCredentialProfileID{profile.ID}},
+		}}
+		resolver := credentials.NewResolver(credentials.WithEnvironmentLookup(func(name string) (string, bool) {
+			return "fixture-secret", name == "STARPORT_ACME_API_KEY"
+		}))
+		handle, err := resolver.Provider(provider, nil, false)
+		require.NoError(t, err)
+		material, err = handle.ResolveMaterial(t.Context())
+		require.NoError(t, err)
+		revoke = func() { require.NoError(t, handle.Revoke()) }
+	}
+	identity := credentials.DestinationIdentity{Provider: "acme", Role: "fixture-role", Handle: material.Handle()}
+	grant, err := credentials.NewDestinationGrant(identity, material.Profile(), []credentials.Destination{{Operation: catalogs.ProviderOperationChatCompletions, Method: http.MethodGet, URL: server.URL}})
+	require.NoError(t, err)
+	material = material.WithDestinationGrant(grant, identity, catalogs.ProviderOperationChatCompletions)
 	firstDone := make(chan error, 1)
 	go func() {
 		request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, nil)
@@ -126,8 +148,16 @@ func testDispatchRevocationDuringConnectionWait(t *testing.T, protocol string, e
 		}
 		firstDone <- err
 	}()
-	<-firstStarted
-	<-firstHeaders
+	select {
+	case <-firstStarted:
+	case err := <-firstDone:
+		t.Fatalf("first request did not reach the provider: %v", err)
+	}
+	select {
+	case <-firstHeaders:
+	case err := <-firstDone:
+		t.Fatalf("first request did not return headers: %v", err)
+	}
 
 	waiting := make(chan struct{})
 	trace := &httptrace.ClientTrace{GetConn: func(string) { close(waiting) }}
@@ -148,7 +178,7 @@ func testDispatchRevocationDuringConnectionWait(t *testing.T, protocol string, e
 		time.Sleep(time.Until(deadline))
 		expected = credentials.ErrMaterialExpired
 	} else {
-		validity.Revoke()
+		revoke()
 	}
 	close(releaseFirst)
 	require.NoError(t, <-firstDone)

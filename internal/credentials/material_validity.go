@@ -9,7 +9,7 @@ import (
 // ErrMaterialExpired reports material outside its allowed validity period.
 var ErrMaterialExpired = errors.New("credential material expired")
 
-// MaterialValidity binds a fixed deadline to a shared revocation fence.
+// MaterialValidity binds an optional deadline to a shared revocation fence.
 // Renewal does not extend the deadline of an existing request handle.
 type MaterialValidity struct {
 	deadline time.Time
@@ -17,6 +17,7 @@ type MaterialValidity struct {
 }
 
 // NewMaterialValidity starts a revocable credential generation.
+// A zero deadline permits use until revocation.
 func NewMaterialValidity(deadline time.Time) *MaterialValidity {
 	return &MaterialValidity{deadline: deadline, revoked: new(atomic.Bool)}
 }
@@ -44,7 +45,7 @@ func (v *MaterialValidity) Check(now time.Time) error {
 	if v.revoked == nil || v.revoked.Load() {
 		return ErrMaterialRevoked
 	}
-	if !now.Before(v.deadline) {
+	if !v.deadline.IsZero() && !now.Before(v.deadline) {
 		return ErrMaterialExpired
 	}
 	return nil

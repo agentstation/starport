@@ -297,8 +297,8 @@ func (h *ProviderHandle) ResolveLocal(ctx context.Context) (Material, bool, erro
 	return h.resolve(ctx, false, false, false)
 }
 
-// CachedSource returns a request-time source that performs no external I/O.
-// Background reconciliation owns source refresh.
+// CachedSource returns material from memory without external reads.
+// The background worker refreshes sources.
 func (h *ProviderHandle) CachedSource() MaterialSource {
 	return cachedProviderSource{handle: h}
 }
@@ -344,7 +344,7 @@ func (h *ProviderHandle) Revoke() error {
 	}
 	h.resolver.mu.Lock()
 	h.resolver.epochs[h.identity]++
-	delete(h.resolver.cache, h.identity)
+	h.resolver.revokeCached(h.identity)
 	h.resolver.mu.Unlock()
 	return nil
 }
@@ -416,18 +416,30 @@ func (r *Resolver) resolve(
 			resolveErr = ErrMaterialRevoked
 			retryForWaiters = false
 		}
+		if resolveErr == nil && configured {
+			previous := r.cache[handle.identity]
+			validity := previous.Validity()
+			expiry, _ := material.ExpiresAt()
+			if validity == nil || previous.Version() != material.Version() {
+				validity.Revoke()
+				validity = NewMaterialValidity(expiry)
+			} else {
+				validity = validity.Renew(expiry)
+			}
+			material = material.WithValidity(validity)
+		}
 		call.material = material
 		call.configured = configured
 		call.err = resolveErr
 		call.retryForWaiters = retryForWaiters
 		if call.err != nil && !MayRetainMaterial(call.err) {
-			delete(r.cache, handle.identity)
+			r.revokeCached(handle.identity)
 		}
 		if call.err == nil {
 			if call.configured {
 				r.cache[handle.identity] = call.material
 			} else {
-				delete(r.cache, handle.identity)
+				r.revokeCached(handle.identity)
 			}
 		}
 		delete(r.inflight, handle.identity)
@@ -435,6 +447,12 @@ func (r *Resolver) resolve(
 		r.mu.Unlock()
 		return call.material, call.configured, call.err
 	}
+}
+
+// revokeCached runs with the resolver mutex held.
+func (r *Resolver) revokeCached(identity string) {
+	r.cache[identity].Validity().Revoke()
+	delete(r.cache, identity)
 }
 
 func (r *Resolver) resolveProfiles(
@@ -777,10 +795,7 @@ func materialUsable(material Material, now time.Time) bool {
 	if material.Empty() {
 		return false
 	}
-	if expiresAt, exists := material.ExpiresAt(); exists && !now.Before(expiresAt) {
-		return false
-	}
-	return true
+	return material.CheckValidity(now) == nil
 }
 
 func defaultChainPrimitive(primitive catalogs.ProviderAuthenticationPrimitive) bool {
