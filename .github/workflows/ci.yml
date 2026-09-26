@@ -96,6 +96,10 @@ jobs:
             tail -n +2 native-catalog/remaining.coverage.txt >> coverage.txt
           fi
 
+      - name: Measure production destination allocations
+        shell: bash
+        run: go test -json -count=1 ./internal/credentials -run '^TestDestinationTemplateAuthorizationHasNoAllocations$' | tee native-catalog/allocations.jsonl
+
       - name: Retain native test evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

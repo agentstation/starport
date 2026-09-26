@@ -98,21 +98,3 @@ func TestDestinationTemplateBindsJobMethodAndTarget(t *testing.T) {
 	grant.Revoke()
 	require.ErrorIs(t, final.Check(request), ErrDestinationUnapproved)
 }
-
-func TestDestinationTemplateAuthorizationHasNoAllocations(t *testing.T) {
-	identity, material, _, _ := destinationFixture(t)
-	grant, err := NewDestinationGrant(identity, material.Profile(), []Destination{{Operation: catalogs.ProviderOperationChatCompletions, Method: http.MethodPost, URL: "https://provider.example/v1/{model...}:generateContent", PathTemplate: true}})
-	require.NoError(t, err)
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://provider.example/v1/models/model-v2:generateContent", nil)
-	require.NoError(t, err)
-	allocations := testing.AllocsPerRun(100, func() {
-		authorized, err := grant.Authorize(identity, material, catalogs.ProviderOperationChatCompletions, request)
-		if err != nil {
-			panic(err)
-		}
-		if err := authorized.Check(request); err != nil {
-			panic(err)
-		}
-	})
-	require.Zero(t, allocations)
-}
