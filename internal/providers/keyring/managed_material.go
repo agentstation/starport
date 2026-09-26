@@ -167,7 +167,7 @@ func (c *managedMaterials) loadFlight(key materialIdentity, entry *managedEntry,
 	defer c.work.Done()
 	loadCtx, cancel := context.WithTimeout(c.ctx, c.limits.LoadTimeout)
 	material, err := load(loadCtx)
-	if loadCtx.Err() != nil {
+	if loadCtx.Err() != nil && (err == nil || credentials.MayRetainMaterial(err)) {
 		err = errors.Join(credentials.NewSourceError(credentials.SourceErrorUnavailable, "stored"), loadCtx.Err())
 	}
 	cancel()
@@ -190,7 +190,13 @@ func (c *managedMaterials) publishLoaded(key materialIdentity, entry *managedEnt
 	if c.entries[key] != entry {
 		err = ErrMaterialChanged
 	} else if err != nil {
-		c.remove(key, entry)
+		now := c.now()
+		if credentials.MayRetainMaterial(err) && now.Before(entry.deadline) && entry.material.CheckValidity(now) == nil {
+			// Retain the fixed deadline and let other due scopes refresh first.
+			entry.refreshAt = now.Add(c.limits.RefreshInterval)
+		} else {
+			c.remove(key, entry)
+		}
 	} else {
 		size := material.SecretBytes()
 		if expiry, ok := material.ExpiresAt(); ok && !c.now().Before(expiry) {

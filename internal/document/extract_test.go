@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -185,19 +184,6 @@ func TestThePageBudgetRefusesBeforeAnyPageIsRead(t *testing.T) {
 	require.Contains(t, err.Error(), "12 pages")
 	require.Empty(t, extraction.Pages,
 		"a refused document returns no partial extraction")
-}
-
-// TestTheTimeBudgetIsReportedAsItsOwnBound separates the two deadlines. A
-// caller whose own request timed out and an operator whose extraction bound is
-// too tight have different problems and different fixes, so the refusal says
-// which one fired.
-func TestTheTimeBudgetIsReportedAsItsOwnBound(t *testing.T) {
-	extractor := document.NewExtractor(document.Limits{MaxDuration: time.Nanosecond})
-	_, err := extractor.Extract(t.Context(), document.Input{
-		Data:   fixture(t, "many-pages.pdf"),
-		Format: "pdf",
-	})
-	require.ErrorIs(t, err, document.ErrTimeBudgetExceeded)
 }
 
 // TestACanceledCallerStopsTheExtraction keeps the caller's own cancellation

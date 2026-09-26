@@ -2,7 +2,11 @@ package document
 
 import (
 	"context"
+	"errors"
+	"io"
+	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -56,4 +60,53 @@ func TestACallersOwnCancellationOutranksTheDeadline(t *testing.T) {
 func TestAReadWithNoBoundNeverStops(t *testing.T) {
 	t.Parallel()
 	require.NoError(t, stopped(context.Background()))
+}
+
+func TestTheTimeBudgetIsReportedAsItsOwnBound(t *testing.T) {
+	for _, kind := range []string{"extractor", "caller_deadline", "caller_cancellation"} {
+		t.Run(kind, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx := t.Context()
+				want := ErrTimeBudgetExceeded
+				switch kind {
+				case "caller_deadline":
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(ctx, time.Second)
+					defer cancel()
+					want = context.DeadlineExceeded
+				case "caller_cancellation":
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithCancel(ctx)
+					defer cancel()
+					go func() {
+						time.Sleep(time.Second)
+						cancel()
+					}()
+					want = context.Canceled
+				}
+				extractor := NewExtractor(Limits{MaxDuration: 2 * time.Second})
+				started := time.Now()
+				read := func(ctx context.Context, _ io.ReaderAt, _ int64, limits Limits) (Extraction, error) {
+					if limits.MaxDuration != 2*time.Second {
+						t.Fatal("reader did not receive the configured budget")
+					}
+					<-ctx.Done()
+					return Extraction{}, ctx.Err()
+				}
+				result, err := extractor.extract(ctx, Input{Data: []byte("%PDF-"), Format: "pdf", Filename: "budget.pdf"}, read)
+				if !errors.Is(err, want) || !strings.Contains(err.Error(), "budget.pdf") || len(result.Pages) != 0 {
+					t.Fatalf("deadline result = %+v, error = %v, want %v", result, err, want)
+				}
+				elapsed := time.Second
+				if kind == "extractor" {
+					elapsed = 2 * time.Second
+				} else if errors.Is(err, ErrTimeBudgetExceeded) {
+					t.Fatal("caller cancellation became an extractor refusal")
+				}
+				if time.Since(started) != elapsed {
+					t.Fatalf("deadline elapsed %s, want %s", time.Since(started), elapsed)
+				}
+			})
+		})
+	}
 }

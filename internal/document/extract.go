@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 )
 
 // Extractor reads text out of a document inside this process.
@@ -36,6 +37,10 @@ func (e *Extractor) Limits() Limits { return e.limits }
 // scanned document, and reporting it as one is what lets the recognition
 // engine take over.
 func (e *Extractor) Extract(ctx context.Context, input Input) (Extraction, error) {
+	return e.extract(ctx, input, readPDF)
+}
+
+func (e *Extractor) extract(ctx context.Context, input Input, read func(context.Context, io.ReaderAt, int64, Limits) (Extraction, error)) (Extraction, error) {
 	if len(input.Data) == 0 {
 		return Extraction{}, e.refuse(input, ErrEmptyDocument)
 	}
@@ -59,7 +64,7 @@ func (e *Extractor) Extract(ctx context.Context, input Input) (Extraction, error
 	deadline, cancel := context.WithTimeout(ctx, e.limits.MaxDuration)
 	defer cancel()
 
-	extraction, err := readPDF(deadline, bytes.NewReader(input.Data), int64(len(input.Data)), e.limits)
+	extraction, err := read(deadline, bytes.NewReader(input.Data), int64(len(input.Data)), e.limits)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 			// The extractor's own bound fired rather than the caller's. Say
