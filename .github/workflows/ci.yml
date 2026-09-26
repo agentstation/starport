@@ -72,11 +72,29 @@ jobs:
       - name: Run native tests
         shell: bash
         run: |
+          # Catalog recovery starts cold child processes. Give that package
+          # the runner before the remaining packages share its CPU and memory.
+          go list ./... > native-catalog/packages.txt
+          remaining=()
+          while IFS= read -r package; do
+            if [[ "$package" != "github.com/agentstation/starport/internal/catalog" ]]; then
+              remaining+=("$package")
+            fi
+          done < native-catalog/packages.txt
           coverage=()
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
-            coverage=(-coverprofile=coverage.txt -covermode=atomic)
+            coverage=(-coverprofile=native-catalog/catalog.coverage.txt -covermode=atomic)
           fi
-          go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" ./... | tee native-catalog/tests.jsonl
+          go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" ./internal/catalog | tee native-catalog/tests.jsonl
+          coverage=()
+          if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
+            coverage=(-coverprofile=native-catalog/remaining.coverage.txt -covermode=atomic)
+          fi
+          go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" "${remaining[@]}" | tee -a native-catalog/tests.jsonl
+          if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
+            cat native-catalog/catalog.coverage.txt > coverage.txt
+            tail -n +2 native-catalog/remaining.coverage.txt >> coverage.txt
+          fi
 
       - name: Retain native test evidence
         if: always()

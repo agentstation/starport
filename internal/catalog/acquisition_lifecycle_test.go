@@ -55,15 +55,7 @@ func TestProductionAcquisitionLifecycle(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(metadata)), Request: r}, nil
 	})
 	t.Cleanup(func() { http.DefaultTransport = prior })
-	source := filepath.Join(t.TempDir(), "catalog.json")
-	payload, err := catalogs.EncodeCatalogPayload(acquisitionLifecycleCatalog(t, server.URL))
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(source, payload, 0600))
-	settings := identityTestSettings(filepath.Join(t.TempDir(), "runtime"), "", "")
-	settings.Source = string(runtime.SourceFile)
-	settings.SourceURL = source
-	settings.SourceStartupPolicy = string(runtime.StartupRequireSource)
-	settings.SourcePollInterval = 0
+	settings := acquisitionCatalogSettings(t, server.URL)
 	settings.SourceCacheDirectory = filepath.Join(t.TempDir(), "cache")
 	settings.AcquisitionEnabled = true
 	settings.AcquisitionInterval = time.Hour
@@ -190,4 +182,19 @@ func acquisitionLifecycleCatalog(t *testing.T, endpoint string) *catalogs.Catalo
 	catalog, err := builder.Build()
 	require.NoError(t, err)
 	return catalog
+}
+
+// acquisitionCatalogSettings selects a controlled baseline for acquisition contracts.
+func acquisitionCatalogSettings(t *testing.T, endpoint string) Settings {
+	t.Helper()
+	source := filepath.Join(t.TempDir(), "catalog.json")
+	payload, err := catalogs.EncodeCatalogPayload(acquisitionLifecycleCatalog(t, endpoint))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(source, payload, 0600))
+	settings := identityTestSettings(filepath.Join(t.TempDir(), "runtime"), "", "")
+	settings.Source = string(runtime.SourceFile)
+	settings.SourceURL = source
+	settings.SourceStartupPolicy = string(runtime.StartupRequireSource)
+	settings.SourcePollInterval = 0
+	return settings
 }

@@ -22,7 +22,7 @@ import (
 
 func TestRuntimeAcquiresSelectedMetadataSource(t *testing.T) {
 	var calls atomic.Int64
-	payload := metadataSourcePayload(t)
+	payload := metadataSourcePayloadWithRetainedRecord(t)
 	prior := http.DefaultTransport
 	http.DefaultTransport = metadataTransport(func(request *http.Request) (*http.Response, error) {
 		if request.URL.String() != "https://models.dev/api.json" {
@@ -32,7 +32,8 @@ func TestRuntimeAcquiresSelectedMetadataSource(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(payload)), Request: request}, nil
 	})
 	t.Cleanup(func() { http.DefaultTransport = prior })
-	settings := identityTestSettings(filepath.Join(t.TempDir(), "runtime"), "", "")
+	settings := acquisitionCatalogSettings(t, "https://provider.invalid")
+	writeMetadataBaseline(t, settings.SourceURL)
 	settings.SourceCacheDirectory = filepath.Join(t.TempDir(), "source-cache")
 	settings.AcquisitionEnabled = false
 	settings.Values = map[string]string{catalogconfig.AcquisitionSources: string(sources.ModelsDevHTTPID)}
@@ -51,15 +52,29 @@ func TestRuntimeAcquiresSelectedMetadataSource(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, connected.Close(context.Background())) })
 	require.Zero(t, calls.Load(), "disabled automatic acquisition must remain passive")
+	first, err := connected.Refresh(t.Context())
+	require.NoError(t, err)
+	require.NotEmpty(t, first.Acquisition.SourceObservations)
+	for _, observation := range first.Acquisition.SourceObservations {
+		require.EqualValues(t, sources.ModelsDevHTTPID, observation.Source)
+		require.EqualValues(t, sources.ObservationStatusSucceeded, observation.Status)
+	}
 	initial, err := connected.CurrentCandidate(t.Context())
 	require.NoError(t, err)
 	baseline, err := connected.candidates.Get(t.Context(), initial.State.GenerationID)
 	require.NoError(t, err)
 	baselineProvider, err := initial.State.Catalog.Provider("openai")
 	require.NoError(t, err)
+	require.Contains(t, baselineProvider.Models, "retained-only")
+	// A complete first observation attributes the record to this source.
+	// The next response omits it without granting removal permission.
+	payload = metadataSourcePayload(t)
+	// Evict the transport cache so the collector reads the changed response.
+	require.NoError(t, os.Remove(filepath.Join(settings.SourceCacheDirectory, "models.dev", "api.json")))
+	priorCalls := calls.Load()
 	report, err := connected.Refresh(t.Context())
 	require.NoError(t, err)
-	require.Positive(t, calls.Load(), "selected non-provider source must reach its collector")
+	require.Greater(t, calls.Load(), priorCalls, "selected non-provider source must reach its collector")
 	stored, err := os.ReadFile(filepath.Join(settings.SourceCacheDirectory, "models.dev", "api.json"))
 	require.NoError(t, err)
 	require.JSONEq(t, string(payload), string(stored))
@@ -79,11 +94,8 @@ func TestRuntimeAcquiresSelectedMetadataSource(t *testing.T) {
 	accepted, err := connected.accepted.Get(t.Context(), candidate.State.GenerationID)
 	require.NoError(t, err)
 	expected := append([]catalogs.SourceObservationLink(nil), report.Acquisition.SourceObservations...)
-	for _, observation := range baseline.Manifest.SourceObservations {
-		if observation.Source != sources.ModelsDevHTTPID {
-			expected = append(expected, observation)
-		}
-	}
+	// The omitted record retains its original observation receipt.
+	expected = append(expected, baseline.Manifest.SourceObservations...)
 	require.ElementsMatch(t, expected, accepted.Manifest.SourceObservations)
 	require.NoError(t, connected.Close(t.Context()))
 	require.NoError(t, store.Close())
@@ -172,4 +184,32 @@ func metadataSourcePayload(t *testing.T) []byte {
 	payload, err := json.Marshal(providers)
 	require.NoError(t, err)
 	return payload
+}
+
+func metadataSourcePayloadWithRetainedRecord(t *testing.T) []byte {
+	t.Helper()
+	var providers map[string]map[string]any
+	require.NoError(t, json.Unmarshal(metadataSourcePayload(t), &providers))
+	models := providers["openai"]["models"].(map[string]any)
+	models["retained-only"] = map[string]any{"id": "retained-only", "name": "Retained source record", "limit": map[string]any{"context": 32768, "output": 4096}}
+	payload, err := json.Marshal(providers)
+	require.NoError(t, err)
+	return payload
+}
+
+func writeMetadataBaseline(t *testing.T, path string) {
+	t.Helper()
+	baseline := acquisitionLifecycleCatalog(t, "https://provider.invalid")
+	builder, err := catalogs.NewBuilderFrom(baseline)
+	require.NoError(t, err)
+	provider, err := baseline.Provider("openai")
+	require.NoError(t, err)
+	retained := *provider.Models["fixture-chat"]
+	retained.ID = "retained-only"
+	require.NoError(t, builder.SetProviderModel("openai", retained))
+	catalog, err := builder.Build()
+	require.NoError(t, err)
+	payload, err := catalogs.EncodeCatalogPayload(catalog)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, payload, 0600))
 }

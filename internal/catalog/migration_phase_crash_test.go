@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +22,9 @@ func TestMigrationPhaseProcessRecovery(t *testing.T) {
 		migrationPhaseChild(t, root, os.Getenv("STARPORT_TEST_MIGRATION_PHASE_STOP"))
 		return
 	}
+	// Each child decodes the compiled baseline under race instrumentation.
+	// Serialize cold processes while fixture setup and recovery stay parallel.
+	var childProcess sync.Mutex
 	for _, phase := range []string{"stage", "publish", "complete"} {
 		t.Run(phase, func(t *testing.T) {
 			t.Parallel()
@@ -30,11 +34,13 @@ func TestMigrationPhaseProcessRecovery(t *testing.T) {
 			prepareMigrationPhase(t, root)
 			executable, err := os.Executable()
 			require.NoError(t, err)
+			childProcess.Lock()
 			ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
-			defer cancel()
 			child := exec.CommandContext(ctx, executable, "-test.run=^TestMigrationPhaseProcessRecovery$")
 			child.Env = append(os.Environ(), "STARPORT_TEST_MIGRATION_PHASE_ROOT="+root, "STARPORT_TEST_MIGRATION_PHASE_STOP="+phase)
 			output, err := child.CombinedOutput()
+			cancel()
+			childProcess.Unlock()
 			var exited *exec.ExitError
 			require.ErrorAs(t, err, &exited, string(output))
 			require.Equal(t, migrationCrashExit, exited.ExitCode(), string(output))

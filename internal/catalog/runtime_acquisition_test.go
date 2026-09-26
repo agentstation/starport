@@ -43,18 +43,10 @@ func TestStarmapAcquisitionPublishesRefresh(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	settings := acquisitionCatalogSettings(t, "https://provider.invalid")
+	settings.AcquisitionEnabled = true
 	runtime, err := openRuntime(
-		t.Context(),
-		storage.NewMockStore(),
-		Settings{
-			Source:              string(runtime.SourceEmbedded),
-			SourceStartupPolicy: string(runtime.StartupPreferLocal),
-			SourcePollInterval:  time.Hour,
-			SourceMaxHops:       8,
-			AcquisitionEnabled:  true,
-			TransferIdleTimeout: time.Minute,
-			TransferMaxDuration: time.Minute,
-		},
+		t.Context(), storage.NewMockStore(), settings,
 		runtimeCollectors{providers: acquirer},
 	)
 	require.NoError(t, err)
