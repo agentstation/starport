@@ -222,13 +222,10 @@ func (s *FleetStore) CommitPublication(ctx context.Context, publication runtime.
 			return runtime.FleetHead{}, fleetStoreConflict("the generation ID already identifies different content")
 		}
 	}
-	if err = m.collect(ctx); err != nil {
-		return runtime.FleetHead{}, err
-	}
 	if err = m.capacity(len(encoded)); err != nil {
 		return runtime.FleetHead{}, err
 	}
-	blob, err := m.stageBlob(ctx, head, encoded, grant)
+	blob, err := m.stageBlob(ctx, snapshot, encoded, grant)
 	if err != nil {
 		return runtime.FleetHead{}, err
 	}

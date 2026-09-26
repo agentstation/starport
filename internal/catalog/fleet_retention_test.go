@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	catalogstorage "github.com/agentstation/starmap/pkg/catalogs/storage"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/runtime"
 	"github.com/stretchr/testify/require"
@@ -46,6 +47,7 @@ func TestFleetRetentionBoundsCommittedSnapshots(t *testing.T) {
 			first = head
 		}
 	}
+	collectFleetTest(t, fleet, head)
 	history, err := fleet.AcceptedHistory(t.Context())
 	require.NoError(t, err)
 	require.Len(t, history, catalogGenerationIndexCap)
@@ -83,11 +85,13 @@ func TestFleetRetentionProtectsPinnedGeneration(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, fleet.AcceptPublication(ctx, head, previous))
 	}
+	collectFleetTest(t, fleet, head)
 	_, err = fleet.Get(ctx, first.GenerationID)
 	require.NoError(t, err)
 	require.NoError(t, release())
 	require.NoError(t, release())
 	require.NoError(t, fleet.AcceptPublication(ctx, head, head))
+	collectFleetTest(t, fleet, head)
 	_, err = fleet.Get(ctx, first.GenerationID)
 	require.ErrorIs(t, err, starmaperrors.ErrNotFound)
 	require.Equal(t, first.GenerationID, generation.Manifest.GenerationID, "the independent in-memory snapshot remains usable")
@@ -201,6 +205,7 @@ func TestFleetRetentionConcurrentReadersAndCollection(t *testing.T) {
 		head, err = fleet.CommitPublication(ctx, fleetTestPublication(t, grant, previous, fmt.Sprintf("concurrent-%d", i)))
 		require.NoError(t, err)
 		require.NoError(t, fleet.AcceptPublication(ctx, head, previous))
+		collectFleetTest(t, fleet, head)
 	}
 	require.NoError(t, <-done)
 }
@@ -237,6 +242,7 @@ func TestFleetRetentionCapacityRefusesWithoutMovingHead(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, head, current)
 	require.NoError(t, releases[0]())
+	collectFleetTest(t, fleet, head)
 	_, err = fleet.CommitPublication(ctx, fleetTestPublication(t, grant, head, "capacity-recovered"))
 	require.NoError(t, err)
 }
@@ -304,4 +310,11 @@ func TestFleetRetentionCorruptionCannotDeleteSelectedBytes(t *testing.T) {
 			require.ElementsMatch(t, before, after)
 		})
 	}
+}
+
+func collectFleetTest(t *testing.T, fleet *FleetStore, head runtime.FleetHead) catalogstorage.RetentionReport {
+	t.Helper()
+	report, err := fleet.Collect(t.Context(), catalogstorage.RetentionRequest{ExpectedGenerationID: head.GenerationID, MaxGenerations: catalogGenerationIndexCap, MaxBytes: 1 << 30})
+	require.NoError(t, err)
+	return report
 }

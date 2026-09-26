@@ -20,12 +20,18 @@ const (
 )
 
 // stageBlob records ownership before writing immutable chunks.
-func (m *fleetMaintenance) stageBlob(ctx context.Context, head runtime.FleetHead, encoded, grant []byte) (fleetBlob, error) {
+func (m *fleetMaintenance) stageBlob(ctx context.Context, snapshot runtime.FleetSnapshot, encoded, grant []byte) (fleetBlob, error) {
 	if len(encoded) == 0 || len(encoded) > fleetEncodedMaxBytes {
 		return fleetBlob{}, errors.New("fleet publication exceeds the encoded byte bound")
 	}
 	record, chunks := encodeGenerationPayload(encoded)
-	blob := fleetBlob{ID: rand.Text(), Head: head, Record: record}
+	logicalBytes, err := fleetGenerationBytes(snapshot.Publication.Generation)
+	if err != nil {
+		return fleetBlob{}, err
+	}
+	blob := fleetBlob{ID: rand.Text(), Head: snapshot.Head, Record: record,
+		GenerationBytes: logicalBytes,
+		RecoveryBytes:   int64(len(snapshot.Publication.Recovery.Data))}
 	m.inventory.Pending = &blob
 	if err := m.save(ctx); err != nil {
 		return fleetBlob{}, err
@@ -72,4 +78,9 @@ func (s *FleetStore) readBlob(ctx context.Context, blob fleetBlob) ([]byte, erro
 		return nil, errors.New("fleet publication checksum mismatch")
 	}
 	return data, nil
+}
+
+func fleetGenerationBytes(generation catalogs.Generation) (int64, error) {
+	manifest, err := json.Marshal(generation.Manifest)
+	return int64(len(manifest) + len(generation.Payload)), err
 }

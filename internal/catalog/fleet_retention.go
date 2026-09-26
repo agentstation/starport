@@ -27,9 +27,11 @@ const (
 )
 
 type fleetBlob struct {
-	ID     string            `json:"id"`
-	Head   runtime.FleetHead `json:"head"`
-	Record generationRecord  `json:"record"`
+	ID              string            `json:"id"`
+	Head            runtime.FleetHead `json:"head"`
+	Record          generationRecord  `json:"record"`
+	GenerationBytes int64             `json:"generation_bytes"`
+	RecoveryBytes   int64             `json:"recovery_bytes"`
 }
 
 type fleetInventory struct {
@@ -49,6 +51,10 @@ type fleetMaintenance struct {
 }
 
 func (s *FleetStore) maintain(ctx context.Context) (*fleetMaintenance, error) {
+	return s.beginMaintenance(ctx, true)
+}
+
+func (s *FleetStore) beginMaintenance(ctx context.Context, recoverPending bool) (*fleetMaintenance, error) {
 	if err := s.checkApproval(ctx); err != nil {
 		return nil, err
 	}
@@ -60,8 +66,10 @@ func (s *FleetStore) maintain(ctx context.Context) (*fleetMaintenance, error) {
 			if err := m.load(ctx); err != nil {
 				return nil, errors.Join(err, m.close())
 			}
-			if err := m.recover(ctx); err != nil {
-				return nil, errors.Join(err, m.close())
+			if recoverPending {
+				if err := m.recover(ctx); err != nil {
+					return nil, errors.Join(err, m.close())
+				}
 			}
 			return m, nil
 		}
@@ -244,67 +252,14 @@ func (m *fleetMaintenance) read(ctx context.Context, blob fleetBlob) (runtime.Fl
 	if snapshot.Head != blob.Head {
 		return snapshot, fleetStoreConflict("the stored snapshot differs from the selected head")
 	}
-	return snapshot, nil
-}
-
-// collect retains the current head, accepted rollback history, active readers, and recent receipts.
-func (m *fleetMaintenance) collect(ctx context.Context) error {
-	head, headBytes, err := m.readHead(ctx)
+	size, err := fleetGenerationBytes(snapshot.Publication.Generation)
 	if err != nil {
-		return err
+		return snapshot, err
 	}
-	accepted, acceptedBytes, err := m.owner.readAcceptance(ctx)
-	if err != nil && !errors.Is(err, storage.ErrNotFound) {
-		return err
+	if blob.GenerationBytes != size || blob.RecoveryBytes != int64(len(snapshot.Publication.Recovery.Data)) {
+		return snapshot, errors.New("fleet retained byte counts differ from the stored snapshot")
 	}
-	keep := map[string]bool{}
-	protect := func(h runtime.FleetHead) error {
-		if h == (runtime.FleetHead{}) {
-			return nil
-		}
-		entry, ok := m.publication(h)
-		if !ok {
-			return errors.New("a protected fleet publication is missing")
-		}
-		keep[entry.ID] = true
-		return nil
-	}
-	if err = protect(head); err != nil {
-		return err
-	}
-	if err = protect(accepted.Head); err != nil {
-		return err
-	}
-	for _, entry := range accepted.History {
-		b, ok := m.generation(entry.GenerationID)
-		if !ok {
-			return errors.New("an accepted rollback generation is missing")
-		}
-		keep[b.ID] = true
-	}
-	for _, id := range m.inventory.Readers {
-		keep[id] = true
-	}
-	start := max(0, len(m.inventory.Entries)-catalogGenerationIndexCap)
-	for _, entry := range m.inventory.Entries[start:] {
-		keep[entry.ID] = true
-	}
-	for i := 0; i < len(m.inventory.Entries); {
-		entry := m.inventory.Entries[i]
-		if keep[entry.ID] {
-			i++
-			continue
-		}
-		m.inventory.Pending = &entry
-		m.inventory.Entries = slices.Delete(m.inventory.Entries, i, i+1)
-		if err = m.save(ctx, storage.CompareAndSwapMutation{Key: m.owner.prefix + "head", ExpectedValue: headBytes, NewValue: headBytes}, storage.CompareAndSwapMutation{Key: m.owner.prefix + "accepted", ExpectedValue: acceptedBytes, NewValue: acceptedBytes}); err != nil {
-			return err
-		}
-		if err = m.recover(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
+	return snapshot, nil
 }
 
 func (m *fleetMaintenance) readHead(ctx context.Context) (runtime.FleetHead, []byte, error) {
@@ -384,7 +339,7 @@ func (m *fleetMaintenance) capacity(encoded int) error {
 		total += int64(b.Record.Size)
 	}
 	if len(m.inventory.Entries) >= fleetRetentionMaxEntries || total > fleetRetentionMaxBytes {
-		return fmt.Errorf("fleet retention capacity reached: %d publications, %d bytes; release protected generations", len(m.inventory.Entries), total)
+		return fmt.Errorf("fleet retention capacity reached: %d publications, %d bytes; run collection or release protected generations", len(m.inventory.Entries), total)
 	}
 	return nil
 }

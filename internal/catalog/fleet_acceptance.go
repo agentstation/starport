@@ -68,7 +68,7 @@ func (s *FleetStore) AcceptPublication(ctx context.Context, selected, expected r
 		return err
 	}
 	if current.Head == selected {
-		return m.collect(ctx)
+		return nil
 	}
 	if current.Head != expected || selected.Revision <= expected.Revision {
 		return fleetStoreConflict("the accepted catalog predecessor changed or the candidate regressed")
@@ -109,7 +109,7 @@ func (s *FleetStore) AcceptPublication(ctx context.Context, selected, expected r
 	if err != nil {
 		return err
 	}
-	return m.collect(ctx)
+	return nil
 }
 
 // AcceptedHistory returns a bounded index from the same record as the accepted head.

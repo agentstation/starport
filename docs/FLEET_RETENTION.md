@@ -1,9 +1,10 @@
 # Fleet catalog retention
 
-Status: local implementation pending policy integration and review.
+Status: local implementation pending final review and native CI.
 
-The final adapter must use Starmap retention settings, including disabled automatic cleanup and explicit collection.
-Current publication-triggered cleanup does not yet meet that configuration contract. Do not qualify this implementation for production.
+Starmap owns automatic collection through its canonical retention settings. Disabling automatic cleanup preserves committed publications until explicit collection.
+Publishing or accepting a catalog does not collect committed data. Recovery can still finish a prior deletion or remove an abandoned upload.
+The library collection API remains available when the operator disables automatic cleanup.
 
 Starport owns fleet payload retention in the Valkey adapter. Starmap owns acquisition and catalog selection.
 Maintenance does not run on inference requests. Requests use the accepted in-memory catalog.
@@ -23,12 +24,15 @@ The pending descriptor remains durable until every chunk deletion completes.
 No catalog chunk expires by time. An outage cannot expire the selected catalog bytes.
 
 Collection protects the current publication, accepted publication, accepted rollback history, and active generation readers.
-It also retains the most recent 32 publication receipts for exact retries.
+It also retains the most recent 32 publication receipts for exact retries. Explicit required generation IDs receive the same protection.
+
+Configured generation and byte limits control other retained generations. Limits cannot remove protected content.
+When protected content exceeds a limit, collection reports `OverLimit`.
 An older retry whose receipt has left retention returns a conflict and cannot move the head.
 
 A generation reader retains its bytes until explicit release. Reader claims do not expire with a host clock.
 The adapter permits at most 256 claims, 96 retained publications, and 2 GiB of encoded retained and staged bytes.
-It refuses another upload when protected content exhausts those limits.
+It refuses another upload at those limits. Run explicit collection or release protected generations before retrying.
 CSP13 owns inspection and fenced recovery of abandoned reader claims.
 
 Collection removes an unprotected entry from the inventory before deleting its chunks.
@@ -38,3 +42,16 @@ Existing inference snapshots remain valid independent copies of catalog data.
 
 The pre-release fleet format requires its inventory whenever a durable head exists.
 Missing or invalid inventory refuses operation. It never authorizes an empty-store reset.
+
+Collection reports public catalog usage separately from publication storage. A public generation counts once, with its manifest and payload bytes.
+Input-only updates can create several receipts for that generation. Publication accounting reports receipt count, encoded bytes, recovery bytes, and active reader claims.
+
+Encoded bytes include pending reservations. Public generation bytes exclude private recovery inputs and backend replication.
+Starmap copies this report into its in-memory retention status. Reading that status does not query storage.
+
+A dry run returns the proposed result and preserves stored data, including pending cleanup.
+The scan limit bounds the number of inspected inventory entries. The input byte limit bounds receipt and chunk reads for cleanup.
+
+Collection reserves the maximum receipt read and complete chunk size before deletion. An insufficient limit refuses the pass before data changes.
+Increase `catalog_retention.input_max_bytes` when the reported cleanup cannot fit the configured bound.
+An interrupted deletion retains a durable pending record. The next collection can resume it.
