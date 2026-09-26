@@ -92,7 +92,7 @@ func TestFileManifestSharedBackendsOmitCredentialsAndLocalSelection(t *testing.T
 			cfg, err := NewLoader().WithPaths(paths).WithEnvironment(nil).WithEnvFiles().Load(t.Context(), func(cfg *Config) {
 				cfg.Storage.Mode = storageModeValkey
 				cfg.Storage.Valkey.URL = "redis://account:kv-secret@127.0.0.1:1"
-				cfg.Storage.SQL.Mode = sql
+				cfg.Storage.SQL.Mode = sqlModePostgres
 				cfg.Storage.SQL.Postgres.URL = "postgres://account:sql-secret@127.0.0.1:1/db"
 				cfg.Storage.SQL.MySQL.DSN = "account:sql-secret@tcp(127.0.0.1:1)/db"
 				cfg.Files.Backend = BlobBackendObjectStore
@@ -102,6 +102,11 @@ func TestFileManifestSharedBackendsOmitCredentialsAndLocalSelection(t *testing.T
 				cfg.Files.ObjectStore.SecretAccessKey = "private-secret-key"
 			})
 			require.NoError(t, err)
+			// Inspection must redact an unqualified backend selection too.
+			cfg.Storage.SQL.Mode = sql
+			if sql == sqlModeMySQL {
+				require.Error(t, cfg.Validate())
+			}
 			report, err := cfg.FileManifest("test")
 			require.NoError(t, err)
 			for _, role := range []string{"badger", "sqlite", "sqlite-wal", "files", "setup-transaction", "setup-storage-guard", "setup-database-stage", "setup-config-publications"} {

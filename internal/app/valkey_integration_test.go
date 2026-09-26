@@ -136,6 +136,11 @@ func TestSharedStartupDoesNotCreateLocalDatabases(t *testing.T) {
 
 func isolatedFleetConfig(t *testing.T, base *config.Config) *config.Config {
 	t.Helper()
+	base.Files.Backend = config.BlobBackendObjectStore
+	base.Files.ObjectStore.Bucket = "shared-startup-test"
+	base.Files.ObjectStore.Region = "us-east-1"
+	base.Files.ObjectStore.Endpoint = "http://127.0.0.1:1"
+
 	cfg, err := config.NewLoader().WithPaths(config.PathsForConfigDir(t.TempDir())).
 		WithEnvironment(map[string]string{"STARPORT_DEPLOYMENT_ID": "app-test-" + rand.Text()}).
 		WithEnvFiles().Load(t.Context(), func(cfg *config.Config) { *cfg = *base })

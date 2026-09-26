@@ -437,6 +437,10 @@ func (c *Config) Validate() error {
 		return err
 	}
 
+	if err := c.validateStorageRecipe(); err != nil {
+		return err
+	}
+
 	// Exposure is the one decision no single section can make: it reads the
 	// authentication mode against the bind address.
 	return c.validateAuthenticationExposure()

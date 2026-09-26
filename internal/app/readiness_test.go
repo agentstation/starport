@@ -38,6 +38,7 @@ func TestReadinessTracksAdmissionWithoutBlockingLiveness(t *testing.T) {
 	cfg.Storage.Mode = "valkey"
 	cfg.Storage.Valkey.URL = "redis://127.0.0.1:6379"
 	cfg.Storage.Valkey.MaxConnections = 10
+	useSharedRecipeWithLocalTestStores(t, cfg, &factories)
 	application, err := New(cfg, withRuntimeFactories(factories))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
