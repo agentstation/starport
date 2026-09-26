@@ -421,29 +421,37 @@ func (r *Runtime) Close(ctx context.Context) error {
 
 func (r *Runtime) forward(ctx context.Context, done chan struct{}) {
 	defer close(done)
-	updates := r.runtime.Updates()
-	var retry <-chan time.Time
-	if r.fleet != nil {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		retry = ticker.C
-	}
+	r.forwardFrom(ctx, r.runtime.Updates())
+}
+
+func (r *Runtime) forwardFrom(ctx context.Context, updates <-chan starmap.CatalogState) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	var pending *starmap.CatalogState
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-retry:
-			r.offer(ctx, r.runtime.State())
+		case <-ticker.C:
+			if r.fleet != nil {
+				r.offer(ctx, r.runtime.State())
+			} else if pending != nil && r.offer(ctx, *pending) {
+				pending = nil
+			}
 		case state, open := <-updates:
 			if !open {
 				return
 			}
-			r.offer(ctx, state)
+			if r.offer(ctx, state) {
+				pending = nil
+			} else {
+				pending = &state
+			}
 		}
 	}
 }
 
-func (r *Runtime) offer(ctx context.Context, state starmap.CatalogState) {
+func (r *Runtime) offer(ctx context.Context, state starmap.CatalogState) bool {
 	if r.fleet != nil {
 		// A queued notification can precede the current durable publication.
 		state = r.runtime.State()
@@ -455,31 +463,33 @@ func (r *Runtime) offer(ctx context.Context, state starmap.CatalogState) {
 			alreadyOffered := r.lastSeen == identity
 			r.mu.Unlock()
 			if alreadyOffered && r.validation.snapshot().State != RouteValidationRejected {
-				return
+				return true
 			}
 		}
 	}
 	candidate, err := r.candidateFromState(ctx, state)
 	if err != nil {
-		r.validation.reject(Candidate{State: state}, err)
-		return
+		r.validation.observe(Candidate{State: state})
+		return false
 	}
 	identity := stateIdentity(state)
 	identity.fleetRevision = candidate.FleetHead.Revision
 	if identity.generationID == "" {
-		return
+		return true
 	}
 	r.mu.Lock()
 	if r.lastSeen == identity && (r.fleet == nil || r.validation.snapshot().State != RouteValidationRejected) {
 		r.mu.Unlock()
-		return
+		return true
 	}
 	r.lastSeen = identity
 	r.mu.Unlock()
 	r.validation.observe(candidate)
 	select {
 	case r.updates <- candidate:
+		return true
 	case <-ctx.Done():
+		return false
 	}
 }
 
