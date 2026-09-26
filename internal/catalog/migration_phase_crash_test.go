@@ -25,6 +25,9 @@ func TestMigrationPhaseProcessRecovery(t *testing.T) {
 		t.Run(phase, func(t *testing.T) {
 			t.Parallel()
 			root := t.TempDir()
+			// Prepare durable input before the bounded crash process.
+			// The child owns every migration operation.
+			prepareMigrationPhase(t, root)
 			executable, err := os.Executable()
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
@@ -92,7 +95,7 @@ func migrationPhaseSettings(root string) Settings {
 	return settings
 }
 
-func migrationPhaseChild(t *testing.T, root, stop string) {
+func prepareMigrationPhase(t *testing.T, root string) {
 	t.Helper()
 	payload, err := catalogs.EncodeCatalogPayload(acquisitionLifecycleCatalog(t, "https://provider.invalid"))
 	require.NoError(t, err)
@@ -131,6 +134,17 @@ func migrationPhaseChild(t *testing.T, root, stop string) {
 	raw, err := json.Marshal(migration)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(root, "request.json"), raw, 0600))
+	require.NoError(t, store.Close())
+}
+
+func migrationPhaseChild(t *testing.T, root, stop string) {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(root, "request.json"))
+	require.NoError(t, err)
+	var migration RuntimeMigration
+	require.NoError(t, json.Unmarshal(raw, &migration))
+	settings := migrationPhaseSettings(root)
+	store := authoritySnapshotBadger(t, filepath.Join(root, "badger"))
 	_, err = migration.Prepare(t.Context(), store, settings)
 	require.NoError(t, err)
 	_, err = migration.Stage(t.Context(), store, settings)

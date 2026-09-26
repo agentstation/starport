@@ -71,7 +71,12 @@ jobs:
 
       - name: Run native tests
         shell: bash
-        run: go test -json -count=1 ${{ matrix.race }} -coverprofile=coverage.txt -covermode=atomic ./... | tee native-catalog/tests.jsonl
+        run: |
+          coverage=()
+          if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
+            coverage=(-coverprofile=coverage.txt -covermode=atomic)
+          fi
+          go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" ./... | tee native-catalog/tests.jsonl
 
       - name: Retain native test evidence
         if: always()

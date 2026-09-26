@@ -475,11 +475,9 @@ func readyStore(t *testing.T, version string) (*Store, catalogs.ProviderID) {
 
 func embeddedCatalog(t *testing.T) *catalogs.Catalog {
 	t.Helper()
-	source, err := starmap.EmbeddedBuilder()
+	client, err := starmap.New()
 	require.NoError(t, err)
-	catalog, err := source.Build()
-	require.NoError(t, err)
-	return catalog
+	return client.Catalog()
 }
 
 func catalogAdapterObservations(

@@ -131,10 +131,9 @@ func (s syntheticCatalogSource) CurrentCatalogState() starmap.CatalogState { ret
 
 func syntheticInferenceCatalog(t *testing.T, baseURL string) *catalogs.Catalog {
 	t.Helper()
-	baselineBuilder, err := starmap.EmbeddedBuilder()
+	client, err := starmap.New()
 	require.NoError(t, err)
-	baseline, err := baselineBuilder.Build()
-	require.NoError(t, err)
+	baseline := client.Catalog()
 	builder := catalogs.NewEmpty()
 	for _, author := range baseline.Authors().List() {
 		require.NoError(t, builder.SetAuthor(author))
