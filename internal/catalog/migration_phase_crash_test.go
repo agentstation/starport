@@ -23,6 +23,7 @@ func TestMigrationPhaseProcessRecovery(t *testing.T) {
 	}
 	for _, phase := range []string{"stage", "publish", "complete"} {
 		t.Run(phase, func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
 			executable, err := os.Executable()
 			require.NoError(t, err)
