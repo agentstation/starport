@@ -46,4 +46,22 @@ if "$repository_root/scripts/verify-homebrew-cask.sh" "$legacy" >/dev/null 2>&1;
 	exit 1
 fi
 
+missing_arch="$test_root/missing-arch.rb"
+sed '/depends_on arch: :arm64/d' "$valid" > "$missing_arch"
+if "$repository_root/scripts/verify-homebrew-cask.sh" "$missing_arch" >/dev/null 2>&1; then
+	printf 'Homebrew cask verifier accepted missing macOS architecture restriction\n' >&2
+	exit 1
+fi
+
+intel_mac="$test_root/intel-mac.rb"
+sed '/  on_intel do/a\
+    on_macos do\
+      sha256 "@CHECKSUM@"\
+    end
+' "$valid" > "$intel_mac"
+if "$repository_root/scripts/verify-homebrew-cask.sh" "$intel_mac" >/dev/null 2>&1; then
+	printf 'Homebrew cask verifier accepted an Intel Mac artifact\n' >&2
+	exit 1
+fi
+
 printf 'PASS scoped Homebrew cask hook regression tests\n'

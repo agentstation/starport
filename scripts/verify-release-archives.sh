@@ -18,7 +18,7 @@ actual_names="$(mktemp "${TMPDIR:-/tmp}/starport-release-checksums.XXXXXX")"
 archive_names="$(mktemp "${TMPDIR:-/tmp}/starport-release-archives.XXXXXX")"
 trap 'rm -f "$expected_names" "$actual_names" "$archive_names"' EXIT
 
-for platform in darwin_arm64 darwin_x86_64 linux_arm64 linux_x86_64; do
+for platform in darwin_arm64 linux_arm64 linux_x86_64; do
 	archive="starport_${version}_${platform}.tar.gz"
 	printf '%s\n%s\n' "$archive" "$archive.sbom.json" >>"$expected_names"
 	printf '%s\n' "$archive" >>"$archive_names"
@@ -92,4 +92,4 @@ while IFS= read -r archive; do
 	fi
 done <"$archive_names"
 
-printf 'PASS 6 release archives, 6 Syft SBOMs, and the checksum manifest\n'
+printf 'PASS 5 release archives, 5 Syft SBOMs, and the checksum manifest\n'

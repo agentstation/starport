@@ -23,7 +23,6 @@ expected_version="${2:-$(jq -r .version "$metadata_file")}"
 expected_commit="$(jq -r .commit "$metadata_file")"
 expected_targets="$({
 	printf '%s\n' \
-		'darwin/amd64' \
 		'darwin/arm64' \
 		'linux/amd64' \
 		'linux/arm64' \
@@ -128,8 +127,8 @@ while IFS= read -r binary; do
 	verified=$((verified + 1))
 done < <(find "$distribution_directory" -type f \( -name starport -o -name starport.exe \) | LC_ALL=C sort)
 
-if [ "$verified" -ne 6 ]; then
-	printf 'verified %s release binaries; want exactly 6\n' "$verified" >&2
+if [ "$verified" -ne 5 ]; then
+	printf 'verified %s release binaries; want exactly 5\n' "$verified" >&2
 	exit 1
 fi
 if [ "$native_verified" -ne 1 ]; then
@@ -141,4 +140,4 @@ if ! diff -u <(printf '%s\n' "$expected_targets") <(LC_ALL=C sort -u "$actual_ta
 	exit 1
 fi
 
-printf 'PASS 6 version-exact cgo-disabled release binaries for the supported target matrix\n'
+printf 'PASS 5 version-exact cgo-disabled release binaries for the supported target matrix\n'

@@ -82,12 +82,16 @@ else
 	fail 'CI and release publication do not use the same reviewed Syft version'
 fi
 
-if [ -f "$repository_root/.goreleaser.yaml" ] &&
-	grep -q 'linux' "$repository_root/.goreleaser.yaml" &&
-	grep -q 'darwin' "$repository_root/.goreleaser.yaml" &&
-	grep -q 'windows' "$repository_root/.goreleaser.yaml" &&
-	grep -q 'amd64' "$repository_root/.goreleaser.yaml" &&
-	grep -q 'arm64' "$repository_root/.goreleaser.yaml"; then
+if ruby -ryaml - "$repository_root/.goreleaser.yaml" <<'RUBY'
+config = YAML.safe_load(File.read(ARGV.fetch(0)))
+build = config.fetch("builds").find { |item| item["id"] == "starport" }
+expected = %w[darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64]
+targets = build.fetch("goos").product(build.fetch("goarch")).reject do |os, arch|
+  build.fetch("ignore", []).any? { |rule| rule["goos"] == os && rule["goarch"] == arch }
+end.map { |pair| pair.join("/") }.sort
+abort "release target matrix differs from the supported targets" unless targets == expected
+RUBY
+then
 	pass 'release configuration covers the v1 platform matrix'
 else
 	fail 'release configuration does not cover the v1 platform matrix'

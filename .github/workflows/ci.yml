@@ -42,7 +42,6 @@ jobs:
           - {runner: ubuntu-24.04, cgo: '1', race: '-race'}
           - {runner: ubuntu-24.04-arm, cgo: '1', race: '-race'}
           - {runner: macos-15, cgo: '1', race: '-race'}
-          - {runner: macos-15-intel, cgo: '1', race: '-race'}
           - {runner: windows-2025, cgo: '1', race: '-race'}
           - {runner: windows-11-arm, cgo: '0', race: ''}
     steps:

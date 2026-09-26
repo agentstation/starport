@@ -41,6 +41,10 @@ require_text '^[[:space:]]*postflight_steps do$' 'the structured post-install ho
 
 ruby - "$cask" <<'RUBY'
 source = File.read(ARGV.fetch(0))
+architecture = source[/^([ ]*)on_macos do\n\s*depends_on arch: :arm64\n\1end$/m]
+abort "Homebrew cask must require Apple silicon on macOS" unless architecture
+intel = source[/^([ ]*)on_intel do\n.*?^\1end$/m]
+abort "Homebrew cask must retain Linux x86-64 without Intel macOS" unless intel&.include?("on_linux do") && !intel.include?("on_macos do")
 expected = <<~'HOOK'
   postflight_steps do
     on_macos do
