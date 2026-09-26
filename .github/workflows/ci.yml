@@ -130,6 +130,13 @@ jobs:
         options: >-
           --health-cmd "valkey-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 10
+      valkey-replacement:
+        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        ports:
+          - 6379/tcp
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
       postgres:
         image: postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
         env:
@@ -152,7 +159,13 @@ jobs:
         env:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
           TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
-        run: go test -json -race -count=1 -timeout 3m ./internal/app -run '^TestSharedStartupDoesNotCreateLocalDatabases$' > shared-startup.jsonl
+        run: go test -json -race -count=1 -timeout 3m ./internal/app -run '^(TestAppWithValkey|TestSharedStartupDoesNotCreateLocalDatabases)$' > shared-startup.jsonl
+      - name: Verify native catalog publication and recovery
+        env:
+          TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+          TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
+          TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
+        run: go test -json -race -count=1 -timeout 7m ./internal/catalog ./internal/catalog/recovery ./internal/storage -run '^(TestFleet|TestRecoveryWitness|TestValkeyIncarnation)' > fleet-catalog.jsonl
       - name: Verify authorization source and fleet enforcement
         env:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
@@ -169,6 +182,7 @@ jobs:
           name: shared-storage-startup
           path: |
             shared-startup.jsonl
+            fleet-catalog.jsonl
             authorization-storage.jsonl
             shared-cache.jsonl
           retention-days: 7

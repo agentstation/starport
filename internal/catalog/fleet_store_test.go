@@ -261,3 +261,65 @@ func TestFleetStoreNamespaceAndMalformedDescriptor(t *testing.T) {
 	require.Error(t, err)
 	require.NotErrorIs(t, err, starmaperrors.ErrNotFound)
 }
+
+// expireBeforeSelection preserves native CAS and injects expiry after publication preparation.
+type expireBeforeSelection struct {
+	storage.IncarnationStore
+	target string
+	expire func(context.Context) error
+	called bool
+}
+
+func (s *expireBeforeSelection) CompareAndSwap(ctx context.Context, changes []storage.CompareAndSwapMutation, live ...string) error {
+	for _, change := range changes {
+		if change.Key == s.target && !s.called {
+			s.called = true
+			if err := s.expire(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	return s.IncarnationStore.CompareAndSwap(ctx, changes, live...)
+}
+
+func TestFleetStoreLeaseExpiresDuringSelection(t *testing.T) {
+	for _, operation := range []string{"publication", "acceptance"} {
+		t.Run(operation, func(t *testing.T) {
+			fleet, kv, _ := fleetTestStore(t)
+			ctx := t.Context()
+			grant, err := fleet.AcquireLease(ctx, "owner", time.Minute)
+			require.NoError(t, err)
+			first := fleetTestPublication(t, grant, runtime.FleetHead{}, "first")
+			head, err := fleet.CommitPublication(ctx, first)
+			require.NoError(t, err)
+			require.NoError(t, fleet.AcceptPublication(ctx, head, runtime.FleetHead{}))
+			next := fleetTestPublication(t, grant, head, "next")
+			expiring := &expireBeforeSelection{IncarnationStore: fleet.store, target: fleet.prefix + "head",
+				expire: func(ctx context.Context) error {
+					return kv.ExpireAt(ctx, fleet.prefix+"lease", time.Now().Add(-time.Second))
+				}}
+			if operation == "publication" {
+				fleet.store = expiring
+				_, err = fleet.CommitPublication(ctx, next)
+				require.ErrorIs(t, err, starmaperrors.ErrConflict)
+				current, err := fleet.CurrentPublication(ctx)
+				require.NoError(t, err)
+				require.Equal(t, head, current.Head)
+				require.Equal(t, first.Recovery, current.Publication.Recovery)
+			} else {
+				nextHead, err := fleet.CommitPublication(ctx, next)
+				require.NoError(t, err)
+				expiring.target = fleet.prefix + "accepted"
+				fleet.store = expiring
+				require.ErrorIs(t, fleet.AcceptPublication(ctx, nextHead, head), starmaperrors.ErrConflict)
+			}
+			require.True(t, expiring.called, "the failure must occur at native selection")
+			accepted, err := fleet.AcceptedPublication(ctx)
+			require.NoError(t, err)
+			require.Equal(t, head, accepted.Head)
+			history, err := fleet.AcceptedHistory(ctx)
+			require.NoError(t, err)
+			require.Len(t, history, 1)
+		})
+	}
+}
