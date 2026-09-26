@@ -112,3 +112,51 @@ func TestFleetRuntimePreservesOriginalGrantThroughAcceptance(t *testing.T) {
 	require.NoError(t, followerStore.Release(t.Context(), snapshot.Publication.Grant))
 	require.NoError(t, second.Accept(t.Context(), current))
 }
+
+// unchangedFleetSource reports no new upstream data after a live owner change.
+type unchangedFleetSource struct{}
+
+func (unchangedFleetSource) Identity() string { return "unchanged-fleet-source" }
+func (unchangedFleetSource) Read(ctx context.Context) (runtime.SourceRead, error) {
+	return runtime.SourceRead{Health: runtime.HealthOK}, ctx.Err()
+}
+
+func TestFleetRuntimeLiveTakeoverAcceptance(t *testing.T) {
+	fleet, kv, witness := fleetTestStore(t)
+	open := func(id string, store *FleetStore) *runtime.Runtime {
+		connected, err := runtime.Open(t.Context(), runtime.WithFleetStore(store),
+			runtime.WithStateDirectory(filepath.Join(t.TempDir(), "state")),
+			runtime.WithSchedulerIdentity(id), runtime.WithSource(unchangedFleetSource{}),
+			runtime.WithSourceRefreshMode("manual"))
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, connected.Close()) })
+		return connected
+	}
+	leader := open("live-owner", fleet)
+	before, ok := leader.FleetStatus()
+	require.True(t, ok)
+	original, err := fleet.Publication(t.Context(), before.Head)
+	require.NoError(t, err)
+	followerStore, err := NewFleetStore(t.Context(), kv.(storage.IncarnationProvider), witness, fleet.identity.DeploymentID)
+	require.NoError(t, err)
+	follower := open("live-follower", followerStore)
+	status, _ := follower.FleetStatus()
+	require.Equal(t, before.Head, status.Head)
+	require.NoError(t, leader.Close())
+	_, err = follower.RefreshSource(t.Context())
+	require.NoError(t, err)
+	after, _ := follower.FleetStatus()
+	require.Greater(t, after.Head.Revision, before.Head.Revision)
+	require.Equal(t, before.Head.GenerationID, after.Head.GenerationID)
+	require.Error(t, followerStore.AcceptPublication(t.Context(), before.Head, runtime.FleetHead{}))
+	require.NoError(t, followerStore.AcceptPublication(t.Context(), after.Head, runtime.FleetHead{}))
+	retried, err := fleet.CommitPublication(t.Context(), original.Publication)
+	require.NoError(t, err, "an exact historical retry must return its original result")
+	require.Equal(t, before.Head, retried)
+	current, err := fleet.CurrentHead(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, after.Head, current)
+	stale := fleetTestPublication(t, original.Publication.Grant, after.Head, "stale-owner-candidate")
+	_, err = fleet.CommitPublication(t.Context(), stale)
+	require.Error(t, err, "the old owner must not publish after live takeover")
+}
