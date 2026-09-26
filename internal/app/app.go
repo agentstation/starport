@@ -347,6 +347,7 @@ func (b *runtimeBuilder) openConcepts() error {
 	catalogRuntime, err := b.factories.openCatalog(
 		context.Background(),
 		b.application.store,
+		b.sqlDB,
 		catalogSettings(b.config),
 		runtimecatalog.DeploymentLookup(b.config.LookupDeployment),
 	)
@@ -358,9 +359,9 @@ func (b *runtimeBuilder) openConcepts() error {
 	}
 	b.application.catalogRuntime = catalogRuntime
 	b.application.catalog = catalogRuntime.ControlPlane()
-	generations, err := runtimecatalog.NewGenerationStore(b.application.store)
-	if err != nil {
-		return fmt.Errorf("open catalog generation store: %w", err)
+	generations := catalogRuntime.AcceptedStore()
+	if generations == nil {
+		return ErrCatalogRequired
 	}
 	b.application.catalogFreshness = runtimecatalog.NewFreshnessService(b.application.catalog, generations)
 	// One deployment setting bounds the whole run: the operation registry and
@@ -1315,10 +1316,11 @@ func defaultRuntimeFactories() runtimeFactories {
 		openCatalog: func(
 			ctx context.Context,
 			store storage.KVStore,
+			db *sqlstore.DB,
 			settings runtimecatalog.Settings,
 			lookup runtimecatalog.DeploymentLookup,
 		) (catalogRuntime, error) {
-			runtime, err := runtimecatalog.OpenRuntime(ctx, store, settings, lookup)
+			runtime, err := runtimecatalog.OpenRuntimeWithRecovery(ctx, store, db, settings, lookup)
 			if err != nil {
 				return nil, err
 			}

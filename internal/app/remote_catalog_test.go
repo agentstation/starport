@@ -229,7 +229,8 @@ type recordingCatalogRuntime struct {
 	err      error
 }
 
-func (*recordingCatalogRuntime) ControlPlane() *runtimecatalog.ControlPlane { return nil }
+func (*recordingCatalogRuntime) AcceptedStore() *runtimecatalog.GenerationStore { return nil }
+func (*recordingCatalogRuntime) ControlPlane() *runtimecatalog.ControlPlane     { return nil }
 func (*recordingCatalogRuntime) RefreshCandidate(
 	context.Context,
 	time.Duration,

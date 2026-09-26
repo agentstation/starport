@@ -48,3 +48,27 @@ func (*readOnlyStore) BeginTransaction(context.Context) (Transaction, error) {
 }
 
 func (s *readOnlyStore) Ping(ctx context.Context) error { return s.KVStore.Ping(ctx) }
+
+// readOnlyIncarnationProvider retains shared identity checks without exposing mutations.
+type readOnlyIncarnationProvider struct {
+	*readOnlyStore
+	provider IncarnationProvider
+}
+
+func (s *readOnlyIncarnationProvider) ObserveIncarnation(ctx context.Context) (string, error) {
+	return s.provider.ObserveIncarnation(ctx)
+}
+
+func (s *readOnlyIncarnationProvider) BindIncarnation(ctx context.Context, approved string) (IncarnationStore, error) {
+	bound, err := s.provider.BindIncarnation(ctx, approved)
+	if err != nil {
+		return nil, err
+	}
+	return &readOnlyIncarnationStore{IncarnationStore: bound}, nil
+}
+
+type readOnlyIncarnationStore struct{ IncarnationStore }
+
+func (*readOnlyIncarnationStore) CompareAndSwap(context.Context, []CompareAndSwapMutation, ...string) error {
+	return ErrReadOnly
+}

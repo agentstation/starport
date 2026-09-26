@@ -9,6 +9,7 @@ import (
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
+	"github.com/agentstation/starmap/runtime"
 )
 
 // Candidate is one effective catalog generation offered for acceptance,
@@ -26,6 +27,9 @@ type Candidate struct {
 	// the deployment shares no lease, and every candidate then passes the
 	// fence.
 	Epoch uint64
+
+	// FleetHead binds route validation to the original durable publication and grant.
+	FleetHead runtime.FleetHead
 }
 
 // Accept advances the accepted head to one validated candidate.
@@ -50,8 +54,10 @@ func (r *Runtime) Accept(ctx context.Context, candidate Candidate) error {
 	if state.Catalog == nil || state.GenerationID == "" {
 		return ErrCatalogRequired
 	}
-	if err := r.fenceEpoch(ctx, candidate.Epoch); err != nil {
-		return err
+	if r.fleet == nil {
+		if err := r.fenceEpoch(ctx, candidate.Epoch); err != nil {
+			return err
+		}
 	}
 	if r.runtime != nil && r.runtime.Status().GenerationPin != "" {
 		selected := r.runtime.State()
@@ -83,6 +89,10 @@ func (r *Runtime) Accept(ctx context.Context, candidate Candidate) error {
 	}
 	if generation.Manifest.AuthorityHead != state.AuthorityHead {
 		return ErrCatalogAuthorityMismatch
+	}
+
+	if r.fleet != nil {
+		return r.acceptFleetCandidate(ctx, candidate)
 	}
 
 	expectedID := ""

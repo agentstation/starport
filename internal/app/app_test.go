@@ -18,6 +18,7 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/server"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -57,6 +58,7 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 				factories.openCatalog = func(
 					context.Context,
 					storage.KVStore,
+					*sqlstore.DB,
 					runtimecatalog.Settings,
 					runtimecatalog.DeploymentLookup,
 				) (catalogRuntime, error) {
@@ -122,12 +124,13 @@ func TestCompositionPassesCatalogAcquisitionThrough(t *testing.T) {
 	factories.openCatalog = func(
 		ctx context.Context,
 		store storage.KVStore,
+		db *sqlstore.DB,
 		settings runtimecatalog.Settings,
 		lookup runtimecatalog.DeploymentLookup,
 	) (catalogRuntime, error) {
 		opened++
 		require.True(t, settings.AcquisitionEnabled)
-		return inner(ctx, store, settings, lookup)
+		return inner(ctx, store, db, settings, lookup)
 	}
 
 	application, err := New(cfg, withRuntimeFactories(factories))
@@ -201,6 +204,7 @@ func TestDefaultCatalogFactoryComposesOneConnectedRuntime(t *testing.T) {
 			runtime, err := factories.openCatalog(
 				t.Context(),
 				storage.NewMockStore(),
+				nil,
 				test.settings,
 				func(string) (string, bool) { return "", false },
 			)

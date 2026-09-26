@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/agentstation/starmap/pkg/catalogs/permission"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 	"sync/atomic"
 	"testing"
@@ -146,8 +147,8 @@ func TestSharedAuthorizationDoesNotRequireCatalogClock(t *testing.T) {
 	factories := explicitTestFactories()
 	openCatalog := factories.openCatalog
 	sampled := &sampledCatalogRuntime{}
-	factories.openCatalog = func(ctx context.Context, store storage.KVStore, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
-		runtime, err := openCatalog(ctx, store, settings, lookup)
+	factories.openCatalog = func(ctx context.Context, store storage.KVStore, db *sqlstore.DB, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
+		runtime, err := openCatalog(ctx, store, db, settings, lookup)
 		sampled.catalogRuntime = runtime
 		return sampled, err
 	}

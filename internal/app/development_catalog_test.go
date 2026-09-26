@@ -9,6 +9,7 @@ import (
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
@@ -19,14 +20,14 @@ func TestDevLetsStarmapCreateCatalogState(t *testing.T) {
 	factoryReached := false
 	development, err := NewDevelopment(t.Context(), cfg, func(options *buildOptions) {
 		openCatalog := options.factories.openCatalog
-		options.factories.openCatalog = func(ctx context.Context, store storage.KVStore, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
+		options.factories.openCatalog = func(ctx context.Context, store storage.KVStore, db *sqlstore.DB, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
 			factoryReached = true
 			require.Equal(t, cfg.EffectivePaths().CacheDir, settings.SourceCacheDirectory)
 			require.True(t, filepath.IsLocal(mustRelative(t, filepath.Dir(cfg.Files.Path), settings.SourceCacheDirectory)))
 			if _, err := os.Stat(settings.StateDirectory); !errors.Is(err, os.ErrNotExist) {
 				return nil, errors.New("development must let Starmap create its catalog state directory")
 			}
-			return openCatalog(ctx, store, settings, lookup)
+			return openCatalog(ctx, store, db, settings, lookup)
 		}
 	})
 	require.NoError(t, err)
