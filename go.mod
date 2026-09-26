@@ -8,7 +8,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.1
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.5.0
-	github.com/agentstation/starmap v0.16.6-0.20260917204518-b09931c66d7d
+	github.com/agentstation/starmap v0.16.6-0.20260926043135-d5b9eba0e15a
 	github.com/agentstation/uuidkey v1.2.0
 	github.com/aws/aws-sdk-go-v2 v1.47.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.5
@@ -51,7 +51,6 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/oauth2 v0.37.0
-	golang.org/x/sys v0.48.0
 	google.golang.org/grpc v1.84.0
 	modernc.org/sqlite v1.59.0
 )
@@ -201,6 +200,7 @@ require (
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
