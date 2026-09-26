@@ -3,6 +3,7 @@ package catalog
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,40 +19,36 @@ const (
 	fleetEncodedMaxBytes    = 2*(runtime.MaxFleetRecoveryBytes+catalogs.MaxCatalogPayloadBytes) + 1<<20
 )
 
-// stageBlob stores immutable chunks without creating a publication receipt or moving a head.
-func (s *FleetStore) stageBlob(ctx context.Context, encoded []byte) ([]byte, error) {
+// stageBlob records ownership before writing immutable chunks.
+func (m *fleetMaintenance) stageBlob(ctx context.Context, head runtime.FleetHead, encoded, grant []byte) (fleetBlob, error) {
 	if len(encoded) == 0 || len(encoded) > fleetEncodedMaxBytes {
-		return nil, errors.New("fleet publication exceeds the encoded byte bound")
+		return fleetBlob{}, errors.New("fleet publication exceeds the encoded byte bound")
 	}
 	record, chunks := encodeGenerationPayload(encoded)
+	blob := fleetBlob{ID: rand.Text(), Head: head, Record: record}
+	m.inventory.Pending = &blob
+	if err := m.save(ctx); err != nil {
+		return fleetBlob{}, err
+	}
 	for key, chunk := range chunks {
-		// The content digest belongs to this deployment's namespace.
-		key = s.prefix + "chunk:" + key[len(catalogGenerationChunkKeyPrefix):]
-		if err := s.store.CompareAndSwap(ctx, []storage.CompareAndSwapMutation{{Key: key, NewValue: chunk}}); err != nil {
-			if !errors.Is(err, storage.ErrConflict) {
-				return nil, err
-			}
-			current, _, err := s.store.ReadWithLifetime(ctx, key, generationChunkSize)
-			if err != nil {
-				return nil, err
-			}
-			if !bytes.Equal(current, chunk) {
-				return nil, fleetStoreConflict("a stored immutable fleet chunk has different content")
-			}
+		key = m.chunkKey(blob, key[len(catalogGenerationChunkKeyPrefix):])
+		if err := m.mutate(ctx, []storage.CompareAndSwapMutation{{Key: key, NewValue: chunk}, {Key: m.owner.prefix + "lease", ExpectedValue: grant, NewValue: grant}}, m.owner.prefix+"lease"); err != nil {
+			return fleetBlob{}, err
 		}
 	}
-	return json.Marshal(record)
+	return blob, nil
 }
 
-func (s *FleetStore) readBlob(ctx context.Context, key string) ([]byte, error) {
-	encoded, _, err := s.store.ReadWithLifetime(ctx, key, fleetDescriptorMaxBytes)
+func (s *FleetStore) readBlob(ctx context.Context, blob fleetBlob) ([]byte, error) {
+	encoded, _, err := s.store.ReadWithLifetime(ctx, s.publicationKey(blob.Head), fleetDescriptorMaxBytes)
 	if err != nil {
-		return nil, fleetReadError(err, key)
+		return nil, fmt.Errorf("read retained fleet receipt: %w", err)
 	}
-	var record generationRecord
-	if err := json.Unmarshal(encoded, &record); err != nil {
-		return nil, err
+	expected, _ := json.Marshal(blob)
+	if !bytes.Equal(encoded, expected) {
+		return nil, errors.New("fleet receipt differs from its retention inventory")
 	}
+	record := blob.Record
 	if record.Encoding != generationEncodingChunked || record.ChunkSize != generationChunkSize ||
 		record.Size <= 0 || record.Size > fleetEncodedMaxBytes ||
 		len(record.Chunks) != (record.Size+generationChunkSize-1)/generationChunkSize {
@@ -62,7 +59,7 @@ func (s *FleetStore) readBlob(ctx context.Context, key string) ([]byte, error) {
 		if len(digest) != 64 {
 			return nil, errors.New("invalid fleet chunk digest")
 		}
-		chunk, _, err := s.store.ReadWithLifetime(ctx, s.prefix+"chunk:"+digest, generationChunkSize)
+		chunk, _, err := s.store.ReadWithLifetime(ctx, s.prefix+"blob:"+blob.ID+":"+digest, generationChunkSize)
 		if err != nil {
 			return nil, fmt.Errorf("read selected fleet chunk: %w", err)
 		}

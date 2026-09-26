@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/runtime"
 
 	"github.com/agentstation/starport/internal/storage"
@@ -21,16 +22,35 @@ func (s *FleetStore) AcceptedPublication(ctx context.Context) (runtime.FleetSnap
 	if err := s.checkApproval(ctx); err != nil {
 		return runtime.FleetSnapshot{}, err
 	}
-	accepted, _, err := s.readAcceptance(ctx)
-	if err != nil {
-		return runtime.FleetSnapshot{}, fleetReadError(err, "accepted")
+	for range fleetRetentionAttempts {
+		accepted, _, err := s.readAcceptance(ctx)
+		if err != nil {
+			return runtime.FleetSnapshot{}, fleetReadError(err, "accepted")
+		}
+		snapshot, err := s.Publication(ctx, accepted.Head)
+		if errors.Is(err, starmaperrors.ErrNotFound) {
+			current, _, readErr := s.readAcceptance(ctx)
+			if readErr != nil {
+				return runtime.FleetSnapshot{}, readErr
+			}
+			if current.Head != accepted.Head {
+				continue
+			}
+			return runtime.FleetSnapshot{}, errors.New("accepted fleet publication is unavailable")
+		}
+		return snapshot, err
 	}
-	return s.selectedPublication(ctx, accepted.Head)
+	return runtime.FleetSnapshot{}, fleetStoreConflict("accepted selection changed during the read")
 }
 
 // AcceptPublication selects a validated candidate under its original live acquisition grant.
 // It compares the complete candidate and accepted predecessors in the same native transaction.
 func (s *FleetStore) AcceptPublication(ctx context.Context, selected, expected runtime.FleetHead) error {
+	m, err := s.maintain(ctx)
+	if err != nil {
+		return err
+	}
+	defer m.finish()
 	if err := s.checkApproval(ctx); err != nil {
 		return err
 	}
@@ -48,12 +68,16 @@ func (s *FleetStore) AcceptPublication(ctx context.Context, selected, expected r
 		return err
 	}
 	if current.Head == selected {
-		return nil
+		return m.collect(ctx)
 	}
 	if current.Head != expected || selected.Revision <= expected.Revision {
 		return fleetStoreConflict("the accepted catalog predecessor changed or the candidate regressed")
 	}
-	snapshot, err := s.Publication(ctx, selected)
+	blob, ok := m.publication(selected)
+	if !ok {
+		return fleetStoreConflict("candidate publication is no longer retained")
+	}
+	snapshot, err := m.read(ctx, blob)
 	if err != nil {
 		return err
 	}
@@ -74,7 +98,7 @@ func (s *FleetStore) AcceptPublication(ctx context.Context, selected, expected r
 		return err
 	}
 	head, _ := json.Marshal(selected)
-	err = s.store.CompareAndSwap(ctx, []storage.CompareAndSwapMutation{
+	err = m.mutate(ctx, []storage.CompareAndSwapMutation{
 		{Key: s.prefix + "lease", ExpectedValue: grant, NewValue: grant},
 		{Key: s.prefix + "head", ExpectedValue: head, NewValue: head},
 		{Key: s.prefix + "accepted", ExpectedValue: encoded, NewValue: next},
@@ -82,7 +106,10 @@ func (s *FleetStore) AcceptPublication(ctx context.Context, selected, expected r
 	if errors.Is(err, storage.ErrConflict) {
 		return fleetStoreConflict("the original grant, candidate head, or accepted head changed during route validation")
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return m.collect(ctx)
 }
 
 // AcceptedHistory returns a bounded index from the same record as the accepted head.

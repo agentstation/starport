@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strconv"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -16,6 +15,8 @@ import (
 	"github.com/agentstation/starport/internal/catalog/recovery"
 	"github.com/agentstation/starport/internal/storage"
 )
+
+const fleetPublicationResource = "fleet publication"
 
 // FleetStore binds shared catalog publication to an independent recovery approval.
 // It uses native backend expiry and retains complete acquisition inputs outside local directories.
@@ -87,19 +88,25 @@ func (s *FleetStore) CurrentHead(ctx context.Context) (runtime.FleetHead, error)
 
 // CurrentPublication reads the immutable snapshot selected by the current head.
 func (s *FleetStore) CurrentPublication(ctx context.Context) (runtime.FleetSnapshot, error) {
-	head, err := s.CurrentHead(ctx)
-	if err != nil {
-		return runtime.FleetSnapshot{}, err
+	for range fleetRetentionAttempts {
+		head, err := s.CurrentHead(ctx)
+		if err != nil {
+			return runtime.FleetSnapshot{}, err
+		}
+		snapshot, err := s.Publication(ctx, head)
+		if errors.Is(err, starmaperrors.ErrNotFound) {
+			current, readErr := s.CurrentHead(ctx)
+			if readErr != nil {
+				return runtime.FleetSnapshot{}, readErr
+			}
+			if current != head {
+				continue
+			}
+			return runtime.FleetSnapshot{}, errors.New("selected fleet publication is unavailable")
+		}
+		return snapshot, err
 	}
-	return s.selectedPublication(ctx, head)
-}
-
-func (s *FleetStore) selectedPublication(ctx context.Context, head runtime.FleetHead) (runtime.FleetSnapshot, error) {
-	snapshot, err := s.Publication(ctx, head)
-	if errors.Is(err, starmaperrors.ErrNotFound) {
-		return runtime.FleetSnapshot{}, fmt.Errorf("selected fleet publication is unavailable: %v", err)
-	}
-	return snapshot, err
+	return runtime.FleetSnapshot{}, fleetStoreConflict("catalog selection changed during the read")
 }
 
 // Publication reads a retained snapshot by its complete head identity.
@@ -113,44 +120,41 @@ func (s *FleetStore) Publication(ctx context.Context, head runtime.FleetHead) (r
 	if head.Identity != s.identity {
 		return runtime.FleetSnapshot{}, fleetStoreConflict("the requested publication belongs to another recovery identity")
 	}
-	data, err := s.readBlob(ctx, s.publicationKey(head))
-	if err != nil {
+	m := &fleetMaintenance{owner: s}
+	if err := m.load(ctx); err != nil {
 		return runtime.FleetSnapshot{}, err
 	}
-	var snapshot runtime.FleetSnapshot
-	if err := json.Unmarshal(data, &snapshot); err != nil {
-		return snapshot, err
+	blob, ok := m.publication(head)
+	if !ok {
+		return runtime.FleetSnapshot{}, &starmaperrors.NotFoundError{Resource: fleetPublicationResource, ID: head.GenerationID}
 	}
-	if err := snapshot.Validate(); err != nil {
-		return snapshot, err
+	snapshot, err := m.read(ctx, blob)
+	if errors.Is(err, storage.ErrNotFound) {
+		if loadErr := m.load(ctx); loadErr != nil {
+			return snapshot, loadErr
+		}
+		if _, retained := m.publication(head); !retained {
+			return snapshot, &starmaperrors.NotFoundError{Resource: fleetPublicationResource, ID: head.GenerationID}
+		}
 	}
-	if snapshot.Head != head {
-		return snapshot, fleetStoreConflict("the stored snapshot differs from the selected head")
-	}
-	return snapshot, nil
+	return snapshot, err
 }
 
-// Get reads an immutable catalog from a committed publication.
+// Get reads an immutable catalog from a retained publication.
 func (s *FleetStore) Get(ctx context.Context, id string) (catalogs.Generation, error) {
 	if err := s.checkApproval(ctx); err != nil {
 		return catalogs.Generation{}, err
 	}
-	data, _, err := s.store.ReadWithLifetime(ctx, s.generationKey(id), 4096)
-	if err != nil {
-		return catalogs.Generation{}, fleetReadError(err, id)
-	}
-	var head runtime.FleetHead
-	if err := json.Unmarshal(data, &head); err != nil {
+	m := &fleetMaintenance{owner: s}
+	if err := m.load(ctx); err != nil {
 		return catalogs.Generation{}, err
 	}
-	snapshot, err := s.Publication(ctx, head)
-	if err != nil {
-		return catalogs.Generation{}, err
+	blob, ok := m.generation(id)
+	if !ok {
+		return catalogs.Generation{}, &starmaperrors.NotFoundError{Resource: "fleet generation", ID: id}
 	}
-	if snapshot.Publication.Generation.Manifest.GenerationID != id {
-		return catalogs.Generation{}, fleetStoreConflict("the generation index selects a different catalog")
-	}
-	return snapshot.Publication.Generation, nil
+	snapshot, err := s.Publication(ctx, blob.Head)
+	return snapshot.Publication.Generation, err
 }
 
 // CommitPublication checks the original live grant and predecessor in one native transaction.
@@ -171,71 +175,84 @@ func (s *FleetStore) CommitPublication(ctx context.Context, publication runtime.
 	if err != nil {
 		return runtime.FleetHead{}, err
 	}
-	record, err := s.stageBlob(ctx, encoded)
+	m, err := s.maintain(ctx)
 	if err != nil {
 		return runtime.FleetHead{}, err
 	}
-	selected, _ := json.Marshal(head)
-	var previous []byte
-	if publication.Expected != (runtime.FleetHead{}) {
-		previous, _ = json.Marshal(publication.Expected)
+	defer m.finish()
+	if committed, ok := m.publication(head); ok {
+		prior, readErr := m.read(ctx, committed)
+		if readErr != nil {
+			return runtime.FleetHead{}, readErr
+		}
+		original, marshalErr := json.Marshal(prior)
+		if marshalErr != nil {
+			return runtime.FleetHead{}, marshalErr
+		}
+		if bytes.Equal(original, encoded) {
+			return head, nil
+		}
+		return runtime.FleetHead{}, fleetStoreConflict("the retained receipt identifies a different request")
+	}
+	current, previous, err := m.readHead(ctx)
+	if err != nil {
+		return runtime.FleetHead{}, err
+	}
+	if current != publication.Expected {
+		return runtime.FleetHead{}, fleetStoreConflict("the exact catalog predecessor changed")
 	}
 	grant, err := encodeFleetGrant(publication.Grant)
 	if err != nil {
 		return runtime.FleetHead{}, err
 	}
-	generationKey := s.generationKey(head.GenerationID)
-	indexed, _, err := s.store.ReadWithLifetime(ctx, generationKey, 4096)
-	if err != nil && !errors.Is(err, storage.ErrNotFound) {
+	if err = m.mutate(ctx, []storage.CompareAndSwapMutation{{Key: s.prefix + "lease", ExpectedValue: grant, NewValue: grant}}, s.prefix+"lease"); err != nil {
+		if errors.Is(err, storage.ErrConflict) {
+			return runtime.FleetHead{}, fleetStoreConflict("the original refresh grant expired or changed")
+		}
 		return runtime.FleetHead{}, err
 	}
-	nextIndex := selected
-	if indexed != nil {
-		if err := s.checkGenerationContent(ctx, publication.Generation); err != nil {
+	if existing, ok := m.generation(head.GenerationID); ok {
+		prior, err := m.read(ctx, existing)
+		if err != nil {
 			return runtime.FleetHead{}, err
 		}
-		nextIndex = indexed
+		before, _ := json.Marshal(prior.Publication.Generation)
+		after, _ := json.Marshal(publication.Generation)
+		if !bytes.Equal(before, after) {
+			return runtime.FleetHead{}, fleetStoreConflict("the generation ID already identifies different content")
+		}
 	}
-	err = s.store.CompareAndSwap(ctx, []storage.CompareAndSwapMutation{
+	if err = m.collect(ctx); err != nil {
+		return runtime.FleetHead{}, err
+	}
+	if err = m.capacity(len(encoded)); err != nil {
+		return runtime.FleetHead{}, err
+	}
+	blob, err := m.stageBlob(ctx, head, encoded, grant)
+	if err != nil {
+		return runtime.FleetHead{}, err
+	}
+	selected, _ := json.Marshal(head)
+	record, _ := json.Marshal(blob)
+	m.inventory.Pending = nil
+	m.inventory.Entries = append(m.inventory.Entries, blob)
+	inventory, err := json.Marshal(m.inventory)
+	if err != nil {
+		return runtime.FleetHead{}, err
+	}
+	err = m.mutate(ctx, []storage.CompareAndSwapMutation{
 		{Key: s.prefix + "lease", ExpectedValue: grant, NewValue: grant},
 		{Key: s.prefix + "head", ExpectedValue: previous, NewValue: selected},
 		{Key: s.publicationKey(head), NewValue: record},
-		{Key: generationKey, ExpectedValue: indexed, NewValue: nextIndex},
+		{Key: s.prefix + "inventory", ExpectedValue: m.encoded, NewValue: inventory},
 	}, s.prefix+"lease")
 	if err == nil {
 		return head, nil
 	}
-	if !errors.Is(err, storage.ErrConflict) {
-		return runtime.FleetHead{}, err
+	if errors.Is(err, storage.ErrConflict) {
+		return runtime.FleetHead{}, fleetStoreConflict("the original live grant, maintenance lease, or exact predecessor changed")
 	}
-	// Only the atomic commit creates this immutable receipt. Staged chunks cannot prove success.
-	committed, _, readErr := s.store.ReadWithLifetime(ctx, s.publicationKey(head), fleetDescriptorMaxBytes)
-	if readErr == nil && bytes.Equal(committed, record) {
-		return head, nil
-	}
-	if readErr != nil && !errors.Is(readErr, storage.ErrNotFound) {
-		return runtime.FleetHead{}, readErr
-	}
-	return runtime.FleetHead{}, fleetStoreConflict("the original live grant or exact catalog predecessor changed")
-}
-
-func (s *FleetStore) checkGenerationContent(ctx context.Context, generation catalogs.Generation) error {
-	current, err := s.Get(ctx, generation.Manifest.GenerationID)
-	if err != nil {
-		return err
-	}
-	existing, err := json.Marshal(current)
-	if err != nil {
-		return err
-	}
-	proposed, err := json.Marshal(generation)
-	if err != nil {
-		return err
-	}
-	if !bytes.Equal(existing, proposed) {
-		return fleetStoreConflict("the generation ID already identifies different content")
-	}
-	return nil
+	return runtime.FleetHead{}, err
 }
 
 func (s *FleetStore) publicationKey(head runtime.FleetHead) string {
@@ -243,13 +260,9 @@ func (s *FleetStore) publicationKey(head runtime.FleetHead) string {
 	return s.prefix + "publication:" + strconv.FormatUint(head.Revision, 10) + ":" + payloadDigest(encoded)
 }
 
-func (s *FleetStore) generationKey(id string) string {
-	return s.prefix + "generation:" + payloadDigest([]byte(id))
-}
-
 func fleetReadError(err error, id string) error {
 	if errors.Is(err, storage.ErrNotFound) {
-		return &starmaperrors.NotFoundError{Resource: "fleet publication", ID: id}
+		return &starmaperrors.NotFoundError{Resource: fleetPublicationResource, ID: id}
 	}
 	return err
 }

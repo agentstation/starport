@@ -251,9 +251,9 @@ func TestFleetStoreNamespaceAndMalformedDescriptor(t *testing.T) {
 	key := first.publicationKey(head)
 	original, _, err := first.store.ReadWithLifetime(t.Context(), key, fleetDescriptorMaxBytes)
 	require.NoError(t, err)
-	var descriptor generationRecord
+	var descriptor fleetBlob
 	require.NoError(t, json.Unmarshal(original, &descriptor))
-	descriptor.Size = fleetEncodedMaxBytes + 1
+	descriptor.Record.Size = fleetEncodedMaxBytes + 1
 	invalid, err := json.Marshal(descriptor)
 	require.NoError(t, err)
 	require.NoError(t, first.store.CompareAndSwap(t.Context(), []storage.CompareAndSwapMutation{{Key: key, ExpectedValue: original, NewValue: invalid}}))
