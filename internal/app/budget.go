@@ -10,6 +10,7 @@ import (
 	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/storage"
+	"github.com/rs/zerolog/log"
 )
 
 const budgetSettlementTimeout = 5 * time.Second
@@ -18,6 +19,7 @@ type budgetOwner struct {
 	ledger    *reservation.Repository
 	admission *admission.Owner
 	shared    *recovery.Authority
+	recovery  *reservation.Recovery
 }
 
 // openBudgetAdmission binds required accounting to the durable storage authority.
@@ -53,8 +55,45 @@ func (b *runtimeBuilder) openBudgetAdmission() error {
 	if err != nil {
 		return err
 	}
+	owner.recovery, err = reservation.NewRecovery(owner.ledger, b.application.store)
+	if err != nil {
+		return err
+	}
 	b.application.budget = owner
 	return nil
+}
+
+// budgetRecoveryLoop retries retained usage independently of optional reports
+// and job maintenance. Shutdown joins this worker before closing storage.
+func (a *App) budgetRecoveryLoop(ctx context.Context) {
+	for ctx.Err() == nil {
+		passCtx, cancel := context.WithTimeout(ctx, budgetSettlementTimeout)
+		result, err := a.budget.recovery.Pass(passCtx, 512)
+		cancel()
+		if ctx.Err() != nil {
+			return
+		}
+		if err != nil {
+			// Storage errors can contain connection details. Log only counts.
+			log.Warn().Int("scanned", result.Scanned).Int("recovered", result.Recovered).
+				Int("failed", result.Failed).Int("held", result.Held).
+				Msg("budget recovery could not finish; retained evidence will be retried")
+		} else if result.Recovered > 0 {
+			log.Info().Int("recovered", result.Recovered).Int("held", result.Held).
+				Msg("budget recovery settled retained usage")
+		}
+		delay := time.Second
+		if result.Complete {
+			delay = 30 * time.Second
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
 }
 
 // preparePolicy runs during bounded authorization loading, outside warm requests.

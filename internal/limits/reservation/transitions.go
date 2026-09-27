@@ -1,6 +1,7 @@
 package reservation
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"maps"
@@ -77,6 +78,7 @@ func (r *Repository) Reconcile(ctx context.Context, id string, evidence Evidence
 }
 
 func (r *Repository) finish(ctx context.Context, id string, evidence *Evidence) error {
+attempts:
 	for range maxConflicts {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -130,12 +132,12 @@ func (r *Repository) finish(ctx context.Context, id string, evidence *Evidence) 
 		}
 		mutations := make([]storage.CompareAndSwapMutation, 0, len(record.Bindings)+1)
 		for _, binding := range record.Bindings {
-			state, previous, err := r.readWindow(ctx, binding.Rule.Meter, binding.Window)
+			state, previous, err := r.readSettlementWindow(ctx, binding, id, old)
+			if errors.Is(err, storage.ErrConflict) {
+				continue attempts
+			}
 			if err != nil {
 				return err
-			}
-			if state.Reserved < binding.Amount {
-				return ErrUnavailable
 			}
 			if overflow {
 				state.Overflow = true
@@ -167,6 +169,23 @@ func (r *Repository) finish(ctx context.Context, id string, evidence *Evidence) 
 		}
 	}
 	return ErrUnavailable
+}
+
+// readSettlementWindow distinguishes a concurrent settlement from corrupt
+// balances. Only a changed attempt permits another settlement read.
+func (r *Repository) readSettlementWindow(ctx context.Context, binding Binding, id string, attempt []byte) (*WindowState, []byte, error) {
+	state, previous, err := r.readWindow(ctx, binding.Rule.Meter, binding.Window)
+	if err != nil || state.Reserved >= binding.Amount {
+		return state, previous, err
+	}
+	_, current, err := r.readRecord(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !bytes.Equal(attempt, current) {
+		return nil, nil, storage.ErrConflict
+	}
+	return nil, nil, ErrUnavailable
 }
 
 // JSON normalizes an absent quantity map to an empty object. Both represent no

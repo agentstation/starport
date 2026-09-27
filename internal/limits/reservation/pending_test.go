@@ -38,7 +38,12 @@ func TestRetainedUsageSurvivesRestart(t *testing.T) {
 		require.NoError(t, err)
 		require.EqualValues(t, 600, state.Reserved)
 	}
-	require.NoError(t, repository.ReconcileRetained(t.Context(), attempt.ID))
+	worker, err := NewRecovery(repository, store)
+	require.NoError(t, err)
+	result, err := worker.Pass(t.Context(), 16)
+	require.NoError(t, err)
+	require.True(t, result.Complete)
+	require.Equal(t, 1, result.Recovered)
 	require.NoError(t, repository.ReconcileRetained(t.Context(), attempt.ID))
 	record, err = repository.Inspect(t.Context(), attempt.ID)
 	require.NoError(t, err)

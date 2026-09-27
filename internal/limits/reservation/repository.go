@@ -164,12 +164,16 @@ func (r *Repository) readRecord(ctx context.Context, id string) (*Record, []byte
 	if !validID(id) {
 		return nil, nil, ErrInvalid
 	}
-	data, err := r.read(ctx, storageKey("attempt", id))
+	return r.readRecordKey(ctx, storageKey("attempt", id))
+}
+
+func (r *Repository) readRecordKey(ctx context.Context, key string) (*Record, []byte, error) {
+	data, err := r.read(ctx, key)
 	if err != nil {
 		return nil, nil, err
 	}
 	var record Record
-	if json.Unmarshal(data, &record) != nil || record.Version != recordVersion || record.Attempt.ID != id || validateAttempt(record.Attempt) != nil || record.AdmittedAt.IsZero() || len(record.Bindings) != len(record.Attempt.Rules) {
+	if json.Unmarshal(data, &record) != nil || record.Version != recordVersion || storageKey("attempt", record.Attempt.ID) != key || validateAttempt(record.Attempt) != nil || record.AdmittedAt.IsZero() || len(record.Bindings) != len(record.Attempt.Rules) {
 		return nil, nil, ErrUnavailable
 	}
 	if err := validateBindings(&record); err != nil {
