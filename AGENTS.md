@@ -158,10 +158,10 @@ the stored file reference a chat request carries, and the console file view. It
 is terminal at 22 conditions (`FIL-V01` through `FIL-V22`) and runs in CI.
 
 `scripts/verify-async-media-jobs.sh` guards the asynchronous job surface. It
-covers the job record, its five states, the five video routes, and their one
+covers the job record, its five states, the six video routes, and their one
 scope. It covers the provider job identifier that never reaches a caller. It
 covers the retention window, the outstanding job bound, the poll budget that
-ends an abandoned job, and the console jobs page. It is terminal at 18
+retains unresolved work, explicit reconciliation, and the console jobs page. It is terminal at 18
 conditions (`AMJ-V01` through `AMJ-V18`) and runs in CI.
 
 `scripts/verify-document-parser.sh` guards the document parser plugin. It covers

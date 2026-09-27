@@ -235,50 +235,31 @@ func TestASubmissionOverTheLimitReachesNoProvider(t *testing.T) {
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
 }
 
-// TestTheSweepClosesAJobNobodyCameBackFor is the other half of the bound. Every
-// other path settles a job because a caller polled it, and a caller that
-// submits and walks away is exactly the caller the limit exists for. Without
-// this pass one abandoned job holds one slot for as long as the process runs.
-func TestTheSweepClosesAJobNobodyCameBackFor(t *testing.T) {
+// TestTheSweepRetainsUnconfirmedWork separates a local timeout from provider completion.
+func TestTheSweepRetainsUnconfirmedWork(t *testing.T) {
 	t.Parallel()
-
-	ctx := context.Background()
+	ctx := t.Context()
 	accountant := &recordingAccountant{}
 	meter := &countingMeter{}
 	clock := &assetClock{now: submitted}
-	service, _ := newService(t,
-		jobs.WithAccountant(accountant),
-		jobs.WithJobMeter(meter),
-		jobs.WithClock(clock.read))
+	service, records := newService(t, jobs.WithAccountant(accountant), jobs.WithJobMeter(meter), jobs.WithClock(clock.read))
 	runner := acceptedRunner()
-
-	_, err := service.Submit(ctx, open(runner), submissionFor(accountA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
-
-	// Move past the polling budget. A provider that has not answered by then is
-	// not going to, and nothing is polling this job to notice.
 	clock.now = submitted.Add(jobs.DefaultLifetime + time.Minute)
-	result, err := service.Sweep(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 1, result.Abandoned)
-	require.Equal(t, 1, result.Accounted)
-
-	entries := accountant.all()
-	require.Len(t, entries, 1)
-	require.Equal(t, jobs.JobStateFailed, entries[0].State)
-	require.False(t, entries[0].Chargeable)
-
-	reserves, releases := meter.counts()
-	require.Equal(t, 1, reserves)
-	require.Equal(t, 1, releases)
-
-	// A second pass finds nothing. The stamp is what stops it, so a sweep on a
-	// ticker does not draw a record per tick for the rest of the day.
-	again, err := service.Sweep(ctx)
-	require.NoError(t, err)
-	require.Zero(t, again.Abandoned)
-	require.Zero(t, again.Accounted)
-	require.Len(t, accountant.all(), 1)
+	for range 2 {
+		result, err := service.Sweep(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 1, result.AwaitingReconciliation)
+		require.Zero(t, result.Accounted)
+		require.Empty(t, accountant.all())
+		reserves, releases := meter.counts()
+		require.Equal(t, 1, reserves)
+		require.Zero(t, releases)
+		stored, err := records.Get(ctx, accountA, job.ID)
+		require.NoError(t, err)
+		require.Equal(t, jobs.JobStateQueued, stored.State)
+	}
 }
 
 // recordingNotifier is the event side under test: it keeps every terminal

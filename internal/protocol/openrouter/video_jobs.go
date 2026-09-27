@@ -36,6 +36,7 @@ func DecodeVideoJob(reader io.Reader) (inference.VideoJobRequest, error) {
 
 // VideoJob is the OpenRouter video wire object.
 type VideoJob struct {
+	PollingStatus    string         `json:"polling_status,omitempty"`
 	SubmissionStatus string         `json:"submission_status,omitempty"`
 	ID               string         `json:"id"`
 	Model            string         `json:"model"`
@@ -60,6 +61,7 @@ type VideoJobList struct {
 // EncodeVideoJob converts one canonical job to OpenRouter wire values.
 func EncodeVideoJob(job inference.VideoJob) VideoJob {
 	wire := VideoJob{
+		PollingStatus:    job.PollingStatus,
 		SubmissionStatus: job.SubmissionStatus,
 		ID:               job.ID,
 		Model:            job.Model,

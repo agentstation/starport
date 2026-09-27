@@ -299,36 +299,10 @@ func (s *Service) Refresh(ctx context.Context, runner Runner, account, id string
 	if job.State.Terminal() {
 		return s.settle(ctx, s.collect(ctx, runner, job)), nil
 	}
-	previous := job
-	now := s.now()
-	if s.policy.Spent(job, now) {
-		if err := s.policy.FailSpent(&job, now); err != nil {
-			return Job{}, err
-		}
-		spent, err := s.commit(ctx, previous, job)
-		if err != nil {
-			return Job{}, err
-		}
-		return s.settle(ctx, spent), nil
-	}
-	if runner == nil {
-		return Job{}, ErrRunnerRequired
-	}
-	report, err := runner.Poll(ctx, s.handle(job))
-	if err != nil {
-		return Job{}, err
-	}
-	if report.State == job.State {
+	if s.NeedsReconciliation(job) {
 		return job, nil
 	}
-	if err := applyReport(&job, report, now); err != nil {
-		return Job{}, err
-	}
-	moved, err := s.commit(ctx, previous, job)
-	if err != nil {
-		return Job{}, err
-	}
-	return s.settle(ctx, s.collect(ctx, runner, moved)), nil
+	return s.poll(ctx, runner, job)
 }
 
 // Cancel requests cancellation and retains the provider's reported state.

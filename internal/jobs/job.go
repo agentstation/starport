@@ -273,10 +273,8 @@ func (j *Job) Transition(to JobState, now time.Time) error {
 	return j.transition(to, now)
 }
 
-// Fail moves the job to its terminal failed state and records why. Every path
-// that ends a job without an asset passes through here: a provider rejection, a
-// provider state word that names a failure, and a job that outlived its
-// polling budget.
+// Fail records a confirmed provider failure and its reason.
+// Local polling exhaustion does not establish this state.
 func (j *Job) Fail(reason string, now time.Time) error {
 	if strings.TrimSpace(reason) == "" {
 		return fmt.Errorf("%w: a failed job states no reason", ErrInvalidJob)

@@ -50,7 +50,7 @@ func TestAmbiguousSubmissionRetainsRecordAndSlot(t *testing.T) {
 		require.NoError(t, err)
 		result, err := reopened.Sweep(t.Context())
 		require.NoError(t, err)
-		require.Zero(t, result.Abandoned)
+		require.Zero(t, result.AwaitingReconciliation)
 		require.Zero(t, result.Accounted)
 		_, err = reopened.Refresh(t.Context(), runner, accountA, held.ID)
 		require.ErrorIs(t, err, jobs.ErrSubmissionUnconfirmed)

@@ -86,6 +86,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.With(s.requireAnyScope("videos:write")).Get("/{video_id}", s.controllers.Videos.Get)
 			r.With(s.requireAnyScope("videos:write")).Get("/{video_id}/content", s.controllers.Videos.Content)
 			r.With(s.requireAnyScope("videos:write")).Post("/{video_id}/cancel", s.controllers.Videos.Cancel)
+			r.With(s.requireAnyScope("videos:write")).Post("/{video_id}/reconcile", s.controllers.Videos.Reconcile)
 		})
 
 		// Files. An upload writes bytes the gateway keeps, so it needs a
@@ -167,6 +168,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 				r.With(s.requireAnyScope("videos:write")).Get("/{video_id}", s.controllers.OpenRouterVideos.Get)
 				r.With(s.requireAnyScope("videos:write")).Get("/{video_id}/content", s.controllers.OpenRouterVideos.Content)
 				r.With(s.requireAnyScope("videos:write")).Post("/{video_id}/cancel", s.controllers.OpenRouterVideos.Cancel)
+				r.With(s.requireAnyScope("videos:write")).Post("/{video_id}/reconcile", s.controllers.OpenRouterVideos.Reconcile)
 			})
 
 			// Models with enhanced metadata

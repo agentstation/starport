@@ -1531,10 +1531,11 @@ breaking a caller that is mid-poll.
 | `GET /v1/videos` | `videos:write` | list the account's jobs |
 | `GET /v1/videos/{video_id}` | `videos:write` | read one job |
 | `GET /v1/videos/{video_id}/content` | `videos:write` | read the stored bytes |
-| `POST /v1/videos/{video_id}/cancel` | `videos:write` | cancel one job |
+| `POST /v1/videos/{video_id}/cancel` | `videos:write` | request cancellation |
+| `POST /v1/videos/{video_id}/reconcile` | `videos:write` | explicitly check an accepted provider job |
 
-The OpenRouter family serves the same five paths under `/api/v1/videos`. A
-caller polls a job through the family it submitted through.
+The OpenRouter family serves the same six paths under `/api/v1/videos`.
+The `reconcile` route is a Starport extension.
 
 One scope covers the whole surface. The account that submits a job is the only
 account that can read it. A separate read scope would therefore name a
@@ -1586,11 +1587,23 @@ reclaims expired bytes every hour. The sweep is a floor on how long expired
 bytes survive on disk. It is not a floor on how long an asset reads: an expired
 asset stops reading the moment it expires.
 
-Starport polls a job for one hour. Past that it fails the job and states the
-budget in the message. A provider that has not answered in an hour is not going
-to. The wait between polls starts at two seconds and doubles to a 30-second
-ceiling. The provider request count therefore grows with the logarithm of the
-wait.
+For one hour after submission, a single-job GET can check the provider.
+After that window, GET retains the last provider state and returns `polling_status: "paused"`.
+A listing reads stored records without provider calls.
+A local timeout does not prove that provider work stopped.
+The outstanding slot remains held until the provider confirms a terminal state.
+A timeout does not prove a zero charge or permit a reservation refund.
+
+Select **Check provider** in the Jobs page, or call the `reconcile` route.
+This action uses current caller authorization and provider access to check the existing provider handle.
+The operation has a 30-second timeout. It never submits generation or restarts automatic polling.
+
+A provider error retains the job and its capacity claim. Retry the check when provider access returns.
+An unconfirmed submission has no trusted provider handle and refuses this action.
+
+The sweep reports `awaiting_reconciliation` for accepted jobs beyond the polling window.
+This count describes records observed during that pass. It is not a count of new failures.
+Provider completion and billing settlement remain separate facts.
 
 Video bytes go to the same backend that `## File Storage` above configures. A
 deployment that sets `STARPORT_FILES_BACKEND=objectstore` serves a video from

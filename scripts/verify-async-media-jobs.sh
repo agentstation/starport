@@ -6,7 +6,7 @@
 #     table and no provider identifier reachable from outside the record,
 #   - one provider path submits, polls, and cancels behind a narrow optional
 #     interface that a descriptor must satisfy to claim the operation,
-#   - four caller routes on both protocol families answer with a Starport job
+#   - six caller routes on both protocol families answer with a Starport job
 #     identifier, serve the asset from Starport storage, and expire it,
 #   - a job draws its cost once and an account holds a bounded number of them.
 #
@@ -91,7 +91,8 @@ video_routes_registered() {
   [ -f "$held" ] || return 1
   grep -q 'chi.Walk' "$held" || return 1
   all_present '/v1/videos' '/v1/videos/{video_id}' \
-    '/v1/videos/{video_id}/content' '/v1/videos/{video_id}/cancel' -- "$held"
+    '/v1/videos/{video_id}/content' '/v1/videos/{video_id}/cancel' \
+    '/v1/videos/{video_id}/reconcile' '/api/v1/videos/{video_id}/reconcile' -- "$held"
 }
 
 # console_jobs holds AMJ-V17. A panel that listed jobs and rendered no failure
@@ -150,13 +151,13 @@ check AMJ-V06 "the named operation set holds the video operation" \
 check AMJ-V07 "a descriptor claiming the operation with no interface fails activation" \
   in_tests ErrJobsUnsupported internal/providers/connectors
 
-check AMJ-V08 "an unknown provider state word and a spent lifetime both fail loudly" \
-  tests_all_present ErrUnknownProviderState ErrJobLifetimeExceeded \
+check AMJ-V08 "unknown provider states refuse and polling exhaustion retains unresolved work" \
+  tests_all_present ErrUnknownProviderState TestPollingExhaustionRetainsProviderWork \
     -- internal/jobs internal/providers/connectors
 
 # --- Phase C, the caller surface ---
 
-check AMJ-V09 "a route test walks the router and names the four video paths" \
+check AMJ-V09 "route tests cover video submission, reads, cancellation, and reconciliation" \
   video_routes_registered
 
 check AMJ-V10 "a key holding no videos:write scope cannot submit a job" \

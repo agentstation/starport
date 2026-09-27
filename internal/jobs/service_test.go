@@ -255,10 +255,8 @@ func TestAFailedProviderAnswerAlwaysStatesAReason(t *testing.T) {
 	require.False(t, failed.TerminalAt.IsZero())
 }
 
-// TestASpentJobFailsWithoutAskingTheProvider covers the bound that makes this
-// surface terminate. A provider that never reaches a terminal state would
-// otherwise leave a caller polling for as long as the process runs.
-func TestASpentJobFailsWithoutAskingTheProvider(t *testing.T) {
+// TestASpentJobRetainsStateWithoutAskingTheProvider bounds automatic polling.
+func TestASpentJobRetainsStateWithoutAskingTheProvider(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -271,8 +269,9 @@ func TestASpentJobFailsWithoutAskingTheProvider(t *testing.T) {
 	clock = submitted.Add(jobs.DefaultLifetime + time.Minute)
 	spent, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
-	require.Equal(t, jobs.JobStateFailed, spent.State)
-	require.Contains(t, spent.Reason, "did not finish")
+	require.Equal(t, jobs.JobStateQueued, spent.State)
+	require.Empty(t, spent.Reason)
+	require.True(t, service.NeedsReconciliation(spent))
 	require.Zero(t, runner.polls)
 }
 

@@ -16,6 +16,11 @@ const gateway = vi.hoisted(() => ({
   jobs: [] as unknown[],
   models: [] as unknown[],
   cancelled: [] as string[],
+  cancelStatus: "cancelled",
+  checked: [] as string[],
+  check: vi.fn(),
+  announce: vi.fn(),
+  report: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -29,7 +34,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
     listModels: async () => gateway.models,
     cancelJob: async (jobID: string) => {
       gateway.cancelled.push(jobID);
-      return {};
+      return { id: jobID, status: gateway.cancelStatus };
+    },
+    reconcileJob: async (jobID: string) => {
+      gateway.checked.push(jobID);
+      return gateway.check(jobID);
     },
     // A fetch here would mean the panel decided to play something. Every test
     // in this file asserts it did not, so a call is a failure rather than a
@@ -39,6 +48,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
     },
   };
 });
+
+vi.mock("@/lib/mutations", () => ({ announce: gateway.announce, report: gateway.report }));
 
 const HOUR = 3600;
 
@@ -50,6 +61,11 @@ beforeEach(() => {
   gateway.jobs = [];
   gateway.models = [];
   gateway.cancelled = [];
+  gateway.cancelStatus = "cancelled";
+  gateway.checked = [];
+  gateway.check.mockReset();
+  gateway.announce.mockReset();
+  gateway.report.mockReset();
 });
 
 afterEach(cleanup);
@@ -207,4 +223,59 @@ test("cancels a running job only after the operator confirms", async () => {
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancel job" }));
 
   await waitFor(() => expect(gateway.cancelled).toEqual(["job-running"]));
+});
+
+
+test("a paused job requires an explicit provider check and retains its state on error", async () => {
+  gateway.jobs = [{ id: "job-paused", model: "mock/video-1", status: "in_progress", created_at: nowSeconds() - 2 * HOUR, polling_status: "paused" }];
+  let refuse!: (error: Error) => void;
+  gateway.check.mockImplementation(() => new Promise((_resolve, reject) => { refuse = reject; }));
+  mount();
+  expect((await screen.findByTestId("job-polling-paused")).textContent).toContain("holds a job slot");
+  expect(gateway.checked).toEqual([]);
+  fireEvent.click(screen.getByRole("button", { name: "Check provider" }));
+  await waitFor(() => expect(gateway.checked).toEqual(["job-paused"]));
+  expect((await screen.findByRole("button", { name: "Checking…" }) as HTMLButtonElement).disabled).toBe(true);
+  refuse(new Error("provider unavailable"));
+  await waitFor(() => expect(gateway.report).toHaveBeenCalledWith("Provider check failed: provider unavailable"));
+  expect(screen.getByText("in progress")).toBeTruthy();
+  expect(screen.getByTestId("job-polling-paused")).toBeTruthy();
+  expect(gateway.announce).not.toHaveBeenCalled();
+  expect(gateway.cancelled).toEqual([]);
+});
+
+test("a confirmed provider check replaces the paused state", async () => {
+  gateway.jobs = [{ id: "job-paused", model: "mock/video-1", status: "queued", created_at: nowSeconds() - 2 * HOUR, polling_status: "paused" }];
+  gateway.check.mockImplementation(async () => {
+    const result = { id: "job-paused", model: "mock/video-1", status: "failed", created_at: nowSeconds() - 2 * HOUR, error: { message: "provider stopped" } };
+    gateway.jobs = [result];
+    return result;
+  });
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Check provider" }));
+  await waitFor(() => expect(gateway.announce).toHaveBeenCalledWith("Provider reports failed for job-paused"));
+  expect((await screen.findByTestId("job-failure")).textContent).toContain("provider stopped");
+  expect(screen.queryByTestId("job-polling-paused")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Check provider" })).toBeNull();
+  expect(gateway.checked).toEqual(["job-paused"]);
+});
+
+test("an unconfirmed submission cannot poll an unknown provider handle", async () => {
+  gateway.jobs = [{ id: "job-uncertain", model: "mock/video-1", status: "queued", created_at: nowSeconds(), submission_status: "unconfirmed" }];
+  mount();
+  await screen.findByTestId("job-row");
+  expect(screen.queryByRole("button", { name: "Check provider" })).toBeNull();
+  expect(gateway.checked).toEqual([]);
+});
+
+test("a pending cancellation reports the provider state without claiming cancellation", async () => {
+  gateway.jobs = [{ id: "job-running", model: "mock/video-1", status: "in_progress", created_at: nowSeconds() }];
+  gateway.cancelStatus = "in_progress";
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+  const dialog = await screen.findByRole("dialog", { name: "Cancel job" });
+  expect(dialog.textContent).toContain("cancellation does not establish a refund");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel job" }));
+  await waitFor(() => expect(gateway.announce).toHaveBeenCalledWith("Provider reports in progress for job-running"));
+  expect(gateway.announce).not.toHaveBeenCalledWith("Cancelled job-running");
 });

@@ -1600,15 +1600,15 @@ func (a *App) sweepJobAssets(ctx context.Context) {
 			Int("reclaimed", result.Expired).
 			Msg("job sweep did not finish; the next pass retries the rest")
 	}
-	if result.Expired == 0 && result.Abandoned == 0 && result.Accounted == 0 && result.Released == 0 {
+	if result.Expired == 0 && result.AwaitingReconciliation == 0 && result.Accounted == 0 && result.Released == 0 {
 		return
 	}
 	log.Info().
 		Int("expired", result.Expired).
-		Int("abandoned", result.Abandoned).
+		Int("awaiting_reconciliation", result.AwaitingReconciliation).
 		Int("accounted", result.Accounted).
 		Int("released", result.Released).
-		Msg("job sweep reclaimed storage and closed finished work")
+		Msg("job sweep checked retained work and storage")
 }
 
 // catalogCandidateLoop validates and accepts every candidate the connected

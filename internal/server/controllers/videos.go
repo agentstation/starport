@@ -125,6 +125,25 @@ func (h *VideosController) Get(w http.ResponseWriter, r *http.Request) {
 	h.writeJob(w, job)
 }
 
+// Reconcile handles one explicit provider check after automatic polling stops.
+func (h *VideosController) Reconcile(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	ctx := r.Context()
+	runner, err := h.runner(ctx)
+	if err != nil {
+		h.writeCredentialStrategyError(w, err)
+		return
+	}
+	job, err := h.jobs.Reconcile(ctx, runner, h.getAccountID(ctx), chi.URLParam(r, videoIDParam))
+	if err != nil {
+		h.writeJobError(ctx, w, err, "video job reconciliation failed")
+		return
+	}
+	h.writeJob(w, job)
+}
+
 // List handles GET /v1/videos. It reads records and asks no provider anything,
 // so a listing costs one storage read however many jobs are still running.
 func (h *VideosController) List(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +159,7 @@ func (h *VideosController) List(w http.ResponseWriter, r *http.Request) {
 	published := make([]inference.VideoJob, 0, len(records))
 	for _, record := range records {
 		if record.Operation == routing.OperationVideosGenerations {
-			published = append(published, canonicalVideoJob(record))
+			published = append(published, h.canonicalVideoJob(record))
 		}
 	}
 	h.writeJobList(w, published)
@@ -265,7 +284,7 @@ func (h *VideosController) runner(ctx context.Context) (jobs.Runner, error) {
 // canonicalVideoJob projects one record onto the canonical answer. The record
 // holds a provider job identifier and this value does not, which is what lets
 // each codec encode it without a field-by-field review.
-func canonicalVideoJob(job jobs.Job) inference.VideoJob {
+func (h *VideosController) canonicalVideoJob(job jobs.Job) inference.VideoJob {
 	answer := inference.VideoJob{
 		ID:          job.ID,
 		Model:       job.Model,
@@ -273,6 +292,9 @@ func canonicalVideoJob(job jobs.Job) inference.VideoJob {
 		State:       string(job.State),
 		Reason:      job.Reason,
 		CreatedUnix: job.CreatedAt.Unix(),
+	}
+	if h.jobs.NeedsReconciliation(job) {
+		answer.PollingStatus = "paused"
 	}
 	if job.SubmissionPending {
 		answer.SubmissionStatus = "unconfirmed"
@@ -297,7 +319,7 @@ func (h *VideosController) decodeSubmission(r *http.Request) (inference.VideoJob
 }
 
 func (h *VideosController) writeJob(w http.ResponseWriter, job jobs.Job) {
-	answer := canonicalVideoJob(job)
+	answer := h.canonicalVideoJob(job)
 	if h.protocol == ProtocolOpenRouter {
 		_ = openrouter.WriteJSON(w, http.StatusOK, openrouter.EncodeVideoJob(answer))
 		return

@@ -144,29 +144,16 @@ type SweepResult struct {
 	Failed int
 	// Expired counts jobs whose asset passed its window and went.
 	Expired int
-	// Abandoned counts jobs nobody polled that outlived their polling budget.
-	Abandoned int
+	// AwaitingReconciliation counts accepted work beyond automatic polling.
+	AwaitingReconciliation int
 	// Accounted counts jobs that reached a terminal state without a caller
 	// present to settle them.
 	Accounted int
 }
 
-// Sweep reclaims what nothing may read any more, and closes the books on what
-// nobody came back for.
-//
-// A sweep is what makes the outstanding job limit a bound in practice rather
-// than only on paper. Every other path settles a job because a caller polled
-// it, and a caller that submits and never returns is exactly the caller the
-// limit exists for. Without this pass, one abandoned job holds one account slot
-// forever.
-//
-// The record stays. A completed job stays completed after its bytes go, because
-// the work happened and the account paid for it, and the expiry marker is what
-// separates the two answers a caller reads.
-//
-// One failing record does not stop the pass. A sweep that returned on the first
-// error would let one unreachable object hold every later one hostage, and the
-// caller runs on a ticker that would repeat the same failure forever.
+// Sweep expires assets and retries confirmed terminal cleanup.
+// Local polling exhaustion retains provider work and its outstanding capacity.
+// A failed record does not prevent recovery of later records.
 func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 	return recoverPages(ctx, &s.recovery, s.records.RecoveryPage, func(ctx context.Context, job Job, result *SweepResult) error {
 		swept, err := s.sweepOne(ctx, job, s.now(), result)
@@ -189,28 +176,14 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 	})
 }
 
-// sweepOne runs the two reclaims one record may need and reports what it became.
-//
-// Ending an abandoned job comes before expiring an asset, because a job the
-// budget just ended may hold no asset at all, and a job that holds one is
-// already terminal and cannot be ended again.
+// sweepOne expires retained assets and reports work that needs reconciliation.
 func (s *Service) sweepOne(ctx context.Context, job Job, now time.Time, result *SweepResult) (Job, error) {
 	if job.SubmissionPending {
 		return job, nil
 	}
-	previous := job
-	if !job.State.Terminal() && s.policy.Spent(job, now) {
-		// FailSpent needs no runner. A job past its budget has outlived what
-		// this gateway is willing to ask a provider about.
-		if err := s.policy.FailSpent(&job, now); err != nil {
-			return job, err
-		}
-		ended, err := s.commit(ctx, previous, job)
-		if err != nil {
-			return job, err
-		}
-		result.Abandoned++
-		return ended, nil
+	if s.policy.Spent(job, now) {
+		result.AwaitingReconciliation++
+		return job, nil
 	}
 	if s.assets == nil || !job.HasAsset() || !job.AssetExpired(now) {
 		return job, nil
