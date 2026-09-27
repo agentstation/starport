@@ -3,7 +3,6 @@ package recovery
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"strings"
 
@@ -42,17 +41,13 @@ func (w *Witness) InitializeFresh(ctx context.Context, backend storage.FreshData
 	if err != nil {
 		return Record{}, err
 	}
-	claim, err := json.Marshal(struct {
-		Deployment string       `json:"deployment"`
-		Backend    string       `json:"backend"`
-		Request    FreshRequest `json:"request"`
-	}{deployment, identity, request})
+	record := Record{DeploymentID: deployment, Epoch: 1, Open: true, BackendID: identity, Evidence: request.Evidence}
+	claim, err := authorityBytes(record, request.OperationID)
 	if err != nil {
 		return Record{}, err
 	}
-	record := Record{DeploymentID: deployment, Epoch: 1, Open: true, BackendID: identity, Evidence: request.Evidence}
 	err = w.db.WithFreshSchema(ctx, func(tx *sql.Tx) error {
-		if err := backend.ClaimEmptyDatabase(ctx, identity, "catalog:bootstrap:v1", claim); err != nil {
+		if err := backend.ClaimEmptyDatabase(ctx, identity, authorityKey, claim); err != nil {
 			return err
 		}
 		_, err := tx.ExecContext(ctx, w.db.Bind(`INSERT INTO catalog_recovery (deployment_id, epoch, gate_open, backend_id, evidence, bootstrap_allowed) VALUES (?, 1, 1, ?, ?, 1)`), deployment, identity, request.Evidence)

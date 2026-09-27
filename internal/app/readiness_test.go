@@ -17,7 +17,7 @@ import (
 )
 
 func TestReadinessTracksAdmissionWithoutBlockingLiveness(t *testing.T) {
-	factories := explicitTestFactories()
+	factories := explicitTestFactories(t)
 	openCatalog := factories.openCatalog
 	sampled := &sampledCatalogRuntime{}
 	factories.openCatalog = func(ctx context.Context, store storage.KVStore, db *sqlstore.DB, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {

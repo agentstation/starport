@@ -32,7 +32,7 @@ func freshTestStores(t *testing.T) (*Witness, storage.KVStore, storage.FreshData
 	require.NoError(t, err)
 	require.Empty(t, keys, "fresh initialization fixture needs exclusive empty Valkey database 14")
 	t.Cleanup(func() {
-		require.NoError(t, kv.BatchDelete(context.Background(), []string{"catalog:bootstrap:v1", "existing"}))
+		require.NoError(t, kv.BatchDelete(context.Background(), []string{authorityKey, "existing"}))
 	})
 	return w, kv, kv.(storage.FreshDatabase)
 }
@@ -47,7 +47,7 @@ func TestFreshFleetInitialization(t *testing.T) {
 	require.Equal(t, record, actual)
 	_, err = backend.BindIncarnation(t.Context(), record.BackendID)
 	require.NoError(t, err)
-	claim, err := kv.Get(t.Context(), "catalog:bootstrap:v1")
+	claim, err := kv.Get(t.Context(), authorityKey)
 	require.NoError(t, err)
 	require.NotEmpty(t, claim)
 	_, err = w.InitializeFresh(t.Context(), backend, "test-deployment", request)
@@ -83,7 +83,7 @@ func TestFreshFleetRefusesExistingState(t *testing.T) {
 			}
 			_, err := w.InitializeFresh(t.Context(), backend, "test-deployment", FreshRequest{OperationID: "fresh", Evidence: "test/procedure"})
 			require.Error(t, err)
-			_, err = kv.Get(t.Context(), "catalog:bootstrap:v1")
+			_, err = kv.Get(t.Context(), authorityKey)
 			require.ErrorIs(t, err, storage.ErrNotFound)
 			if state == "kv" {
 				value, err := kv.Get(t.Context(), "existing")
@@ -162,9 +162,9 @@ func TestFreshFleetRefusesChangedIncarnation(t *testing.T) {
 	} else {
 		replacement[0] = 'a'
 	}
-	err = backend.ClaimEmptyDatabase(t.Context(), string(replacement), "catalog:bootstrap:v1", []byte("claim"))
+	err = backend.ClaimEmptyDatabase(t.Context(), string(replacement), authorityKey, []byte("claim"))
 	require.ErrorIs(t, err, storage.ErrIncarnationChanged)
-	_, err = kv.Get(t.Context(), "catalog:bootstrap:v1")
+	_, err = kv.Get(t.Context(), authorityKey)
 	require.ErrorIs(t, err, storage.ErrNotFound)
 }
 
@@ -178,7 +178,7 @@ CREATE TRIGGER refuse_approval BEFORE INSERT ON catalog_recovery FOR EACH ROW EX
 	require.ErrorContains(t, err, "injected SQL refusal")
 	_, err = w.Approved(t.Context(), "test-deployment")
 	require.ErrorIs(t, err, ErrClosed)
-	_, err = kv.Get(t.Context(), "catalog:bootstrap:v1")
+	_, err = kv.Get(t.Context(), authorityKey)
 	require.NoError(t, err)
 	_, err = w.db.ExecContext(t.Context(), "DROP TRIGGER refuse_approval ON catalog_recovery; DROP FUNCTION refuse_approval()")
 	require.NoError(t, err)

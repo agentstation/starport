@@ -18,7 +18,7 @@ func TestIncompleteFleetRecipeRefusesBeforeStorageAccess(t *testing.T) {
 			cfg.Storage.SQL.Mode = sqlMode
 			cfg.Storage.SQL.Postgres.URL = "postgres://127.0.0.1:1/recipe-test"
 			cfg.Files.Backend = config.BlobBackendFilesystem
-			factories := explicitTestFactories()
+			factories := explicitTestFactories(t)
 			opened := false
 			factories.openStorage = func(storage.Config) (storage.KVStore, error) {
 				opened = true

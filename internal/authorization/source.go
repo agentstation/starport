@@ -10,6 +10,7 @@ import (
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authorization/revision"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
 )
 
 const (
@@ -77,6 +78,7 @@ type GrantReader interface {
 // RepositorySource checks independent revision markers around one policy read.
 // The constructor starts without I/O. Startup initializes markers and creates fences.
 type RepositorySource struct {
+	prepare                   func(context.Context, *limits.BudgetPolicy) error
 	users                     UserReader
 	grants                    GrantReader
 	keys                      KeyReader
@@ -91,6 +93,9 @@ type RepositorySource struct {
 
 // RepositorySources binds policy records to their authoritative revision owners.
 type RepositorySources struct {
+	// PrepareBudget runs only during bounded source loads. It may establish
+	// accounting history and change a revision, requiring a complete reread.
+	PrepareBudget             func(context.Context, *limits.BudgetPolicy) error
 	Users                     UserReader
 	Grants                    GrantReader
 	Keys                      KeyReader
@@ -110,7 +115,7 @@ func NewRepositorySource(s RepositorySources, authorities *AuthoritySet, clock C
 			return nil, ErrEvidence
 		}
 	}
-	return &RepositorySource{users: s.Users, grants: s.Grants, keys: s.Keys, accounts: s.Accounts, teams: s.Teams, kv: s.KV, sql: s.SQL, authorities: authorities, clock: clock, lifetime: lifetime, kvAuthority: s.KVAuthority, sqlAuthority: s.SQLAuthority}, nil
+	return &RepositorySource{prepare: s.PrepareBudget, users: s.Users, grants: s.Grants, keys: s.Keys, accounts: s.Accounts, teams: s.Teams, kv: s.KV, sql: s.SQL, authorities: authorities, clock: clock, lifetime: lifetime, kvAuthority: s.KVAuthority, sqlAuthority: s.SQLAuthority}, nil
 }
 
 // Load refuses records that span a policy change. The caller can retry the whole load.
@@ -129,6 +134,13 @@ func (s *RepositorySource) Load(ctx context.Context, caller Identity) (Candidate
 		return Candidate{}, err
 	}
 	candidate, recordErr := s.records(ctx, caller)
+	if recordErr == nil && s.prepare != nil && candidate.Key.APIKey.Active && candidate.Account.Account.Active {
+		var policy *limits.BudgetPolicy
+		policy, recordErr = budgetPolicy(candidate)
+		if recordErr == nil {
+			recordErr = s.prepare(ctx, policy)
+		}
+	}
 	// Reverse order creates a common interval for both independent authorities.
 	afterSQL, sqlErr := s.observe(ctx, s.sql, s.sqlAuthority)
 	afterKV, kvErr := s.observe(ctx, s.kv, s.kvAuthority)

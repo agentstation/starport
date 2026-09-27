@@ -38,6 +38,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../authorization/revision",
 		"../policyrecord",
 		"../sqlstore",
+		"../recovery",
 		"../limits/...",
 		"../credentials",
 		"../ratelimit",
@@ -169,6 +170,10 @@ func TestImportGraphArchitecture(t *testing.T) {
 	// Limits is the vocabulary both a gateway API key and an account hold. It
 	// stays a leaf so neither owner can reach the other through it.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/limits"])
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/recovery"],
+		"github.com/agentstation/starport/internal/sqlstore",
+		"github.com/agentstation/starport/internal/storage",
+	)
 	// Reservation owns durable capacity without reading identities or calling
 	// providers. Admission reads the inherited permission and the limits vocabulary.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/limits/reservation"],

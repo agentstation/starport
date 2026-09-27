@@ -113,6 +113,7 @@ type App struct {
 	availability        *availability.Tracker
 	advisory            *advisoryWorkers
 	authorization       *authorizationOwner
+	budget              *budgetOwner
 	// build is the provenance the admin and health surfaces report, with
 	// the start time New recorded.
 	build controllers.BuildInfo
@@ -236,6 +237,7 @@ func (b *runtimeBuilder) compose() error {
 		b.openBlob,
 		b.openEvents,
 		b.openConcepts,
+		b.openBudgetAdmission,
 		b.openRegistry,
 		b.openCache,
 		b.buildGateway,

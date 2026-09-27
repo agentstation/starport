@@ -38,8 +38,22 @@ func (r *teamRepository) ClaimBudgetHistory(ctx context.Context, teamID, interva
 	if teamID == "" || historyID == "" {
 		return false, ErrMissingID
 	}
+	// An absent or consumed grant is a read-only refusal. Repeated recovery
+	// failures must not advance identity revisions or revoke unrelated callers.
+	var retained string
+	var allowed int
+	err := r.db.QueryRowContext(ctx, r.db.Bind(`SELECT history_id, initialize_allowed FROM team_budget_origins WHERE team_id = ?`), teamID).Scan(&retained, &allowed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if allowed != 1 || retained != historyID {
+		return false, nil
+	}
 	claimed := false
-	err := r.authority.Apply(ctx, func(tx *sql.Tx) error {
+	err = r.authority.Apply(ctx, func(tx *sql.Tx) error {
 		var data sql.NullString
 		err := tx.QueryRowContext(ctx, r.db.Bind(boundedIdentityQuery(r.db.Dialect(), `SELECT record FROM teams WHERE id = ?`)), policyrecord.MaxBytes, teamID).Scan(&data)
 		if errors.Is(err, sql.ErrNoRows) {

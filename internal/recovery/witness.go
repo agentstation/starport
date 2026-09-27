@@ -1,4 +1,4 @@
-// Package recovery owns the independent approval for a catalog backend incarnation.
+// Package recovery owns independent approval for the deployment KV incarnation.
 package recovery
 
 import (
