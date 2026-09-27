@@ -25,7 +25,8 @@ GOLANGCI_LINT_VERSION=v2.13.2
 AIR_VERSION=v1.67.4
 GOIMPORTS_VERSION=v0.48.0
 VALKEY_INTEGRATION_PORT ?= 16379
-INTEGRATION_COMPOSE=docker compose -f docker-compose.yml -f docker-compose.integration.yml
+POSTGRES_INTEGRATION_PORT ?= 15432
+INTEGRATION_COMPOSE=docker compose -f docker-compose.integration.yml
 
 # Build flags
 LDFLAGS = -ldflags "\
@@ -123,14 +124,14 @@ test-coverage: ## Run tests with coverage report
 	@$(GO) tool cover -func=coverage.out | grep total | awk '{print "Total coverage: " $$3}'
 
 .PHONY: test-integration
-test-integration: ## Run Valkey integration tests with Docker Compose
+test-integration: ## Run Valkey and PostgreSQL integration tests with Docker Compose
 	@set -eu; \
 		export COMPOSE_PROJECT_NAME=starport-integration-test-$$$$; \
-		export STARPORT_SECURITY_MASTER_KEY=integration-test-master-key-0001; \
-		export OPENAI_API_KEY=integration-test-provider-key; \
 		export STARPORT_VALKEY_PORT=$(VALKEY_INTEGRATION_PORT); \
+		export STARPORT_POSTGRES_PORT=$(POSTGRES_INTEGRATION_PORT); \
+		export TEST_POSTGRES_URL=postgres://postgres@127.0.0.1:$(POSTGRES_INTEGRATION_PORT)/starport_test?sslmode=disable; \
 		trap '$(INTEGRATION_COMPOSE) down --volumes --remove-orphans' EXIT INT TERM; \
-		$(INTEGRATION_COMPOSE) up -d --wait valkey; \
+		$(INTEGRATION_COMPOSE) up -d --wait valkey postgres; \
 		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/storage -run 'Test(Valkey|KVStoreContract)'; \
 		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) TEST_SHARED_CACHE_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/cache -run '^TestSharedCache'; \
 		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) TEST_SHARED_CACHE_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/app -run 'Test(AppWithValkey|SharedCacheCompositionUsesSeparateService)'; \
@@ -255,7 +256,6 @@ dev-docker: ## Start the Compose development environment
 	docker compose up -d
 	@echo "Development environment started:"
 	@echo "  - Starport: http://localhost:8080"
-	@echo "  - Valkey: localhost:6379"
 	@echo "Use 'make dev-docker-logs' to view logs"
 
 .PHONY: dev-docker-logs

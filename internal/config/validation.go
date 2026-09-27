@@ -120,8 +120,8 @@ func (c *BadgerConfig) Validate() error {
 		return fmt.Errorf("GC interval must be positive")
 	}
 
-	if c.GCDiscardRatio < 0 || c.GCDiscardRatio > 1 {
-		return fmt.Errorf("GC discard ratio must be between 0 and 1")
+	if !(c.GCDiscardRatio > 0 && c.GCDiscardRatio < 1) {
+		return fmt.Errorf("GC discard ratio must be greater than 0 and less than 1")
 	}
 
 	return nil
@@ -129,17 +129,8 @@ func (c *BadgerConfig) Validate() error {
 
 // Validate validates ValkeyConfig
 func (c *ValkeyConfig) Validate() error {
-	if c.URL == "" {
-		return fmt.Errorf("valkey URL cannot be empty")
-	}
-
-	u, err := url.Parse(c.URL)
-	if err != nil {
-		return fmt.Errorf("valkey URL is invalid")
-	}
-
-	if u.Scheme != storageModeValkey && u.Scheme != "redis" && u.Scheme != "rediss" {
-		return fmt.Errorf("invalid valkey URL scheme: %s", u.Scheme)
+	if err := c.RuntimeConnection().ValidateConnection(); err != nil {
+		return err
 	}
 
 	if c.MaxConnections <= 0 {

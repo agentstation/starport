@@ -38,6 +38,7 @@ go.work.sum
 # Environment files
 .env
 .env.local
+.env.fleet
 .env.*.local
 local.env
 

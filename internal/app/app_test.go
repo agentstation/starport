@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
@@ -48,7 +49,7 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 		{
 			name: "missing storage",
 			mutate: func(_ *config.Config, factories *runtimeFactories) {
-				factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) { return nil, nil }
+				factories.openStorage = func(storage.Config) (storage.KVStore, error) { return nil, nil }
 			},
 			cause: ErrStorageRequired,
 		},
@@ -77,7 +78,7 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 		{
 			name: "missing API key",
 			mutate: func(_ *config.Config, factories *runtimeFactories) {
-				factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
+				factories.openStorage = func(storage.Config) (storage.KVStore, error) {
 					return storage.NewMockStore(), nil
 				}
 			},
@@ -148,9 +149,9 @@ func TestDefaultFactoryErrorsReturnNilInterfaces(t *testing.T) {
 
 	storagePath := filepath.Join(t.TempDir(), "not-a-directory")
 	require.NoError(t, os.WriteFile(storagePath, []byte("occupied"), 0o600))
-	store, err := openStorage(config.StorageConfig{
+	store, err := openStorage((&config.Config{Storage: config.StorageConfig{
 		Mode: "badger", Badger: config.BadgerConfig{Path: storagePath, Compression: "snappy"},
-	})
+	}}).RuntimeStorage())
 	require.Error(t, err)
 	require.True(t, store == nil, "failed storage constructor must return a nil interface")
 }
@@ -163,7 +164,7 @@ func TestProductionCompositionReturnsStorageOpenError(t *testing.T) {
 				cfg.Storage.Badger.Path = filepath.Join(t.TempDir(), "occupied")
 				require.NoError(t, os.WriteFile(cfg.Storage.Badger.Path, []byte("occupied"), 0o600))
 			} else {
-				store, err := openStorage(cfg.Storage)
+				store, err := openStorage(cfg.RuntimeStorage())
 				require.NoError(t, err)
 				t.Cleanup(func() { require.NoError(t, store.Close()) })
 			}
@@ -280,17 +281,29 @@ func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
 	cfg := validProductionConfig(t)
 	fakeHTTP := newBlockingHTTPRuntime()
 	factories := explicitTestFactories()
+	var catalogDependency *lifecycleCatalogRuntime
+	// This test owns cancellation and dependency closure. The container recipe
+	// tests qualify real catalog persistence and startup separately.
+	factories.openCatalog = func(ctx context.Context, store storage.KVStore, _ *sqlstore.DB, _ runtimecatalog.Settings, _ runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
+		var err error
+		catalogDependency, err = newLifecycleCatalogRuntime(ctx, store)
+		return catalogDependency, err
+	}
 	factories.newServer = func(*server.Config, server.Dependencies) (httpRuntime, error) {
 		return fakeHTTP, nil
 	}
 	application, err := New(cfg, withRuntimeFactories(factories))
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 	result := make(chan error, 1)
 	go func() { result <- application.Run(ctx) }()
 	select {
 	case <-fakeHTTP.started:
+	case err := <-result:
+		t.Fatalf("application stopped before HTTP startup: %v", err)
 	case <-time.After(2 * time.Second):
 		t.Fatal("HTTP runtime did not start")
 	}
@@ -302,6 +315,42 @@ func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
 		t.Fatal("application did not stop after cancellation")
 	}
 	require.True(t, fakeHTTP.wasStopped())
+	require.True(t, catalogDependency.closed)
+}
+
+type lifecycleCatalogRuntime struct {
+	runtimeSyncFixture
+	accepted *runtimecatalog.GenerationStore
+	closed   bool
+}
+
+// newLifecycleCatalogRuntime isolates application worker tests from catalog publication.
+func newLifecycleCatalogRuntime(ctx context.Context, store storage.KVStore) (*lifecycleCatalogRuntime, error) {
+	client, err := starmap.NewContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	plane, err := runtimecatalog.Open(client)
+	if err != nil {
+		return nil, err
+	}
+	accepted, err := runtimecatalog.NewGenerationStore(store)
+	if err != nil {
+		return nil, err
+	}
+	return &lifecycleCatalogRuntime{
+		runtimeSyncFixture: runtimeSyncFixture{plane: plane, state: client.CurrentCatalogState()},
+		accepted:           accepted,
+	}, nil
+}
+
+func (r *lifecycleCatalogRuntime) AcceptedStore() *runtimecatalog.GenerationStore {
+	return r.accepted
+}
+
+func (r *lifecycleCatalogRuntime) Close(context.Context) error {
+	r.closed = true
+	return nil
 }
 
 func validProductionConfig(t testing.TB) *config.Config {
@@ -378,7 +427,7 @@ func explicitTestFactories() runtimeFactories {
 	store := storage.NewMockStore()
 	apiKeys, _ := apikey.Open(store)
 	_, _ = apiKeys.Create(context.Background(), testAPIKey())
-	factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
+	factories.openStorage = func(storage.Config) (storage.KVStore, error) {
 		return store, nil
 	}
 	factories.newConnector = func(

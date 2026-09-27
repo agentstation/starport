@@ -163,7 +163,7 @@ func initializeConfiguredStorage(
 	if err := cfg.CheckLegacyPaths(ctx); err != nil {
 		return starportcli.InitResult{}, err
 	}
-	storageConfig := cfg.Storage.RuntimeStorage()
+	storageConfig := cfg.RuntimeStorage()
 	if storageConfig.Type == storage.StorageTypeBadger {
 		storageConfig.Badger.SyncWrites = true
 	}

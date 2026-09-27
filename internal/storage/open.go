@@ -56,8 +56,7 @@ func OpenReadOnly(config Config) (KVStore, error) {
 // NewMockStore creates a new mock KVStore for testing
 func NewMockStore() *MockStore {
 	return &MockStore{
-		data:         make(map[string][]byte),
-		ttl:          make(map[string]time.Time),
-		transactions: make(map[string]*MockTransaction),
+		data: make(map[string][]byte),
+		ttl:  make(map[string]time.Time),
 	}
 }

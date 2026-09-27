@@ -16,7 +16,7 @@ import (
 func TestDefaultResponseCacheDoesNotWriteDurableKV(t *testing.T) {
 	cfg := validProductionConfig(t)
 	cfg.Cache.Enabled = true
-	store, err := openStorage(cfg.Storage)
+	store, err := openStorage(cfg.RuntimeStorage())
 	require.NoError(t, err)
 	keys, err := apikey.Open(store)
 	require.NoError(t, err)

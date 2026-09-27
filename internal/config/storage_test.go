@@ -22,7 +22,7 @@ func TestRuntimeStorageProjectsAdapterSettings(t *testing.T) {
 			check: func(t *testing.T, got storage.Config) {
 				t.Helper()
 				if got.Type != storage.StorageTypeBadger || got.Badger.Path != "/data" ||
-					!got.Badger.SyncWrites || got.Badger.Compression {
+					!got.Badger.SyncWrites || got.Badger.Compression != "none" {
 					t.Errorf("Badger runtime configuration = %#v", got)
 				}
 			},
@@ -46,7 +46,7 @@ func TestRuntimeStorageProjectsAdapterSettings(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			test.check(t, test.input.RuntimeStorage())
+			test.check(t, (&Config{Storage: test.input}).RuntimeStorage())
 		})
 	}
 }

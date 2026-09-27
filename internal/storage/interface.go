@@ -72,9 +72,6 @@ type KVStore interface {
 	BatchDelete(ctx context.Context, keys []string) error
 	BatchSetWithTTL(ctx context.Context, items map[string][]byte, ttl time.Duration) error
 
-	// Transaction support
-	BeginTransaction(ctx context.Context) (Transaction, error)
-
 	// Scan operations for listing keys
 	Scan(ctx context.Context, pattern string, limit int) ([]string, error)
 	ScanWithPrefix(ctx context.Context, prefix string, limit int) ([]string, error)
@@ -94,25 +91,6 @@ type CompareAndSwapMutation struct {
 	TTL           time.Duration
 }
 
-// Transaction represents an atomic set of operations
-type Transaction interface {
-	// Basic operations within transaction
-	Get(key string) ([]byte, error)
-	Set(key string, value []byte) error
-	Delete(key string) error
-
-	// TTL operations within transaction
-	SetWithTTL(key string, value []byte, ttl time.Duration) error
-
-	// Atomic operations within transaction
-	Increment(key string, delta int64) (int64, error)
-	CompareAndSwap(key string, old, newValue []byte) error
-
-	// Transaction control
-	Commit(ctx context.Context) error
-	Rollback() error
-}
-
 // Config represents storage configuration
 type Config struct {
 	Type   string       `env:"TYPE,default=badger"`
@@ -122,27 +100,33 @@ type Config struct {
 
 // BadgerConfig represents Badger-specific configuration
 type BadgerConfig struct {
-	Path         string `env:"PATH,default=./data/badger"`
-	InMemory     bool
-	SyncWrites   bool  `env:"SYNC_WRITES,default=false"`
-	Compression  bool  `env:"COMPRESSION,default=true"`
-	NumVersions  int   `env:"NUM_VERSIONS,default=1"`
-	NumLevelZero int   `env:"NUM_LEVEL_ZERO,default=5"`
-	MemTableSize int64 `env:"MEM_TABLE_SIZE,default=67108864"` // 64MB
+	GCInterval     time.Duration
+	GCDiscardRatio float64
+	Path           string `env:"PATH,default=./data/badger"`
+	InMemory       bool
+	SyncWrites     bool   `env:"SYNC_WRITES,default=true"`
+	Compression    string `env:"COMPRESSION,default=snappy"`
+	NumVersions    int    `env:"NUM_VERSIONS,default=1"`
+	NumLevelZero   int    `env:"NUM_LEVEL_ZERO,default=5"`
+	MemTableSize   int64  `env:"MEM_TABLE_SIZE,default=67108864"` // 64MB
 }
 
 // ValkeyConfig represents Valkey/Redis-specific configuration
 type ValkeyConfig struct {
-	URL          string        `env:"URL,default=redis://localhost:6379"`
-	MaxRetries   int           `env:"MAX_RETRIES,default=3"`
-	MinIdleConns int           `env:"MIN_IDLE_CONNS,default=10"`
-	MaxConnAge   time.Duration `env:"MAX_CONN_AGE,default=0"`
-	PoolTimeout  time.Duration `env:"POOL_TIMEOUT,default=4s"`
-	ReadTimeout  time.Duration `env:"READ_TIMEOUT,default=3s"`
-	WriteTimeout time.Duration `env:"WRITE_TIMEOUT,default=3s"`
-	Password     string        `env:"PASSWORD"`
-	DB           int           `env:"DB,default=0"`
-	ClusterMode  bool          `env:"CLUSTER_MODE,default=false"`
+	DeploymentID   string
+	URL            string `env:"URL,default=redis://localhost:6379"`
+	Username       string
+	CAFile         string
+	AllowInsecure  bool
+	DialTimeout    time.Duration
+	MaxConnections int
+	IdleTimeout    time.Duration
+	MinIdleConns   int           `env:"MIN_IDLE_CONNS,default=10"`
+	ReadTimeout    time.Duration `env:"READ_TIMEOUT,default=3s"`
+	WriteTimeout   time.Duration `env:"WRITE_TIMEOUT,default=3s"`
+	Password       string        `env:"PASSWORD"`
+	DB             int           `env:"DB,default=0"`
+	ClusterMode    bool          `env:"CLUSTER_MODE,default=false"`
 }
 
 // Validate validates the storage configuration
@@ -173,8 +157,8 @@ func (c *Config) Validate() error {
 		if c.Valkey.URL == "" {
 			return errors.New("valkey URL cannot be empty")
 		}
-		if c.Valkey.MaxRetries < 0 {
-			return errors.New("valkey max_retries cannot be negative")
+		if err := c.Valkey.ValidateConnection(); err != nil {
+			return err
 		}
 		if c.Valkey.DB < 0 {
 			return errors.New("valkey DB index cannot be negative")

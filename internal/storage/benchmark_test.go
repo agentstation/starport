@@ -19,7 +19,7 @@ func BenchmarkBadgerStore(b *testing.B) {
 	config := BadgerConfig{
 		Path:         tempDir,
 		SyncWrites:   false,
-		Compression:  true,
+		Compression:  "snappy",
 		NumVersions:  1,
 		NumLevelZero: 5,
 		MemTableSize: 64 << 20, // 64MB

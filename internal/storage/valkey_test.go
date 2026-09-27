@@ -19,16 +19,15 @@ func TestValkeyStore(t *testing.T) {
 	}
 
 	config := ValkeyConfig{
-		URL:          valkeyURL,
-		MaxRetries:   3,
-		MinIdleConns: 1,
-		ReadTimeout:  3 * time.Second,
-		WriteTimeout: 3 * time.Second,
-		PoolTimeout:  4 * time.Second,
-		DB:           15, // Use DB 15 for tests
+		URL:            valkeyURL,
+		MaxConnections: 50,
+		MinIdleConns:   1,
+		ReadTimeout:    3 * time.Second,
+		WriteTimeout:   3 * time.Second,
+		DB:             15, // Use DB 15 for tests
 	}
 
-	store, err := OpenValkey(config)
+	store, err := openUnscopedValkeyForTest(config)
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -242,58 +241,6 @@ func TestValkeyStore(t *testing.T) {
 		assert.Len(t, result, 0)
 	})
 
-	t.Run("Transactions", func(t *testing.T) {
-		prefix := "test:tx:"
-
-		// Begin transaction
-		tx, err := store.BeginTransaction(ctx)
-		assert.NoError(t, err)
-
-		// Queue operations
-		err = tx.Set(prefix+"key1", []byte("value1"))
-		assert.NoError(t, err)
-
-		err = tx.SetWithTTL(prefix+"key2", []byte("value2"), 10*time.Second)
-		assert.NoError(t, err)
-
-		err = tx.Delete(prefix + "nonexistent")
-		assert.NoError(t, err)
-
-		// Commit transaction
-		err = tx.Commit(ctx)
-		assert.NoError(t, err)
-
-		// Verify results
-		val1, err := store.Get(ctx, prefix+"key1")
-		assert.NoError(t, err)
-		assert.Equal(t, []byte("value1"), val1)
-
-		val2, err := store.Get(ctx, prefix+"key2")
-		assert.NoError(t, err)
-		assert.Equal(t, []byte("value2"), val2)
-	})
-
-	t.Run("Transaction Rollback", func(t *testing.T) {
-		key := "test:tx:rollback"
-
-		// Begin transaction
-		tx, err := store.BeginTransaction(ctx)
-		assert.NoError(t, err)
-
-		// Queue operations
-		err = tx.Set(key, []byte("should not be set"))
-		assert.NoError(t, err)
-
-		// Rollback
-		err = tx.Rollback()
-		assert.NoError(t, err)
-
-		// Key should not exist
-		exists, err := store.Exists(ctx, key)
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	})
-
 	t.Run("Scan Operations", func(t *testing.T) {
 		prefix := "test:scan:"
 
@@ -337,7 +284,7 @@ func TestValkeyPubSub(t *testing.T) {
 		DB:  15,
 	}
 
-	store, err := OpenValkey(config)
+	store, err := openUnscopedValkeyForTest(config)
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -395,7 +342,7 @@ func BenchmarkValkeyStore(b *testing.B) {
 		MinIdleConns: 10,
 	}
 
-	store, err := OpenValkey(config)
+	store, err := openUnscopedValkeyForTest(config)
 	require.NoError(b, err)
 	defer store.Close()
 

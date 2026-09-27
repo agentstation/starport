@@ -32,21 +32,20 @@ func (c StorageConfig) Distributed() bool {
 }
 
 // RuntimeStorage projects external storage settings into the storage adapter contract.
-func (c StorageConfig) RuntimeStorage() storage.Config {
+func (c *Config) RuntimeStorage() storage.Config {
+	selected := c.Storage
+	connection := selected.Valkey.RuntimeConnection()
+	connection.DeploymentID = c.EffectivePaths().DeploymentID
 	return storage.Config{
-		Type: c.Mode,
+		Type: selected.Mode,
 		Badger: storage.BadgerConfig{
-			Path: c.Badger.Path, InMemory: c.Badger.inMemory,
-			SyncWrites:  c.Badger.SyncWrites,
-			Compression: c.Badger.Compression != compressionNone, NumVersions: 1,
+			Path: selected.Badger.Path, InMemory: selected.Badger.inMemory,
+			SyncWrites:  selected.Badger.SyncWrites,
+			Compression: selected.Badger.Compression, NumVersions: 1,
+			GCInterval: selected.Badger.GCInterval, GCDiscardRatio: selected.Badger.GCDiscardRatio,
 			NumLevelZero: 5, MemTableSize: 64 << 20,
 		},
-		Valkey: storage.ValkeyConfig{
-			URL: c.Valkey.URL, Password: c.Valkey.Password,
-			MaxRetries: 3, MinIdleConns: c.Valkey.MinIdleConns,
-			ReadTimeout: c.Valkey.ReadTimeout, WriteTimeout: c.Valkey.WriteTimeout,
-			ClusterMode: c.Valkey.ClusterMode,
-		},
+		Valkey: connection,
 	}
 }
 
@@ -66,6 +65,7 @@ func (c *Config) ConfigureDevelopmentRuntime() error {
 	// sets STARPORT_CATALOG_ACQUISITION_ENABLED=false.
 	c.Storage.Mode = storageModeBadger
 	c.Storage.Badger.inMemory = true
+	c.Storage.Badger.SyncWrites = false
 	c.Storage.SQL.Mode = sqlModeSQLite
 	c.Files.Backend = BlobBackendFilesystem
 	// Development can read an existing machine token for local authentication.
@@ -83,4 +83,15 @@ func (c *Config) ConfigureDevelopmentRuntime() error {
 	c.Logging.Output = "stdout"
 	c.Logging.FilePath = ""
 	return nil
+}
+
+const valkeyCAFileRole = "valkey-ca"
+const valkeyCAFileEnvironment = "STARPORT_STORAGE_VALKEY_CA_FILE"
+
+// RuntimeConnection projects endpoint settings without opening storage.
+func (c ValkeyConfig) RuntimeConnection() storage.ValkeyConfig {
+	return storage.ValkeyConfig{URL: c.URL, Username: c.Username, Password: c.Password,
+		CAFile: c.CAFile, AllowInsecure: c.AllowInsecure, ClusterMode: c.ClusterMode,
+		DialTimeout: c.DialTimeout, MaxConnections: c.MaxConnections, MinIdleConns: c.MinIdleConns,
+		IdleTimeout: c.IdleTimeout, ReadTimeout: c.ReadTimeout, WriteTimeout: c.WriteTimeout}
 }

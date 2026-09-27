@@ -1,0 +1,37 @@
+# Candidate fresh fleet. External stores must satisfy docs/FLEET_INITIALIZATION.md.
+# CSP13 and CSP15 still block production fleet use and existing fleet upgrades.
+services:
+  starport:
+    # One replica per project keeps the local credential volume private.
+    container_name: "${COMPOSE_PROJECT_NAME}-gateway"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - path: .env.fleet
+        required: true
+    # Choose an available loopback port for each replica or add a load balancer.
+    ports:
+      - "127.0.0.1::8080"
+    # Use a different Compose project for each replica. Do not share this volume.
+    # Durable records and uploaded bytes reside in the external shared stores.
+    volumes:
+      - starport-node-state:/var/lib/starport
+    environment:
+      STARPORT_SERVER_HOST: 0.0.0.0
+      STARPORT_DEPLOYMENT_ID: ${STARPORT_DEPLOYMENT_ID:?set a stable fleet deployment ID}
+      STARPORT_STORAGE_MODE: valkey
+      STARPORT_STORAGE_VALKEY_URL: ${STARPORT_STORAGE_VALKEY_URL:?set a TLS Valkey URL}
+      STARPORT_STORAGE_VALKEY_ALLOW_INSECURE: "false"
+      STARPORT_STORAGE_VALKEY_CLUSTER_MODE: "false"
+      STARPORT_STORAGE_SQL_MODE: postgres
+      STARPORT_STORAGE_SQL_POSTGRES_URL: ${STARPORT_STORAGE_SQL_POSTGRES_URL:?set the fleet PostgreSQL URL}
+      STARPORT_FILES_BACKEND: objectstore
+      STARPORT_FILES_OBJECT_STORE_BUCKET: ${STARPORT_FILES_OBJECT_STORE_BUCKET:?set the shared bucket}
+      STARPORT_FILES_OBJECT_STORE_REGION: ${STARPORT_FILES_OBJECT_STORE_REGION:?set the object store region}
+      STARPORT_FILES_OBJECT_STORE_PREFIX: ${STARPORT_DEPLOYMENT_ID:?set a stable fleet deployment ID}/files/
+      STARPORT_SECURITY_MASTER_KEY: ${STARPORT_SECURITY_MASTER_KEY:?set the shared master key}
+    restart: unless-stopped
+
+volumes:
+  starport-node-state:

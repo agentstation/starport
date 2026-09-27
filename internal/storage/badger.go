@@ -44,6 +44,16 @@ func OpenBadgerReadOnly(config BadgerConfig) (*BadgerStore, error) {
 }
 
 func openBadger(config BadgerConfig, readOnly bool) (*BadgerStore, error) {
+	if config.GCInterval == 0 {
+		config.GCInterval = 5 * time.Minute
+	}
+	if config.GCDiscardRatio == 0 {
+		config.GCDiscardRatio = 0.5
+	}
+	opts, err := badgerEngineOptions(config, readOnly)
+	if err != nil {
+		return nil, err
+	}
 	if readOnly && config.InMemory {
 		return nil, errors.New("in-memory badger cannot open read-only")
 	}
@@ -57,23 +67,6 @@ func openBadger(config BadgerConfig, readOnly bool) (*BadgerStore, error) {
 			return nil, fmt.Errorf("failed to create badger directory: %w", err)
 		}
 	}
-
-	// Configure Badger options for performance
-	opts := badger.DefaultOptions(config.Path)
-	if config.InMemory {
-		opts = badger.DefaultOptions("").WithInMemory(true)
-	}
-	opts.SyncWrites = config.SyncWrites
-	opts.NumVersionsToKeep = config.NumVersions
-	opts.NumLevelZeroTables = config.NumLevelZero
-	opts.MemTableSize = config.MemTableSize
-
-	// Performance optimizations
-	opts.NumMemtables = 5
-	opts.NumLevelZeroTablesStall = 10
-	opts.NumCompactors = 4
-	opts.BlockCacheSize = 256 << 20 // 256 MB
-	opts.ReadOnly = readOnly
 
 	// Open the database
 	db, err := badger.Open(opts)
@@ -89,8 +82,11 @@ func openBadger(config BadgerConfig, readOnly bool) (*BadgerStore, error) {
 	}
 
 	if !readOnly && !config.InMemory {
+		if !config.SyncWrites {
+			log.Warn().Msg("Badger sync_writes=false permits acknowledged-write loss after a host failure")
+		}
 		// Start garbage collection for expired keys.
-		store.startGarbageCollection()
+		store.startGarbageCollection(store.collectValueLog)
 
 		// Start periodic compaction.
 		store.startCompaction()
@@ -656,25 +652,6 @@ func (s *BadgerStore) BatchSetWithTTL(_ context.Context, items map[string][]byte
 	})
 }
 
-// Transaction support
-
-// BeginTransaction starts a new transaction
-func (s *BadgerStore) BeginTransaction(_ context.Context) (Transaction, error) {
-	s.mu.RLock()
-	if s.closed {
-		s.mu.RUnlock()
-		return nil, ErrStorageClosed
-	}
-	s.mu.RUnlock()
-
-	txn := s.db.NewTransaction(true)
-	return &BadgerTransaction{
-		txn:    txn,
-		store:  s,
-		closed: false,
-	}, nil
-}
-
 // Scan operations
 
 // Scan returns keys matching a pattern
@@ -879,8 +856,10 @@ func (s *BadgerStore) Restore(_ context.Context, path string) error {
 	}
 
 	// Open new database
-	opts := badger.DefaultOptions(s.config.Path)
-	opts.SyncWrites = s.config.SyncWrites
+	opts, err := badgerEngineOptions(s.config, false)
+	if err != nil {
+		return err
+	}
 	db, err := badger.Open(opts)
 	if err != nil {
 		return fmt.Errorf("failed to open new database: %w", err)
@@ -901,37 +880,30 @@ func (s *BadgerStore) Restore(_ context.Context, path string) error {
 // Background tasks
 
 // startGarbageCollection starts the garbage collection process for expired keys
-func (s *BadgerStore) startGarbageCollection() {
-	s.gcTicker = time.NewTicker(5 * time.Minute)
-	s.wg.Add(1)
-
-	go func() {
-		defer s.wg.Done()
-
+func (s *BadgerStore) startGarbageCollection(collect func(float64) error) {
+	s.gcTicker = time.NewTicker(s.config.GCInterval)
+	s.wg.Go(func() {
 		for {
 			select {
 			case <-s.gcTicker.C:
-				s.runGarbageCollection()
+				if err := collect(s.config.GCDiscardRatio); err != nil && !errors.Is(err, badger.ErrNoRewrite) {
+					log.Error().Err(err).Msg("badger garbage collection failed")
+				}
 			case <-s.gcStop:
 				return
 			}
 		}
-	}()
+	})
 }
 
-// runGarbageCollection runs the garbage collection process
-func (s *BadgerStore) runGarbageCollection() {
+// collectValueLog prevents maintenance from racing a database replacement.
+func (s *BadgerStore) collectValueLog(discardRatio float64) error {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.closed {
-		s.mu.RUnlock()
-		return
+		return nil
 	}
-	s.mu.RUnlock()
-
-	err := s.db.RunValueLogGC(0.5)
-	if err != nil && !errors.Is(err, badger.ErrNoRewrite) {
-		log.Error().Err(err).Msg("badger garbage collection failed")
-	}
+	return s.db.RunValueLogGC(discardRatio)
 }
 
 // startCompaction starts the periodic compaction process

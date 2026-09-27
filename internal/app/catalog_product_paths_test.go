@@ -24,7 +24,7 @@ func TestCatalogPersistsProductBaselineAndOwnershipOffline(t *testing.T) {
 	}).WithEnvFiles().Load(t.Context())
 	require.NoError(t, err)
 	require.NoError(t, os.MkdirAll(cfg.EffectivePaths().BadgerDir, 0700))
-	store, err := storage.Open(cfg.Storage.RuntimeStorage())
+	store, err := storage.Open(cfg.RuntimeStorage())
 	require.NoError(t, err)
 	connected, err := runtimecatalog.OpenRuntime(t.Context(), store, catalogSettings(cfg), nil)
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestCatalogPersistsProductBaselineAndOwnershipOffline(t *testing.T) {
 	require.Equal(t, "team-local", identity.Deployment)
 	require.Equal(t, "gateway-two", identity.Instance)
 	// An unchanged restart must preserve and verify the same export.
-	store, err = storage.Open(cfg.Storage.RuntimeStorage())
+	store, err = storage.Open(cfg.RuntimeStorage())
 	require.NoError(t, err)
 	defer store.Close()
 	again, err := runtimecatalog.OpenRuntime(t.Context(), store, catalogSettings(cfg), nil)

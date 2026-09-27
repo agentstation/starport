@@ -19,7 +19,7 @@ func incarnationTestStore(t *testing.T, variable string) *ValkeyStore {
 	if address == "" {
 		t.Skip("UNVERIFIED: " + variable + " is not set")
 	}
-	store, err := OpenValkey(ValkeyConfig{URL: address})
+	store, err := openUnscopedValkeyForTest(ValkeyConfig{URL: address})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, store.Close()) })
 	return store.(*ValkeyStore)

@@ -26,7 +26,7 @@ func fleetTestStores(t *testing.T) (storage.KVStore, *recovery.Witness, *sqlstor
 	if address == "" || sqlURL == "" {
 		t.Skip("UNVERIFIED: real Valkey and PostgreSQL are required")
 	}
-	kv, err := storage.OpenValkey(storage.ValkeyConfig{URL: address})
+	kv, err := storage.OpenValkey(storage.ValkeyConfig{DeploymentID: "contract-tests", URL: address})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, kv.Close()) })
 	db, err := sqlstore.Open(sqlstore.Config{Type: sqlstore.TypePostgres, Postgres: sqlstore.PostgresConfig{URL: sqlURL}})

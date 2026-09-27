@@ -10,7 +10,7 @@ The storage package defines a `KVStore` interface that abstracts key-value stora
 - TTL (Time-To-Live) support for temporary data
 - Atomic operations (Increment, Decrement, CompareAndSwap)
 - Batch operations for efficiency
-- Transaction support for atomic multi-operation updates
+- Atomic conditional mutation sets through `CompareAndSwapBatch`
 - Scanning/listing capabilities
 
 ## Architecture
@@ -66,11 +66,11 @@ err = store.SetWithTTL(ctx, "temp-key", []byte("temp-value"), 5*time.Minute)
 // Atomic operations
 count, err := store.Increment(ctx, "counter", 1)
 
-// Transactions
-tx, err := store.BeginTransaction(ctx)
-tx.Set("key1", []byte("value1"))
-tx.Set("key2", []byte("value2"))
-err = tx.Commit(ctx)
+// Apply all conditional mutations or none. A nil expectation requires absence.
+err = store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
+    {Key: "key1", ExpectedValue: nil, NewValue: []byte("value1")},
+    {Key: "key2", ExpectedValue: nil, NewValue: []byte("value2")},
+})
 ```
 
 ## Testing
@@ -101,7 +101,7 @@ The storage layer uses consistent key patterns for different data types:
 
 1. **Batch Operations**: Use batch operations when working with multiple keys to reduce round trips
 2. **TTL Usage**: Use TTL for temporary data to avoid manual cleanup
-3. **Transaction Scope**: Keep transactions small and focused
+3. **Conditional writes**: Use `CompareAndSwapBatch` when writes must succeed together. A conflict changes no keys.
 4. **Key Design**: Use hierarchical key patterns for efficient scanning
 
 ## Error Handling
@@ -122,3 +122,22 @@ if errors.Is(err, storage.ErrNotFound) {
     // Handle missing key
 }
 ```
+
+## Deployment identity
+
+Production composition opens storage through `Config.RuntimeStorage()`.
+That projection supplies the canonical `STARPORT_DEPLOYMENT_ID` from the resolved product paths.
+`OpenValkey` refuses an absent or invalid identity before it opens a connection.
+
+Durable keys and notification channels use `{starport:v1:<base64url-deployment-id>:}kv:` before the logical repository key or channel.
+The identity uses unpadded UTF-8 encoding. One deployment occupies one hash slot, including multi-key conditional mutations.
+This layout does not qualify Cluster support. Cache-only service keys retain their separate cache prefix and service configuration.
+
+Repositories use logical keys. The adapter adds the physical prefix and removes it from scan results and notification callbacks.
+Bounded reads, native ownership checks, and fresh-initialization claims use the same physical prefix.
+Fresh initialization still requires an empty dedicated KV database and SQL schema.
+A namespace alone cannot approve populated state or a replacement backend.
+
+Existing unprefixed records require an explicit migration before use.
+Ordinary startup never copies them or falls back to them.
+Badger retains its local layout inside private product storage.

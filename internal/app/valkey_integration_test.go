@@ -36,7 +36,7 @@ func TestAppWithValkey(t *testing.T) {
 	cfg.Storage.SQL.Postgres.URL = postgresURL
 	cfg.Cache.Enabled = true
 	cfg = isolatedFleetConfig(t, cfg)
-	store, err := openStorage(cfg.Storage)
+	store, err := openStorage(cfg.RuntimeStorage())
 	require.NoError(t, err)
 	apiKeys, err := apikey.Open(store)
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestSharedStartupDoesNotCreateLocalDatabases(t *testing.T) {
 	cfg.Storage.SQL.SQLite.Path = filepath.Join(local, "sqlite", "starport.db")
 	cfg.Catalog.StateDirectory = filepath.Join(t.TempDir(), "runtime")
 	cfg = isolatedFleetConfig(t, cfg)
-	seed, err := openStorage(cfg.Storage)
+	seed, err := openStorage(cfg.RuntimeStorage())
 	require.NoError(t, err)
 	keys, err := apikey.Open(seed)
 	require.NoError(t, err)
@@ -136,6 +136,11 @@ func TestSharedStartupDoesNotCreateLocalDatabases(t *testing.T) {
 
 func isolatedFleetConfig(t *testing.T, base *config.Config) *config.Config {
 	t.Helper()
+	base.Files.Backend = config.BlobBackendObjectStore
+	base.Files.ObjectStore.Bucket = "shared-startup-test"
+	base.Files.ObjectStore.Region = "us-east-1"
+	base.Files.ObjectStore.Endpoint = "http://127.0.0.1:1"
+
 	cfg, err := config.NewLoader().WithPaths(config.PathsForConfigDir(t.TempDir())).
 		WithEnvironment(map[string]string{"STARPORT_DEPLOYMENT_ID": "app-test-" + rand.Text()}).
 		WithEnvFiles().Load(t.Context(), func(cfg *config.Config) { *cfg = *base })

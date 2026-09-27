@@ -24,7 +24,7 @@ func TestManagedMaterialValkeyOutageAndRecovery(t *testing.T) {
 	parsed, err := url.Parse(endpoint)
 	require.NoError(t, err)
 	proxy := newCredentialStorageProxy(t, parsed.Host)
-	store, err := storage.OpenValkey(storage.ValkeyConfig{URL: "redis://" + proxy.listener.Addr().String()})
+	store, err := storage.OpenValkey(storage.ValkeyConfig{DeploymentID: "contract-tests", URL: "redis://" + proxy.listener.Addr().String()})
 	require.NoError(t, err)
 	defer store.Close()
 	repo, err := credentials.Open(store)

@@ -65,7 +65,7 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 		return nil, errors.Join(fmt.Errorf("validate development config: %w", err), scratch.close())
 	}
 
-	store, err := storage.Open(cfg.Storage.RuntimeStorage())
+	store, err := storage.Open(cfg.RuntimeStorage())
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("open development storage: %w", err), scratch.close())
 	}
@@ -82,7 +82,7 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 
 	claimed := false
 	application, err := New(cfg, append(slices.Clone(options), func(options *buildOptions) {
-		options.factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
+		options.factories.openStorage = func(storage.Config) (storage.KVStore, error) {
 			claimed = true
 			return store, nil
 		}

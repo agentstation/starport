@@ -94,7 +94,7 @@ func TestOfflineDiagnosisIsPassiveAndRedactsSecrets(t *testing.T) {
 func TestProbeReadsAPIKeysWithoutChangingThem(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "starport")
 	cfg := loadTestConfig(t, root)
-	store, err := storage.Open(cfg.Storage.RuntimeStorage())
+	store, err := storage.Open(cfg.RuntimeStorage())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestProbeReadsAPIKeysWithoutChangingThem(t *testing.T) {
 		t.Fatalf("diagnosis changed storage files\nbefore: %#v\nafter: %#v", before, after)
 	}
 
-	reopened, err := storage.OpenReadOnly(cfg.Storage.RuntimeStorage())
+	reopened, err := storage.OpenReadOnly(cfg.RuntimeStorage())
 	if err != nil {
 		t.Fatal(err)
 	}

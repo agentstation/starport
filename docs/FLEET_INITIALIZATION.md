@@ -24,6 +24,9 @@ STARPORT_STORAGE_MODE=valkey
 STARPORT_STORAGE_VALKEY_URL
 STARPORT_STORAGE_SQL_MODE=postgres
 STARPORT_STORAGE_SQL_POSTGRES_URL
+STARPORT_FILES_BACKEND=objectstore
+STARPORT_FILES_OBJECT_STORE_BUCKET
+STARPORT_FILES_OBJECT_STORE_REGION
 ```
 
 Keep credentials in the configured secret source.
@@ -66,7 +69,8 @@ The initializer then commits the SQL approval.
 An uncertain SQL response does not prove failure: the approval might already exist.
 Never delete approval or application data to force a fresh initialization.
 
-An interrupted attempt can leave `catalog:bootstrap:v1` as the sole Valkey key.
+An interrupted attempt can leave the logical key `catalog:bootstrap:v1` as the sole Valkey key.
+Its physical key includes the deployment namespace.
 This key contains the deployment, backend identity, operation ID, and non-secret audit reference.
 Retry with the same command only after correcting the reported failure.
 A matching claim permits retry while SQL remains empty and Valkey contains only that claim.
@@ -92,3 +96,58 @@ CSP13 owns the recovery procedure for an interrupted first publication and popul
 The independent permission survives complete catalog KV loss while the same Valkey process remains live.
 Schema migration treats existing approval rows as consumed. An empty catalog under such approval requires recovery.
 These checks run during startup and catalog operations, outside inference requests.
+
+## Container recipe
+
+`docker-compose.fleet.yml` runs Starport against external shared services.
+It does not create those services. Prepare a dedicated empty Valkey database,
+an empty PostgreSQL schema, and an object-store bucket first. Use TLS with
+server identity verification for remote services. Use a controlled single-primary
+Valkey service. Redis, MySQL, and Valkey Cluster qualification remain separate.
+
+This is a candidate recipe for fresh initialization and qualification.
+Production use requires the CSP13 recovery procedures and CSP15 failure tests.
+A Valkey restart or failover changes its identity and prevents normal recovery
+in this build. Do not delete state or repeat fresh initialization to bypass it.
+
+```bash
+cp .env.fleet.example .env.fleet
+chmod 600 .env.fleet
+# Replace every placeholder. Supply object-store credentials or an ambient role.
+export COMPOSE_PROJECT_NAME=starport-node-a
+docker compose --env-file .env.fleet -f docker-compose.fleet.yml build starport
+docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
+  config validate --json
+docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
+  fleet init --operation initial-deployment --evidence deployment-ticket-123 --json
+docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
+  init --configured-storage --name primary-admin
+docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
+  auth rotate
+docker compose --env-file .env.fleet -f docker-compose.fleet.yml up -d starport
+```
+
+Retain the initialization result and protect the printed gateway key.
+All replicas need the same deployment ID, master key, shared stores, catalog
+policy, and configured credential sources. The example follows GitHub catalog
+publications and disables provider acquisition. Select `embedded` as the catalog
+source to disable GitHub pulls. An internal authority requires the separate
+[authority configuration](DEPLOYMENT-TOPOLOGIES.md).
+
+Each replica has a private named volume for its rotated admin token and local state. The shared stores retain
+application records, catalog generations, recovery approval, and uploaded bytes.
+Container replacement preserves its local token. A surviving process
+must not depend on another replica's local files. Do not mount one writable local
+state directory into several containers.
+
+For another replica, select a different `COMPOSE_PROJECT_NAME`. Run `auth rotate`
+and `up` with that project. Do not repeat fleet or gateway-key initialization.
+
+The recipe permits one gateway per project. Its fixed container name prevents
+Compose scaling from sharing the local volume. Keep each printed token private.
+If its local volume is lost, rotate a new token before starting that replica.
+
+Compose assigns an available loopback host port to each replica. Inspect the
+mapping with `docker compose --env-file .env.fleet -f docker-compose.fleet.yml ps`.
+Use a load balancer when testing several replicas. Shared data services need
+independent backups and recovery procedures. Container volumes do not back them up.

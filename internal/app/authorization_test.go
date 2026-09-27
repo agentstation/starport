@@ -14,6 +14,7 @@ import (
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/authorization/revision"
+	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/server"
@@ -36,6 +37,10 @@ func TestApplicationOwnsAuthorizationFencesAndCatchup(t *testing.T) {
 	cfg := validProductionConfig(t)
 	cfg.Identity.OAuth.GitHub = config.OAuthApplicationConfig{ClientID: "test-client", ClientSecret: "test-client-secret"}
 	factories := explicitTestFactories()
+	// Revision polling owns this test. Real catalog startup has separate coverage.
+	factories.openCatalog = func(ctx context.Context, store storage.KVStore, _ *sqlstore.DB, _ runtimecatalog.Settings, _ runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
+		return newLifecycleCatalogRuntime(ctx, store)
+	}
 	fakeHTTP := newBlockingHTTPRuntime()
 	var dependencies server.Dependencies
 	factories.newServer = func(_ *server.Config, value server.Dependencies) (httpRuntime, error) {
@@ -103,6 +108,8 @@ func TestApplicationOwnsAuthorizationFencesAndCatchup(t *testing.T) {
 	go func() { done <- application.Run(ctx) }()
 	select {
 	case <-fakeHTTP.started:
+	case err := <-done:
+		t.Fatalf("application stopped before HTTP startup: %v", err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("HTTP runtime did not start")
 	}
@@ -161,6 +168,7 @@ func TestSharedAuthorizationDoesNotRequireCatalogClock(t *testing.T) {
 	cfg.Storage.Mode = "valkey"
 	cfg.Storage.Valkey.URL = "redis://127.0.0.1:6379"
 	cfg.Storage.Valkey.MaxConnections = 10
+	useSharedRecipeWithLocalTestStores(t, cfg, &factories)
 	application, err := New(cfg, withRuntimeFactories(factories))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
@@ -190,4 +198,19 @@ func TestSharedAuthorizationDoesNotRequireCatalogClock(t *testing.T) {
 		_, err = dependencies.Authorization.Resolve(t.Context(), identity)
 		require.NoError(t, err)
 	}
+}
+
+// useSharedRecipeWithLocalTestStores isolates clock and readiness behavior from network services.
+// Native integration tests own the actual shared-store contract.
+func useSharedRecipeWithLocalTestStores(t *testing.T, cfg *config.Config, factories *runtimeFactories) {
+	t.Helper()
+	localSQL := cfg.Storage.RuntimeSQL()
+	localFiles := cfg.Files.Path
+	cfg.Storage.SQL.Mode = "postgres"
+	cfg.Storage.SQL.Postgres.URL = "postgres://127.0.0.1:1/clock-test"
+	cfg.Files.Backend = config.BlobBackendObjectStore
+	cfg.Files.ObjectStore.Bucket = "clock-test"
+	cfg.Files.ObjectStore.Region = "us-east-1"
+	factories.openSQL = func(config.StorageConfig) (*sqlstore.DB, error) { return sqlstore.Open(localSQL) }
+	factories.openBlob = func(context.Context, config.FilesConfig) (blob.Store, error) { return blob.NewFilesystem(localFiles) }
 }

@@ -28,7 +28,6 @@ func TestReadOnlyStoreRejectsEveryWriteContract(t *testing.T) {
 		func() error {
 			return store.BatchSetWithTTL(ctx, map[string][]byte{"key": []byte("value")}, time.Minute)
 		},
-		func() error { _, err := store.BeginTransaction(ctx); return err },
 	}
 	for index, write := range writes {
 		if err := write(); !errors.Is(err, ErrReadOnly) {
@@ -43,7 +42,7 @@ func TestReadOnlyStoreRejectsEveryWriteContract(t *testing.T) {
 func TestOpenBadgerReadOnlyDoesNotChangeStoredValues(t *testing.T) {
 	ctx := context.Background()
 	configuration := BadgerConfig{
-		Path: t.TempDir(), Compression: true, NumVersions: 1,
+		Path: t.TempDir(), Compression: "snappy", NumVersions: 1,
 		NumLevelZero: 5, MemTableSize: 64 << 20,
 	}
 	writable, err := OpenBadger(configuration)

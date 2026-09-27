@@ -21,7 +21,7 @@ func InitializeFleet(ctx context.Context, cfg *config.Config, request recovery.F
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	store, err := storage.Open(cfg.Storage.RuntimeStorage())
+	store, err := storage.Open(cfg.RuntimeStorage())
 	if err != nil {
 		return record, err
 	}

@@ -179,7 +179,7 @@ type SQLMySQLConfig struct {
 // BadgerConfig defines Badger DB settings
 type BadgerConfig struct {
 	Path           string        `env:"PATH,overwrite"`
-	SyncWrites     bool          `env:"SYNC_WRITES,default=false"`
+	SyncWrites     bool          `env:"SYNC_WRITES,default=true"`
 	Compression    string        `env:"COMPRESSION,default=snappy"`
 	GCInterval     time.Duration `env:"GC_INTERVAL,default=5m"`
 	GCDiscardRatio float64       `env:"GC_DISCARD_RATIO,default=0.5"`
@@ -188,6 +188,9 @@ type BadgerConfig struct {
 
 // ValkeyConfig defines Valkey/Redis settings
 type ValkeyConfig struct {
+	Username       string        `env:"USERNAME"`
+	CAFile         string        `env:"CA_FILE"`
+	AllowInsecure  bool          `env:"ALLOW_INSECURE,default=false"`
 	URL            string        `env:"URL,default=valkey://localhost:6379" redact:"url"`
 	MaxConnections int           `env:"MAX_CONNECTIONS,default=50"`
 	MinIdleConns   int           `env:"MIN_IDLE_CONNS,default=10"`
@@ -434,6 +437,10 @@ func (c *Config) Validate() error {
 
 	// Validate the semantic cache selection
 	if err := c.SemanticCache.Validate(); err != nil {
+		return err
+	}
+
+	if err := c.validateStorageRecipe(); err != nil {
 		return err
 	}
 

@@ -41,7 +41,7 @@ func TestCatalogConfigurationControlsRuntimeTraffic(t *testing.T) {
 			cfg, err := config.NewLoader().WithPaths(config.PathsForConfigDir(t.TempDir())).WithEnvironment(environment).WithEnvFiles().Load(t.Context())
 			require.NoError(t, err)
 			for restart := range 2 {
-				store, err := openStorage(cfg.Storage)
+				store, err := openStorage(cfg.RuntimeStorage())
 				require.NoError(t, err)
 				connected, err := runtimecatalog.OpenRuntime(t.Context(), store, catalogSettings(cfg), nil)
 				require.NoError(t, err)

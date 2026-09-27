@@ -20,7 +20,7 @@ func TestBadgerStore(t *testing.T) {
 	t.Run("TTLOperations", testBadgerTTLOperations)
 	t.Run("AtomicOperations", testBadgerAtomicOperations)
 	t.Run("BatchOperations", testBadgerBatchOperations)
-	t.Run("Transactions", testBadgerTransactions)
+
 	t.Run("ScanOperations", testBadgerScanOperations)
 	t.Run("BackupRestore", testBadgerBackupRestore)
 	t.Run("Concurrency", testBadgerConcurrency)
@@ -63,7 +63,7 @@ func createTestBadgerStore(t *testing.T) (*BadgerStore, func()) {
 	config := BadgerConfig{
 		Path:         dir,
 		SyncWrites:   false,
-		Compression:  true,
+		Compression:  "snappy",
 		NumVersions:  1,
 		NumLevelZero: 5,
 		MemTableSize: 64 << 20, // 64MB
@@ -549,146 +549,6 @@ func testBadgerBatchOperations(t *testing.T) {
 		}
 		if len(results) != 0 {
 			t.Errorf("Expected 0 results after expiration, got %d", len(results))
-		}
-	})
-}
-
-func testBadgerTransactions(t *testing.T) {
-	store, cleanup := createTestBadgerStore(t)
-	defer cleanup()
-
-	ctx := context.Background()
-
-	// Test basic transaction operations
-	t.Run("BasicTransaction", func(t *testing.T) {
-		txn, err := store.BeginTransaction(ctx)
-		if err != nil {
-			t.Fatalf("BeginTransaction failed: %v", err)
-		}
-
-		// Set within transaction
-		err = txn.Set("txn_key1", []byte("value1"))
-		if err != nil {
-			t.Fatalf("Transaction Set failed: %v", err)
-		}
-
-		// Get within transaction (should see the uncommitted value)
-		value, err := txn.Get("txn_key1")
-		if err != nil {
-			t.Fatalf("Transaction Get failed: %v", err)
-		}
-		if string(value) != "value1" {
-			t.Errorf("Expected value1, got %s", value)
-		}
-
-		// Value shouldn't be visible outside transaction yet
-		_, err = store.Get(ctx, "txn_key1")
-		if !errors.Is(err, ErrNotFound) {
-			t.Errorf("Expected ErrNotFound outside transaction, got %v", err)
-		}
-
-		// Commit transaction
-		err = txn.Commit(ctx)
-		if err != nil {
-			t.Fatalf("Commit failed: %v", err)
-		}
-
-		// Now value should be visible
-		value, err = store.Get(ctx, "txn_key1")
-		if err != nil {
-			t.Fatalf("Get after commit failed: %v", err)
-		}
-		if string(value) != "value1" {
-			t.Errorf("Expected value1 after commit, got %s", value)
-		}
-	})
-
-	// Test transaction rollback
-	t.Run("TransactionRollback", func(t *testing.T) {
-		txn, err := store.BeginTransaction(ctx)
-		if err != nil {
-			t.Fatalf("BeginTransaction failed: %v", err)
-		}
-
-		// Make changes in transaction
-		err = txn.Set("rollback_key", []byte("should_not_persist"))
-		if err != nil {
-			t.Fatalf("Transaction Set failed: %v", err)
-		}
-
-		// Rollback transaction
-		err = txn.Rollback()
-		if err != nil {
-			t.Fatalf("Rollback failed: %v", err)
-		}
-
-		// Value should not exist
-		_, err = store.Get(ctx, "rollback_key")
-		if !errors.Is(err, ErrNotFound) {
-			t.Errorf("Expected ErrNotFound after rollback, got %v", err)
-		}
-	})
-
-	// Test transaction with TTL
-	t.Run("TransactionWithTTL", func(t *testing.T) {
-		txn, err := store.BeginTransaction(ctx)
-		if err != nil {
-			t.Fatalf("BeginTransaction failed: %v", err)
-		}
-
-		ttl := 5 * time.Second
-		err = txn.SetWithTTL("txn_ttl_key", []byte("ttl_value"), ttl)
-		if err != nil {
-			t.Fatalf("Transaction SetWithTTL failed: %v", err)
-		}
-
-		err = txn.Commit(ctx)
-		if err != nil {
-			t.Fatalf("Commit failed: %v", err)
-		}
-
-		// Check TTL was set
-		remainingTTL, err := store.GetTTL(ctx, "txn_ttl_key")
-		if err != nil {
-			t.Fatalf("GetTTL failed: %v", err)
-		}
-		if remainingTTL <= 0 || remainingTTL > ttl {
-			t.Errorf("TTL not set correctly: %v", remainingTTL)
-		}
-	})
-
-	// Test transaction increment
-	t.Run("TransactionIncrement", func(t *testing.T) {
-		// Set initial value
-		serialized := SerializeInt64(10)
-		err := store.Set(ctx, "txn_counter", serialized)
-		if err != nil {
-			t.Fatalf("Set failed: %v", err)
-		}
-
-		txn, err := store.BeginTransaction(ctx)
-		if err != nil {
-			t.Fatalf("BeginTransaction failed: %v", err)
-		}
-
-		newValue, err := txn.Increment("txn_counter", 5)
-		if err != nil {
-			t.Fatalf("Transaction Increment failed: %v", err)
-		}
-		if newValue != 15 {
-			t.Errorf("Expected 15, got %d", newValue)
-		}
-
-		err = txn.Commit(ctx)
-		if err != nil {
-			t.Fatalf("Commit failed: %v", err)
-		}
-
-		// Verify committed value
-		data, _ := store.Get(ctx, "txn_counter")
-		value, _ := DeserializeInt64(data)
-		if value != 15 {
-			t.Errorf("Expected committed value 15, got %d", value)
 		}
 	})
 }
@@ -1212,7 +1072,7 @@ func TestBadgerStoreOpenError(t *testing.T) {
 	config := BadgerConfig{
 		Path:         path,
 		SyncWrites:   false,
-		Compression:  true,
+		Compression:  "snappy",
 		NumVersions:  1,
 		NumLevelZero: 5,
 		MemTableSize: 64 << 20,

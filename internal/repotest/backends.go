@@ -40,7 +40,7 @@ func runBackends(t *testing.T, contract func(*testing.T, storage.KVStore), clock
 			store, err := storage.OpenBadger(storage.BadgerConfig{
 				Path:         t.TempDir(),
 				SyncWrites:   true,
-				Compression:  true,
+				Compression:  "snappy",
 				NumVersions:  1,
 				NumLevelZero: 5,
 				MemTableSize: 64 << 20,
@@ -58,7 +58,7 @@ func runBackends(t *testing.T, contract func(*testing.T, storage.KVStore), clock
 			if url == "" {
 				t.Skip("UNVERIFIED: TEST_VALKEY_URL is not set")
 			}
-			store, err := storage.OpenValkey(storage.ValkeyConfig{URL: url})
+			store, err := storage.OpenValkey(storage.ValkeyConfig{DeploymentID: "contract-tests", URL: url})
 			if err != nil {
 				t.Fatalf("open Valkey: %v", err)
 			}
@@ -193,14 +193,6 @@ func (s *namespacedStore) scopedItems(items map[string][]byte) map[string][]byte
 	return scoped
 }
 
-func (s *namespacedStore) BeginTransaction(ctx context.Context) (storage.Transaction, error) {
-	transaction, err := s.KVStore.BeginTransaction(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &namespacedTransaction{Transaction: transaction, prefix: s.prefix}, nil
-}
-
 func (s *namespacedStore) Scan(ctx context.Context, pattern string, limit int) ([]string, error) {
 	return s.scan(ctx, s.prefix+pattern, limit)
 }
@@ -231,35 +223,4 @@ func (s *namespacedStore) logicalKeys(keys []string) []string {
 		logical[index] = s.logicalKey(key)
 	}
 	return logical
-}
-
-type namespacedTransaction struct {
-	storage.Transaction
-	prefix string
-}
-
-func (t *namespacedTransaction) key(key string) string { return t.prefix + key }
-
-func (t *namespacedTransaction) Get(key string) ([]byte, error) {
-	return t.Transaction.Get(t.key(key))
-}
-
-func (t *namespacedTransaction) Set(key string, value []byte) error {
-	return t.Transaction.Set(t.key(key), value)
-}
-
-func (t *namespacedTransaction) Delete(key string) error {
-	return t.Transaction.Delete(t.key(key))
-}
-
-func (t *namespacedTransaction) SetWithTTL(key string, value []byte, ttl time.Duration) error {
-	return t.Transaction.SetWithTTL(t.key(key), value, ttl)
-}
-
-func (t *namespacedTransaction) Increment(key string, delta int64) (int64, error) {
-	return t.Transaction.Increment(t.key(key), delta)
-}
-
-func (t *namespacedTransaction) CompareAndSwap(key string, old, newValue []byte) error {
-	return t.Transaction.CompareAndSwap(t.key(key), old, newValue)
 }

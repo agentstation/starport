@@ -150,8 +150,10 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 		add(item.id, item.path, "file", selectedAvailability(c.Security.EnableTLS && item.path != ""), item.access,
 			"The operator supplies TLS material.", "Renew through the deployment certificate procedure.")
 	}
-	add(cacheCAFileRole, c.Cache.CAFile, "file", selectedAvailability(c.Cache.Enabled && c.Cache.Backend == "valkey" && c.Cache.CAFile != ""), policy.DeploymentControlled,
+	add(cacheCAFileRole, c.Cache.CAFile, "file", selectedAvailability(c.Cache.Enabled, c.Cache.Backend == "valkey", c.Cache.CAFile != ""), policy.DeploymentControlled,
 		"The operator supplies cache trust roots.", "Replace the trust bundle and restart the gateway to apply it.", cacheCAFileEnvironment)
+	add(valkeyCAFileRole, c.Storage.Valkey.CAFile, "file", selectedAvailability(c.Storage.Distributed(), c.Storage.Valkey.CAFile != ""), policy.DeploymentControlled,
+		"The operator supplies durable KV trust roots.", "Replace the trust bundle and restart the gateway to apply it.", valkeyCAFileEnvironment)
 	add("logs", c.Logging.FilePath, "file", filePlanned, policy.OwnerOnly,
 		"File logging has no implemented application writer.", "Current application logging uses streams.", "STARPORT_LOGGING_FILE_PATH")
 	selection := make(map[string]string)
@@ -209,11 +211,14 @@ func (c *Config) addExternalStorage(report *productpaths.FileManifest) {
 	}
 }
 
-func selectedAvailability(selected bool) string {
-	if selected {
-		return fileAvailable
+// selectedAvailability enables an entry only when all selection conditions hold.
+func selectedAvailability(conditions ...bool) string {
+	for _, selected := range conditions {
+		if !selected {
+			return fileDisabled
+		}
 	}
-	return fileDisabled
+	return fileAvailable
 }
 
 func childPath(parent string, parts ...string) string {

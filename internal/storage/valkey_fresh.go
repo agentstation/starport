@@ -30,7 +30,7 @@ local size = redis.call('DBSIZE')
 if size == 0 then redis.call('SET', KEYS[1], ARGV[2]); return 1 end
 if size == 1 and redis.call('GET', KEYS[1]) == ARGV[2] and redis.call('PTTL', KEYS[1]) == -1 then return 1 end
 return 0`
-	result, err := v.client.Do(ctx, v.client.B().Eval().Script(script).Numkeys(1).Key(key).Arg(identity, string(claim)).Build()).AsInt64()
+	result, err := v.do(ctx, v.client.B().Eval().Script(script).Numkeys(1).Key(v.prefix+key).Arg(identity, string(claim)).Build()).AsInt64()
 	if err != nil {
 		if strings.Contains(err.Error(), "WRONGTYPE") {
 			return ErrDatabaseNotEmpty

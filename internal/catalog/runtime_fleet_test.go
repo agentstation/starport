@@ -45,7 +45,7 @@ func TestFleetRuntimeRejectsUnapprovedBackend(t *testing.T) {
 	head, err := fleet.CommitPublication(t.Context(), publication)
 	require.NoError(t, err)
 	require.NoError(t, fleet.AcceptPublication(t.Context(), head, runtime.FleetHead{}))
-	readOnly, err := storage.OpenReadOnly(storage.Config{Type: storage.StorageTypeValkey, Valkey: storage.ValkeyConfig{URL: os.Getenv("TEST_VALKEY_URL")}})
+	readOnly, err := storage.OpenReadOnly(storage.Config{Type: storage.StorageTypeValkey, Valkey: storage.ValkeyConfig{DeploymentID: "contract-tests", URL: os.Getenv("TEST_VALKEY_URL")}})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, readOnly.Close()) })
 	accepted, err := OpenAcceptedStore(t.Context(), readOnly, db, settings.DeploymentID)

@@ -165,7 +165,7 @@ func TestFleetDurableReceiptPrecedesReplicaEnforcement(t *testing.T) {
 
 func fleetStores(t *testing.T) (storage.KVStore, *sqlstore.DB) {
 	t.Helper()
-	raw, err := storage.OpenValkey(storage.ValkeyConfig{URL: os.Getenv("TEST_VALKEY_URL")})
+	raw, err := storage.OpenValkey(storage.ValkeyConfig{DeploymentID: "contract-tests", URL: os.Getenv("TEST_VALKEY_URL")})
 	require.NoError(t, err)
 	prefix := os.Getenv("STARPORT_TEST_AUTH_NAMESPACE")
 	require.NotEmpty(t, prefix)

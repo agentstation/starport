@@ -1,5 +1,5 @@
-// Package connection validates the optional shared-cache endpoint.
-package connection
+// Package kvconnection validates KV transport endpoints and trust roots.
+package kvconnection
 
 import (
 	"errors"
@@ -14,32 +14,32 @@ import (
 func Parse(raw string, allowInsecure bool) (*url.URL, error) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Hostname() == "" || u.Opaque != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "" || u.RawPath != "" {
-		return nil, errors.New("cache URL must name one host without query options or fragments")
+		return nil, errors.New("KV URL must name one host without query options or fragments")
 	}
 	switch u.Scheme {
 	case "valkeys", "rediss":
 	case "valkey", "redis":
 		if !allowInsecure && !loopback(u.Hostname()) {
-			return nil, errors.New("remote cache requires TLS or explicit allow_insecure")
+			return nil, errors.New("remote KV requires TLS or explicit allow_insecure")
 		}
 	default:
-		return nil, errors.New("cache URL requires valkey, valkeys, redis, or rediss scheme")
+		return nil, errors.New("KV URL requires valkey, valkeys, redis, or rediss scheme")
 	}
 	if port := u.Port(); port != "" {
 		n, err := strconv.Atoi(port)
 		if err != nil || n < 1 || n > 65535 {
-			return nil, errors.New("cache URL port is invalid")
+			return nil, errors.New("KV URL port is invalid")
 		}
 	}
 	if u.Path != "" {
 		n, err := strconv.Atoi(strings.TrimPrefix(u.Path, "/"))
 		if err != nil || n < 0 || n > 65535 {
-			return nil, errors.New("cache URL database is invalid")
+			return nil, errors.New("KV URL database is invalid")
 		}
 	}
 	host := u.Hostname()
 	if strings.Contains(host, ":") && net.ParseIP(host) == nil {
-		return nil, errors.New("cache URL host is invalid")
+		return nil, errors.New("KV URL host is invalid")
 	}
 	port := u.Port()
 	if port == "" {

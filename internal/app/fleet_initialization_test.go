@@ -53,7 +53,7 @@ func TestInitializeFleetFreshStartup(t *testing.T) {
 	record, err := InitializeFleet(t.Context(), cfg, recovery.FreshRequest{OperationID: "first", Evidence: "test/procedure"})
 	require.NoError(t, err)
 	require.Equal(t, cfg.EffectivePaths().DeploymentID, record.DeploymentID)
-	kv, err := openStorage(cfg.Storage)
+	kv, err := openStorage(cfg.RuntimeStorage())
 	require.NoError(t, err)
 	db, err := sqlstore.Open(cfg.Storage.RuntimeSQL())
 	require.NoError(t, err)

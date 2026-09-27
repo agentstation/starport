@@ -3,7 +3,9 @@ package storage
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/valkey-io/valkey-go"
@@ -11,20 +13,24 @@ import (
 
 // ValkeyPubSub implements PubSubClient using Valkey pub/sub
 type ValkeyPubSub struct {
-	client        valkey.Client
-	subscriptions map[string]context.CancelFunc
-	handlers      map[string]func(channel, message string)
-	mu            sync.RWMutex
-	closed        bool
-	wg            sync.WaitGroup
+	client           valkey.Client
+	prefix           string
+	operationTimeout time.Duration
+	subscriptions    map[string]context.CancelFunc
+	handlers         map[string]func(channel, message string)
+	mu               sync.RWMutex
+	closed           bool
+	wg               sync.WaitGroup
 }
 
-// NewValkeyPubSub creates a new Valkey pub/sub client
-func NewValkeyPubSub(client valkey.Client) *ValkeyPubSub {
+// newValkeyPubSub uses the same deployment namespace as durable records.
+func newValkeyPubSub(client valkey.Client, prefix string) *ValkeyPubSub {
 	return &ValkeyPubSub{
-		client:        client,
-		subscriptions: make(map[string]context.CancelFunc),
-		handlers:      make(map[string]func(channel, message string)),
+		client:           client,
+		prefix:           prefix,
+		operationTimeout: 3 * time.Second,
+		subscriptions:    make(map[string]context.CancelFunc),
+		handlers:         make(map[string]func(channel, message string)),
 	}
 }
 
@@ -56,11 +62,13 @@ func (v *ValkeyPubSub) Subscribe(pattern string, handler func(channel, message s
 		log.Info().Str("pattern", pattern).Msg("starting pubsub subscription")
 
 		// Use client.Receive for pattern subscription
-		err := v.client.Receive(ctx, v.client.B().Psubscribe().Pattern(pattern).Build(), func(msg valkey.PubSubMessage) {
+		err := v.client.Receive(ctx, v.client.B().Psubscribe().Pattern(v.prefix+pattern).Build(), func(msg valkey.PubSubMessage) {
 			// For pattern messages, check if it has pattern field
 			if msg.Pattern != "" {
 				// Pattern message received
-				handler(msg.Channel, msg.Message)
+				if logical, ok := strings.CutPrefix(msg.Channel, v.prefix); ok {
+					handler(logical, msg.Message)
+				}
 			}
 			// Note: subscription confirmations are handled by OnSubscriptionHook if needed
 		})
@@ -88,7 +96,9 @@ func (v *ValkeyPubSub) Publish(ctx context.Context, channel string, message stri
 	}
 	v.mu.RUnlock()
 
-	cmd := v.client.B().Publish().Channel(channel).Message(message).Build()
+	ctx, cancel := context.WithTimeout(ctx, v.operationTimeout)
+	defer cancel()
+	cmd := v.client.B().Publish().Channel(v.prefix + channel).Message(message).Build()
 	resp := v.client.Do(ctx, cmd)
 
 	if err := resp.Error(); err != nil {
