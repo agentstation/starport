@@ -341,10 +341,9 @@ func (call providerCall[Request, ProviderResponse, Response]) attempt(
 			}
 		}
 		response, requestErr := invoke(attemptCtx, request)
+		var persistenceErr error
 		if call.afterDispatch != nil {
-			if err := call.afterDispatch(attemptCtx, route, response, requestErr); err != nil {
-				return nil, submissionFailure(errors.Join(err, ticket.Finish(attemptCtx, nil))), execution.AttemptActionStop
-			}
+			persistenceErr = call.afterDispatch(attemptCtx, route, response, requestErr)
 		}
 		var evidence *reservation.Evidence
 		if ticket.ID() != "" && charge.evidence != nil {
@@ -353,8 +352,13 @@ func (call providerCall[Request, ProviderResponse, Response]) attempt(
 				evidence.ID = ticket.ID() + ":usage"
 			}
 		}
-		if err := ticket.Finish(attemptCtx, evidence); err != nil {
-			return nil, budgetFailure(err), execution.AttemptActionStop
+		// A failed job write does not invalidate measured provider usage.
+		settlementErr := ticket.Finish(attemptCtx, evidence)
+		if persistenceErr != nil {
+			return nil, submissionFailure(errors.Join(persistenceErr, settlementErr)), execution.AttemptActionStop
+		}
+		if settlementErr != nil {
+			return nil, budgetFailure(settlementErr), execution.AttemptActionStop
 		}
 		if requestErr != nil {
 			if call.beforeDispatch != nil {

@@ -51,6 +51,10 @@ func approveConnectorFixture[T any](t testing.TB, request T) T {
 		material = &req.Credential
 		target = req.Endpoint.URL
 		operation = catalogs.ProviderOperationModerations
+	case *NativeVideoRequest:
+		material = &req.Credential
+		target = req.Endpoint.URL
+		operation = catalogs.ProviderOperationVideosGenerations
 	case *JobSubmission:
 		material = &req.Credential
 		target = req.Endpoint.URL
