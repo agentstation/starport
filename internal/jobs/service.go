@@ -331,7 +331,7 @@ func (s *Service) Refresh(ctx context.Context, runner Runner, account, id string
 	return s.settle(ctx, s.collect(ctx, runner, moved)), nil
 }
 
-// Cancel stops one running job.
+// Cancel requests cancellation and retains the provider's reported state.
 //
 // A job that already ended answers ErrJobAlreadyEnded rather than moving
 // again. A completed job holds an asset the account paid for, and a cancellation
@@ -352,22 +352,27 @@ func (s *Service) Cancel(ctx context.Context, runner Runner, account, id string)
 		return job, fmt.Errorf("%w: it is %s", ErrJobAlreadyEnded, job.State)
 	}
 	previous := job
-	if _, err := runner.Cancel(ctx, s.handle(job)); err != nil {
+	report, err := runner.Cancel(ctx, s.handle(job))
+	if err != nil {
 		return Job{}, err
 	}
-	// The provider's own answer is not read back into the state. A provider
-	// that reports the job as still running one moment after it accepted the
-	// stop would otherwise leave a job this gateway has stopped billing for
-	// still polling.
+	if !report.State.Valid() {
+		return Job{}, fmt.Errorf("%w: cancellation has no confirmed provider state", ErrInvalidJob)
+	}
+	if report.State == job.State {
+		return job, nil
+	}
+	// Accepting a cancellation request does not prove that provider work ended.
+	// A completion that races cancellation must retain its actual outcome.
 	now := s.now()
-	if err := job.Transition(JobStateCancelled, now); err != nil {
+	if err := applyReport(&job, report, now); err != nil {
 		return Job{}, err
 	}
 	stopped, err := s.commit(ctx, previous, job)
 	if err != nil {
 		return Job{}, err
 	}
-	return s.settle(ctx, stopped), nil
+	return s.settle(ctx, s.collect(ctx, runner, stopped)), nil
 }
 
 // handle reads the provider identifier out of the record for one call. The

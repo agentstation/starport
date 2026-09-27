@@ -93,7 +93,7 @@ func (r *recordingRunner) Fetch(
 }
 
 func acceptedRunner() *recordingRunner {
-	return &recordingRunner{acceptance: jobs.Acceptance{
+	return &recordingRunner{cancel: jobs.Report{State: jobs.JobStateCancelled}, acceptance: jobs.Acceptance{
 		Provider:      "deepinfra",
 		Model:         "deepinfra/wan-2.2",
 		ProviderJobID: "provider-side-identifier",
@@ -297,10 +297,7 @@ func TestRefreshOfAnotherAccountsJobIsNotFound(t *testing.T) {
 	require.Zero(t, runner.cancels)
 }
 
-// TestCancelStopsTheProviderAndTheRecord covers the stop path. The record moves
-// to cancelled on this gateway's own authority rather than on the provider's
-// next answer, so a provider still reporting the job as running one moment
-// after it accepted the stop cannot leave it polling.
+// TestCancelStopsTheProviderAndTheRecord persists a confirmed cancellation.
 func TestCancelStopsTheProviderAndTheRecord(t *testing.T) {
 	t.Parallel()
 
@@ -310,7 +307,7 @@ func TestCancelStopsTheProviderAndTheRecord(t *testing.T) {
 	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
-	runner.cancel = jobs.Report{State: jobs.JobStateRunning}
+	runner.cancel = jobs.Report{State: jobs.JobStateCancelled}
 	cancelled, err := service.Cancel(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, 1, runner.cancels)

@@ -1550,10 +1550,16 @@ A job holds one of five states:
 | `running` | the provider is working |
 | `completed` | the video is ready, and this gateway may still hold the bytes |
 | `failed` | the provider refused or gave up, and `error.message` says why |
-| `cancelled` | a caller stopped the job before it finished |
+| `cancelled` | the provider confirmed cancellation |
 
 The last three are terminal. A terminal job never returns to `running`, so a
 caller that reads one of them can stop polling.
+
+A cancellation response can still report `queued` or `running`.
+Such a response does not release the outstanding slot.
+A deletion acknowledgement alone does not confirm cancellation.
+If the cancellation request fails, read the existing job before another submission.
+A completion that races cancellation remains `completed`.
 
 A completed job carries `expires_at` while this gateway still holds its bytes.
 The field goes once the retention window closes. That tells a caller the work
