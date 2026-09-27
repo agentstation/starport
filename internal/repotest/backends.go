@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/agentstation/starport/internal/storage"
@@ -15,37 +16,55 @@ import (
 // Run runs one repository contract against each configured backend.
 func Run(t *testing.T, contract func(*testing.T, storage.KVStore)) {
 	t.Helper()
+	runBackends(t, contract, func(t *testing.T, run func(*testing.T)) { run(t) })
+}
+
+// RunWithClock separates lifecycle assertions from real CPU scheduling time.
+// Backend resources start and stop inside each synctest clock.
+func RunWithClock(t *testing.T, contract func(*testing.T, storage.KVStore)) {
+	t.Helper()
+	runBackends(t, contract, synctest.Test)
+}
+
+func runBackends(t *testing.T, contract func(*testing.T, storage.KVStore), clock func(*testing.T, func(*testing.T))) {
+	t.Helper()
 	t.Run("memory", func(t *testing.T) {
-		store := storage.NewMockStore()
-		t.Cleanup(func() { _ = store.Close() })
-		contract(t, newNamespacedStore(t, store))
+		clock(t, func(t *testing.T) {
+			store := storage.NewMockStore()
+			t.Cleanup(func() { _ = store.Close() })
+			contract(t, newNamespacedStore(t, store))
+		})
 	})
 	t.Run("badger", func(t *testing.T) {
-		store, err := storage.OpenBadger(storage.BadgerConfig{
-			Path:         t.TempDir(),
-			SyncWrites:   true,
-			Compression:  true,
-			NumVersions:  1,
-			NumLevelZero: 5,
-			MemTableSize: 64 << 20,
+		clock(t, func(t *testing.T) {
+			store, err := storage.OpenBadger(storage.BadgerConfig{
+				Path:         t.TempDir(),
+				SyncWrites:   true,
+				Compression:  true,
+				NumVersions:  1,
+				NumLevelZero: 5,
+				MemTableSize: 64 << 20,
+			})
+			if err != nil {
+				t.Fatalf("open Badger: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			contract(t, newNamespacedStore(t, store))
 		})
-		if err != nil {
-			t.Fatalf("open Badger: %v", err)
-		}
-		t.Cleanup(func() { _ = store.Close() })
-		contract(t, newNamespacedStore(t, store))
 	})
 	t.Run("valkey", func(t *testing.T) {
-		url := os.Getenv("TEST_VALKEY_URL")
-		if url == "" {
-			t.Skip("UNVERIFIED: TEST_VALKEY_URL is not set")
-		}
-		store, err := storage.OpenValkey(storage.ValkeyConfig{URL: url})
-		if err != nil {
-			t.Fatalf("open Valkey: %v", err)
-		}
-		t.Cleanup(func() { _ = store.Close() })
-		contract(t, newNamespacedStore(t, store))
+		clock(t, func(t *testing.T) {
+			url := os.Getenv("TEST_VALKEY_URL")
+			if url == "" {
+				t.Skip("UNVERIFIED: TEST_VALKEY_URL is not set")
+			}
+			store, err := storage.OpenValkey(storage.ValkeyConfig{URL: url})
+			if err != nil {
+				t.Fatalf("open Valkey: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			contract(t, newNamespacedStore(t, store))
+		})
 	})
 }
 

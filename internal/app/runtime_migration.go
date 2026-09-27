@@ -9,10 +9,11 @@ import (
 	"github.com/agentstation/starmap/pkg/productfiles"
 	"github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// MigrateRuntime executes a stopped runtime move without opening SQL or serving requests.
+// MigrateRuntime moves a stopped runtime. Shared storage reads its SQL recovery witness.
 func MigrateRuntime(ctx context.Context, cfg *config.Config, phase string, migration catalog.RuntimeMigration) (result catalog.RuntimeMigrationResult, err error) {
 	if cfg == nil {
 		return result, fmt.Errorf("runtime migration requires configuration")
@@ -52,6 +53,18 @@ func MigrateRuntime(ctx context.Context, cfg *config.Config, phase string, migra
 		return result, err
 	}
 	defer func() { err = errors.Join(err, store.Close()) }()
+	if _, shared := store.(storage.IncarnationProvider); shared {
+		configuration := cfg.Storage.RuntimeSQL()
+		if configuration.Type != sqlstore.TypePostgres {
+			return result, fmt.Errorf("shared runtime migration requires the PostgreSQL recovery witness")
+		}
+		db, openErr := sqlstore.Open(configuration)
+		if openErr != nil {
+			return result, openErr
+		}
+		defer func() { err = errors.Join(err, db.Close()) }()
+		migration = migration.WithRecoveryWitness(db)
+	}
 	settings := catalogSettings(cfg)
 	switch phase {
 	case "prepare":

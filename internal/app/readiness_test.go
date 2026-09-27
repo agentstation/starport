@@ -11,6 +11,7 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/server"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
@@ -19,8 +20,8 @@ func TestReadinessTracksAdmissionWithoutBlockingLiveness(t *testing.T) {
 	factories := explicitTestFactories()
 	openCatalog := factories.openCatalog
 	sampled := &sampledCatalogRuntime{}
-	factories.openCatalog = func(ctx context.Context, store storage.KVStore, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
-		runtime, err := openCatalog(ctx, store, settings, lookup)
+	factories.openCatalog = func(ctx context.Context, store storage.KVStore, db *sqlstore.DB, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
+		runtime, err := openCatalog(ctx, store, db, settings, lookup)
 		sampled.catalogRuntime = runtime
 		return sampled, err
 	}

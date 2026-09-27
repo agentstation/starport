@@ -12,7 +12,7 @@ import (
 )
 
 func TestManagedMaterialStorageRotationRevocationAndRecreation(t *testing.T) {
-	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+	repotest.RunWithClock(t, func(t *testing.T, store storage.KVStore) {
 		provider := syntheticCredentialProvider()
 		repo, err := credentials.Open(store)
 		require.NoError(t, err)
@@ -25,6 +25,8 @@ func TestManagedMaterialStorageRotationRevocationAndRecreation(t *testing.T) {
 		readerKeys, err := NewProviderKeys(repo, master, validator)
 		require.NoError(t, err)
 		reader := readerKeys.(*keyManager)
+		defer reader.materials.close()
+		defer writer.(*keyManager).materials.close()
 		now := time.Now()
 		reader.materials.now = func() time.Time { return now }
 		scope := AccountScope("a")

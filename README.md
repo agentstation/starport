@@ -31,6 +31,9 @@ Starport serves individual developers, startups, and enterprises:
 
 ## Install
 
+Supported targets are macOS on Apple silicon, Linux on x86-64 and ARM64, and Windows on x86-64 and ARM64.
+New releases do not support Intel Macs. Historical Intel Mac archives remain available.
+
 Install the released cask on macOS or Linux:
 
 ```bash

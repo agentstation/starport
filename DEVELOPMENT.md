@@ -220,7 +220,7 @@ make release-check
 make release-snapshot
 ```
 
-The snapshot checks six target binaries, six archives, six SBOMs, shell
+The snapshot checks five target binaries, five archives, five SBOMs, shell
 completions, the manual page, and the generated Homebrew cask. Snapshot mode
 skips Apple signing and notarization. A stable release signs and notarizes
 macOS binaries when all Apple release credentials are available. The release

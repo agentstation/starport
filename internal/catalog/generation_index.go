@@ -33,6 +33,12 @@ type GenerationIndexEntry struct {
 // History returns accepted generations in acceptance order, oldest first.
 // A store without an index (the remote head store) reports no history.
 func (s *GenerationStore) History(ctx context.Context) ([]GenerationIndexEntry, error) {
+	if s.fleet != nil {
+		if !s.fleetAccepted {
+			return nil, nil
+		}
+		return s.fleet.AcceptedHistory(ctx)
+	}
 	if s.indexKey == "" {
 		return nil, nil
 	}

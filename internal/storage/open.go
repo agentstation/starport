@@ -5,8 +5,7 @@ import (
 	"time"
 )
 
-// Open creates a new KVStore instance based on the configuration.
-// This follows the Go convention of using Open for creating connections.
+// Open creates the configured KVStore.
 func Open(config Config) (KVStore, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid storage config: %w", err)
@@ -47,7 +46,11 @@ func OpenReadOnly(config Config) (KVStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &readOnlyStore{KVStore: store}, nil
+	readOnly := &readOnlyStore{KVStore: store}
+	if provider, ok := store.(IncarnationProvider); ok {
+		return &readOnlyIncarnationProvider{readOnlyStore: readOnly, provider: provider}, nil
+	}
+	return readOnly, nil
 }
 
 // NewMockStore creates a new mock KVStore for testing

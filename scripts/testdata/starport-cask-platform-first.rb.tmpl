@@ -1,0 +1,33 @@
+cask "starport" do
+  version "@VERSION@"
+
+  on_macos do
+    on_arm do
+      sha256 "@CHECKSUM@"
+    end
+  end
+  on_linux do
+    on_intel do
+      sha256 "@CHECKSUM@"
+    end
+    on_arm do
+      sha256 "@CHECKSUM@"
+    end
+  end
+
+  on_macos do
+    depends_on arch: :arm64
+  end
+
+  binary "starport"
+  manpage "manpages/starport.1"
+  bash_completion "completions/starport.bash"
+  zsh_completion "completions/starport.zsh"
+  fish_completion "completions/starport.fish"
+
+  postflight_steps do
+    on_macos do
+      run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{staged_path}}/starport"], sudo: false
+    end
+  end
+end

@@ -14,6 +14,7 @@ import (
 	"github.com/agentstation/starmap/remote"
 	"github.com/agentstation/starmap/runtime"
 
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -28,11 +29,12 @@ const updateBuffer = 8
 //
 // One runtime reads one source. The local-or-remote choice is gone: a
 // deployment names a source kind, and the same composition serves every kind.
-// Starmap publishes an effective generation into the candidate store; Starport
-// then validates the candidate and advances its own accepted head, so a
-// candidate that fails route validation never routes a request.
+// Starmap publishes an effective generation into the candidate store.
+// Starport validates the candidate before it advances the accepted head.
+// A candidate that fails route validation never routes a request.
 type Runtime struct {
 	runtime *runtime.Runtime
+	fleet   *FleetStore
 
 	// cascade is the upstream Starmap source this deployment reads, when it
 	// reads another Starmap runtime. The connected runtime does not own an
@@ -46,7 +48,7 @@ type Runtime struct {
 	updates    chan Candidate
 
 	// validation holds what happened to the newest candidate this instance
-	// observed. The accepted head is durable; this record says how the
+	// observed. The accepted head is durable. This record says how the
 	// instance reached it.
 	validation validationRecord
 
@@ -61,11 +63,13 @@ type Runtime struct {
 type catalogStateIdentity struct {
 	generationID    string
 	payloadChecksum string
+	fleetRevision   uint64
 }
 
 type runtimeCollectors struct {
 	providers runtime.Acquirer
 	metadata  runtime.SourceAcquirer
+	fleet     *FleetStore
 }
 
 // OpenRuntime composes one connected Starmap runtime over Starport's durable
@@ -79,6 +83,20 @@ func OpenRuntime(
 	settings Settings,
 	lookup DeploymentLookup,
 ) (*Runtime, error) {
+	return openRuntimeWithRecovery(ctx, store, nil, settings, lookup)
+}
+
+// OpenRuntimeWithRecovery uses an independent SQL witness for a shared KV deployment.
+// An unknown or closed witness cannot approve a backend during startup.
+func OpenRuntimeWithRecovery(ctx context.Context, store storage.KVStore, db *sqlstore.DB, settings Settings, lookup DeploymentLookup) (*Runtime, error) {
+	return openRuntimeWithRecovery(ctx, store, db, settings, lookup)
+}
+
+func openRuntimeWithRecovery(ctx context.Context, store storage.KVStore, db *sqlstore.DB, settings Settings, lookup DeploymentLookup) (*Runtime, error) {
+	fleet, err := openRecoveryFleet(ctx, store, db, settings.DeploymentID)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := settings.starmapOptions(); err != nil {
 		return nil, fmt.Errorf("configure Starmap runtime: %w", err)
 	}
@@ -103,7 +121,7 @@ func OpenRuntime(
 	if err != nil {
 		return nil, fmt.Errorf("open Starmap metadata acquisition: %w", err)
 	}
-	return openRuntime(ctx, store, settings, runtimeCollectors{providers: providers, metadata: metadata})
+	return openRuntime(ctx, store, settings, runtimeCollectors{providers: providers, metadata: metadata, fleet: fleet})
 }
 
 // openRuntime composes the connected runtime with host-supplied provider and metadata collectors.
@@ -153,16 +171,20 @@ func openRuntimeWithMigration(
 	if err != nil {
 		return nil, err
 	}
+	if collectors.fleet != nil {
+		acceptedStore.fleet, acceptedStore.fleetAccepted = collectors.fleet, true
+		candidateStore.fleet = collectors.fleet
+	}
 	acceptedClient, err := starmap.NewContext(ctx, starmap.WithCatalogStore(acceptedStore))
 	if err != nil {
 		return nil, fmt.Errorf("open accepted Starmap catalog: %w", err)
 	}
 
-	options = append(
-		options,
-		runtime.WithClientOptions(starmap.WithCatalogStore(candidateStore)),
-		runtime.WithLeaseStore(leases),
-	)
+	if collectors.fleet != nil {
+		options = append(options, runtime.WithFleetStore(collectors.fleet))
+	} else {
+		options = append(options, runtime.WithClientOptions(starmap.WithCatalogStore(candidateStore)), runtime.WithLeaseStore(leases))
+	}
 	var cascade *remote.Source
 	if settings.Source == string(runtime.SourceStarmap) {
 		cascade, err = settings.cascadeSource(ctx)
@@ -192,7 +214,9 @@ func openRuntimeWithMigration(
 		}
 		return nil, err
 	}
-	return newRuntime(connected, cascade, candidateStore, acceptedStore, control, leases), nil
+	result := newRuntime(connected, cascade, candidateStore, acceptedStore, control, leases)
+	result.fleet = collectors.fleet
+	return result, nil
 }
 
 func newRuntime(
@@ -286,11 +310,10 @@ func (r *Runtime) candidate(ctx context.Context) (Candidate, error) {
 	if state.Catalog == nil || state.GenerationID == "" {
 		return Candidate{}, ErrCatalogRequired
 	}
-	epoch, err := r.leases.CurrentEpoch(ctx)
+	candidate, err := r.candidateFromState(ctx, state)
 	if err != nil {
 		return Candidate{}, err
 	}
-	candidate := Candidate{State: state, Epoch: epoch}
 	r.validation.observe(candidate)
 	return candidate, nil
 }
@@ -332,7 +355,7 @@ func (r *Runtime) AcceptedGeneration(ctx context.Context) (catalogs.Generation, 
 	return r.accepted.Current(ctx)
 }
 
-// Start begins forwarding every new candidate the connected runtime publishes.
+// Start forwards every new candidate the connected runtime publishes.
 func (r *Runtime) Start(ctx context.Context) error {
 	if r == nil || r.runtime == nil {
 		return ErrCatalogSourceRequired
@@ -354,7 +377,7 @@ func (r *Runtime) Start(ctx context.Context) error {
 	return nil
 }
 
-// Updates emits every distinct candidate exactly once.
+// Updates emits distinct candidates and retries shared candidates after a failed validation.
 func (r *Runtime) Updates() <-chan Candidate {
 	if r == nil {
 		return nil
@@ -398,49 +421,75 @@ func (r *Runtime) Close(ctx context.Context) error {
 
 func (r *Runtime) forward(ctx context.Context, done chan struct{}) {
 	defer close(done)
-	updates := r.runtime.Updates()
+	r.forwardFrom(ctx, r.runtime.Updates())
+}
+
+func (r *Runtime) forwardFrom(ctx context.Context, updates <-chan starmap.CatalogState) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	var pending *starmap.CatalogState
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-ticker.C:
+			if r.fleet != nil {
+				r.offer(ctx, r.runtime.State())
+			} else if pending != nil && r.offer(ctx, *pending) {
+				pending = nil
+			}
 		case state, open := <-updates:
 			if !open {
 				return
 			}
-			r.offer(ctx, state)
+			if r.offer(ctx, state) {
+				pending = nil
+			} else {
+				pending = &state
+			}
 		}
 	}
 }
 
-func (r *Runtime) offer(ctx context.Context, state starmap.CatalogState) {
+func (r *Runtime) offer(ctx context.Context, state starmap.CatalogState) bool {
+	if r.fleet != nil {
+		// A queued notification can precede the current durable publication.
+		state = r.runtime.State()
+		status, ok := r.runtime.FleetStatus()
+		if ok && status.Head.GenerationID == state.GenerationID {
+			identity := stateIdentity(state)
+			identity.fleetRevision = status.Head.Revision
+			r.mu.Lock()
+			alreadyOffered := r.lastSeen == identity
+			r.mu.Unlock()
+			if alreadyOffered && r.validation.snapshot().State != RouteValidationRejected {
+				return true
+			}
+		}
+	}
+	candidate, err := r.candidateFromState(ctx, state)
+	if err != nil {
+		r.validation.observe(Candidate{State: state})
+		return false
+	}
 	identity := stateIdentity(state)
+	identity.fleetRevision = candidate.FleetHead.Revision
 	if identity.generationID == "" {
-		return
+		return true
 	}
 	r.mu.Lock()
-	if r.lastSeen == identity {
+	if r.lastSeen == identity && (r.fleet == nil || r.validation.snapshot().State != RouteValidationRejected) {
 		r.mu.Unlock()
-		return
+		return true
 	}
 	r.lastSeen = identity
 	r.mu.Unlock()
-
-	epoch, err := r.leases.CurrentEpoch(ctx)
-	if err != nil {
-		// The candidate still reaches acceptance. The transaction reads the
-		// epoch again and refuses a stale one, so an unreadable lease costs a
-		// fence read here, never a wrong acceptance there.
-		epoch = 0
-	}
-	candidate := Candidate{State: state, Epoch: epoch}
 	r.validation.observe(candidate)
-
-	// The offer waits for acceptance rather than dropping the candidate. A
-	// dropped candidate would leave route validation with no record of a head
-	// the source published, so only a closing runtime ends the wait.
 	select {
 	case r.updates <- candidate:
+		return true
 	case <-ctx.Done():
+		return false
 	}
 }
 

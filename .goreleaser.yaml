@@ -35,6 +35,9 @@ builds:
     goarch:
       - amd64
       - arm64
+    ignore:
+      - goos: darwin
+        goarch: amd64
 
 archives:
   - id: starport
@@ -87,6 +90,9 @@ homebrew_casks:
       zsh: completions/starport.zsh
       fish: completions/starport.fish
     custom_block: |
+      on_macos do
+        depends_on arch: :arm64
+      end
       postflight_steps do
         on_macos do
           run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/starport"], sudo: false

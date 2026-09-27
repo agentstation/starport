@@ -11,6 +11,7 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +36,7 @@ func TestInferencePolicyIsRecordedBeforeCatalogStartup(t *testing.T) {
 			factories := explicitTestFactories()
 			openCatalog := factories.openCatalog
 			observed := false
-			factories.openCatalog = func(ctx context.Context, store storage.KVStore, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
+			factories.openCatalog = func(ctx context.Context, store storage.KVStore, db *sqlstore.DB, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
 				data, err := os.ReadFile(filepath.Join(cfg.InferenceCredentialPolicyDirectory(), "policy.json"))
 				require.NoError(t, err)
 				var record struct {
@@ -48,7 +49,7 @@ func TestInferencePolicyIsRecordedBeforeCatalogStartup(t *testing.T) {
 				}
 				require.Equal(t, want, record.Policy)
 				observed = true
-				return openCatalog(ctx, store, settings, lookup)
+				return openCatalog(ctx, store, db, settings, lookup)
 			}
 			application, err := New(cfg, withRuntimeFactories(factories))
 			require.NoError(t, err)

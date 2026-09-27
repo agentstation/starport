@@ -9,18 +9,26 @@ import (
 
 	catalogconfig "github.com/agentstation/starmap/pkg/catalogs/config"
 	"github.com/agentstation/starmap/runtime"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
 
 // RuntimeMigration selects a stopped runtime directory and its replacement.
 // It does not move the gateway databases, catalog store, or authoring workspace.
 type RuntimeMigration struct {
+	recoveryDB      *sqlstore.DB
 	OperationID     string
 	SourceDirectory string
 	TargetDirectory string
 	JournalRoot     string
 	SourceIdentity  string
 	StoreSelection  string
+}
+
+// WithRecoveryWitness selects the independent witness for a shared catalog directory move.
+func (m RuntimeMigration) WithRecoveryWitness(db *sqlstore.DB) RuntimeMigration {
+	m.recoveryDB = db
+	return m
 }
 
 // RuntimeMigrationResult reports the durable phase of a runtime directory move.
@@ -90,7 +98,11 @@ func (m RuntimeMigration) OpenReplacement(ctx context.Context, store storage.KVS
 	settings.Values[catalogconfig.NetworkMode] = "offline"
 	settings.AcquisitionEnabled = false
 	settings.SourcePollInterval = 0
-	return openRuntimeWithMigration(ctx, store, settings, runtimeCollectors{}, &request)
+	fleet, err := openRecoveryFleet(ctx, store, m.recoveryDB, settings.DeploymentID)
+	if err != nil {
+		return nil, err
+	}
+	return openRuntimeWithMigration(ctx, store, settings, runtimeCollectors{fleet: fleet}, &request)
 }
 
 // Complete records completion for an active replacement after saved selection checks.

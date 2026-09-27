@@ -754,8 +754,8 @@ make release-snapshot
 ```
 
 The release gate requires raw HTTP and the official OpenRouter Python,
-TypeScript, and Go SDKs. It also verifies six static binaries, six archives,
-six SBOMs, action provenance, checksums, build provenance, the non-root
+TypeScript, and Go SDKs. It also verifies five static binaries, five archives,
+five SBOMs, action provenance, checksums, build provenance, the non-root
 multi-platform container, and immutable release readback.
 
 Starport releases must use a published Starmap version with no local module

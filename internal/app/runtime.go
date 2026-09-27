@@ -30,6 +30,7 @@ type httpRuntime interface {
 type catalogRuntime interface {
 	PermissionClock() permission.ClockReading
 	ControlPlane() *runtimecatalog.ControlPlane
+	AcceptedStore() *runtimecatalog.GenerationStore
 	RefreshCandidate(context.Context, time.Duration) (runtimecatalog.Candidate, error)
 	CurrentCandidate(context.Context) (runtimecatalog.Candidate, error)
 	Refresh(context.Context) (runtime.RefreshReport, error)
@@ -46,7 +47,7 @@ type runtimeFactories struct {
 	openStorage  func(config.StorageConfig) (storage.KVStore, error)
 	openSQL      func(config.StorageConfig) (*sqlstore.DB, error)
 	openBlob     func(context.Context, config.FilesConfig) (blob.Store, error)
-	openCatalog  func(context.Context, storage.KVStore, runtimecatalog.Settings, runtimecatalog.DeploymentLookup) (catalogRuntime, error)
+	openCatalog  func(context.Context, storage.KVStore, *sqlstore.DB, runtimecatalog.Settings, runtimecatalog.DeploymentLookup) (catalogRuntime, error)
 	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
 	newCache     func(cache.ManagerConfig, cache.ResponseStore) (*cache.Manager, error)
 	newServer    func(*server.Config, server.Dependencies) (httpRuntime, error)

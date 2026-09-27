@@ -24,10 +24,12 @@ const (
 // GenerationStore adapts Starport's configured KV store to Starmap's durable
 // immutable-generation contract.
 type GenerationStore struct {
-	store      storage.KVStore
-	currentKey string
+	fleet         *FleetStore
+	fleetAccepted bool
+	store         storage.KVStore
+	currentKey    string
 	// indexKey selects the ordered acceptance-history record. Only the
-	// accepted runtime store keeps history; the candidate head store leaves
+	// accepted runtime store keeps history. The candidate head store leaves
 	// it empty and records none.
 	indexKey string
 }
@@ -37,10 +39,9 @@ func NewGenerationStore(store storage.KVStore) (*GenerationStore, error) {
 	return newGenerationStore(store, catalogCurrentGenerationKey, catalogGenerationIndexKey)
 }
 
-// newCandidateGenerationStore creates the candidate head store. It shares
-// immutable generation records with the accepted runtime store but owns a
-// separate current pointer, so the head Starmap publishes and the head
-// Starport accepted stay independent.
+// newCandidateGenerationStore creates the candidate head store.
+// It shares immutable generation records with the accepted store.
+// Separate current pointers keep published and accepted heads independent.
 func newCandidateGenerationStore(store storage.KVStore) (*GenerationStore, error) {
 	return newGenerationStore(store, candidateCurrentGenerationKey, "")
 }
@@ -57,6 +58,14 @@ func newGenerationStore(store storage.KVStore, currentKey, indexKey string) (*Ge
 
 // Current returns the atomically selected generation.
 func (s *GenerationStore) Current(ctx context.Context) (catalogs.Generation, error) {
+	if s.fleet != nil {
+		if s.fleetAccepted {
+			snapshot, err := s.fleet.AcceptedPublication(ctx)
+			return snapshot.Publication.Generation, err
+		}
+		snapshot, err := s.fleet.CurrentPublication(ctx)
+		return snapshot.Publication.Generation, err
+	}
 	currentID, err := s.store.Get(ctx, s.currentKey)
 	if err != nil {
 		if stderrors.Is(err, storage.ErrNotFound) {
@@ -71,6 +80,9 @@ func (s *GenerationStore) Current(ctx context.Context) (catalogs.Generation, err
 
 // Get returns one immutable generation by ID.
 func (s *GenerationStore) Get(ctx context.Context, generationID string) (catalogs.Generation, error) {
+	if s.fleet != nil {
+		return s.fleet.Get(ctx, generationID)
+	}
 	stored, err := s.store.Get(ctx, catalogGenerationKey(generationID))
 	if err != nil {
 		if stderrors.Is(err, storage.ErrNotFound) {
@@ -111,6 +123,9 @@ func (s *GenerationStore) Commit(
 	generation catalogs.Generation,
 	expectedGenerationID string,
 ) error {
+	if s.fleet != nil {
+		return fleetStoreConflict("fleet writes require the original publication and validated acceptance contract")
+	}
 	if err := generation.Validate(); err != nil {
 		return err
 	}

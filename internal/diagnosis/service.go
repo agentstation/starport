@@ -17,6 +17,7 @@ import (
 	"github.com/agentstation/starport/internal/providers"
 	providerauth "github.com/agentstation/starport/internal/providers/auth"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -55,11 +56,12 @@ type dependencies struct {
 	loadConfig     func(context.Context) (*config.Config, error)
 	resolvePaths   func() (config.Paths, error)
 	openStorage    func(storage.Config) (storage.KVStore, error)
+	openSQL        func(sqlstore.Config) (*sqlstore.DB, error)
 	transports     func() (*connectors.TransportRegistry, error)
 	authentication func() (*providerauth.Registry, error)
 }
 
-// Run performs production diagnosis without constructing the server.
+// Run checks production startup without constructing the server.
 func Run(ctx context.Context, options Options) Report {
 	service := service{dependencies: dependencies{
 		loadConfig: func(loadCtx context.Context) (*config.Config, error) {
@@ -144,7 +146,7 @@ func (s service) run(ctx context.Context, options Options) Report {
 		}
 	}
 
-	state, stateErr := loadCatalogState(ctx, cfg.Catalog.WorkspacePath, store)
+	state, stateErr := s.loadCatalogState(ctx, cfg, store)
 	if stateErr != nil {
 		report.addFailure("catalog", "Starmap catalog state could not be loaded")
 		report.addSkip("adapters", "catalog is unavailable")
@@ -225,13 +227,29 @@ func (s service) checkAdapters(
 	)
 }
 
-func loadCatalogState(
+func (s service) loadCatalogState(
 	ctx context.Context,
-	workspacePath string,
+	cfg *config.Config,
 	store storage.KVStore,
 ) (starmap.CatalogState, error) {
 	if store != nil {
-		generationStore, err := runtimecatalog.NewGenerationStore(store)
+		var db *sqlstore.DB
+		if _, shared := store.(storage.IncarnationProvider); shared {
+			if cfg.Storage.RuntimeSQL().Type != sqlstore.TypePostgres {
+				return starmap.CatalogState{}, errors.New("shared catalog inspection requires the PostgreSQL recovery witness")
+			}
+			open := s.dependencies.openSQL
+			if open == nil {
+				open = sqlstore.Open
+			}
+			var err error
+			db, err = open(cfg.Storage.RuntimeSQL())
+			if err != nil {
+				return starmap.CatalogState{}, err
+			}
+			defer func() { _ = db.Close() }()
+		}
+		generationStore, err := runtimecatalog.OpenAcceptedStore(ctx, store, db, cfg.EffectivePaths().DeploymentID)
 		if err != nil {
 			return starmap.CatalogState{}, err
 		}
@@ -246,14 +264,14 @@ func loadCatalogState(
 				Catalog: catalog, GenerationID: generation.Manifest.GenerationID,
 				GeneratedAt: generation.Manifest.GeneratedAt, Sequence: 1,
 			}, nil
-		case !errors.Is(currentErr, starmaperrors.ErrNotFound):
+		case db != nil || !errors.Is(currentErr, starmaperrors.ErrNotFound):
 			return starmap.CatalogState{}, currentErr
 		}
 	}
 
 	options := make([]starmap.Option, 0, 1)
-	if strings.TrimSpace(workspacePath) != "" {
-		options = append(options, starmap.WithCatalogPath(workspacePath))
+	if strings.TrimSpace(cfg.Catalog.WorkspacePath) != "" {
+		options = append(options, starmap.WithCatalogPath(cfg.Catalog.WorkspacePath))
 	}
 	client, err := starmap.NewContext(ctx, options...)
 	if err != nil {

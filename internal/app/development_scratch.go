@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,13 +57,10 @@ func newDevelopmentScratch(ctx context.Context, temporary string) (_ *developmen
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	path, err := os.MkdirTemp(temporary, developmentScratchPrefix)
+	path := filepath.Join(temporary, developmentScratchPrefix+rand.Text())
+	directory, err := productfiles.CreateDirectory(path)
 	if err != nil {
 		return nil, err
-	}
-	directory, err := productfiles.ExistingDirectory(path)
-	if err != nil {
-		return nil, errors.Join(err, os.Remove(path))
 	}
 	session := &developmentScratch{path: path, directory: directory,
 		record: developmentScratchRecord{Version: developmentScratchRecordVersion,

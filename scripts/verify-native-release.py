@@ -33,6 +33,8 @@ def native_target():
     architecture = {'AMD64': 'x86_64', 'x86_64': 'x86_64', 'arm64': 'arm64', 'aarch64': 'arm64', 'ARM64': 'arm64'}.get(platform.machine())
     if not operating_system or not architecture:
         raise ValueError('This native operating system or CPU is unsupported.')
+    if operating_system == 'darwin' and architecture != 'arm64':
+        raise ValueError('macOS releases require Apple silicon.')
     return operating_system, architecture
 
 

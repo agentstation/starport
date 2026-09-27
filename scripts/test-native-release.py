@@ -49,12 +49,18 @@ class NativeReleaseTests(unittest.TestCase):
     def test_native_targets(self):
         for system, machine, expected in [('Windows', 'AMD64', ('windows', 'x86_64')),
                                           ('Windows', 'ARM64', ('windows', 'arm64')),
+                                          ('Linux', 'x86_64', ('linux', 'x86_64')),
                                           ('Linux', 'aarch64', ('linux', 'arm64')),
                                           ('Darwin', 'arm64', ('darwin', 'arm64'))]:
             with self.subTest(system=system, machine=machine), patch.object(verifier.platform, 'system', return_value=system), patch.object(verifier.platform, 'machine', return_value=machine):
                 self.assertEqual(verifier.native_target(), expected)
         with patch.object(verifier.platform, 'machine', return_value='unknown'), self.assertRaises(ValueError):
             verifier.native_target()
+
+    def test_intel_macos_is_unsupported(self):
+        with patch.object(verifier.platform, 'system', return_value='Darwin'), patch.object(verifier.platform, 'machine', return_value='x86_64'):
+            with self.assertRaisesRegex(ValueError, 'Apple silicon'):
+                verifier.native_target()
 
     def test_exact_release_tag(self):
         self.assertEqual(verifier.archive_name('v1.2.0', 'windows', 'arm64'), 'starport_1.2.0_windows_arm64.zip')

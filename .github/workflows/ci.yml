@@ -42,7 +42,6 @@ jobs:
           - {runner: ubuntu-24.04, cgo: '1', race: '-race'}
           - {runner: ubuntu-24.04-arm, cgo: '1', race: '-race'}
           - {runner: macos-15, cgo: '1', race: '-race'}
-          - {runner: macos-15-intel, cgo: '1', race: '-race'}
           - {runner: windows-2025, cgo: '1', race: '-race'}
           - {runner: windows-11-arm, cgo: '0', race: ''}
     steps:
@@ -152,7 +151,7 @@ jobs:
         env:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
           TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
-        run: go test -json -race -count=1 -timeout 3m ./internal/app -run '^TestSharedStartupDoesNotCreateLocalDatabases$' > shared-startup.jsonl
+        run: go test -json -race -count=1 -timeout 3m ./internal/app -run '^(TestAppWithValkey|TestSharedStartupDoesNotCreateLocalDatabases)$' > shared-startup.jsonl
       - name: Verify authorization source and fleet enforcement
         env:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
@@ -172,6 +171,73 @@ jobs:
             authorization-storage.jsonl
             shared-cache.jsonl
           retention-days: 7
+
+  catalog-fleet:
+    name: Catalog Fleet Recovery
+    runs-on: ubuntu-latest
+    # Includes cold compilation, both bounded test steps, and evidence upload.
+    timeout-minutes: 20
+    services:
+      valkey:
+        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        ports:
+          - 6379/tcp
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      valkey-replacement:
+        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        ports:
+          - 6379/tcp
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      valkey-fresh:
+        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        ports:
+          - 6379/tcp
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      postgres:
+        image: postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: starport_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres -d starport_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.1"
+          cache: true
+      - name: Verify native catalog publication and recovery
+        env:
+          TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+          TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
+          TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
+        run: go test -json -race -count=1 -timeout 7m ./internal/catalog ./internal/catalog/recovery ./internal/storage -run '^(TestFleet|TestFreshFleet|TestRecoveryWitness|TestValkeyIncarnation)' > fleet-catalog.jsonl
+      - name: Verify explicit fleet initialization and startup
+        env:
+          TEST_FRESH_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey-fresh.ports['6379'] }}
+          TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
+        run: go test -json -race -count=1 -timeout 3m ./internal/app -run '^TestInitializeFleet' > fleet-initialization.jsonl
+      - name: Retain catalog fleet evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: catalog-fleet-recovery
+          path: |
+            fleet-catalog.jsonl
+            fleet-initialization.jsonl
+          retention-days: 7
+          if-no-files-found: error
 
   authorization-capacity:
     name: Authorization Capacity
@@ -198,7 +264,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test, shared-storage, authorization-capacity, release-contract, sdk-smoke]
+    needs: [lint, test, shared-storage, catalog-fleet, authorization-capacity, release-contract, sdk-smoke]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
