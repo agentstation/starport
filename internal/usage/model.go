@@ -97,7 +97,10 @@ type Tokens struct {
 // carries no token count at all, so a token total cannot describe it, and a
 // spend budget that reads tokens alone would meter such a turn as free.
 type Media struct {
-	GeneratedImages int64 `json:"generated_images,omitempty"`
+	// ImageSize retains the requested dimensions for image valuation.
+	ImageSize       string `json:"image_size,omitempty"`
+	ImagesEdited    bool   `json:"images_edited,omitzero"`
+	GeneratedImages int64  `json:"generated_images,omitempty"`
 	// GeneratedVideos counts finished videos. A provider prices a video per
 	// video, not per second and not per token, so this is the whole meter for
 	// the operation rather than a share of another one.

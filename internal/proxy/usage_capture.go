@@ -292,6 +292,13 @@ func captureOperation[Request, Response any](
 		record.TokensUnknown = operationUsage(response.Response).TokensUnknown
 		record.TokensEstimated = operationUsage(response.Response).Estimated
 		record.Media = usageMedia(operationUsage(response.Response))
+		if imageRequest, ok := any(req.Request).(inference.ImagesRequest); ok {
+			if record.Media == nil {
+				record.Media = &usage.Media{}
+			}
+			record.Media.ImageSize = imageRequest.Size
+			record.Media.ImagesEdited = imageRequest.IsEdit()
+		}
 		record.SearchUnits = int64(operationUsage(response.Response).SearchUnits)
 		record.SearchUnitsKnown = operationUsage(response.Response).SearchUnitsKnown
 		record.InputCharacters = operationUsage(response.Response).InputCharacters
@@ -691,6 +698,9 @@ func usageCost(snapshot *runtimecatalog.RoutableSnapshot, record usage.Record) (
 	}
 	if snapshot == nil || record.ModelUsed == "" {
 		return nil, usage.CostReasonNoRoute
+	}
+	if record.Operation == usage.OperationImages {
+		return imageUsageCost(snapshot, record)
 	}
 	if record.Operation == usage.OperationSpeech {
 		return speechUsageCost(snapshot, record)

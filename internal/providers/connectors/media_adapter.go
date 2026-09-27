@@ -32,8 +32,14 @@ func ImagesResponseToInference(response *ImagesResponse) (inference.ImagesRespon
 	if response == nil {
 		return inference.ImagesResponse{}, fmt.Errorf("image response is required")
 	}
+	if len(response.Data) == 0 {
+		return inference.ImagesResponse{}, fmt.Errorf("image response carries no images")
+	}
 	images := make([]inference.GeneratedImage, len(response.Data))
 	for index, datum := range response.Data {
+		if datum.B64JSON == "" && datum.URL == "" {
+			return inference.ImagesResponse{}, fmt.Errorf("image response carries an empty image")
+		}
 		images[index] = inference.GeneratedImage{
 			B64JSON:       datum.B64JSON,
 			URL:           datum.URL,
@@ -165,7 +171,7 @@ func uploadFromInference(upload inference.UploadedFile) UploadedFile {
 // separate: the gateway counted the pictures itself, so it is a measurement
 // even when the provider reported no tokens.
 func mediaUsageToInference(usage *MediaUsage, generatedImages int) inference.Usage {
-	converted := inference.Usage{GeneratedImages: generatedImages}
+	converted := inference.Usage{GeneratedImages: generatedImages, TokensUnknown: usage == nil}
 	if usage == nil {
 		return converted
 	}

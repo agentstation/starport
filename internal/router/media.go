@@ -55,6 +55,7 @@ func (r *modelRouter) RouteImages(ctx context.Context, req *ImagesRequest) (*Ima
 	}
 	call := providerCall[*connectors.ImagesRequest, *connectors.ImagesResponse, inference.ImagesResponse]{
 		transport: imageTransport,
+		charge:    imageCharge,
 		build:     func() *connectors.ImagesRequest { return connectors.ImagesRequestFromInference(req.Request) },
 		convert:   connectors.ImagesResponseToInference,
 	}
