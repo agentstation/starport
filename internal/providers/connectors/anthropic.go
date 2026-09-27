@@ -374,6 +374,9 @@ func convertAnthropicResponse(resp *anthropicResponse, model string) *ChatRespon
 // anthropicUsage is the Anthropic wire usage object. Its input_tokens field
 // excludes cache reads and writes, unlike OpenAI prompt_tokens.
 type anthropicUsage struct {
+	decoded                  bool
+	promptReported           bool
+	outputReported           bool
 	InputTokens              int `json:"input_tokens"`
 	OutputTokens             int `json:"output_tokens"`
 	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
@@ -383,12 +386,19 @@ type anthropicUsage struct {
 // convertAnthropicUsage normalizes Anthropic usage to OpenAI semantics:
 // prompt_tokens includes cached tokens.
 func convertAnthropicUsage(u anthropicUsage) Usage {
-	promptTokens := u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+	promptTokens, inputValid := sumUsageTokens(u.InputTokens, u.CacheReadInputTokens, u.CacheCreationInputTokens)
+	totalTokens, totalValid := sumUsageTokens(promptTokens, u.OutputTokens)
 	usage := Usage{
 		PromptTokens:     promptTokens,
 		CompletionTokens: u.OutputTokens,
-		TotalTokens:      promptTokens + u.OutputTokens,
+		TotalTokens:      totalTokens,
 		CacheWriteTokens: u.CacheCreationInputTokens,
+	}
+	if u.decoded {
+		usage.setReportedTotals(u.promptReported, u.outputReported, u.promptReported && u.outputReported)
+	}
+	if !inputValid || !totalValid {
+		usage.setReportedTotals(false, false, false)
 	}
 	if u.CacheReadInputTokens != 0 {
 		usage.PromptTokensDetails = &PromptTokensDetails{CachedTokens: u.CacheReadInputTokens}
@@ -536,6 +546,7 @@ func (s *anthropicStream) convertToOpenAIChunk(event *anthropicStreamEvent) *Cha
 		if event.Usage != nil {
 			composed := *event.Usage
 			if s.promptKnown {
+				composed.promptReported = s.promptUsage.promptReported
 				composed.InputTokens = s.promptUsage.InputTokens
 				composed.CacheCreationInputTokens = s.promptUsage.CacheCreationInputTokens
 				composed.CacheReadInputTokens = s.promptUsage.CacheReadInputTokens

@@ -172,7 +172,7 @@ func finishChatBudget(ctx context.Context, ticket admission.Ticket, usage *conne
 		return nil
 	}
 	var evidence *reservation.Evidence
-	if usage != nil && usage.PromptTokens >= 0 && usage.CompletionTokens >= 0 && usage.TotalTokens >= 0 &&
+	if usage != nil && usage.HasReportedTotals() && usage.PromptTokens >= 0 && usage.CompletionTokens >= 0 && usage.TotalTokens >= 0 &&
 		usage.PromptTokens <= math.MaxInt-usage.CompletionTokens && usage.TotalTokens == usage.PromptTokens+usage.CompletionTokens {
 		evidence = &reservation.Evidence{ID: ticket.ID() + ":usage", Tokens: int64(usage.TotalTokens)}
 		if billing != nil {

@@ -229,7 +229,11 @@ type ChatResponse struct {
 // ReportedUsage returns retained provider usage without requiring valid content.
 // An absent or unmarked zero report cannot authorize a budget refund.
 func (r *ChatResponse) ReportedUsage() *Usage {
-	if r == nil || !r.usageReported && r.Usage.TotalTokens == 0 {
+	if r == nil {
+		return nil
+	}
+	reported := r.usageReported || r.Usage.TotalTokens != 0 || r.Usage.decoded && r.Usage.HasReportedTotals()
+	if !reported {
 		return nil
 	}
 	usage := r.Usage.Copy()
@@ -269,6 +273,8 @@ type TopLogProb struct {
 // OpenAI wire field. Connectors whose providers report cache writes set it
 // for internal accounting.
 type Usage struct {
+	decoded                 bool
+	reportedTotals          uint8
 	PromptTokens            int                      `json:"prompt_tokens"`
 	CompletionTokens        int                      `json:"completion_tokens"`
 	TotalTokens             int                      `json:"total_tokens"`

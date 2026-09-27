@@ -24,6 +24,7 @@ type geminiCandidate struct {
 // geminiUsageMetadata represents token usage information
 type geminiUsageMetadata struct {
 	zeroReported            bool
+	decoded                 bool
 	PromptTokenCount        int `json:"promptTokenCount"`
 	CandidatesTokenCount    int `json:"candidatesTokenCount"`
 	TotalTokenCount         int `json:"totalTokenCount"`
@@ -44,6 +45,7 @@ func (m *geminiUsageMetadata) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*m = geminiUsageMetadata{
+		decoded:              true,
 		CandidatesTokenCount: decoded.Candidates, CachedContentTokenCount: decoded.Cached,
 		ThoughtsTokenCount: decoded.Thoughts,
 		zeroReported:       decoded.Prompt != nil && decoded.Total != nil,

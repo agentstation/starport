@@ -347,10 +347,17 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 // already includes cachedContentTokenCount. Billed output includes both
 // candidate and thinking tokens.
 func convertGeminiUsage(m geminiUsageMetadata) Usage {
+	output, outputValid := sumUsageTokens(m.CandidatesTokenCount, m.ThoughtsTokenCount)
 	usage := Usage{
 		PromptTokens:     m.PromptTokenCount,
-		CompletionTokens: m.CandidatesTokenCount + m.ThoughtsTokenCount,
+		CompletionTokens: output,
 		TotalTokens:      m.TotalTokenCount,
+	}
+	if m.decoded {
+		usage.setReportedTotals(m.zeroReported, m.zeroReported, m.zeroReported)
+	}
+	if !outputValid || m.CachedContentTokenCount < 0 {
+		usage.setReportedTotals(false, false, false)
 	}
 	if m.ThoughtsTokenCount > 0 {
 		usage.CompletionTokensDetails = &CompletionTokensDetails{ReasoningTokens: m.ThoughtsTokenCount}
