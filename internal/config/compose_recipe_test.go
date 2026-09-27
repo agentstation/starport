@@ -106,6 +106,7 @@ func TestContainerRecipePersistence(t *testing.T) {
 	require.ElementsMatch(t, []string{
 		"effective_container_paths", "fresh_start_kv_sql_file_catalog",
 		"container_recreation_preserves_records", "cold_backup_restores_into_fresh_volumes",
+		"fleet_replica_rotation_survives_replacement", "fleet_replica_local_state_isolated",
 	}, result.Observations)
 	t.Log(string(output))
 }

@@ -2,6 +2,8 @@
 # CSP13 and CSP15 still block production fleet use and existing fleet upgrades.
 services:
   starport:
+    # One replica per project keeps the local credential volume private.
+    container_name: "${COMPOSE_PROJECT_NAME}-gateway"
     build:
       context: .
       dockerfile: Dockerfile
@@ -11,10 +13,10 @@ services:
     # Choose an available loopback port for each replica or add a load balancer.
     ports:
       - "127.0.0.1::8080"
-    # Each replica owns its local token and reconstructible catalog state.
+    # Use a different Compose project for each replica. Do not share this volume.
     # Durable records and uploaded bytes reside in the external shared stores.
-    tmpfs:
-      - /var/lib/starport:uid=65532,gid=65532,mode=0700
+    volumes:
+      - starport-node-state:/var/lib/starport
     environment:
       STARPORT_SERVER_HOST: 0.0.0.0
       STARPORT_DEPLOYMENT_ID: ${STARPORT_DEPLOYMENT_ID:?set a stable fleet deployment ID}
@@ -30,3 +32,6 @@ services:
       STARPORT_FILES_OBJECT_STORE_PREFIX: ${STARPORT_DEPLOYMENT_ID:?set a stable fleet deployment ID}/files/
       STARPORT_SECURITY_MASTER_KEY: ${STARPORT_SECURITY_MASTER_KEY:?set the shared master key}
     restart: unless-stopped
+
+volumes:
+  starport-node-state:

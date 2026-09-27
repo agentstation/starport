@@ -114,6 +114,7 @@ in this build. Do not delete state or repeat fresh initialization to bypass it.
 cp .env.fleet.example .env.fleet
 chmod 600 .env.fleet
 # Replace every placeholder. Supply object-store credentials or an ambient role.
+export COMPOSE_PROJECT_NAME=starport-node-a
 docker compose --env-file .env.fleet -f docker-compose.fleet.yml build starport
 docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
   config validate --json
@@ -121,6 +122,8 @@ docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starpo
   fleet init --operation initial-deployment --evidence deployment-ticket-123 --json
 docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
   init --configured-storage --name primary-admin
+docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
+  auth rotate
 docker compose --env-file .env.fleet -f docker-compose.fleet.yml up -d starport
 ```
 
@@ -131,11 +134,18 @@ publications and disables provider acquisition. Select `embedded` as the catalog
 source to disable GitHub pulls. An internal authority requires the separate
 [authority configuration](DEPLOYMENT-TOPOLOGIES.md).
 
-Each container has private temporary local state. The shared stores retain
+Each replica has a private named volume for its rotated admin token and local state. The shared stores retain
 application records, catalog generations, recovery approval, and uploaded bytes.
-Container replacement discards its local token and caches. A surviving process
+Container replacement preserves its local token. A surviving process
 must not depend on another replica's local files. Do not mount one writable local
 state directory into several containers.
+
+For another replica, select a different `COMPOSE_PROJECT_NAME`. Run `auth rotate`
+and `up` with that project. Do not repeat fleet or gateway-key initialization.
+
+The recipe permits one gateway per project. Its fixed container name prevents
+Compose scaling from sharing the local volume. Keep each printed token private.
+If its local volume is lost, rotate a new token before starting that replica.
 
 Compose assigns an available loopback host port to each replica. Inspect the
 mapping with `docker compose --env-file .env.fleet -f docker-compose.fleet.yml ps`.

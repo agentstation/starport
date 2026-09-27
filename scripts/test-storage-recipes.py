@@ -14,6 +14,54 @@ import urllib.error
 import urllib.request
 
 
+def qualify_fleet_local_state(root, image, run):
+    """Check each replica's local credential without opening shared stores."""
+    projects = ['starport-node-' + secrets.token_hex(6) for _ in range(2)]
+    with tempfile.TemporaryDirectory(prefix='starport-fleet-recipe-') as scratch:
+        directory = Path(scratch)
+        dotenv = directory / '.env.fleet'
+        dotenv.write_text('\n'.join([
+            'STARPORT_DEPLOYMENT_ID=recipe-fixture',
+            'STARPORT_SECURITY_MASTER_KEY=' + secrets.token_hex(32),
+            'STARPORT_STORAGE_VALKEY_URL=valkeys://valkey.example.test:6379/0',
+            'STARPORT_STORAGE_SQL_POSTGRES_URL=postgres://fixture@postgres.example.test/starport?sslmode=verify-full',
+            'STARPORT_FILES_OBJECT_STORE_BUCKET=recipe-fixture',
+            'STARPORT_FILES_OBJECT_STORE_REGION=us-east-1',
+            'STARPORT_CATALOG_SOURCE=embedded',
+            'STARPORT_CATALOG_ACQUISITION_ENABLED=false', '',
+        ]))
+        dotenv.chmod(0o600)
+        override = directory / 'image.json'
+        override.write_text(json.dumps({'services': {'starport': {'image': image}}}))
+        commands = [['docker', 'compose', '--project-name', project,
+                     '--project-directory', scratch, '--env-file', str(dotenv),
+                     '-f', str(root / 'docker-compose.fleet.yml'), '-f', str(override)]
+                    for project in projects]
+
+        def cli(index, *args):
+            return run(commands[index] + ['run', '--rm', '--no-deps', '--pull', 'never', 'starport', *args])
+
+        def status(index):
+            return json.loads(cli(index, 'auth', 'status', '--json'))
+
+        try:
+            assert not status(0)['present'], 'first replica inherited local credentials'
+            cli(0, 'auth', 'rotate')  # Discard the one-time credential output.
+            first = status(0)
+            assert first['allows_network_bind'], 'rotation did not survive container replacement'
+            assert not status(1)['present'], 'second replica shared the first local credential'
+            cli(1, 'auth', 'rotate')
+            second = status(1)
+            assert second['allows_network_bind'], 'second replica lost its rotated token'
+            cli(0, 'auth', 'rotate')
+            assert status(0)['generation'] > first['generation'], 'first replica did not rotate'
+            assert status(1)['generation'] == second['generation'], 'rotation crossed replica boundary'
+            return ['fleet_replica_rotation_survives_replacement', 'fleet_replica_local_state_isolated']
+        finally:
+            for command in commands:
+                run(command + ['down', '--volumes', '--remove-orphans'])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--image', required=True, help='Previously built Starport image')
@@ -142,12 +190,13 @@ def main():
             base = start()
             verify_records()
             observations.append('cold_backup_restores_into_fresh_volumes')
+            observations.extend(qualify_fleet_local_state(root, args.image, run))
             print(json.dumps({'status': 'PASS', 'image': args.image,
                               'image_id': run(['docker', 'image', 'inspect', args.image, '--format', '{{.Id}}']).decode().strip(),
                               'observations': observations, 'source_sha256': {
                                   name: hashlib.sha256((root / name).read_bytes()).hexdigest()
-                                  for name in ('Dockerfile', 'docker-compose.yml', 'scripts/test-storage-recipes.py')},
-                              'limits': 'Fresh local recipe only. No host power-loss or populated fleet recovery qualification.'}))
+                                  for name in ('Dockerfile', 'docker-compose.yml', 'docker-compose.fleet.yml', 'scripts/test-storage-recipes.py')},
+                              'limits': 'Fresh local persistence and replica credential files only. No complete fleet, host power-loss, or populated recovery qualification.'}))
         finally:
             # The unique project contains only this probe's disposable fixtures.
             run(compose + ['down', '--volumes', '--remove-orphans'])
