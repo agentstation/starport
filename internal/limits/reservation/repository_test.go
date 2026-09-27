@@ -239,6 +239,15 @@ func TestReservationContract(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, Uncertain, record.State)
 				require.Equal(t, evidence, *record.Unresolved)
+				require.ErrorIs(t, f.repository.Reconcile(t.Context(), attempt.ID, evidence), ErrOverflow)
+				conflicting := Evidence{ID: evidence.ID, Quantities: Quantities{"output": 0}, Tokens: 0}
+				require.ErrorIs(t, f.repository.Reconcile(t.Context(), attempt.ID, conflicting), ErrIdentityConflict)
+				conflicting.ID = "replacement-provider-record"
+				require.ErrorIs(t, f.repository.Reconcile(t.Context(), attempt.ID, conflicting), ErrIdentityConflict)
+				record, err = f.repository.Inspect(t.Context(), attempt.ID)
+				require.NoError(t, err)
+				require.Equal(t, Uncertain, record.State)
+				require.Equal(t, evidence, *record.Unresolved)
 				for _, rule := range attempt.Rules {
 					state, err := f.repository.Window(t.Context(), rule.Meter, f.now)
 					require.NoError(t, err)

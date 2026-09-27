@@ -99,6 +99,9 @@ func (r *Repository) finish(ctx context.Context, id string, evidence *Evidence) 
 			if record.Pending != nil && !sameEvidence(record.Pending, evidence) {
 				return ErrIdentityConflict
 			}
+			if record.Unresolved != nil && !sameEvidence(record.Unresolved, evidence) {
+				return ErrIdentityConflict
+			}
 			if record.State == Settled {
 				if sameEvidence(record.Evidence, evidence) {
 					return nil
