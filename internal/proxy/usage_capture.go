@@ -784,11 +784,9 @@ func mediaCost(pricing *starmapcatalogs.ModelPricing, tokens usage.Tokens, units
 		total += float64(units.GeneratedImages) * *pricing.Operations.ImageGen
 	}
 	if units.GeneratedVideos > 0 {
-		// A video is priced per video, the way an image is. An offering that
-		// serves videos and publishes no video price withdraws the whole cost,
-		// because a video is the most expensive unit this gateway meters and
-		// reporting the token half alone would read as the bill.
-		if pricing.Operations == nil || pricing.Operations.VideoGen == nil {
+		// Video counts price only declared per-video rates. A duration rate
+		// needs measured duration and a complete billing contract.
+		if pricing.Operations == nil || pricing.Operations.VideoGen == nil || pricing.Operations.InputSecond != nil || pricing.Operations.OutputSecond != nil {
 			return 0, usage.CostReasonMediaUnpriced
 		}
 		total += float64(units.GeneratedVideos) * *pricing.Operations.VideoGen

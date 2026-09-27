@@ -67,3 +67,15 @@ func TestRecognitionPageEvidenceRequiresMeasurement(t *testing.T) {
 		})
 	}
 }
+
+func TestFixedPageBoundDoesNotInventProviderLimit(t *testing.T) {
+	requestCharge := false
+	offering := catalogs.ProviderOffering{Billing: &catalogs.ModelBilling{Recognition: &catalogs.RecognitionBilling{Basis: catalogs.RecognitionBillingPages, RequestCharge: &requestCharge}}}
+	request := &connectors.RecognitionRequest{Document: connectors.UploadedFile{Bytes: []byte("PDF"), MediaType: "application/pdf"}, Pages: 2}
+	_, err := recognitionBound(offering, request)
+	require.NoError(t, err)
+	require.Nil(t, offering.Limits)
+	request.Pages = 0
+	_, err = recognitionBound(offering, request)
+	require.ErrorIs(t, err, admission.ErrBoundUnknown)
+}

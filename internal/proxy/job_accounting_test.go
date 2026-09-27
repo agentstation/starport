@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starmap"
 	"github.com/stretchr/testify/require"
 
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
@@ -94,9 +95,7 @@ func TestACancelledJobIsNotAFailure(t *testing.T) {
 	require.Nil(t, records[0].Cost)
 }
 
-// TestAVideoPricesPerVideo holds the pricing half. Starmap prices a video per
-// video, not per second and not per token, so the video count is the whole
-// meter for the operation.
+// TestAVideoPricesPerVideo checks an explicitly declared per-video price.
 func TestAVideoPricesPerVideo(t *testing.T) {
 	t.Parallel()
 
@@ -107,6 +106,33 @@ func TestAVideoPricesPerVideo(t *testing.T) {
 	cost, reason := mediaCost(pricing, usage.Tokens{}, usage.Media{GeneratedVideos: 2})
 	require.Empty(t, reason)
 	require.InDelta(t, 0.70, cost, 1e-12)
+}
+
+func TestVideoCountCannotPriceDurationOffering(t *testing.T) {
+	t.Parallel()
+	client, err := starmap.New()
+	require.NoError(t, err)
+	offering, err := client.Catalog().Offering(starmapcatalogs.ProviderIDDeepInfra, "Wan-AI/Wan2.2-T2V-A14B")
+	require.NoError(t, err)
+	require.NotNil(t, offering.Pricing)
+	require.NotNil(t, offering.Pricing.Operations)
+	require.NotNil(t, offering.Pricing.Operations.OutputSecond)
+	require.Nil(t, offering.Pricing.Operations.VideoGen)
+	cost, reason := mediaCost(offering.Pricing, usage.Tokens{}, usage.Media{GeneratedVideos: 1})
+	require.Zero(t, cost)
+	require.Equal(t, usage.CostReasonMediaUnpriced, reason)
+}
+
+func TestVideoCountCannotIgnoreAdditionalDurationRates(t *testing.T) {
+	for _, operations := range []*starmapcatalogs.ModelOperationPricing{
+		{VideoGen: float(0.35), InputSecond: float(0.01)},
+		{VideoGen: float(0.35), OutputSecond: float(0.075)},
+	} {
+		pricing := &starmapcatalogs.ModelPricing{Currency: starmapcatalogs.ModelPricingCurrencyUSD, Operations: operations}
+		cost, reason := mediaCost(pricing, usage.Tokens{}, usage.Media{GeneratedVideos: 1})
+		require.Zero(t, cost)
+		require.Equal(t, usage.CostReasonMediaUnpriced, reason)
+	}
 }
 
 // TestAnOfferingThatPricesNoVideoWithdrawsTheWholeCost is why the media half
