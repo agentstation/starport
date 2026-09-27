@@ -165,6 +165,9 @@ func (s *Service) recoverNative(ctx context.Context, job Job) (Job, error) {
 		return job, err
 	}
 	job = current
+	if job.adminDecision != nil {
+		return s.retainAdministratorReceipt(ctx, job)
+	}
 	if job.AssetExpired(s.now()) {
 		return s.expireNativeReceipt(ctx, job)
 	}

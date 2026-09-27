@@ -13,15 +13,19 @@ import (
 // AccountingEntry reports a terminal job with its pinned rates and measured usage.
 // Provider request identifiers remain private to the job record.
 type AccountingEntry struct {
-	Valuation   *reservation.Valuation
-	Measurement *reservation.Evidence
-	JobID       string
-	Account     string
-	KeyID       string
-	Provider    string
-	Model       string
-	Operation   routing.Operation
-	State       JobState
+	// BillingDisposition identifies administrator-supplied billing evidence.
+	BillingDisposition string
+	// BillingEvidence can contain administrator evidence without a provider measurement.
+	BillingEvidence *reservation.Evidence
+	Valuation       *reservation.Valuation
+	Measurement     *reservation.Evidence
+	JobID           string
+	Account         string
+	KeyID           string
+	Provider        string
+	Model           string
+	Operation       routing.Operation
+	State           JobState
 	// Chargeable reports completed output for display. It does not prove cost.
 	Chargeable bool
 	// SubmittedAt and TerminalAt bound the work. A record of the two is what
@@ -108,8 +112,13 @@ func (s *Service) notifyTerminal(ctx context.Context, job Job) (Job, error) {
 
 // entryFor projects a settled record into what the accounting seam reads.
 func entryFor(job Job) AccountingEntry {
+	disposition := ""
+	if job.adminDecision != nil {
+		disposition = "administrator_" + job.adminDecision.Disposition
+	}
 	return AccountingEntry{
-		Valuation: copyValuation(job.Valuation), Measurement: copyMeasurement(job.Measurement),
+		BillingDisposition: disposition,
+		BillingEvidence:    job.BillingEvidence(), Valuation: copyValuation(job.Valuation), Measurement: copyMeasurement(job.Measurement),
 		JobID:       job.ID,
 		Account:     job.Account,
 		KeyID:       job.KeyID,

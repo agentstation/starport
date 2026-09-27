@@ -27,6 +27,9 @@ func (a Attempt) money(amount int64) *int64 {
 }
 
 func (r *Record) moneyMatches(amount int64) bool {
+	if r.Evidence != nil && r.Evidence.NoCharge {
+		return r.NanoUSD != nil && *r.NanoUSD == 0 && amount == 0
+	}
 	if r.Attempt.TokenOnly {
 		return r.NanoUSD == nil
 	}

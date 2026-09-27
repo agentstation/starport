@@ -20,9 +20,10 @@ import (
 
 type nativeRunner struct {
 	*recordingRunner
-	valuation   *reservation.Valuation
-	measurement *reservation.Evidence
-	assetURL    string
+	reservationID string
+	valuation     *reservation.Valuation
+	measurement   *reservation.Evidence
+	assetURL      string
 }
 
 func nativeFixture() *nativeRunner {
@@ -35,7 +36,7 @@ func nativeFixture() *nativeRunner {
 }
 
 func (r *nativeRunner) Submit(ctx context.Context, recorder jobs.SubmissionRecorder) (jobs.Acceptance, error) {
-	if err := recorder.BeforeDispatch(ctx, jobs.Dispatch{Native: true, Provider: r.acceptance.Provider, Model: r.acceptance.Model, CatalogGeneration: "generation", Valuation: r.valuation}); err != nil {
+	if err := recorder.BeforeDispatch(ctx, jobs.Dispatch{Native: true, Provider: r.acceptance.Provider, Model: r.acceptance.Model, CatalogGeneration: "generation", Valuation: r.valuation, ReservationID: r.reservationID}); err != nil {
 		return jobs.Acceptance{}, err
 	}
 	r.submits++

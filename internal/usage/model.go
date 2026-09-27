@@ -116,6 +116,8 @@ type Cost struct {
 
 // Record is one completed inference request.
 type Record struct {
+	// BillingDisposition distinguishes administrator decisions from provider measurements.
+	BillingDisposition string `json:"billing_disposition,omitempty"`
 	// InputCharacters preserves the measured Unicode code-point count for speech.
 	InputCharacters      int64 `json:"input_characters,omitempty"`
 	InputCharactersKnown bool  `json:"input_characters_known,omitzero"`
@@ -237,6 +239,14 @@ type Record struct {
 
 // Validate reports whether the record can be persisted.
 func (r Record) Validate() error {
+	switch r.BillingDisposition {
+	case "", "administrator_usage", "administrator_no_charge":
+	default:
+		return fmt.Errorf("%w: unknown billing disposition", ErrInvalidRecord)
+	}
+	if r.BillingDisposition == "administrator_no_charge" && (r.Cost == nil || r.Cost.NanoUSD != 0) {
+		return fmt.Errorf("%w: no-charge decision requires zero cost", ErrInvalidRecord)
+	}
 	if strings.TrimSpace(r.RequestID) == "" {
 		return fmt.Errorf("%w: request id is required", ErrInvalidRecord)
 	}

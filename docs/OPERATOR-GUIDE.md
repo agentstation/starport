@@ -1530,7 +1530,7 @@ A native response receipt retains the result, measured duration, and asset bytes
 Recovery reads this receipt without another inference request.
 A lost response leaves `submission_status` as `unconfirmed` and retains required budget capacity.
 Starport never automatically repeats uncertain inference.
-External asset URL downloads remain unimplemented. Inline video assets support durable recovery.
+Inline assets support durable recovery. External downloads require explicit origin grants, as described below.
 
 ### The routes and their scopes
 
@@ -1559,7 +1559,7 @@ A job holds one of five states:
 | `queued` | dispatch ownership exists, or the provider accepted work that has not started |
 | `running` | the provider is working |
 | `completed` | the video is ready, and this gateway may still hold the bytes |
-| `failed` | the provider refused or gave up, and `error.message` says why |
+| `failed` | the job ended without a usable result, and `error.message` says why |
 | `cancelled` | the provider confirmed cancellation |
 
 The last three are terminal. A terminal job never returns to `running`, so a
@@ -1574,6 +1574,61 @@ A completion that races cancellation remains `completed`.
 A completed job carries `expires_at` while this gateway still holds its bytes.
 The field goes once the retention window closes. That tells a caller the work
 finished and the video went, without spending a request to find out.
+
+### Administrator reconciliation
+
+If a native response is lost, get provider usage or explicit no-charge evidence before resolving its reservation.
+A timeout, estimated cost, or missing asset cannot establish a charge. This action never generates another video.
+
+An authenticated administrator can inspect and resolve the job through these Starport routes:
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/v1/admin/accounts/{account_id}/videos/{video_id}/reconciliation` | Read the original identity, pinned valuation, and audit evidence. |
+| `POST /api/v1/admin/accounts/{account_id}/videos/{video_id}/reconciliation` | Record an administrator decision and retry required settlement. |
+
+Both routes require the `admin` scope and an authenticated key or console session.
+An anonymous administrator scope cannot supply an audit identity. The submitting account's `videos:write` scope cannot authorize either route.
+
+1. Read the inspection response.
+2. Verify its account, job, reservation, provider, model, and catalog generation against the provider evidence.
+3. Copy its `binding` into the decision request.
+4. Supply a stable `decision_id`, an `evidence_reference`, and a `reason`.
+5. Select `disposition: usage` with the actual `quantities` named by the pinned valuation, or select `disposition: no_charge`.
+
+A no-charge decision carries no quantities and zero tokens. It does not invent measured output duration.
+Use an evidence reference that your operators can retrieve. Do not put credentials in the evidence reference or reason.
+Starport stores the authenticated actor and decision time. The caller cannot set either field.
+
+Starport stores the immutable decision in the original job before releasing budget capacity or its outstanding slot.
+Job records use Badger locally and the selected shared KV store in replicated deployments.
+This required audit does not depend on the optional SQL audit trail.
+The repository refuses changes to an accepted decision and refuses to delete its job record.
+
+An exact retry from the same actor returns the accepted decision. Changed evidence returns HTTP 409 and requires explicit correction.
+HTTP 503 can follow a committed decision if settlement fails. Inspect the decision before retrying the same request.
+The original reservation and catalog valuation remain binding after a restart or configuration change.
+
+Ordinary job responses expose only `reconciliation_status`:
+
+| Value | Meaning |
+| --- | --- |
+| `evidence_required` | The dispatch has no confirmed response. |
+| `administrator_recorded` | The audit exists, but required settlement or optional reporting remains pending. |
+| `administrator_resolved` | Settlement and reporting acknowledged the administrator decision. |
+| `provider_evidence_review_required` | A later provider response requires review against the immutable decision. |
+
+The job ends as `failed` with `native_response_unavailable`. This describes the unavailable result, not a provider cancellation or free request.
+Usage records distinguish `administrator_usage` and `administrator_no_charge` through `billing_disposition`.
+Private evidence, reasons, and provider request identifiers remain on the administrator route.
+
+A later provider response cannot replace the administrator decision or silently change its charge.
+If that evidence cannot confirm the decision, Starport blocks new admission in the original budget windows before publishing the conflict.
+Matching evidence preserves the accepted charge and permits normal operation. Conflicts require explicit reconciliation.
+Unrelated accounts remain available. Existing evidence and charges remain unchanged.
+
+Starport retains its billing evidence and original private response through the response's retention deadline.
+The billing evidence remains after asset expiry. A conflicting decision requires explicit correction outside this endpoint.
 
 ### Retention and the polling budget
 

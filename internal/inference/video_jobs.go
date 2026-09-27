@@ -42,6 +42,8 @@ func (r VideoJobRequest) Clone() VideoJobRequest {
 type VideoJob struct {
 	// AssetStatus reports retrieval state without a provider URL.
 	AssetStatus string
+	// ReconciliationStatus identifies unresolved billing without private evidence.
+	ReconciliationStatus string
 	// PollingStatus reports paused automatic polling without changing provider state.
 	PollingStatus string
 	// SubmissionStatus reports unconfirmed provider acceptance separately from state.

@@ -1,13 +1,13 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json/v2"
 	"io"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starport/internal/jobs"
@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// This fixture exercises the catalog-declared asynchronous transport. It does not qualify live provider support.
 func TestProductionVideoPollingPauseAndReconciliation(t *testing.T) {
 	for _, prefix := range []string{"/v1", "/api/v1"} {
 		t.Run(prefix, func(t *testing.T) {
@@ -37,7 +38,7 @@ func TestProductionVideoPollingPauseAndReconciliation(t *testing.T) {
 				default:
 					w.WriteHeader(http.StatusMethodNotAllowed)
 				}
-			}), []performanceProvider{{catalogs.ProviderID("deepinfra"), "DEEPINFRA_TOKEN", "Authorization", "Bearer sk-test-key", []string{"/videos", "/videos/provider-job"}}}, nil)
+			}), []performanceProvider{{catalogs.ProviderID("deepinfra"), "DEEPINFRA_TOKEN", "Authorization", "Bearer sk-test-key", []string{"/openai/videos", "/openai/videos/provider-job"}}}, nil)
 			request := func(method, path, body string) (int, []byte) {
 				req, err := http.NewRequestWithContext(t.Context(), method, fixture.gateway.URL+prefix+path, strings.NewReader(body))
 				require.NoError(t, err)
@@ -48,9 +49,13 @@ func TestProductionVideoPollingPauseAndReconciliation(t *testing.T) {
 				data, err := io.ReadAll(response.Body)
 				require.NoError(t, err)
 				require.NoError(t, response.Body.Close())
+				select {
+				case <-fixture.handlers:
+				default:
+				}
 				return response.StatusCode, data
 			}
-			status, data := request(http.MethodPost, "/videos", `{"model":"deepinfra/Wan-AI/Wan2.2-T2V-A14B","prompt":"landscape"}`)
+			status, data := request(http.MethodPost, "/videos", `{"model":"deepinfra/Wan-AI/Wan2.6-T2V","prompt":"landscape"}`)
 			require.Equal(t, http.StatusOK, status, string(data))
 			var answer struct {
 				ID string `json:"id"`
@@ -60,9 +65,20 @@ func TestProductionVideoPollingPauseAndReconciliation(t *testing.T) {
 			require.NoError(t, err)
 			original, err := records.Get(t.Context(), "default", answer.ID)
 			require.NoError(t, err)
-			aged := original
-			aged.CreatedAt = time.Now().Add(-2 * jobs.DefaultLifetime)
-			require.NoError(t, records.Replace(t.Context(), original, aged))
+			// Seed an old persisted fixture. Production replacement forbids changing job identity and creation time.
+			keys, err := fixture.application.store.ScanWithPrefix(t.Context(), jobs.StoragePrefix, 10)
+			require.NoError(t, err)
+			require.Len(t, keys, 1)
+			previous, err := fixture.application.store.Get(t.Context(), keys[0])
+			require.NoError(t, err)
+			oldTime, err := json.Marshal(original.CreatedAt)
+			require.NoError(t, err)
+			newTime, err := json.Marshal(original.CreatedAt.Add(-2 * jobs.DefaultLifetime))
+			require.NoError(t, err)
+			oldField := append([]byte(`"created_at":`), oldTime...)
+			require.Equal(t, 1, bytes.Count(previous, oldField))
+			aged := bytes.Replace(previous, oldField, append([]byte(`"created_at":`), newTime...), 1)
+			require.NoError(t, fixture.application.store.CompareAndSwap(t.Context(), keys[0], previous, aged))
 			meter, err := jobslots.Open(fixture.application.store)
 			require.NoError(t, err)
 			assertSlot := func(expected int64) {

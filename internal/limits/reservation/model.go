@@ -92,6 +92,8 @@ type Binding struct {
 // Evidence must describe reliable provider usage or explicit operator reconciliation.
 // A timeout, terminal job state, or local token estimate is not charge evidence.
 type Evidence struct {
+	// NoCharge records an explicit billing disposition without measured units.
+	NoCharge   bool       `json:"no_charge,omitempty"`
 	ID         string     `json:"id"`
 	Quantities Quantities `json:"quantities"`
 	Tokens     int64      `json:"tokens"`
@@ -100,6 +102,8 @@ type Evidence struct {
 // Record preserves the pinned valuation, original windows, and settlement identity.
 // No reservation record expires automatically in this implementation.
 type Record struct {
+	// DisputeID retains the evidence reference that blocks further reconciliation.
+	DisputeID  string    `json:"dispute_id,omitempty"`
 	Version    int       `json:"version"`
 	Attempt    Attempt   `json:"attempt"`
 	State      State     `json:"state"`
@@ -108,7 +112,7 @@ type Record struct {
 	Evidence   *Evidence `json:"evidence,omitempty"`
 	Unresolved *Evidence `json:"unresolved,omitempty"`
 	Pending    *Evidence `json:"pending,omitempty"`
-	// NanoUSD is null when only tokens were metered and monetary cost is unknown.
+	// NanoUSD is null when monetary cost is unknown. Explicit no-charge evidence records zero.
 	NanoUSD *int64 `json:"nano_usd"`
 	Reason  string `json:"reason,omitempty"`
 	// JobID binds this attempt to one asynchronous job before provider dispatch.
@@ -118,15 +122,17 @@ type Record struct {
 // WindowState contains verified consumption and reserved capacity for one meter.
 // Overflow blocks new admission until explicit reconciliation repairs the aggregate.
 type WindowState struct {
-	Version      int                `json:"version"`
-	Meter        Meter              `json:"meter"`
-	Window       storage.TimeWindow `json:"window"`
-	HistoryProof string             `json:"history_proof"`
-	HistoryID    string             `json:"history_id"`
-	SeedConsumed int64              `json:"seed_consumed"`
-	Consumed     int64              `json:"consumed"`
-	Reserved     int64              `json:"reserved"`
-	Overflow     bool               `json:"overflow,omitempty"`
+	// ReconciliationRequired blocks new admission after conflicting billing evidence.
+	ReconciliationRequired bool               `json:"reconciliation_required,omitempty"`
+	Version                int                `json:"version"`
+	Meter                  Meter              `json:"meter"`
+	Window                 storage.TimeWindow `json:"window"`
+	HistoryProof           string             `json:"history_proof"`
+	HistoryID              string             `json:"history_id"`
+	SeedConsumed           int64              `json:"seed_consumed"`
+	Consumed               int64              `json:"consumed"`
+	Reserved               int64              `json:"reserved"`
+	Overflow               bool               `json:"overflow,omitempty"`
 }
 
 func validID(id string) bool {

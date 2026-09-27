@@ -24,20 +24,23 @@ func validateBindings(record *Record) error {
 }
 
 func validateSettlement(record *Record, amount int64) error {
+	if record.DisputeID != "" && (!validID(record.DisputeID) || record.State == Reserved || record.State == Canceled) {
+		return ErrUnavailable
+	}
 	if record.Pending != nil {
-		if record.State != Uncertain || record.Unresolved != nil || !validID(record.Pending.ID) || record.Pending.Tokens < 0 {
+		if record.State != Uncertain || record.Unresolved != nil || !record.Pending.valid() {
 			return ErrUnavailable
 		}
-		_, err := record.Attempt.amount(record.Pending.Quantities)
+		_, err := record.Attempt.evidenceAmount(record.Pending)
 		if err != nil && !errors.Is(err, ErrOverflow) {
 			return ErrUnavailable
 		}
 	}
 	if record.Unresolved != nil {
-		if record.State != Uncertain || !validID(record.Unresolved.ID) || record.Unresolved.Tokens < 0 {
+		if record.State != Uncertain || !record.Unresolved.valid() {
 			return ErrUnavailable
 		}
-		_, err := record.Attempt.amount(record.Unresolved.Quantities)
+		_, err := record.Attempt.evidenceAmount(record.Unresolved)
 		if !errors.Is(err, ErrOverflow) {
 			return ErrUnavailable
 		}
@@ -52,10 +55,10 @@ func validateSettlement(record *Record, amount int64) error {
 			return ErrUnavailable
 		}
 	case Settled:
-		if record.Evidence == nil || !validID(record.Evidence.ID) || record.Evidence.Tokens < 0 {
+		if record.Evidence == nil || !record.Evidence.valid() {
 			return ErrUnavailable
 		}
-		actual, err := record.Attempt.amount(record.Evidence.Quantities)
+		actual, err := record.Attempt.evidenceAmount(record.Evidence)
 		if err != nil || !record.moneyMatches(actual) {
 			return ErrUnavailable
 		}

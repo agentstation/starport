@@ -26,16 +26,17 @@ func (a *JobAccountant) RecordJob(ctx context.Context, entry jobs.AccountingEntr
 		return nil
 	}
 	record := usage.Record{
-		RequestID:      entry.JobID,
-		KeyID:          orAnonymous(entry.KeyID, usageAnonymousKeyID),
-		AccountID:      orAnonymous(entry.Account, usageAnonymousAccountID),
-		Timestamp:      entry.TerminalAt,
-		Operation:      usage.OperationVideos,
-		ModelRequested: entry.Model,
-		ModelUsed:      entry.Model,
-		Provider:       entry.Provider,
-		Status:         jobStatus(entry.State),
-		LatencyMS:      entry.TerminalAt.Sub(entry.SubmittedAt).Milliseconds(),
+		BillingDisposition: entry.BillingDisposition,
+		RequestID:          entry.JobID,
+		KeyID:              orAnonymous(entry.KeyID, usageAnonymousKeyID),
+		AccountID:          orAnonymous(entry.Account, usageAnonymousAccountID),
+		Timestamp:          entry.TerminalAt,
+		Operation:          usage.OperationVideos,
+		ModelRequested:     entry.Model,
+		ModelUsed:          entry.Model,
+		Provider:           entry.Provider,
+		Status:             jobStatus(entry.State),
+		LatencyMS:          entry.TerminalAt.Sub(entry.SubmittedAt).Milliseconds(),
 	}
 	if entry.State == jobs.JobStateCompleted {
 		record.Media = &usage.Media{GeneratedVideos: 1}
@@ -48,13 +49,19 @@ func (a *JobAccountant) RecordJob(ctx context.Context, entry jobs.AccountingEntr
 			record.Media.VideoOutputSeconds, record.Media.VideoOutputSecondsKnown = seconds, true
 		}
 	}
+	evidence := entry.BillingEvidence
+	if evidence == nil {
+		evidence = entry.Measurement
+	}
 	switch {
-	case entry.Measurement == nil:
+	case evidence != nil && evidence.NoCharge:
+		record.Cost = &usage.Cost{NanoUSD: 0, Currency: "USD"}
+	case evidence == nil:
 		record.CostUnavailableReason = usage.CostReasonNoUsage
 	case entry.Valuation == nil:
 		record.CostUnavailableReason = usage.CostReasonNoPricing
 	default:
-		amount, err := entry.Valuation.NanoUSD(entry.Measurement.Quantities)
+		amount, err := entry.Valuation.NanoUSD(evidence.Quantities)
 		if err != nil {
 			record.CostUnavailableReason = usage.CostReasonInvalidUsage
 		} else {

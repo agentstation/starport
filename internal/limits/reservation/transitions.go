@@ -18,6 +18,9 @@ func (r *Repository) Begin(ctx context.Context, id string) error {
 		if err != nil {
 			return err
 		}
+		if record.DisputeID != "" {
+			return ErrUnavailable
+		}
 		if record.State != Reserved {
 			return ErrAlreadyDispatched
 		}
@@ -43,6 +46,9 @@ func (r *Repository) MarkUncertain(ctx context.Context, id, reason string) error
 		record, old, err := r.readRecord(ctx, id)
 		if err != nil {
 			return err
+		}
+		if record.DisputeID != "" {
+			return ErrUnavailable
 		}
 		if record.State == Uncertain {
 			return nil
@@ -71,7 +77,7 @@ func (r *Repository) CancelBeforeDispatch(ctx context.Context, id string) error 
 // Reconcile applies reliable usage once under the original prices and windows.
 // Different evidence for an already settled identity requires operator repair.
 func (r *Repository) Reconcile(ctx context.Context, id string, evidence Evidence) error {
-	if !validID(evidence.ID) || evidence.Tokens < 0 {
+	if !evidence.valid() {
 		return ErrInvalid
 	}
 	return r.finish(ctx, id, &evidence)
@@ -86,6 +92,9 @@ attempts:
 		record, old, err := r.readRecord(ctx, id)
 		if err != nil {
 			return err
+		}
+		if record.DisputeID != "" {
+			return ErrUnavailable
 		}
 		var amount int64
 		var overflow bool
@@ -113,7 +122,7 @@ attempts:
 			if record.State != Dispatched && record.State != Uncertain {
 				return ErrTransition
 			}
-			amount, err = record.Attempt.amount(evidence.Quantities)
+			amount, err = record.Attempt.evidenceAmount(evidence)
 			overflow = errors.Is(err, ErrOverflow)
 			if err != nil && !overflow {
 				return err
@@ -126,6 +135,9 @@ attempts:
 				record.Pending = nil
 			} else {
 				record.State, record.Evidence, record.NanoUSD, record.Reason = Settled, evidence, record.Attempt.money(amount), ""
+				if evidence.NoCharge {
+					record.NanoUSD = &amount
+				}
 				record.Unresolved = nil
 				record.Pending = nil
 			}
@@ -194,5 +206,5 @@ func sameEvidence(first, second *Evidence) bool {
 	if first == nil || second == nil {
 		return first == second
 	}
-	return first.ID == second.ID && first.Tokens == second.Tokens && maps.Equal(first.Quantities, second.Quantities)
+	return first.NoCharge == second.NoCharge && first.ID == second.ID && first.Tokens == second.Tokens && maps.Equal(first.Quantities, second.Quantities)
 }

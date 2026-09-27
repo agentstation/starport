@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// This fixture exercises the catalog-declared asynchronous transport. It does not qualify live provider support.
 func TestProductionVideoCancellationRetainsUnconfirmedWork(t *testing.T) {
 	for _, prefix := range []string{"/v1", "/api/v1"} {
 		for _, tc := range []struct {
@@ -36,7 +37,7 @@ func TestProductionVideoCancellationRetainsUnconfirmedWork(t *testing.T) {
 					case http.MethodGet:
 						_, _ = io.WriteString(w, `{"id":"provider-job","status":"failed","error":"provider stopped"}`)
 					}
-				}), []performanceProvider{{catalogs.ProviderID("deepinfra"), "DEEPINFRA_TOKEN", "Authorization", "Bearer sk-test-key", []string{"/videos", "/videos/provider-job"}}}, nil)
+				}), []performanceProvider{{catalogs.ProviderID("deepinfra"), "DEEPINFRA_TOKEN", "Authorization", "Bearer sk-test-key", []string{"/openai/videos", "/openai/videos/provider-job"}}}, nil)
 				request := func(method, path, body string) (int, []byte) {
 					req, err := http.NewRequestWithContext(t.Context(), method, fixture.gateway.URL+prefix+path, strings.NewReader(body))
 					require.NoError(t, err)
@@ -47,9 +48,13 @@ func TestProductionVideoCancellationRetainsUnconfirmedWork(t *testing.T) {
 					data, err := io.ReadAll(response.Body)
 					require.NoError(t, err)
 					require.NoError(t, response.Body.Close())
+					select {
+					case <-fixture.handlers:
+					default:
+					}
 					return response.StatusCode, data
 				}
-				status, data := request(http.MethodPost, "/videos", `{"model":"deepinfra/Wan-AI/Wan2.2-T2V-A14B","prompt":"landscape"}`)
+				status, data := request(http.MethodPost, "/videos", `{"model":"deepinfra/Wan-AI/Wan2.6-T2V","prompt":"landscape"}`)
 				require.Equal(t, http.StatusOK, status, string(data))
 				var answer struct {
 					ID string `json:"id"`

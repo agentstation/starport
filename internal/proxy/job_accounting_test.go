@@ -197,3 +197,27 @@ func TestJobReportingDoesNotInventMissingMeasurement(t *testing.T) {
 		require.Equal(t, usage.CostReasonNoUsage, record.CostUnavailableReason)
 	}
 }
+
+func TestAdministratorBillingDoesNotFabricateProviderUsage(t *testing.T) {
+	for _, disposition := range []string{"no_charge", "usage"} {
+		t.Run(disposition, func(t *testing.T) {
+			recorder := &recordingUsageRepository{}
+			accountant := NewJobAccountant(recorder)
+			entry := videoEntry(jobs.JobStateFailed)
+			entry.BillingDisposition = "administrator_" + disposition
+			entry.Valuation = &reservation.Valuation{Version: reservation.ArithmeticVersion, Components: []reservation.Component{{Unit: "output_seconds", Price: reservation.Price{USD: "0.075", PerUnits: 1}}}}
+			entry.BillingEvidence = &reservation.Evidence{ID: "admin-decision", NoCharge: disposition == "no_charge"}
+			expected := int64(0)
+			if disposition == "usage" {
+				entry.BillingEvidence.Quantities = reservation.Quantities{"output_seconds": 5}
+				expected = 375000000
+			}
+			require.NoError(t, accountant.RecordJob(t.Context(), entry))
+			records := recorder.all()
+			require.Len(t, records, 1)
+			require.Equal(t, expected, records[0].Cost.NanoUSD)
+			require.Equal(t, entry.BillingDisposition, records[0].BillingDisposition)
+			require.Nil(t, records[0].Media, "operator billing does not invent an output or provider duration")
+		})
+	}
+}

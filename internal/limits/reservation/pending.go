@@ -11,13 +11,16 @@ import (
 // no balances. The reservation continues to deduct its full capacity until the
 // original settlement succeeds. A storage outage can prevent this write too.
 func (r *Repository) RetainEvidence(ctx context.Context, id string, evidence Evidence) error {
-	if !validID(evidence.ID) || evidence.Tokens < 0 {
+	if !evidence.valid() {
 		return ErrInvalid
 	}
 	for range maxConflicts {
 		record, previous, err := r.readRecord(ctx, id)
 		if err != nil {
 			return err
+		}
+		if record.DisputeID != "" {
+			return ErrUnavailable
 		}
 		if record.State == Settled {
 			if sameEvidence(record.Evidence, &evidence) {
@@ -40,7 +43,7 @@ func (r *Repository) RetainEvidence(ctx context.Context, id string, evidence Evi
 			}
 			return ErrIdentityConflict
 		}
-		_, err = record.Attempt.amount(evidence.Quantities)
+		_, err = record.Attempt.evidenceAmount(&evidence)
 		if err != nil && !errors.Is(err, ErrOverflow) {
 			return err
 		}
@@ -63,6 +66,9 @@ func (r *Repository) ReconcileRetained(ctx context.Context, id string) error {
 	record, _, err := r.readRecord(ctx, id)
 	if err != nil {
 		return err
+	}
+	if record.DisputeID != "" {
+		return ErrUnavailable
 	}
 	if record.State == Settled {
 		return nil

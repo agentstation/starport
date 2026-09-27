@@ -126,6 +126,8 @@ func CanTransition(from, to JobState) bool {
 // learned it could poll the provider directly, outside every limit and every
 // usage record Starport keeps.
 type Job struct {
+	adminDecision        *ReconciliationDecision
+	lateProviderEvidence *LateProviderEvidence
 	// Native identifies inference that returns its result in one response.
 	Native bool
 	// Valuation pins submission prices. Measurement contains provider usage only.
@@ -213,6 +215,9 @@ func (j Job) String() string {
 
 // Validate reports whether the record can be stored.
 func (j Job) Validate() error {
+	if err := j.validateAdministrator(); err != nil {
+		return err
+	}
 	if err := j.validateNative(); err != nil {
 		return err
 	}

@@ -43,3 +43,20 @@ func (s *Service) confirmSettlement(ctx context.Context, job Job) error {
 	}
 	return nil
 }
+
+// BillingConflictRecorder blocks affected admission before late evidence is published.
+// The original provider receipt remains durable if this operation fails.
+type BillingConflictRecorder interface {
+	RecordJobConflict(context.Context, Job) error
+}
+
+func (s *Service) recordBillingConflict(ctx context.Context, job Job) error {
+	if job.ReservationID == "" {
+		return nil
+	}
+	recorder, ok := s.requiredSettlement.(BillingConflictRecorder)
+	if !ok {
+		return ErrSettlementPending
+	}
+	return recorder.RecordJobConflict(ctx, job)
+}

@@ -68,7 +68,7 @@ func (j Job) validateNative() error {
 		if j.ReservationID != "" {
 			id = j.ReservationID
 		}
-		if j.Measurement.ID != id+":usage" || j.Measurement.Tokens < 0 || len(j.Measurement.Quantities) == 0 || len(j.Measurement.Quantities) > 16 {
+		if j.Measurement.NoCharge || j.Measurement.ID != id+":usage" || j.Measurement.Tokens < 0 || len(j.Measurement.Quantities) == 0 || len(j.Measurement.Quantities) > 16 {
 			return ErrInvalidJob
 		}
 		for unit, quantity := range j.Measurement.Quantities {

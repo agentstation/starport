@@ -94,6 +94,9 @@ func (r *Repository) Reserve(ctx context.Context, attempt Attempt) (*Record, err
 		}
 		existing, _, err := r.readRecord(ctx, owned.ID)
 		if err == nil {
+			if existing.DisputeID != "" {
+				return nil, ErrUnavailable
+			}
 			if !reflect.DeepEqual(existing.Attempt, owned) {
 				return nil, ErrIdentityConflict
 			}
@@ -117,6 +120,9 @@ func (r *Repository) Reserve(ctx context.Context, attempt Attempt) (*Record, err
 			bound := amount
 			if rule.Meter.Dimension == limits.DimensionTokens {
 				bound = owned.TokenBound
+			}
+			if state.ReconciliationRequired {
+				return nil, ErrUnavailable
 			}
 			if state.Overflow || state.Consumed > rule.Limit || state.Reserved > rule.Limit-state.Consumed || bound > rule.Limit-state.Consumed-state.Reserved {
 				return nil, ErrExhausted

@@ -32,6 +32,9 @@ func (o *budgetOwner) BindJob(ctx context.Context, job jobs.Job) error {
 func (o *budgetOwner) ConfirmJob(ctx context.Context, job jobs.Job) error {
 	ctx, cancel := context.WithTimeout(ctx, budgetSettlementTimeout)
 	defer cancel()
+	if job.ReconciliationStatus() == "provider_evidence_review_required" {
+		return reservation.ErrIdentityConflict
+	}
 	record, err := o.jobReservation(ctx, job)
 	if err != nil {
 		return err
@@ -39,11 +42,11 @@ func (o *budgetOwner) ConfirmJob(ctx context.Context, job jobs.Job) error {
 	if record.JobID != job.ID || record.JobID == "" {
 		return reservation.ErrIdentityConflict
 	}
-	if job.Measurement != nil {
+	if evidence := job.BillingEvidence(); evidence != nil {
 		if job.Valuation == nil || !reflect.DeepEqual(record.Attempt.Valuation, *job.Valuation) {
 			return reservation.ErrIdentityConflict
 		}
-		if err := o.ledger.Reconcile(ctx, job.ReservationID, *job.Measurement); err != nil {
+		if err := o.ledger.Reconcile(ctx, job.ReservationID, *evidence); err != nil {
 			return err
 		}
 	}
@@ -78,4 +81,21 @@ func (o *budgetOwner) checkJobAuthority(ctx context.Context) error {
 		return o.shared.Check(ctx)
 	}
 	return nil
+}
+
+// RecordJobConflict retains the original charge and blocks its disputed budget windows.
+func (o *budgetOwner) RecordJobConflict(ctx context.Context, job jobs.Job) error {
+	ctx, cancel := context.WithTimeout(ctx, budgetSettlementTimeout)
+	defer cancel()
+	if err := job.Validate(); err != nil {
+		return err
+	}
+	record, err := o.jobReservation(ctx, job)
+	if err != nil {
+		return err
+	}
+	if job.ReconciliationStatus() != "provider_evidence_review_required" || record.JobID != job.ID || job.Valuation == nil || !reflect.DeepEqual(record.Attempt.Valuation, *job.Valuation) {
+		return reservation.ErrIdentityConflict
+	}
+	return o.ledger.FlagDispute(ctx, job.ReservationID, "job:"+job.ID)
 }

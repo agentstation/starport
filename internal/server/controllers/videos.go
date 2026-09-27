@@ -291,13 +291,14 @@ func (h *VideosController) runner(ctx context.Context) (jobs.Runner, error) {
 // each codec encode it without a field-by-field review.
 func (h *VideosController) canonicalVideoJob(job jobs.Job) inference.VideoJob {
 	answer := inference.VideoJob{
-		ID:          job.ID,
-		AssetStatus: job.AssetStatus(time.Now()),
-		Model:       job.Model,
-		Provider:    job.Provider,
-		State:       string(job.State),
-		Reason:      job.Reason,
-		CreatedUnix: job.CreatedAt.Unix(),
+		ID:                   job.ID,
+		AssetStatus:          job.AssetStatus(time.Now()),
+		ReconciliationStatus: job.ReconciliationStatus(),
+		Model:                job.Model,
+		Provider:             job.Provider,
+		State:                string(job.State),
+		Reason:               job.Reason,
+		CreatedUnix:          job.CreatedAt.Unix(),
 	}
 	if h.jobs.NeedsReconciliation(job) {
 		answer.PollingStatus = "paused"

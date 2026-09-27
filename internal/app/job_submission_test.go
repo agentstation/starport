@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// This fixture exercises the catalog-declared asynchronous transport. It does not qualify live provider support.
 func TestProductionVideoSubmissionPersistsBeforeDispatch(t *testing.T) {
 	for _, prefix := range []string{"/v1", "/api/v1"} {
 		for _, tc := range []struct {
@@ -56,8 +57,8 @@ func TestProductionVideoSubmissionPersistsBeforeDispatch(t *testing.T) {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(tc.status)
 					_, _ = io.WriteString(w, tc.body)
-				}), []performanceProvider{{catalogs.ProviderID("deepinfra"), "DEEPINFRA_TOKEN", "Authorization", "Bearer sk-test-key", []string{"/videos"}}}, nil)
-				req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, fixture.gateway.URL+prefix+"/videos", strings.NewReader(`{"model":"deepinfra/Wan-AI/Wan2.2-T2V-A14B","prompt":"landscape"}`))
+				}), []performanceProvider{{catalogs.ProviderID("deepinfra"), "DEEPINFRA_TOKEN", "Authorization", "Bearer sk-test-key", []string{"/openai/videos"}}}, nil)
+				req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, fixture.gateway.URL+prefix+"/videos", strings.NewReader(`{"model":"deepinfra/Wan-AI/Wan2.6-T2V","prompt":"landscape"}`))
 				require.NoError(t, err)
 				req.Header.Set("Authorization", "Bearer "+performanceGatewayKey)
 				req.Header.Set("Content-Type", "application/json")
@@ -66,6 +67,10 @@ func TestProductionVideoSubmissionPersistsBeforeDispatch(t *testing.T) {
 				data, err := io.ReadAll(response.Body)
 				require.NoError(t, err)
 				require.NoError(t, response.Body.Close())
+				select {
+				case <-fixture.handlers:
+				default:
+				}
 				status := 200
 				if tc.pending || tc.requiredBudget {
 					status = 503
@@ -100,6 +105,10 @@ func TestProductionVideoSubmissionPersistsBeforeDispatch(t *testing.T) {
 						body, err := io.ReadAll(status.Body)
 						require.NoError(t, err)
 						require.NoError(t, status.Body.Close())
+						select {
+						case <-fixture.handlers:
+						default:
+						}
 						if path == prefix+"/videos" {
 							require.Equal(t, 200, status.StatusCode, string(body))
 							require.Contains(t, string(body), `"submission_status":"unconfirmed"`)
