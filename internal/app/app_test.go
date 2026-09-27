@@ -285,23 +285,9 @@ func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
 	// This test owns cancellation and dependency closure. The container recipe
 	// tests qualify real catalog persistence and startup separately.
 	factories.openCatalog = func(ctx context.Context, store storage.KVStore, _ *sqlstore.DB, _ runtimecatalog.Settings, _ runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
-		client, err := starmap.NewContext(ctx)
-		if err != nil {
-			return nil, err
-		}
-		plane, err := runtimecatalog.Open(client)
-		if err != nil {
-			return nil, err
-		}
-		accepted, err := runtimecatalog.NewGenerationStore(store)
-		if err != nil {
-			return nil, err
-		}
-		catalogDependency = &lifecycleCatalogRuntime{
-			runtimeSyncFixture: runtimeSyncFixture{plane: plane, state: client.CurrentCatalogState()},
-			accepted:           accepted,
-		}
-		return catalogDependency, nil
+		var err error
+		catalogDependency, err = newLifecycleCatalogRuntime(ctx, store)
+		return catalogDependency, err
 	}
 	factories.newServer = func(*server.Config, server.Dependencies) (httpRuntime, error) {
 		return fakeHTTP, nil
@@ -336,6 +322,26 @@ type lifecycleCatalogRuntime struct {
 	runtimeSyncFixture
 	accepted *runtimecatalog.GenerationStore
 	closed   bool
+}
+
+// newLifecycleCatalogRuntime isolates application worker tests from catalog publication.
+func newLifecycleCatalogRuntime(ctx context.Context, store storage.KVStore) (*lifecycleCatalogRuntime, error) {
+	client, err := starmap.NewContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	plane, err := runtimecatalog.Open(client)
+	if err != nil {
+		return nil, err
+	}
+	accepted, err := runtimecatalog.NewGenerationStore(store)
+	if err != nil {
+		return nil, err
+	}
+	return &lifecycleCatalogRuntime{
+		runtimeSyncFixture: runtimeSyncFixture{plane: plane, state: client.CurrentCatalogState()},
+		accepted:           accepted,
+	}, nil
 }
 
 func (r *lifecycleCatalogRuntime) AcceptedStore() *runtimecatalog.GenerationStore {

@@ -37,6 +37,10 @@ func TestApplicationOwnsAuthorizationFencesAndCatchup(t *testing.T) {
 	cfg := validProductionConfig(t)
 	cfg.Identity.OAuth.GitHub = config.OAuthApplicationConfig{ClientID: "test-client", ClientSecret: "test-client-secret"}
 	factories := explicitTestFactories()
+	// Revision polling owns this test. Real catalog startup has separate coverage.
+	factories.openCatalog = func(ctx context.Context, store storage.KVStore, _ *sqlstore.DB, _ runtimecatalog.Settings, _ runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
+		return newLifecycleCatalogRuntime(ctx, store)
+	}
 	fakeHTTP := newBlockingHTTPRuntime()
 	var dependencies server.Dependencies
 	factories.newServer = func(_ *server.Config, value server.Dependencies) (httpRuntime, error) {
@@ -104,6 +108,8 @@ func TestApplicationOwnsAuthorizationFencesAndCatchup(t *testing.T) {
 	go func() { done <- application.Run(ctx) }()
 	select {
 	case <-fakeHTTP.started:
+	case err := <-done:
+		t.Fatalf("application stopped before HTTP startup: %v", err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("HTTP runtime did not start")
 	}
