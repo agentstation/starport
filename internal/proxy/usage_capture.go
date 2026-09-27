@@ -214,6 +214,7 @@ func (s *usageCaptureService) ProcessEmbeddings(ctx context.Context, req *Embedd
 	record := baseUsageRecord(usage.OperationEmbeddings, req.RequestID, req.KeyID, req.AccountID, req.TeamID, req.Protocol, req.Request.Model, start)
 	record.BatchID = req.BatchID
 	applyOutcome(&record, err)
+	record.TokensUnknown = true
 	var snapshot *runtimecatalog.RoutableSnapshot
 	if response != nil {
 		record.ModelUsed = response.ModelUsed
@@ -223,6 +224,8 @@ func (s *usageCaptureService) ProcessEmbeddings(ctx context.Context, req *Embedd
 		record.RoutingMS = response.RoutingDuration.Milliseconds()
 		record.CacheStatus = response.CacheStatus
 		record.Tokens = usageTokens(response.Response.Usage)
+		record.TokensUnknown = response.Response.Usage.TokensUnknown
+		record.TokensEstimated = response.Response.Usage.Estimated
 		snapshot = response.CatalogSnapshot
 	}
 	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
@@ -683,6 +686,9 @@ func usageCost(snapshot *runtimecatalog.RoutableSnapshot, record usage.Record) (
 	}
 	if snapshot == nil || record.ModelUsed == "" {
 		return nil, usage.CostReasonNoRoute
+	}
+	if record.Operation == usage.OperationEmbeddings {
+		return embeddingUsageCost(snapshot, record)
 	}
 	tokens := record.Tokens
 	var units usage.Media

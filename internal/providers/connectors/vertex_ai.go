@@ -1,12 +1,10 @@
 package connectors
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -69,79 +67,6 @@ func (c *VertexAIConnector) ChatStream(ctx context.Context, req *ChatRequest) (C
 		return executeAnthropicStream(ctx, c.httpClient, endpoint, vertexReq, false, c.setHeaders, c.handleError)
 	}
 	return c.googleBaseConnector.ChatStream(ctx, req, c.getEndpoint, c.setHeaders)
-}
-
-// Embeddings generates embeddings for the given input
-func (c *VertexAIConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
-	// Convert to Vertex AI embeddings request format
-	vertexReq := map[string]any{
-		"instances": []map[string]any{
-			{
-				"content": req.Input.(string),
-			},
-		},
-	}
-
-	body, err := json.Marshal(vertexReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	endpoint, err := selectedEndpoint(req.Endpoint, catalogs.EndpointTypeGoogleCloud)
-	if err != nil {
-		return nil, err
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	if err := c.setHeaders(req.Credential, httpReq); err != nil {
-		return nil, fmt.Errorf("apply provider request authentication: %w", err)
-	}
-
-	resp, err := doRequest(c.httpClient, httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.handleError(resp)
-	}
-
-	var vertexResp struct {
-		Predictions []struct {
-			Embeddings struct {
-				Values []float32 `json:"values"`
-			} `json:"embeddings"`
-		} `json:"predictions"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&vertexResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if len(vertexResp.Predictions) == 0 {
-		return nil, fmt.Errorf("no embeddings returned")
-	}
-
-	return &EmbeddingsResponse{
-		Object: objectList,
-		Data: []Embedding{
-			{
-				Object:    objectEmbedding,
-				Index:     0,
-				Embedding: vertexResp.Predictions[0].Embeddings.Values,
-			},
-		},
-		Model: req.Model,
-		Usage: Usage{
-			decoded:      true,
-			PromptTokens: len(strings.Fields(req.Input.(string))),
-			TotalTokens:  len(strings.Fields(req.Input.(string))),
-		},
-	}, nil
 }
 
 // Close cleans up any resources

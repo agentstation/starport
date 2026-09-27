@@ -372,6 +372,8 @@ type ChatRequest struct {
 // and cache writes; CacheReadTokens and CacheWriteTokens break out the
 // cached portions for pricing.
 type Usage struct {
+	// TokensUnknown marks incomplete or invalid provider token evidence.
+	TokensUnknown    bool
 	InputTokens      int
 	OutputTokens     int
 	TotalTokens      int

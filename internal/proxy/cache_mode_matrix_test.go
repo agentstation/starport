@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -20,7 +22,8 @@ func TestProductionCacheSemanticModeMatrix(t *testing.T) {
 				t.Cleanup(func() { require.NoError(t, manager.Close()) })
 				upstream := &mockProxyImpl{chatResponse: canonicalChatResponse()}
 				embedder := newFakeEmbedder()
-				service := semanticCachedService(upstream, manager, embedder)
+				fills := &cacheModeFills{CacheManager: manager, values: make(map[string][]byte)}
+				service := semanticCachedService(upstream, fills, embedder)
 				service.cacheConfig.EnableChatCache = mode != "disabled"
 				service.cacheConfig.EnableSemanticCache = mode != "exact"
 				call := func(text string) string {
@@ -43,6 +46,7 @@ func TestProductionCacheSemanticModeMatrix(t *testing.T) {
 				}
 				call(semanticPromptText)
 				if mode != "disabled" {
+					fills.warm(t)
 					require.Eventually(t, func() bool { return manager.FillStatus().RetainedEntries == 0 }, time.Second, time.Millisecond)
 					require.Positive(t, manager.FillStatus().CompletedFills)
 				}
@@ -81,4 +85,33 @@ func TestProductionCacheSemanticModeMatrix(t *testing.T) {
 			})
 		}
 	}
+}
+
+// cacheModeFills retains the actual production submissions for warm-read setup.
+// Optional fills can drop, so queue completion alone cannot establish a warm cache.
+type cacheModeFills struct {
+	CacheManager
+	values map[string][]byte
+}
+
+func (f *cacheModeFills) SetResponse(ctx context.Context, key string, value []byte) error {
+	f.values[key] = bytes.Clone(value)
+	return f.CacheManager.SetResponse(ctx, key, value)
+}
+
+func (f *cacheModeFills) warm(t *testing.T) {
+	t.Helper()
+	require.NotEmpty(t, f.values)
+	require.Eventually(t, func() bool {
+		ready := true
+		for key, want := range f.values {
+			got, found, err := f.CacheManager.GetResponse(t.Context(), key)
+			require.NoError(t, err)
+			if !found || !bytes.Equal(got, want) {
+				ready = false
+				require.NoError(t, f.CacheManager.SetResponse(t.Context(), key, want))
+			}
+		}
+		return ready
+	}, time.Second, time.Millisecond, "all production cache submissions must be readable before the hit probe")
 }

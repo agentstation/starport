@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"io"
 	"net/http"
@@ -49,6 +50,10 @@ func TestProductionEmbeddingBudget(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, response.Body.Close())
 			require.Equal(t, http.StatusOK, response.StatusCode, string(body))
+			var envelope map[string]jsontext.Value
+			require.NoError(t, json.Unmarshal(body, &envelope))
+			_, usagePresent := envelope["usage"]
+			require.Equal(t, test.state == reservation.Settled, usagePresent, "wire usage must not present an incomplete count as measured")
 			require.EqualValues(t, 1, fixture.calls.Load())
 			keys, err := fixture.application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 10)
 			require.NoError(t, err)

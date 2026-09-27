@@ -157,9 +157,11 @@ type Record struct {
 	SearchUnits int64 `json:"search_units,omitempty"`
 	// TokensEstimated marks counts the gateway synthesized with a
 	// tokenizer because the provider reported none.
-	TokensEstimated bool  `json:"tokens_estimated,omitempty"`
-	LatencyMS       int64 `json:"latency_ms"`
-	RoutingMS       int64 `json:"routing_ms,omitempty"`
+	TokensEstimated bool `json:"tokens_estimated,omitempty"`
+	// TokensUnknown marks incomplete or invalid provider token evidence.
+	TokensUnknown bool  `json:"tokens_unknown,omitempty"`
+	LatencyMS     int64 `json:"latency_ms"`
+	RoutingMS     int64 `json:"routing_ms,omitempty"`
 	// OverheadMS is the gateway-added latency: total handling time
 	// minus upstream provider waits.
 	OverheadMS int64 `json:"overhead_ms,omitempty"`
