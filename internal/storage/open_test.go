@@ -33,7 +33,7 @@ func TestOpen(t *testing.T) {
 				},
 			},
 			wantErr: true, // Connection will fail in test environment
-			errMsg:  "failed to create valkey client",
+			errMsg:  "durable KV connection failed",
 		},
 		{
 			name: "invalid storage type",
@@ -95,9 +95,6 @@ func TestNewMockStore(t *testing.T) {
 	}
 	if store.ttl == nil {
 		t.Error("MockStore ttl map not initialized")
-	}
-	if store.transactions == nil {
-		t.Error("MockStore transactions map not initialized")
 	}
 	if store.closed {
 		t.Error("MockStore should not be closed on creation")

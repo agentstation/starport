@@ -28,7 +28,6 @@ func TestReadOnlyStoreRejectsEveryWriteContract(t *testing.T) {
 		func() error {
 			return store.BatchSetWithTTL(ctx, map[string][]byte{"key": []byte("value")}, time.Minute)
 		},
-		func() error { _, err := store.BeginTransaction(ctx); return err },
 	}
 	for index, write := range writes {
 		if err := write(); !errors.Is(err, ErrReadOnly) {

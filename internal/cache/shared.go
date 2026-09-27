@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/agentstation/starport/internal/cache/connection"
 	"github.com/agentstation/starport/internal/deployment"
+	"github.com/agentstation/starport/internal/kvconnection"
 	"github.com/valkey-io/valkey-go"
 )
 
@@ -53,7 +53,7 @@ func OpenShared(config SharedConfig) (*SharedStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	u, err := connection.Parse(config.URL, config.AllowInsecure)
+	u, err := kvconnection.Parse(config.URL, config.AllowInsecure)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func OpenShared(config SharedConfig) (*SharedStore, error) {
 		if options.TLSConfig == nil {
 			return nil, errors.New("cache CA file requires a TLS endpoint")
 		}
-		roots, err := connection.LoadRoots(config.CAFile)
+		roots, err := kvconnection.LoadRoots(config.CAFile)
 		if err != nil {
 			return nil, err
 		}

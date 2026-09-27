@@ -10,7 +10,7 @@ The storage package defines a `KVStore` interface that abstracts key-value stora
 - TTL (Time-To-Live) support for temporary data
 - Atomic operations (Increment, Decrement, CompareAndSwap)
 - Batch operations for efficiency
-- Transaction support for atomic multi-operation updates
+- Atomic conditional mutation sets through `CompareAndSwapBatch`
 - Scanning/listing capabilities
 
 ## Architecture
@@ -66,11 +66,11 @@ err = store.SetWithTTL(ctx, "temp-key", []byte("temp-value"), 5*time.Minute)
 // Atomic operations
 count, err := store.Increment(ctx, "counter", 1)
 
-// Transactions
-tx, err := store.BeginTransaction(ctx)
-tx.Set("key1", []byte("value1"))
-tx.Set("key2", []byte("value2"))
-err = tx.Commit(ctx)
+// Apply all conditional mutations or none. A nil expectation requires absence.
+err = store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
+    {Key: "key1", ExpectedValue: nil, NewValue: []byte("value1")},
+    {Key: "key2", ExpectedValue: nil, NewValue: []byte("value2")},
+})
 ```
 
 ## Testing
@@ -101,7 +101,7 @@ The storage layer uses consistent key patterns for different data types:
 
 1. **Batch Operations**: Use batch operations when working with multiple keys to reduce round trips
 2. **TTL Usage**: Use TTL for temporary data to avoid manual cleanup
-3. **Transaction Scope**: Keep transactions small and focused
+3. **Conditional writes**: Use `CompareAndSwapBatch` when writes must succeed together. A conflict changes no keys.
 4. **Key Design**: Use hierarchical key patterns for efficient scanning
 
 ## Error Handling

@@ -41,12 +41,7 @@ func (c StorageConfig) RuntimeStorage() storage.Config {
 			Compression: c.Badger.Compression != compressionNone, NumVersions: 1,
 			NumLevelZero: 5, MemTableSize: 64 << 20,
 		},
-		Valkey: storage.ValkeyConfig{
-			URL: c.Valkey.URL, Password: c.Valkey.Password,
-			MaxRetries: 3, MinIdleConns: c.Valkey.MinIdleConns,
-			ReadTimeout: c.Valkey.ReadTimeout, WriteTimeout: c.Valkey.WriteTimeout,
-			ClusterMode: c.Valkey.ClusterMode,
-		},
+		Valkey: c.Valkey.RuntimeConnection(),
 	}
 }
 
@@ -83,4 +78,15 @@ func (c *Config) ConfigureDevelopmentRuntime() error {
 	c.Logging.Output = "stdout"
 	c.Logging.FilePath = ""
 	return nil
+}
+
+const valkeyCAFileRole = "valkey-ca"
+const valkeyCAFileEnvironment = "STARPORT_STORAGE_VALKEY_CA_FILE"
+
+// RuntimeConnection projects endpoint settings without opening storage.
+func (c ValkeyConfig) RuntimeConnection() storage.ValkeyConfig {
+	return storage.ValkeyConfig{URL: c.URL, Username: c.Username, Password: c.Password,
+		CAFile: c.CAFile, AllowInsecure: c.AllowInsecure, ClusterMode: c.ClusterMode,
+		DialTimeout: c.DialTimeout, MaxConnections: c.MaxConnections, MinIdleConns: c.MinIdleConns,
+		IdleTimeout: c.IdleTimeout, ReadTimeout: c.ReadTimeout, WriteTimeout: c.WriteTimeout}
 }

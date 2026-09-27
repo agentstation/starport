@@ -1,6 +1,12 @@
 package config
 
-import "testing"
+import (
+	"encoding/json"
+	"github.com/stretchr/testify/require"
+	"path/filepath"
+	"testing"
+	"time"
+)
 
 func TestFleetRecipeRejectsReplicaLocalStores(t *testing.T) {
 	for _, sqlMode := range []string{"sqlite", "postgres"} {
@@ -50,4 +56,43 @@ func TestSharedStorageRecipeSupportedModes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDurableKVConnectionSettings(t *testing.T) {
+	paths := PathsForConfigDir(t.TempDir())
+	cfg, err := NewLoader().WithPaths(paths).WithEnvFiles().WithEnvironment(map[string]string{
+		"STARPORT_STORAGE_MODE":                "valkey",
+		"STARPORT_STORAGE_VALKEY_URL":          "valkeys://durable.example/2",
+		"STARPORT_STORAGE_VALKEY_USERNAME":     "explicit-user",
+		"STARPORT_STORAGE_VALKEY_PASSWORD":     "field-private-value",
+		"STARPORT_STORAGE_VALKEY_CA_FILE":      "certificates/durable.pem",
+		"STARPORT_STORAGE_VALKEY_DIAL_TIMEOUT": "2s",
+		"STARPORT_STORAGE_SQL_MODE":            "postgres",
+		"STARPORT_STORAGE_SQL_POSTGRES_URL":    "postgres://operator:sql-private-value@sql.example/starport",
+		"STARPORT_FILES_BACKEND":               "objectstore",
+		"STARPORT_FILES_OBJECT_STORE_BUCKET":   "test-bucket",
+		"STARPORT_FILES_OBJECT_STORE_REGION":   "us-east-1",
+		"STARPORT_RELATIVE_PATH_BASE":          "config",
+	}).Load(t.Context())
+	require.NoError(t, err)
+	connection := cfg.Storage.RuntimeStorage().Valkey
+	require.Equal(t, "explicit-user", connection.Username)
+	require.Equal(t, "field-private-value", connection.Password)
+	require.Equal(t, 2*time.Second, connection.DialTimeout)
+	require.Equal(t, filepath.Join(paths.ConfigDir, "certificates", "durable.pem"), connection.CAFile)
+	data, err := json.Marshal(Redacted(cfg))
+	require.NoError(t, err)
+	require.NotContains(t, string(data), "private-value")
+	manifest, err := cfg.FileManifest("test")
+	require.NoError(t, err)
+	found := false
+	for _, entry := range manifest.Files {
+		if entry.ID == valkeyCAFileRole {
+			found = true
+			require.Equal(t, connection.CAFile, entry.Location.Path)
+			require.Equal(t, "available", entry.Availability)
+			require.Equal(t, "deployment-controlled", entry.Policy.Access)
+		}
+	}
+	require.True(t, found)
 }

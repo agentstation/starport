@@ -1218,15 +1218,42 @@ STARPORT_STORAGE_BADGER_PATH=/absolute/path/to/starport/data/badger
 Stop Starport before copying a Badger directory for backup or restore. Keep
 the directory on persistent storage.
 
-Use Valkey for shared state across nodes:
+Shared deployments require Valkey, PostgreSQL, and shared object storage for file bytes.
+Selecting Valkey with local SQLite or local file bytes fails configuration validation.
+Cluster mode remains unsupported.
+
+Use a TLS endpoint for durable KV:
 
 ```text
 STARPORT_STORAGE_MODE=valkey
-STARPORT_STORAGE_VALKEY_URL=valkey://valkey.example:6379
+STARPORT_STORAGE_VALKEY_URL=valkeys://valkey.example:6379/0
+STARPORT_STORAGE_VALKEY_USERNAME=starport
+STARPORT_STORAGE_VALKEY_CA_FILE=/etc/starport/certificates/valkey-ca.pem
 ```
 
-Use `rediss://` for a TLS Valkey endpoint. Apply the Valkey service's normal
-backup, access-control, and failover procedures.
+Supply `STARPORT_STORAGE_VALKEY_PASSWORD` through the deployment secret source.
+Explicit username and password fields can supply values absent from the URI.
+Conflicting URI and field values fail configuration validation without exposing either value.
+
+The optional CA file selects trust roots for this connection. Without it, TLS uses system trust roots.
+TLS always verifies the server identity. URI query options and fragments are invalid.
+
+`rediss://` also selects TLS. Plaintext endpoints require a loopback host or explicit `STARPORT_STORAGE_VALKEY_ALLOW_INSECURE=true`.
+
+These settings use the `STARPORT_STORAGE_VALKEY_` prefix:
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| `MAX_CONNECTIONS` | `50` | Maximum live sockets across the client pipeline and pools. Minimum: two. |
+| `MIN_IDLE_CONNS` | `10` | Idle connections retained per pool during cleanup. Must be less than the maximum. |
+| `DIAL_TIMEOUT` | `5s` | Bounds socket admission, connection setup, and TLS negotiation. |
+| `READ_TIMEOUT`, `WRITE_TIMEOUT` | `3s` each | Equal values select one command deadline. An earlier caller deadline remains effective. |
+| `IDLE_TIMEOUT` | `5m` | Pool cleanup interval. The pool retains its configured minimum. |
+
+The adapter disables transparent command retries. A failed write can have an uncertain outcome.
+Use the owning operation's recovery procedure before retrying a mutation.
+Apply the Valkey service's backup, access-control, and failover procedures.
+The optional response cache requires a separate service from durable KV.
 
 Follow the [fresh fleet initialization procedure](FLEET_INITIALIZATION.md) before the first shared catalog startup.
 Existing or restored deployments require migration or recovery instead.

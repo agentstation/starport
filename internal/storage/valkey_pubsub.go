@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/valkey-io/valkey-go"
@@ -11,20 +12,22 @@ import (
 
 // ValkeyPubSub implements PubSubClient using Valkey pub/sub
 type ValkeyPubSub struct {
-	client        valkey.Client
-	subscriptions map[string]context.CancelFunc
-	handlers      map[string]func(channel, message string)
-	mu            sync.RWMutex
-	closed        bool
-	wg            sync.WaitGroup
+	client           valkey.Client
+	operationTimeout time.Duration
+	subscriptions    map[string]context.CancelFunc
+	handlers         map[string]func(channel, message string)
+	mu               sync.RWMutex
+	closed           bool
+	wg               sync.WaitGroup
 }
 
 // NewValkeyPubSub creates a new Valkey pub/sub client
 func NewValkeyPubSub(client valkey.Client) *ValkeyPubSub {
 	return &ValkeyPubSub{
-		client:        client,
-		subscriptions: make(map[string]context.CancelFunc),
-		handlers:      make(map[string]func(channel, message string)),
+		client:           client,
+		operationTimeout: 3 * time.Second,
+		subscriptions:    make(map[string]context.CancelFunc),
+		handlers:         make(map[string]func(channel, message string)),
 	}
 }
 
@@ -88,6 +91,8 @@ func (v *ValkeyPubSub) Publish(ctx context.Context, channel string, message stri
 	}
 	v.mu.RUnlock()
 
+	ctx, cancel := context.WithTimeout(ctx, v.operationTimeout)
+	defer cancel()
 	cmd := v.client.B().Publish().Channel(channel).Message(message).Build()
 	resp := v.client.Do(ctx, cmd)
 

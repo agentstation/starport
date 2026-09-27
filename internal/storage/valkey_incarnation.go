@@ -43,7 +43,7 @@ func (v *ValkeyStore) ObserveIncarnation(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("%w: cluster recovery is unsupported", ErrIncarnationChanged)
 	}
 	cmd := v.client.B().Eval().Script(valkeyIncarnation + "return identity").Numkeys(0).Build()
-	id, err := v.client.Do(ctx, cmd).ToString()
+	id, err := v.do(ctx, cmd).ToString()
 	if err != nil {
 		return "", incarnationError(err)
 	}
@@ -99,7 +99,7 @@ if redis.call('EXISTS', KEYS[1]) == 0 then return false end
 if redis.call('STRLEN', KEYS[1]) > tonumber(ARGV[2]) then return redis.error_reply('STARPORT_VALUE_TOO_LARGE') end
 return {redis.call('GET', KEYS[1]), redis.call('PTTL', KEYS[1])}`
 	cmd := b.store.client.B().Eval().Script(script).Numkeys(1).Key(key).Arg(b.identity, strconv.Itoa(maxBytes)).Build()
-	values, err := b.store.client.Do(ctx, cmd).ToArray()
+	values, err := b.store.do(ctx, cmd).ToArray()
 	if valkey.IsValkeyNil(err) {
 		return nil, 0, ErrNotFound
 	}
@@ -170,7 +170,7 @@ func (b *valkeyIncarnationStore) CompareAndSwap(ctx context.Context, mutations [
 		}
 	}
 	cmd := b.store.client.B().Eval().Script(valkeyIncarnationCAS).Numkeys(int64(len(keys))).Key(keys...).Arg(args...).Build()
-	result, err := b.store.client.Do(ctx, cmd).AsInt64()
+	result, err := b.store.do(ctx, cmd).AsInt64()
 	if err != nil {
 		return incarnationError(err)
 	}

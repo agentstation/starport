@@ -3,7 +3,7 @@ package config
 import (
 	"errors"
 
-	"github.com/agentstation/starport/internal/cache/connection"
+	"github.com/agentstation/starport/internal/kvconnection"
 )
 
 const cacheBackendLocal = "local"
@@ -18,14 +18,14 @@ func (c *CacheConfig) Validate(durableURL string) error {
 			return errors.New("local cache cannot configure a shared endpoint")
 		}
 	case "valkey":
-		u, err := connection.Parse(c.URL, c.AllowInsecure)
+		u, err := kvconnection.Parse(c.URL, c.AllowInsecure)
 		if err != nil {
 			return err
 		}
 		if c.CAFile != "" && u.Scheme != "valkeys" && u.Scheme != "rediss" {
 			return errors.New("cache CA file requires a TLS endpoint")
 		}
-		if durableURL != "" && connection.SameServer(c.URL, durableURL) {
+		if durableURL != "" && kvconnection.SameServer(c.URL, durableURL) {
 			return errors.New("cache requires a separate service from durable KV; another database does not isolate eviction")
 		}
 	default:

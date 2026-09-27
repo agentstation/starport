@@ -43,10 +43,6 @@ func (*readOnlyStore) BatchSetWithTTL(context.Context, map[string][]byte, time.D
 	return ErrReadOnly
 }
 
-func (*readOnlyStore) BeginTransaction(context.Context) (Transaction, error) {
-	return nil, ErrReadOnly
-}
-
 func (s *readOnlyStore) Ping(ctx context.Context) error { return s.KVStore.Ping(ctx) }
 
 // readOnlyIncarnationProvider retains shared identity checks without exposing mutations.

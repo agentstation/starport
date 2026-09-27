@@ -24,7 +24,7 @@ func (v *ValkeyStore) ReadWithLifetime(ctx context.Context, key string, maxBytes
 if redis.call('STRLEN', KEYS[1]) > tonumber(ARGV[1]) then return redis.error_reply('STARPORT_VALUE_TOO_LARGE') end
 return {redis.call('GET', KEYS[1]), redis.call('PTTL', KEYS[1])}`
 	cmd := v.client.B().Eval().Script(script).Numkeys(1).Key(key).Arg(strconv.Itoa(maxBytes)).Build()
-	values, err := v.client.Do(ctx, cmd).ToArray()
+	values, err := v.do(ctx, cmd).ToArray()
 	if valkey.IsValkeyNil(err) {
 		return nil, 0, ErrNotFound
 	}

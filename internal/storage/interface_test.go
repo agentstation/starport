@@ -1,15 +1,12 @@
 package storage
 
 import (
-	"context"
 	"testing"
-	"time"
 )
 
 func TestKVStoreInterface(t *testing.T) {
 	// This test ensures the interface is properly defined
 	var _ KVStore = (*MockStore)(nil)
-	var _ Transaction = (*MockTransaction)(nil)
 }
 
 func TestStorageErrors(t *testing.T) {
@@ -78,9 +75,9 @@ func TestConfig_Validate(t *testing.T) {
 			config: Config{
 				Type: "valkey",
 				Valkey: ValkeyConfig{
-					URL:        "redis://localhost:6379",
-					MaxRetries: 3,
-					DB:         0,
+					URL:            "redis://localhost:6379",
+					MaxConnections: 50,
+					DB:             0,
 				},
 			},
 			wantErr: false,
@@ -144,16 +141,16 @@ func TestConfig_Validate(t *testing.T) {
 			errMsg:  "valkey URL cannot be empty",
 		},
 		{
-			name: "valkey with negative max_retries",
+			name: "valkey with negative max_connections",
 			config: Config{
 				Type: "valkey",
 				Valkey: ValkeyConfig{
-					URL:        "redis://localhost:6379",
-					MaxRetries: -1,
+					URL:            "redis://localhost:6379",
+					MaxConnections: -1,
 				},
 			},
 			wantErr: true,
-			errMsg:  "valkey max_retries cannot be negative",
+			errMsg:  "durable KV requires at least two connections",
 		},
 		{
 			name: "valkey with negative DB",
@@ -165,7 +162,7 @@ func TestConfig_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "valkey DB index cannot be negative",
+			errMsg:  "durable KV database is invalid",
 		},
 	}
 
@@ -212,29 +209,4 @@ func TestValkeyConfig_Defaults(t *testing.T) {
 	if config.ClusterMode != false {
 		t.Errorf("ClusterMode should be false by default")
 	}
-}
-
-func TestTransactionInterface(t *testing.T) {
-	// Create a mock store first
-	store := NewMockStore()
-	defer store.Close()
-
-	// Begin a transaction
-	ctx := context.Background()
-	tx, err := store.BeginTransaction(ctx)
-	if err != nil {
-		t.Fatalf("BeginTransaction failed: %v", err)
-	}
-
-	// Ensure all required methods are defined
-	var _ Transaction = tx
-
-	// Test that interface methods exist (these calls ensure the interface is properly implemented)
-	_, _ = tx.Get("key")
-	_ = tx.Set("key", []byte("value"))
-	_ = tx.Delete("key")
-	_ = tx.SetWithTTL("key", []byte("value"), time.Second)
-	_, _ = tx.Increment("key", 1)
-	_ = tx.CompareAndSwap("key", nil, []byte("new"))
-	_ = tx.Rollback() // Use rollback to clean up without committing
 }

@@ -22,6 +22,7 @@ func pathSelections(cfg *Config) []pathSelection {
 		{"local-token", "", "", productpaths.Data, &cfg.Security.LocalTokenPath, true},
 		{"tls-certificate", "STARPORT_SECURITY_TLS_CERT_PATH", "", "", &cfg.Security.TLSCertPath, false},
 		{cacheCAFileRole, cacheCAFileEnvironment, "", "", &cfg.Cache.CAFile, false},
+		{valkeyCAFileRole, valkeyCAFileEnvironment, "", "", &cfg.Storage.Valkey.CAFile, false},
 		{"tls-key", "STARPORT_SECURITY_TLS_KEY_PATH", "", "", &cfg.Security.TLSKeyPath, false},
 		{"logs", "STARPORT_LOGGING_FILE_PATH", "", "", &cfg.Logging.FilePath, false},
 	}

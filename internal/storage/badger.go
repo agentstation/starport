@@ -656,25 +656,6 @@ func (s *BadgerStore) BatchSetWithTTL(_ context.Context, items map[string][]byte
 	})
 }
 
-// Transaction support
-
-// BeginTransaction starts a new transaction
-func (s *BadgerStore) BeginTransaction(_ context.Context) (Transaction, error) {
-	s.mu.RLock()
-	if s.closed {
-		s.mu.RUnlock()
-		return nil, ErrStorageClosed
-	}
-	s.mu.RUnlock()
-
-	txn := s.db.NewTransaction(true)
-	return &BadgerTransaction{
-		txn:    txn,
-		store:  s,
-		closed: false,
-	}, nil
-}
-
 // Scan operations
 
 // Scan returns keys matching a pattern

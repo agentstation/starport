@@ -213,44 +213,6 @@ func runKVStoreContract(t *testing.T, openStore func(*testing.T) KVStore) {
 		}
 	})
 
-	t.Run("transactions", func(t *testing.T) {
-		store := openStore(t)
-		ctx := context.Background()
-		committedKey := contractKey(t, "tx-commit")
-		rolledBackKey := contractKey(t, "tx-rollback")
-
-		tx, err := store.BeginTransaction(ctx)
-		if err != nil {
-			t.Fatalf("begin commit transaction: %v", err)
-		}
-		if err := tx.Set(committedKey, []byte("committed")); err != nil {
-			t.Fatalf("transaction set: %v", err)
-		}
-		if err := tx.Commit(ctx); err != nil {
-			t.Fatalf("transaction commit: %v", err)
-		}
-		data, err := store.Get(ctx, committedKey)
-		if err != nil {
-			t.Fatalf("get committed key: %v", err)
-		}
-		if string(data) != "committed" {
-			t.Fatalf("committed value = %q, want committed", data)
-		}
-
-		tx, err = store.BeginTransaction(ctx)
-		if err != nil {
-			t.Fatalf("begin rollback transaction: %v", err)
-		}
-		if err := tx.Set(rolledBackKey, []byte("rolled-back")); err != nil {
-			t.Fatalf("transaction set rollback key: %v", err)
-		}
-		if err := tx.Rollback(); err != nil {
-			t.Fatalf("transaction rollback: %v", err)
-		}
-		if _, err := store.Get(ctx, rolledBackKey); !errors.Is(err, ErrNotFound) {
-			t.Fatalf("get rolled back key: got %v, want %v", err, ErrNotFound)
-		}
-	})
 }
 
 func contractKey(t *testing.T, suffix string) string {

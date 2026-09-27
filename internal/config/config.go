@@ -188,6 +188,9 @@ type BadgerConfig struct {
 
 // ValkeyConfig defines Valkey/Redis settings
 type ValkeyConfig struct {
+	Username       string        `env:"USERNAME"`
+	CAFile         string        `env:"CA_FILE"`
+	AllowInsecure  bool          `env:"ALLOW_INSECURE,default=false"`
 	URL            string        `env:"URL,default=valkey://localhost:6379" redact:"url"`
 	MaxConnections int           `env:"MAX_CONNECTIONS,default=50"`
 	MinIdleConns   int           `env:"MIN_IDLE_CONNS,default=10"`
