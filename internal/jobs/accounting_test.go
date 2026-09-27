@@ -222,26 +222,6 @@ func TestASubmissionOverTheLimitReachesNoProvider(t *testing.T) {
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
 }
 
-// TestARefusedProviderGivesTheSlotBack covers the path between the two: the
-// claim succeeded and the work never started. A slot leaked here would be the
-// worst kind, because a provider outage would walk an account into its own
-// limit and keep it there.
-func TestARefusedProviderGivesTheSlotBack(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	service, _, meter := newAccountedService(t)
-	runner := acceptedRunner()
-	runner.submitErr = errors.New("the provider refused the prompt")
-
-	_, err := service.Submit(ctx, open(runner), submissionFor(accountA))
-	require.Error(t, err)
-
-	reserves, releases := meter.counts()
-	require.Equal(t, 1, reserves)
-	require.Equal(t, 1, releases)
-}
-
 // TestTheSweepClosesAJobNobodyCameBackFor is the other half of the bound. Every
 // other path settles a job because a caller polled it, and a caller that
 // submits and walks away is exactly the caller the limit exists for. Without

@@ -29,18 +29,21 @@ type repository struct{ store storage.KVStore }
 // jobRecord is the durable form. It carries the provider job identifier that
 // Job keeps unexported, because the record store is the one place it belongs.
 type jobRecord struct {
-	SchemaVersion int               `json:"schema_version"`
-	ID            string            `json:"id"`
-	Account       string            `json:"account"`
-	KeyID         string            `json:"key_id,omitempty"`
-	Model         string            `json:"model"`
-	Operation     routing.Operation `json:"operation"`
-	Provider      string            `json:"provider"`
-	State         JobState          `json:"state"`
-	Reason        string            `json:"reason,omitempty"`
-	CreatedAt     time.Time         `json:"created_at"`
-	TerminalAt    time.Time         `json:"terminal_at,omitempty"`
-	ProviderJobID string            `json:"provider_job_id,omitempty"`
+	SubmissionPending bool              `json:"submission_pending,omitzero"`
+	CatalogGeneration string            `json:"catalog_generation,omitempty"`
+	ReservationID     string            `json:"reservation_id,omitempty"`
+	SchemaVersion     int               `json:"schema_version"`
+	ID                string            `json:"id"`
+	Account           string            `json:"account"`
+	KeyID             string            `json:"key_id,omitempty"`
+	Model             string            `json:"model"`
+	Operation         routing.Operation `json:"operation"`
+	Provider          string            `json:"provider"`
+	State             JobState          `json:"state"`
+	Reason            string            `json:"reason,omitempty"`
+	CreatedAt         time.Time         `json:"created_at"`
+	TerminalAt        time.Time         `json:"terminal_at,omitempty"`
+	ProviderJobID     string            `json:"provider_job_id,omitempty"`
 
 	AssetKey         string    `json:"asset_key,omitempty"`
 	AssetBytes       int64     `json:"asset_bytes,omitempty"`
@@ -138,6 +141,9 @@ func (r *repository) Replace(ctx context.Context, expected, job Job) error {
 	if expected.Account != job.Account || expected.ID != job.ID {
 		return ErrInvalidJob
 	}
+	if expected.CatalogGeneration != job.CatalogGeneration || expected.ReservationID != job.ReservationID {
+		return ErrInvalidJob
+	}
 	previous, err := encodeJob(expected)
 	if err != nil {
 		return err
@@ -194,18 +200,21 @@ func encodeJob(job Job) ([]byte, error) {
 		return nil, err
 	}
 	data, err := json.Marshal(jobRecord{
-		SchemaVersion: StorageSchemaVersion,
-		ID:            job.ID,
-		Account:       job.Account,
-		KeyID:         job.KeyID,
-		Model:         job.Model,
-		Operation:     job.Operation,
-		Provider:      job.Provider,
-		State:         job.State,
-		Reason:        job.Reason,
-		CreatedAt:     job.CreatedAt,
-		TerminalAt:    job.TerminalAt,
-		ProviderJobID: job.providerJobID,
+		SchemaVersion:     StorageSchemaVersion,
+		SubmissionPending: job.SubmissionPending,
+		CatalogGeneration: job.CatalogGeneration,
+		ReservationID:     job.ReservationID,
+		ID:                job.ID,
+		Account:           job.Account,
+		KeyID:             job.KeyID,
+		Model:             job.Model,
+		Operation:         job.Operation,
+		Provider:          job.Provider,
+		State:             job.State,
+		Reason:            job.Reason,
+		CreatedAt:         job.CreatedAt,
+		TerminalAt:        job.TerminalAt,
+		ProviderJobID:     job.providerJobID,
 
 		AssetKey:         job.AssetKey,
 		AssetBytes:       job.AssetBytes,
@@ -230,17 +239,20 @@ func decodeJob(data []byte) (Job, error) {
 		return Job{}, fmt.Errorf("%w: unsupported schema %d", ErrCorruptRecord, stored.SchemaVersion)
 	}
 	job := Job{
-		ID:            stored.ID,
-		Account:       stored.Account,
-		KeyID:         stored.KeyID,
-		Model:         stored.Model,
-		Operation:     stored.Operation,
-		Provider:      stored.Provider,
-		State:         stored.State,
-		Reason:        stored.Reason,
-		CreatedAt:     stored.CreatedAt,
-		TerminalAt:    stored.TerminalAt,
-		providerJobID: stored.ProviderJobID,
+		SubmissionPending: stored.SubmissionPending,
+		CatalogGeneration: stored.CatalogGeneration,
+		ReservationID:     stored.ReservationID,
+		ID:                stored.ID,
+		Account:           stored.Account,
+		KeyID:             stored.KeyID,
+		Model:             stored.Model,
+		Operation:         stored.Operation,
+		Provider:          stored.Provider,
+		State:             stored.State,
+		Reason:            stored.Reason,
+		CreatedAt:         stored.CreatedAt,
+		TerminalAt:        stored.TerminalAt,
+		providerJobID:     stored.ProviderJobID,
 
 		AssetKey:         stored.AssetKey,
 		AssetBytes:       stored.AssetBytes,

@@ -19,6 +19,7 @@ import (
 type recordingRunner struct {
 	acceptance jobs.Acceptance
 	submitErr  error
+	onSubmit   func()
 
 	poll    jobs.Report
 	pollErr error
@@ -51,9 +52,21 @@ func submissionFor(account string) jobs.Submission {
 	return jobs.Submission{Account: account, Operation: routing.OperationVideosGenerations}
 }
 
-func (r *recordingRunner) Submit(context.Context) (jobs.Acceptance, error) {
+func (r *recordingRunner) Submit(ctx context.Context, recorder jobs.SubmissionRecorder) (jobs.Acceptance, error) {
+	if err := recorder.BeforeDispatch(ctx, jobs.Dispatch{Provider: r.acceptance.Provider, Model: r.acceptance.Model, CatalogGeneration: "test-generation"}); err != nil {
+		return jobs.Acceptance{}, err
+	}
 	r.submits++
-	return r.acceptance, r.submitErr
+	if r.onSubmit != nil {
+		r.onSubmit()
+	}
+	if r.submitErr != nil {
+		return jobs.Acceptance{}, r.submitErr
+	}
+	if err := recorder.Accepted(ctx, r.acceptance); err != nil {
+		return jobs.Acceptance{}, err
+	}
+	return r.acceptance, nil
 }
 
 func (r *recordingRunner) Poll(_ context.Context, handle jobs.Handle) (jobs.Report, error) {
@@ -128,22 +141,18 @@ func TestSubmitRecordsWhatTheProviderAccepted(t *testing.T) {
 	require.True(t, stored.HasProviderJob())
 }
 
-// TestSubmitWritesNoRecordWhenTheProviderRefuses is why the provider call comes
-// first. A record written ahead of the provider would name a job no provider
-// ever accepted, and a caller would poll it for its whole lifetime.
-func TestSubmitWritesNoRecordWhenTheProviderRefuses(t *testing.T) {
+// A provider error does not prove that it refused the submitted work.
+func TestSubmitRetainsRecordWhenProviderReplyFails(t *testing.T) {
 	t.Parallel()
-
-	ctx := context.Background()
 	service, records := newService(t)
 	runner := acceptedRunner()
-	runner.submitErr = errors.New("the provider refused the prompt")
-
-	_, err := service.Submit(ctx, open(runner), submissionFor(accountA))
-	require.Error(t, err)
-
-	_, err = records.Get(ctx, accountA, "job_service_01")
-	require.ErrorIs(t, err, jobs.ErrJobNotFound)
+	runner.submitErr = errors.New("provider response unavailable")
+	_, err := service.Submit(t.Context(), open(runner), submissionFor(accountA))
+	require.ErrorIs(t, err, jobs.ErrSubmissionUnconfirmed)
+	job, err := records.Get(t.Context(), accountA, "job_service_01")
+	require.NoError(t, err)
+	require.True(t, job.SubmissionPending)
+	require.False(t, job.HasProviderJob())
 }
 
 // TestSubmitRefusesAJobThatNamesNoAccount keeps an unowned record out of the

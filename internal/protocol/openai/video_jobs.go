@@ -35,14 +35,15 @@ func DecodeVideoJob(reader io.Reader) (inference.VideoJobRequest, error) {
 
 // VideoJob is the OpenAI video wire object.
 type VideoJob struct {
-	ID          string         `json:"id"`
-	Object      string         `json:"object"`
-	Model       string         `json:"model"`
-	Status      string         `json:"status"`
-	CreatedAt   int64          `json:"created_at"`
-	CompletedAt int64          `json:"completed_at,omitempty"`
-	ExpiresAt   int64          `json:"expires_at,omitempty"`
-	Error       *VideoJobError `json:"error,omitempty"`
+	SubmissionStatus string         `json:"submission_status,omitempty"`
+	ID               string         `json:"id"`
+	Object           string         `json:"object"`
+	Model            string         `json:"model"`
+	Status           string         `json:"status"`
+	CreatedAt        int64          `json:"created_at"`
+	CompletedAt      int64          `json:"completed_at,omitempty"`
+	ExpiresAt        int64          `json:"expires_at,omitempty"`
+	Error            *VideoJobError `json:"error,omitempty"`
 }
 
 // VideoJobError states why a failed job produced no video.
@@ -59,13 +60,14 @@ type VideoJobList struct {
 // EncodeVideoJob converts one canonical job to OpenAI wire values.
 func EncodeVideoJob(job inference.VideoJob) VideoJob {
 	wire := VideoJob{
-		ID:          job.ID,
-		Object:      "video",
-		Model:       job.Model,
-		Status:      videoJobStatus(job.State),
-		CreatedAt:   job.CreatedUnix,
-		CompletedAt: job.CompletedUnix,
-		ExpiresAt:   job.ExpiresUnix,
+		SubmissionStatus: job.SubmissionStatus,
+		ID:               job.ID,
+		Object:           "video",
+		Model:            job.Model,
+		Status:           videoJobStatus(job.State),
+		CreatedAt:        job.CreatedUnix,
+		CompletedAt:      job.CompletedUnix,
+		ExpiresAt:        job.ExpiresUnix,
 	}
 	if job.Reason != "" {
 		wire.Error = &VideoJobError{Message: job.Reason}

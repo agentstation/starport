@@ -5,7 +5,10 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
+	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/limits/admission"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/routing"
 )
@@ -62,6 +65,9 @@ func (r *modelRouter) RouteVideoSubmit(
 	if req == nil || req.Request.Model == "" {
 		return nil, ErrNoModelsAvailable
 	}
+	if req.JobSubmission == nil {
+		return nil, jobs.ErrSubmissionRecorderRequired
+	}
 	call := providerCall[*connectors.JobSubmission, *connectors.ProviderJob, connectors.ProviderJob]{
 		transport: jobSubmitTransport,
 		build: func() *connectors.JobSubmission {
@@ -74,10 +80,30 @@ func (r *modelRouter) RouteVideoSubmit(
 			}
 		},
 		convert: providerJobAnswer,
+		beforeDispatch: func(ctx context.Context, route routing.Route, ticket admission.Ticket) error {
+			return req.JobSubmission.BeforeDispatch(ctx, jobs.Dispatch{
+				Provider: route.ProviderID, Model: route.ID(), CatalogGeneration: route.CatalogGenerationID, ReservationID: ticket.ID(),
+			})
+		},
+		afterDispatch: func(ctx context.Context, route routing.Route, answer *connectors.ProviderJob, callErr error) error {
+			if callErr != nil {
+				return nil
+			}
+			if answer == nil {
+				return jobs.ErrSubmissionUnconfirmed
+			}
+			return req.JobSubmission.Accepted(ctx, jobs.Acceptance{
+				Provider: route.ProviderID, Model: route.ID(), ProviderJobID: answer.ID, State: answer.State, Reason: answer.Reason,
+			})
+		},
 	}
 	operation := routing.OperationVideosGenerations
 	return routeOperation(ctx, r, req.policy(req.Request.Model), operation,
 		connectors.ProviderJob.Clone, call.attempt(operation))
+}
+
+func submissionFailure(err error) *failure.Failure {
+	return failure.New(failure.GatewayUnavailable, "Durable job submission is unavailable.", false, failure.ProviderDetails{}, err)
 }
 
 // RouteVideoPoll asks the provider that holds the job where it got to.

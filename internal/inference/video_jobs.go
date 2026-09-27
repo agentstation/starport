@@ -40,6 +40,8 @@ func (r VideoJobRequest) Clone() VideoJobRequest {
 
 // VideoJob is the canonical answer a caller reads about one job it submitted.
 type VideoJob struct {
+	// SubmissionStatus reports unconfirmed provider acceptance separately from state.
+	SubmissionStatus string
 	// ID is the Starport job identifier, and the only identifier a caller ever
 	// sees for this work.
 	ID string

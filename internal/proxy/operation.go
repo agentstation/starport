@@ -20,10 +20,11 @@ func processOperation[Request, Response any](
 	route func(context.Context, *router.OperationRequest[Request]) (*router.OperationResponse[Response], error),
 ) (*OperationResponse[Response], error) {
 	result, err := route(ctx, &router.OperationRequest[Request]{
-		Request:      req.Request,
-		APIKeyConfig: transformAPIKeyConfig(req.APIKeyConfig),
-		AccountID:    req.AccountID,
-		RequestID:    req.RequestID,
+		Request:       req.Request,
+		APIKeyConfig:  transformAPIKeyConfig(req.APIKeyConfig),
+		AccountID:     req.AccountID,
+		RequestID:     req.RequestID,
+		JobSubmission: req.JobSubmission,
 	})
 	if err != nil {
 		return nil, routeFailure(model, err)

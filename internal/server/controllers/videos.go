@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -273,6 +274,9 @@ func canonicalVideoJob(job jobs.Job) inference.VideoJob {
 		Reason:      job.Reason,
 		CreatedUnix: job.CreatedAt.Unix(),
 	}
+	if job.SubmissionPending {
+		answer.SubmissionStatus = "unconfirmed"
+	}
 	if !job.TerminalAt.IsZero() {
 		answer.CompletedUnix = job.TerminalAt.Unix()
 	}
@@ -338,6 +342,15 @@ func (h *VideosController) writeJobError(
 	err error,
 	message string,
 ) {
+	if pending, ok := errors.AsType[*jobs.SubmissionError](err); ok {
+		prefix := "/v1/videos/"
+		if h.protocol == ProtocolOpenRouter {
+			prefix = "/api/v1/videos/"
+		}
+		w.Header().Set("Location", prefix+url.PathEscape(pending.JobID))
+		h.writeVideoStatus(w, http.StatusServiceUnavailable, errorTypeServiceUnavailable, pending.Error())
+		return
+	}
 	switch {
 	case errors.Is(err, jobs.ErrJobNotFound):
 		// A job another account owns reads the same way as one that never

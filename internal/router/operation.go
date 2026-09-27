@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
+	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits/admission"
 	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -26,6 +29,8 @@ import (
 // OperationRequest carries one canonical request plus the account routing and
 // credential policy every operation reads.
 type OperationRequest[Request any] struct {
+	// JobSubmission is required by asynchronous submission operations.
+	JobSubmission jobs.SubmissionRecorder
 	// RequestID links every provider attempt to the gateway request.
 	RequestID    string
 	Request      Request
@@ -273,6 +278,10 @@ type providerCall[Request requestBinder, ProviderResponse, Response any] struct 
 	build     func() Request
 	convert   func(ProviderResponse) (Response, error)
 	charge    func(*runtimecatalog.RoutableSnapshot, routing.Route, Request) operationCharge[ProviderResponse]
+	// Dispatch hooks persist asynchronous ownership before and after the call.
+	// Once dispatch starts, an asynchronous operation cannot retry automatically.
+	beforeDispatch func(context.Context, routing.Route, admission.Ticket) error
+	afterDispatch  func(context.Context, routing.Route, ProviderResponse, error) error
 
 	// bounded refuses one route whose offering states a limit the request
 	// exceeds. Most operations leave it nil: a limit that every offering
@@ -323,7 +332,20 @@ func (call providerCall[Request, ProviderResponse, Response]) attempt(
 				return nil, refusal, execution.AttemptActionStop
 			}
 		}
+		if call.beforeDispatch != nil {
+			if err := call.beforeDispatch(attemptCtx, route, ticket); err != nil {
+				return nil, submissionFailure(errors.Join(err, ticket.Finish(attemptCtx, nil))), execution.AttemptActionStop
+			}
+			if err := errors.Join(attemptCtx.Err(), inference.CheckPermission(attemptCtx)); err != nil {
+				return nil, submissionFailure(errors.Join(err, ticket.Finish(attemptCtx, nil))), execution.AttemptActionStop
+			}
+		}
 		response, requestErr := invoke(attemptCtx, request)
+		if call.afterDispatch != nil {
+			if err := call.afterDispatch(attemptCtx, route, response, requestErr); err != nil {
+				return nil, submissionFailure(errors.Join(err, ticket.Finish(attemptCtx, nil))), execution.AttemptActionStop
+			}
+		}
 		var evidence *reservation.Evidence
 		if ticket.ID() != "" && charge.evidence != nil {
 			evidence = charge.evidence(response, requestErr)
@@ -335,9 +357,15 @@ func (call providerCall[Request, ProviderResponse, Response]) attempt(
 			return nil, budgetFailure(err), execution.AttemptActionStop
 		}
 		if requestErr != nil {
+			if call.beforeDispatch != nil {
+				return nil, connectors.NormalizeFailure(route.ProviderID, requestErr), execution.AttemptActionStop
+			}
 			return nil, connectors.NormalizeFailure(route.ProviderID, requestErr), execution.AttemptActionDefault
 		}
 		canonical, convertErr := call.convert(response)
+		if convertErr != nil && call.beforeDispatch != nil {
+			return nil, submissionFailure(convertErr), execution.AttemptActionStop
+		}
 		return operationAnswer(route, canonical, convertErr)
 	}
 }

@@ -127,6 +127,13 @@ func CanTransition(from, to JobState) bool {
 // learned it could poll the provider directly, outside every limit and every
 // usage record Starport keeps.
 type Job struct {
+	// SubmissionPending preserves an attempted dispatch without confirmed acceptance.
+	// Polling, cancellation, and timeout cleanup cannot infer its provider outcome.
+	SubmissionPending bool
+	// CatalogGeneration and ReservationID bind dispatch to its selected evidence.
+	CatalogGeneration string
+	ReservationID     string
+
 	ID      string
 	Account string
 	// KeyID names the gateway API key that submitted the work. A usage record
@@ -191,6 +198,9 @@ func (j Job) String() string {
 
 // Validate reports whether the record can be stored.
 func (j Job) Validate() error {
+	if err := j.validateSubmission(); err != nil {
+		return err
+	}
 	switch {
 	case strings.TrimSpace(j.ID) == "":
 		return fmt.Errorf("%w: it has no identifier", ErrInvalidJob)

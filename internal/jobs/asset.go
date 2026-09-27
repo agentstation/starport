@@ -191,6 +191,9 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 // budget just ended may hold no asset at all, and a job that holds one is
 // already terminal and cannot be ended again.
 func (s *Service) sweepOne(ctx context.Context, job Job, now time.Time, result *SweepResult) (Job, error) {
+	if job.SubmissionPending {
+		return job, nil
+	}
 	previous := job
 	if !job.State.Terminal() && s.policy.Spent(job, now) {
 		// FailSpent needs no runner. A job past its budget has outlived what

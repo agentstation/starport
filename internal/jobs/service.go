@@ -63,7 +63,7 @@ type Report struct {
 // its own. This package decides what it is willing to store, because it is the
 // half that stores it.
 type Runner interface {
-	Submit(ctx context.Context) (Acceptance, error)
+	Submit(ctx context.Context, recorder SubmissionRecorder) (Acceptance, error)
 	Poll(ctx context.Context, handle Handle) (Report, error)
 	Cancel(ctx context.Context, handle Handle) (Report, error)
 	Fetch(ctx context.Context, handle Handle, maxBytes int64) (Asset, error)
@@ -224,34 +224,23 @@ type Submission struct {
 // told it is at its limit.
 type OpenRunner func(ctx context.Context) (Runner, error)
 
-// Submit starts one job and records it.
-//
-// The provider call comes before the record on purpose. A record written first
-// would name a job no provider ever accepted, and a caller polling it would
-// wait out the whole lifetime for an answer that was never coming.
-//
-// The slot claim comes before everything, for the opposite reason. A submission
-// this gateway is about to refuse must not spend routing, credential
-// resolution, or provider work first, or the limit would bound what an account
-// reads rather than what it pays for. Every path that then fails to reach a
-// stored record gives the slot back.
+// Submit records one selected dispatch before the provider can accept work.
+// An uncertain submission retains its record and outstanding slot for recovery.
 func (s *Service) Submit(ctx context.Context, open OpenRunner, submission Submission) (Job, error) {
 	if open == nil {
 		return Job{}, ErrRunnerRequired
 	}
-	account := strings.TrimSpace(submission.Account)
-	if account == "" {
+	submission.Account = strings.TrimSpace(submission.Account)
+	if submission.Account == "" {
 		return Job{}, fmt.Errorf("%w: it names no account", ErrInvalidJob)
 	}
-	if err := s.reserveSlot(ctx, account, submission.OutstandingBound); err != nil {
+	if err := s.reserveSlot(ctx, submission.Account, submission.OutstandingBound); err != nil {
 		return Job{}, err
 	}
-	// kept turns true once a stored record holds the slot. Until then this
-	// function owns it, and settle must not be able to release it twice.
-	kept := false
+	recorder := &submissionRecorder{service: s, submission: submission}
 	defer func() {
-		if !kept {
-			s.releaseSlot(ctx, Job{Account: account})
+		if !recorder.attempted {
+			s.releaseSlot(ctx, Job{Account: submission.Account})
 		}
 	}()
 	runner, err := open(ctx)
@@ -261,31 +250,17 @@ func (s *Service) Submit(ctx context.Context, open OpenRunner, submission Submis
 	if runner == nil {
 		return Job{}, ErrRunnerRequired
 	}
-	accepted, err := runner.Submit(ctx)
+	_, err = runner.Submit(ctx, recorder)
+	if recorder.attempted && !recorder.accepted {
+		return recorder.job, &SubmissionError{JobID: recorder.job.ID, Cause: err}
+	}
 	if err != nil {
-		return Job{}, err
+		return recorder.job, err
 	}
-	now := s.now()
-	job, err := New(s.mint(), account, accepted.Provider, accepted.Model, submission.Operation, now)
-	if err != nil {
-		return Job{}, err
+	if !recorder.accepted {
+		return Job{}, ErrSubmissionRecorderRequired
 	}
-	job.KeyID = submission.KeyID
-	if err := job.AdoptProviderJob(accepted.ProviderJobID); err != nil {
-		return Job{}, err
-	}
-	if err := applyReport(&job, Report{State: accepted.State, Reason: accepted.Reason}, now); err != nil {
-		return Job{}, err
-	}
-	if err := s.records.Create(ctx, job); err != nil {
-		return Job{}, err
-	}
-	kept = true
-	// A provider that answered a finished job on the first response has an
-	// asset waiting already. Collecting it here rather than on the first poll
-	// means a caller that never polls still gets the bytes it paid for, and
-	// settling it here means such a job never holds a slot it cannot use.
-	return s.settle(ctx, s.collect(ctx, runner, job)), nil
+	return s.settle(ctx, s.collect(ctx, runner, recorder.job)), nil
 }
 
 // Get reads one job without asking its provider anything. It is what a listing
@@ -310,6 +285,9 @@ func (s *Service) Refresh(ctx context.Context, runner Runner, account, id string
 	job, err := s.records.Get(ctx, account, id)
 	if err != nil {
 		return Job{}, err
+	}
+	if job.SubmissionPending {
+		return job, &SubmissionError{JobID: job.ID}
 	}
 	if job.State.Terminal() {
 		return s.settle(ctx, s.collect(ctx, runner, job)), nil
@@ -359,6 +337,9 @@ func (s *Service) Cancel(ctx context.Context, runner Runner, account, id string)
 	job, err := s.records.Get(ctx, account, id)
 	if err != nil {
 		return Job{}, err
+	}
+	if job.SubmissionPending {
+		return job, &SubmissionError{JobID: job.ID}
 	}
 	if job.State.Terminal() {
 		return job, fmt.Errorf("%w: it is %s", ErrJobAlreadyEnded, job.State)
