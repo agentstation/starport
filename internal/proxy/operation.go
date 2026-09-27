@@ -23,6 +23,7 @@ func processOperation[Request, Response any](
 		Request:      req.Request,
 		APIKeyConfig: transformAPIKeyConfig(req.APIKeyConfig),
 		AccountID:    req.AccountID,
+		RequestID:    req.RequestID,
 	})
 	if err != nil {
 		return nil, routeFailure(model, err)

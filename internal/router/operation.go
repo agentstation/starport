@@ -24,6 +24,8 @@ import (
 // OperationRequest carries one canonical request plus the account routing and
 // credential policy every operation reads.
 type OperationRequest[Request any] struct {
+	// RequestID links every provider attempt to the gateway request.
+	RequestID    string
 	Request      Request
 	APIKeyConfig *APIKeyConfig
 	AccountID    string
@@ -34,12 +36,13 @@ type OperationRequest[Request any] struct {
 // unites them, so the caller states the model and the shared path stays free
 // of a constraint that would exist only to read one string.
 func (r *OperationRequest[Request]) policy(model string) operationPolicy {
-	return operationPolicy{Model: model, APIKeyConfig: r.APIKeyConfig, AccountID: r.AccountID}
+	return operationPolicy{RequestID: r.RequestID, Model: model, APIKeyConfig: r.APIKeyConfig, AccountID: r.AccountID}
 }
 
 // operationPolicy is everything the shared path reads that is not the
 // provider call itself.
 type operationPolicy struct {
+	RequestID    string
 	Model        string
 	APIKeyConfig *APIKeyConfig
 	AccountID    string
@@ -136,6 +139,7 @@ func routeOperation[Response any](
 		return nil, err
 	}
 
+	requestID := budgetRequestID(policy.RequestID)
 	result, err := execution.Execute(ctx, r.executor, plan, func(
 		attemptCtx context.Context,
 		planned routing.Attempt,
@@ -162,7 +166,7 @@ func routeOperation[Response any](
 		if purpose == "" {
 			purpose = billingPurpose(operation)
 		}
-		ticket, refusal := r.admit(attemptCtx, policy.AccountID, boundRoute, string(purpose), nil)
+		ticket, refusal := r.admit(attemptCtx, requestID, policy.AccountID, boundRoute, string(purpose), nil)
 		if refusal != nil {
 			return nil, refusal, execution.AttemptActionStop
 		}

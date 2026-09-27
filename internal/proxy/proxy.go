@@ -364,6 +364,7 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 		APIKeyConfig:        keyConfig,
 		Metadata:            metadata,
 		AccountID:           req.AccountID,
+		RequestID:           req.RequestID,
 	}
 	if hasCacheControl {
 		routingReq.PrepareAttempt = func(route routing.Route, attempt *connectors.ChatRequest) *connectors.ChatRequest {
@@ -488,6 +489,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 		APIKeyConfig:        keyConfig,
 		Metadata:            metadata,
 		AccountID:           req.AccountID,
+		RequestID:           req.RequestID,
 	}
 	if hasCacheControl {
 		routingReq.PrepareAttempt = func(route routing.Route, attempt *connectors.ChatRequest) *connectors.ChatRequest {
@@ -547,6 +549,7 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 		EmbeddingsRequest: connReq,
 		APIKeyConfig:      transformAPIKeyConfig(req.APIKeyConfig),
 		AccountID:         req.AccountID,
+		RequestID:         req.RequestID,
 	})
 	if err != nil {
 		return nil, routeFailure(req.Request.Model, err)

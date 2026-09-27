@@ -260,6 +260,7 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		return nil, err
 	}
 
+	requestID := budgetRequestID(req.RequestID)
 	result, err := r.executor.ExecuteChat(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (*inference.ChatResponse, *failure.Failure, execution.AttemptAction) {
 		connector := runtime.Get(planned.Route.ProviderID)
 		if connector == nil {
@@ -282,7 +283,7 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		request := prepareChatAttempt(req, boundRoute, false)
 		request.Credential = selected.material
 		var billing *catalogs.TextChatBilling
-		ticket, refusal := r.admit(attemptCtx, accountID, boundRoute, string(routing.OperationChatCompletions), chatTokenQuote(runtime.Snapshot(), boundRoute, request, &billing))
+		ticket, refusal := r.admit(attemptCtx, requestID, accountID, boundRoute, string(routing.OperationChatCompletions), chatTokenQuote(runtime.Snapshot(), boundRoute, request, &billing))
 		if refusal != nil {
 			return nil, refusal, execution.AttemptActionStop
 		}

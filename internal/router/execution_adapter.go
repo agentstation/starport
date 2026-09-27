@@ -54,6 +54,7 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		}
 		return nil, err
 	}
+	requestID := budgetRequestID(req.RequestID)
 	stream, err := r.executor.StartChatStream(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (execution.Stream, *failure.Failure, execution.AttemptAction) {
 		connector := runtime.Get(planned.Route.ProviderID)
 		if connector == nil {
@@ -77,7 +78,7 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		request.Credential = selected.material
 		request.Stream = true
 		var billing *catalogs.TextChatBilling
-		ticket, refusal := r.admit(attemptCtx, accountID, boundRoute, string(routing.OperationChatCompletions), chatTokenQuote(runtime.Snapshot(), boundRoute, request, &billing))
+		ticket, refusal := r.admit(attemptCtx, requestID, accountID, boundRoute, string(routing.OperationChatCompletions), chatTokenQuote(runtime.Snapshot(), boundRoute, request, &billing))
 		if refusal != nil {
 			return nil, refusal, execution.AttemptActionStop
 		}

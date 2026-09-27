@@ -47,6 +47,7 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 		return nil, err
 	}
 
+	requestID := budgetRequestID(req.RequestID)
 	result, err := r.executor.ExecuteEmbedding(ctx, plan, func(
 		attemptCtx context.Context,
 		planned routing.Attempt,
@@ -76,7 +77,7 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 			URL:  boundRoute.Endpoint.URL,
 		}
 		request.Credential = selected.material
-		ticket, refusal := r.admit(attemptCtx, req.AccountID, boundRoute, string(routing.OperationEmbeddings), nil)
+		ticket, refusal := r.admit(attemptCtx, requestID, req.AccountID, boundRoute, string(routing.OperationEmbeddings), nil)
 		if refusal != nil {
 			return nil, refusal, execution.AttemptActionStop
 		}

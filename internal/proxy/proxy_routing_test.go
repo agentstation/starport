@@ -62,6 +62,7 @@ func TestProcessChatCompletionPassesProviderPreferences(t *testing.T) {
 	service := &proxy{router: router}
 
 	_, err := service.ProcessChatCompletion(context.Background(), &ChatCompletionRequest{
+		RequestID: "request-chat",
 		Request: inference.ChatRequest{
 			Model: "openai/gpt-4o",
 			User:  "conversation-123",
@@ -83,6 +84,7 @@ func TestProcessChatCompletionPassesProviderPreferences(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, router.req)
+	require.Equal(t, "request-chat", router.req.RequestID)
 	require.NotNil(t, router.req.ProviderPreferences)
 	require.Equal(t, []string{"openai", "anthropic"}, router.req.ProviderPreferences.Order)
 	require.Equal(t, []string{"openai"}, router.req.ProviderPreferences.Only)
@@ -101,6 +103,7 @@ func TestProcessEmbeddingsDelegatesAccountCredentialAndRoutingPolicy(t *testing.
 	service := &proxy{router: router}
 
 	response, err := service.ProcessEmbeddings(t.Context(), &EmbeddingsRequest{
+		RequestID: "request-embedding",
 		Request: inference.EmbeddingRequest{
 			Model: "acme/opaque/embed@002", Input: inference.EmbeddingInput{Texts: []string{"hello"}},
 		},
@@ -111,6 +114,7 @@ func TestProcessEmbeddingsDelegatesAccountCredentialAndRoutingPolicy(t *testing.
 	})
 	require.NoError(t, err)
 	require.NotNil(t, router.embeddingReq)
+	require.Equal(t, "request-embedding", router.embeddingReq.RequestID)
 	require.Equal(t, "account-a", router.embeddingReq.AccountID)
 	require.Equal(t, []string{"acme"}, router.embeddingReq.APIKeyConfig.AllowedProviders)
 	require.Equal(t, []string{"acme/opaque/embed@002"}, router.embeddingReq.APIKeyConfig.AllowedModels)
@@ -232,6 +236,7 @@ func TestProcessChatCompletionStreamDelegatesOneRouteRequest(t *testing.T) {
 	service := &proxy{router: router}
 
 	stream, err := service.ProcessChatCompletionStream(context.Background(), &ChatCompletionRequest{
+		RequestID: "request-stream",
 		Request: inference.ChatRequest{
 			FallbackModels: []string{"openai/gpt-4o", "anthropic/claude-3"},
 			Stream:         true,
@@ -248,6 +253,7 @@ func TestProcessChatCompletionStreamDelegatesOneRouteRequest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "anthropic/claude-3", chunk.Model)
 	require.NotNil(t, router.request)
+	require.Equal(t, "request-stream", router.request.RequestID)
 	require.Equal(t, []string{"openai/gpt-4o", "anthropic/claude-3"}, router.request.Models)
 }
 

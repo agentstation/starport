@@ -57,3 +57,16 @@ func TestTextChatBillingScopeRejectsExtraChargeSurfaces(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) { require.Equal(t, test.valid, textChatBillingScope(&test.request)) })
 	}
 }
+
+func TestBudgetRequestIdentity(t *testing.T) {
+	const supplied = "logical-request"
+	require.Zero(t, testing.AllocsPerRun(1000, func() {
+		if budgetRequestID(supplied) != supplied {
+			panic("request identity changed")
+		}
+	}))
+	first, second := budgetRequestID(""), budgetRequestID("")
+	require.NotEmpty(t, first)
+	require.NotEmpty(t, second)
+	require.NotEqual(t, first, second)
+}

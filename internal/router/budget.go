@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"math"
 	"slices"
@@ -31,20 +32,29 @@ func WithBudgetAdmission(owner *admission.Owner) Option {
 	return func(r *modelRouter) { r.budget, r.checkBudgets = owner, true }
 }
 
-func (r *modelRouter) admit(ctx context.Context, account string, route routing.Route, operation string, quote admission.QuoteFunc) (admission.Ticket, *failure.Failure) {
+func (r *modelRouter) admit(ctx context.Context, requestID, account string, route routing.Route, operation string, quote admission.QuoteFunc) (admission.Ticket, *failure.Failure) {
 	// Isolated routing compositions can omit accounting. Production composition
 	// always installs this boundary before serving any request.
 	if !r.checkBudgets {
 		return admission.Ticket{}, nil
 	}
 	ticket, err := r.budget.Start(ctx, admission.Target{
-		AccountID: account, OfferingID: route.ID(), CatalogGeneration: route.CatalogGenerationID,
+		RequestID: requestID, AccountID: account, OfferingID: route.ID(), CatalogGeneration: route.CatalogGenerationID,
 		Operation: operation,
 	}, quote)
 	if err != nil {
 		return admission.Ticket{}, budgetFailure(err)
 	}
 	return ticket, nil
+}
+
+// budgetRequestID preserves correlation across retries. A direct router caller
+// without an identity gets one ID for this invocation, separate from attempt IDs.
+func budgetRequestID(id string) string {
+	if id == "" {
+		return rand.Text()
+	}
+	return id
 }
 
 func budgetFailure(err error) *failure.Failure {

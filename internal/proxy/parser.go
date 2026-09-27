@@ -434,6 +434,7 @@ func (p *proxy) recognize(
 		},
 		APIKeyConfig: policy,
 		AccountID:    req.AccountID,
+		RequestID:    req.RequestID,
 	})
 	if err != nil {
 		return "", "", nil, recognitionFailure(attached.Filename, err)
