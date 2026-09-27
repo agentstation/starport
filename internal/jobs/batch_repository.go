@@ -38,6 +38,8 @@ var (
 // change: a terminal move stamps a time and attaches the result files.
 type BatchRepository interface {
 	Create(context.Context, Batch) error
+	// CreateClaimed atomically stores the batch and its prepared claim attachment.
+	CreateClaimed(context.Context, Batch, storage.CompareAndSwapMutation) error
 	Get(context.Context, string, string) (Batch, error)
 	List(context.Context, string, int) ([]Batch, error)
 	RecoveryPage(context.Context, string) (RecoveryPage[Batch], error)
@@ -77,6 +79,9 @@ func OpenBatchRepository(store storage.KVStore) (BatchRepository, error) {
 }
 
 func (r *batchRepository) Create(ctx context.Context, batch Batch) error {
+	if batch.SlotID != "" {
+		return ErrClaimAttachmentRequired
+	}
 	data, err := encodeBatch(batch)
 	if err != nil {
 		return err

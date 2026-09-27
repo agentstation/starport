@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"errors"
+	"github.com/agentstation/starport/internal/storage"
 )
 
 var (
@@ -32,6 +33,8 @@ var (
 // asset storage is a deployment-wide pass, and no request path calls it.
 type Repository interface {
 	Create(context.Context, Job) error
+	// CreateClaimed atomically stores the job and its prepared claim attachment.
+	CreateClaimed(context.Context, Job, storage.CompareAndSwapMutation) error
 	Get(context.Context, string, string) (Job, error)
 	List(context.Context, string, int) ([]Job, error)
 	Scan(context.Context, int) ([]Job, error)

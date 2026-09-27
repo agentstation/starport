@@ -103,6 +103,7 @@ type App struct {
 	files               *files.Service
 	jobs                *jobs.Service
 	batches             *jobs.BatchService
+	jobClaims           *jobslots.Store
 	events              *events.Dispatcher
 	cacheManager        *cache.Manager
 	extractionCache     *cache.BufferedLocalCache
@@ -575,6 +576,7 @@ func (b *runtimeBuilder) openJobService() error {
 	if err != nil {
 		return fmt.Errorf("open job meter: %w", err)
 	}
+	b.application.jobClaims = meter
 	// The accountant reads the catalog through a closure rather than a captured
 	// snapshot. A job ends long after the request that started it, so the price
 	// it draws comes from whatever the catalog holds at that moment.
@@ -1573,6 +1575,15 @@ func (a *App) jobSweepLoop(ctx context.Context) {
 // sweepJobAssets runs one pass and reports what it reclaimed. A quiet pass logs
 // nothing, for the reason the file sweep gives.
 func (a *App) sweepJobAssets(ctx context.Context) {
+	if a.jobClaims != nil {
+		result, err := a.jobClaims.RecoverPending(ctx)
+		if err != nil {
+			log.Warn().Err(err).Int("failed", result.Failed).Msg("pending job claims require recovery")
+		}
+		if result.Released > 0 {
+			log.Info().Int("released", result.Released).Msg("recovered unattached job claims")
+		}
+	}
 	if a.batches != nil {
 		result, err := a.batches.Sweep(ctx)
 		if err != nil {

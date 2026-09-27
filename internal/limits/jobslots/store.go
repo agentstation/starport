@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/storage"
@@ -29,7 +31,7 @@ var (
 )
 
 const (
-	recordVersion  = 2
+	recordVersion  = 3
 	maxRecordBytes = 8192
 	maxAttempts    = 64
 	claimPrefix    = "limits:v2:job_claims:"
@@ -37,17 +39,27 @@ const (
 
 // Store changes each claim and its account count in one native transaction.
 // Claims have no automatic expiry. Recovery owns their eventual collection.
-type Store struct{ store storage.KVStore }
+type Store struct {
+	store           storage.KVStore
+	now             func() time.Time
+	recoveryMu      sync.Mutex
+	recoveryCursor  string
+	recoveryNext    string
+	recoveryPending []string
+	recoveryLoaded  bool
+}
 
 // Claim binds one outstanding slot to a gateway job.
 type Claim struct {
-	Version  int    `json:"version"`
-	Account  string `json:"account"`
-	ID       string `json:"id"`
-	JobID    string `json:"job_id"`
-	Kind     string `json:"kind"`
-	Bound    int64  `json:"bound"`
-	Released bool   `json:"released,omitzero"`
+	Version   int       `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+	Attached  bool      `json:"attached,omitzero"`
+	Account   string    `json:"account"`
+	ID        string    `json:"id"`
+	JobID     string    `json:"job_id"`
+	Kind      string    `json:"kind"`
+	Bound     int64     `json:"bound"`
+	Released  bool      `json:"released,omitzero"`
 }
 
 type counter struct {
@@ -60,13 +72,13 @@ func Open(store storage.KVStore) (*Store, error) {
 	if store == nil {
 		return nil, limits.ErrCounterRequired
 	}
-	return &Store{store: store}, nil
+	return &Store{store: store, now: time.Now}, nil
 }
 
 // Reserve claims one slot. Exact retries cannot increase its account count.
 // A nonpositive bound permits unbounded work while preserving its ownership.
 func (s *Store) Reserve(ctx context.Context, account, id, jobID, kind string, bound int64) error {
-	candidate := Claim{Version: recordVersion, Account: account, ID: id, JobID: jobID, Kind: kind, Bound: max(bound, 0)}
+	candidate := Claim{Version: recordVersion, CreatedAt: s.now().UTC(), Account: account, ID: id, JobID: jobID, Kind: kind, Bound: max(bound, 0)}
 	if !candidate.valid() {
 		return ErrInvalid
 	}
@@ -85,6 +97,8 @@ func (s *Store) Reserve(ctx context.Context, account, id, jobID, kind string, bo
 			}
 			released := held.Released
 			held.Released = false
+			held.Attached = false
+			candidate.CreatedAt = held.CreatedAt
 			if held != candidate {
 				return ErrClaimConflict
 			}
@@ -191,7 +205,7 @@ func (s *Store) write(ctx context.Context, c Claim, oldClaim []byte, count count
 	return s.store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
 		{Key: countKey(c.Account), ExpectedValue: oldCount, NewValue: total},
 		{Key: claimKey(c.Account, c.ID), ExpectedValue: oldClaim, NewValue: record},
-		{Key: historyKey(c.Account), ExpectedValue: historyExpected(oldCount), NewValue: []byte("2")},
+		{Key: historyKey(c.Account), ExpectedValue: historyExpected(oldCount), NewValue: []byte("3")},
 	})
 }
 
@@ -225,7 +239,7 @@ func (s *Store) readCounter(ctx context.Context, account string) (counter, []byt
 	if historyErr != nil {
 		return counter{}, nil, errors.Join(ErrHistoryUnknown, historyErr)
 	}
-	if !bytes.Equal(history, []byte("2")) {
+	if !bytes.Equal(history, []byte("3")) {
 		return counter{}, nil, ErrHistoryUnknown
 	}
 	var count counter
@@ -251,7 +265,7 @@ func (s *Store) readClaim(ctx context.Context, account, id string) (Claim, []byt
 }
 
 func (c Claim) valid() bool {
-	return c.Version == recordVersion && validID(c.Account) && validID(c.ID) && validID(c.JobID) && (c.Kind == "video" || c.Kind == "batch") && c.Bound >= 0
+	return c.Version == recordVersion && !c.CreatedAt.IsZero() && validID(c.Account) && validID(c.ID) && validID(c.JobID) && (c.Kind == "video" || c.Kind == "batch") && c.Bound >= 0
 }
 func validID(s string) bool { return strings.TrimSpace(s) != "" && len(s) <= 512 }
 
@@ -269,7 +283,7 @@ func historyExpected(oldCount []byte) []byte {
 	if oldCount == nil {
 		return nil
 	}
-	return []byte("2")
+	return []byte("3")
 }
 
 func accountClaimPrefix(account string) string {

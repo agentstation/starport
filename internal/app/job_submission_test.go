@@ -48,6 +48,7 @@ func TestProductionVideoSubmissionPersistsBeforeDispatch(t *testing.T) {
 					require.Equal(t, held[0].ID, slot.JobID)
 					require.Equal(t, "video", slot.Kind)
 					require.False(t, slot.Released)
+					require.True(t, slot.Attached, "claim attachment and the job record must commit together")
 					total, err := meter.Total(r.Context(), "default")
 					require.NoError(t, err)
 					require.Equal(t, int64(1), total)

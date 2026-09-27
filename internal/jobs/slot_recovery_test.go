@@ -172,7 +172,9 @@ func TestFinishedBatchSlotReleaseRecoversAfterRestart(t *testing.T) {
 		batch.SlotID = "claim"
 		require.NoError(t, meter.Reserve(ctx, accountA, batch.SlotID, batch.ID, "batch", 2))
 		require.NoError(t, meter.Reserve(ctx, accountA, "other", "other-job", "video", 2))
-		require.NoError(t, records.Create(ctx, batch))
+		attachment, err := meter.Attachment(ctx, batch.Account, batch.SlotID, batch.ID, "batch")
+		require.NoError(t, err)
+		require.NoError(t, records.CreateClaimed(ctx, batch, attachment))
 		done := batch
 		require.NoError(t, done.Transition(jobs.JobStateCompleted, time.Now()))
 		done.RunFinished = true

@@ -50,7 +50,9 @@ func TestRecoverySkipsCorruptionAndReleasesUnreadFinishedBatches(t *testing.T) {
 			require.NoError(t, meter.Reserve(t.Context(), accountA, id, id, "batch", 2))
 			require.NoError(t, batch.Transition(jobs.JobStateCancelled, submitted.Add(time.Minute)))
 			batch.RunFinished = finished
-			require.NoError(t, records.Create(t.Context(), batch))
+			attachment, err := meter.Attachment(t.Context(), batch.Account, batch.SlotID, batch.ID, "batch")
+			require.NoError(t, err)
+			require.NoError(t, records.CreateClaimed(t.Context(), batch, attachment))
 		}
 		require.NoError(t, backing.Set(t.Context(), jobs.BatchStoragePrefix+"corrupt", []byte("broken")))
 		service, err := jobs.NewBatchService(records, jobs.WithBatchJobMeter(meter))

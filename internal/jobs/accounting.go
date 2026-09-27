@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/storage"
 )
 
 // AccountingEntry is what one finished job reports to whoever prices it.
@@ -67,6 +68,7 @@ type Notifier interface {
 type Meter interface {
 	Reserve(ctx context.Context, holder, claimID, jobID, kind string, bound int64) error
 	Release(ctx context.Context, holder, claimID string) error
+	Attachment(ctx context.Context, holder, claimID, jobID, kind string) (storage.CompareAndSwapMutation, error)
 }
 
 // settle retries slot release independently of the optional accounting stamp.

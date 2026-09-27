@@ -23,7 +23,9 @@ func TestProductionSweepRecoversUnreadBatchClaim(t *testing.T) {
 	require.NoError(t, meter.Reserve(t.Context(), batch.Account, batch.SlotID, batch.ID, "batch", 1))
 	require.NoError(t, batch.Transition(jobs.JobStateCompleted, time.Now()))
 	batch.RunFinished = true
-	require.NoError(t, records.Create(t.Context(), batch))
+	attachment, err := meter.Attachment(t.Context(), batch.Account, batch.SlotID, batch.ID, "batch")
+	require.NoError(t, err)
+	require.NoError(t, records.CreateClaimed(t.Context(), batch, attachment))
 	application.sweepJobAssets(t.Context())
 	recovered, err := records.Get(t.Context(), batch.Account, batch.ID)
 	require.NoError(t, err)

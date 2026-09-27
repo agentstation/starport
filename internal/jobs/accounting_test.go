@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/storage"
 )
 
 // recordingAccountant is the priced side under test. It keeps every entry it is
@@ -323,4 +324,13 @@ func TestATerminalJobNotifiesExactlyOnce(t *testing.T) {
 	require.Len(t, entries, 1)
 	require.Equal(t, job.ID, entries[0].JobID)
 	require.Equal(t, jobs.JobStateCompleted, entries[0].State)
+}
+
+func (m *countingMeter) Attachment(_ context.Context, holder, claimID, _, _ string) (storage.CompareAndSwapMutation, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if released, exists := m.claims[holder+"/"+claimID]; !exists || released {
+		return storage.CompareAndSwapMutation{}, jobs.ErrClaimUnavailable
+	}
+	return storage.CompareAndSwapMutation{Key: "test-attachment:" + claimID, NewValue: []byte("attached")}, nil
 }

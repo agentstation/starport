@@ -180,8 +180,8 @@ func (s *BatchService) Submit(ctx context.Context, submission BatchSubmission) (
 	if err := s.reserveBatchSlot(ctx, batch, submission.OutstandingBound); err != nil {
 		return Batch{}, err
 	}
-	if err := s.repository.Create(ctx, batch); err != nil {
-		if errors.Is(err, ErrBatchExists) {
+	if err := s.createBatch(ctx, batch); err != nil {
+		if errors.Is(err, ErrBatchExists) || errors.Is(err, ErrClaimUnavailable) {
 			_ = s.releaseBatchSlot(batch)
 		}
 		return Batch{}, err
@@ -554,4 +554,15 @@ func (f *batchResultFile) finish() (string, error) {
 	_ = f.writer.Close()
 	result := <-f.done
 	return result.fileID, result.err
+}
+
+func (s *BatchService) createBatch(ctx context.Context, batch Batch) error {
+	if s.meter == nil {
+		return s.repository.Create(ctx, batch)
+	}
+	attachment, err := s.meter.Attachment(ctx, batch.Account, batch.SlotID, batch.ID, "batch")
+	if err != nil {
+		return errors.Join(ErrClaimUnavailable, err)
+	}
+	return s.repository.CreateClaimed(ctx, batch, attachment)
 }

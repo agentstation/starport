@@ -65,6 +65,9 @@ func OpenRepository(store storage.KVStore) (Repository, error) {
 }
 
 func (r *repository) Create(ctx context.Context, job Job) error {
+	if job.SlotID != "" {
+		return ErrClaimAttachmentRequired
+	}
 	data, err := encodeJob(job)
 	if err != nil {
 		return err

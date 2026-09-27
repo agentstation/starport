@@ -256,9 +256,13 @@ func TestALinePastTheByteBoundFailsTheWholeBatch(t *testing.T) {
 // a bound of one refuses a second submission while the first runs, and the
 // first batch's end gives the slot back.
 func TestABatchHoldsOneOutstandingJobSlot(t *testing.T) {
-	meter, err := jobslots.Open(storage.NewMockStore())
+	backing := storage.NewMockStore()
+	meter, err := jobslots.Open(backing)
 	require.NoError(t, err)
-	service := newBatchService(t, jobs.WithBatchJobMeter(meter), jobs.WithBatchConcurrency(1))
+	records, err := jobs.OpenBatchRepository(backing)
+	require.NoError(t, err)
+	service, err := jobs.NewBatchService(records, jobs.WithBatchJobMeter(meter), jobs.WithBatchConcurrency(1))
+	require.NoError(t, err)
 	runner := newBlockingRunner()
 	batchIO := newMemoryBatchIO("{\"a\":1}\n")
 

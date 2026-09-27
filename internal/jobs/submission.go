@@ -87,9 +87,19 @@ func (r *submissionRecorder) BeforeDispatch(ctx context.Context, dispatch Dispat
 	job.CatalogGeneration = dispatch.CatalogGeneration
 	job.ReservationID = dispatch.ReservationID
 	job.SubmissionPending = true
-	r.job, r.attempted = job, true
-	err = r.service.records.Create(ctx, job)
-	if errors.Is(err, ErrJobExists) {
+	r.job = job
+	if r.service.meter != nil {
+		attachment, attachErr := r.service.meter.Attachment(ctx, job.Account, job.SlotID, job.ID, "video")
+		if attachErr != nil {
+			return errors.Join(ErrClaimUnavailable, attachErr)
+		}
+		r.attempted = true
+		err = r.service.records.CreateClaimed(ctx, job, attachment)
+	} else {
+		r.attempted = true
+		err = r.service.records.Create(ctx, job)
+	}
+	if errors.Is(err, ErrJobExists) || errors.Is(err, ErrClaimUnavailable) {
 		r.attempted = false
 	}
 	return err
