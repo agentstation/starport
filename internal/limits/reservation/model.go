@@ -43,6 +43,7 @@ type Rule struct {
 	Meter          Meter  `json:"meter"`
 	Limit          int64  `json:"limit"`
 	PolicyRevision string `json:"policy_revision"`
+	HistoryID      string `json:"history_id"`
 }
 
 // Attempt names one potentially charged dispatch and its enforced upper bounds.
@@ -114,6 +115,8 @@ type WindowState struct {
 	Meter        Meter              `json:"meter"`
 	Window       storage.TimeWindow `json:"window"`
 	HistoryProof string             `json:"history_proof"`
+	HistoryID    string             `json:"history_id"`
+	SeedConsumed int64              `json:"seed_consumed"`
 	Consumed     int64              `json:"consumed"`
 	Reserved     int64              `json:"reserved"`
 	Overflow     bool               `json:"overflow,omitempty"`

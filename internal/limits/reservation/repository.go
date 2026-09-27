@@ -34,17 +34,22 @@ func Open(store storage.TimeBoundStore) (*Repository, error) {
 // EstablishWindow installs verified history only when the meter does not exist.
 // The migration or policy owner supplies complete consumption evidence. This
 // method cannot infer zero history, replace an active meter, or repair lost state.
-func (r *Repository) EstablishWindow(ctx context.Context, meter Meter, at time.Time, consumed int64, proof string) error {
-	if !meter.valid() || at.IsZero() || consumed < 0 || !validID(proof) {
+func (r *Repository) EstablishWindow(ctx context.Context, meter Meter, at time.Time, consumed int64, history History) error {
+	if !meter.valid() || at.IsZero() || consumed < 0 || (!validID(history.ID) || !validID(history.Proof)) {
 		return ErrInvalid
 	}
-	state := WindowState{Version: recordVersion, Meter: meter, Window: windowFor(meter.Interval, at), HistoryProof: proof, Consumed: consumed}
+	state := WindowState{Version: recordVersion, Meter: meter, Window: windowFor(meter.Interval, at), HistoryProof: history.Proof, HistoryID: history.ID, SeedConsumed: consumed, Consumed: consumed}
 	key := meterKey(meter, state.Window)
 	data, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
-	err = r.store.CompareAndSwapInWindow(ctx, []storage.CompareAndSwapMutation{{Key: key, NewValue: data}}, storage.TimeWindow{})
+	head := historyState{Version: recordVersion, Meter: meter, History: history, Current: state.Window}
+	headMutation, err := encodeMutation(storageKey("history", meter), nil, head)
+	if err != nil {
+		return err
+	}
+	err = r.store.CompareAndSwapInWindow(ctx, []storage.CompareAndSwapMutation{{Key: key, NewValue: data}, headMutation}, storage.TimeWindow{})
 	if !errors.Is(err, storage.ErrConflict) {
 		return err
 	}
@@ -52,7 +57,11 @@ func (r *Repository) EstablishWindow(ctx context.Context, meter Meter, at time.T
 	if err != nil {
 		return err
 	}
-	if existing.HistoryProof != proof {
+	headRead, _, err := r.readHistory(ctx, meter, history.ID)
+	if err != nil {
+		return err
+	}
+	if existing.HistoryProof != history.Proof || existing.HistoryID != history.ID || existing.SeedConsumed != consumed || headRead.History != history {
 		return ErrIdentityConflict
 	}
 	return nil
@@ -97,10 +106,10 @@ func (r *Repository) Reserve(ctx context.Context, attempt Attempt) (*Record, err
 			return nil, err
 		}
 		record := &Record{Version: recordVersion, Attempt: owned, State: Reserved, AdmittedAt: now, NanoUSD: amount}
-		mutations := make([]storage.CompareAndSwapMutation, 0, len(owned.Rules)+1)
+		mutations := make([]storage.CompareAndSwapMutation, 0, 2*len(owned.Rules)+1)
 		for _, rule := range owned.Rules {
 			window := windowFor(rule.Meter.Interval, now)
-			state, old, err := r.readWindow(ctx, rule.Meter, window)
+			state, old, historyMutation, err := r.admissionWindow(ctx, rule, now)
 			if err != nil {
 				return nil, err
 			}
@@ -116,7 +125,7 @@ func (r *Repository) Reserve(ctx context.Context, attempt Attempt) (*Record, err
 			if err != nil {
 				return nil, err
 			}
-			mutations = append(mutations, mutation)
+			mutations = append(mutations, mutation, historyMutation)
 			record.Bindings = append(record.Bindings, Binding{Rule: rule, Window: window, Amount: bound})
 		}
 		mutation, err := encodeMutation(storageKey("attempt", owned.ID), nil, record)
@@ -178,7 +187,7 @@ func (r *Repository) readWindow(ctx context.Context, meter Meter, window storage
 		return nil, nil, err
 	}
 	var state WindowState
-	if json.Unmarshal(data, &state) != nil || state.Version != recordVersion || state.Meter != meter || state.Window != window || !validID(state.HistoryProof) || state.Consumed < 0 || state.Reserved < 0 {
+	if json.Unmarshal(data, &state) != nil || state.Version != recordVersion || state.Meter != meter || state.Window != window || !validID(state.HistoryProof) || !validID(state.HistoryID) || state.SeedConsumed < 0 || state.Consumed < state.SeedConsumed || state.Reserved < 0 {
 		return nil, nil, ErrUnavailable
 	}
 	return &state, data, nil
@@ -237,7 +246,7 @@ func validateAttempt(attempt Attempt) error {
 		case limits.ScopeTeam:
 			holder = attempt.TeamID
 		}
-		if !rule.Meter.valid() || holder != rule.Meter.Holder || seen[rule.Meter] || rule.Limit <= 0 || !validID(rule.PolicyRevision) {
+		if !rule.Meter.valid() || holder != rule.Meter.Holder || seen[rule.Meter] || rule.Limit <= 0 || !validID(rule.PolicyRevision) || !validID(rule.HistoryID) {
 			return ErrInvalid
 		}
 		seen[rule.Meter] = true

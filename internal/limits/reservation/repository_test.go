@@ -72,8 +72,8 @@ func (f fixture) provision(t *testing.T, attempt *Attempt) {
 	}{{limits.ScopeAccount, attempt.AccountID}, {limits.ScopeKey, attempt.KeyID}, {limits.ScopeTeam, attempt.TeamID}} {
 		for _, dimension := range []limits.Dimension{limits.DimensionSpend, limits.DimensionTokens} {
 			meter := Meter{Scope: holder.scope, Holder: holder.id, Dimension: dimension, Interval: limits.IntervalDay}
-			attempt.Rules = append(attempt.Rules, Rule{Meter: meter, Limit: 1000, PolicyRevision: "revision-1"})
-			require.NoError(t, f.repository.EstablishWindow(t.Context(), meter, f.now, 0, "empty-fixture-history"))
+			attempt.Rules = append(attempt.Rules, Rule{Meter: meter, Limit: 1000, PolicyRevision: "revision-1", HistoryID: "history-1"})
+			require.NoError(t, f.repository.EstablishWindow(t.Context(), meter, f.now, 0, History{ID: "history-1", Proof: "empty-fixture-history"}))
 		}
 	}
 }
@@ -199,11 +199,11 @@ func TestReservationContract(t *testing.T) {
 				_, err = f.repository.Reserve(t.Context(), attempt)
 				require.ErrorIs(t, err, ErrExhausted)
 				rule := attempt.Rules[0]
-				require.NoError(t, f.repository.EstablishWindow(t.Context(), rule.Meter, f.now, 0, "empty-fixture-history"))
+				require.NoError(t, f.repository.EstablishWindow(t.Context(), rule.Meter, f.now, 0, History{ID: "history-1", Proof: "empty-fixture-history"}))
 				state, err := f.repository.Window(t.Context(), rule.Meter, f.now)
 				require.NoError(t, err)
 				require.EqualValues(t, 1200, state.Consumed, "initialization retry cannot reset spending")
-				require.ErrorIs(t, f.repository.EstablishWindow(t.Context(), rule.Meter, f.now, 0, "different-history"), ErrIdentityConflict)
+				require.ErrorIs(t, f.repository.EstablishWindow(t.Context(), rule.Meter, f.now, 0, History{ID: "history-1", Proof: "different-history"}), ErrIdentityConflict)
 			})
 			t.Run("lost dispatch and settlement acknowledgements cannot repeat spending", func(t *testing.T) {
 				attempt := attemptFixture()
