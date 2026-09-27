@@ -43,7 +43,10 @@ type RerankResult struct {
 
 // RerankResponse is the provider answer to a rerank call.
 type RerankResponse struct {
-	Results []RerankResult `json:"results"`
+	// Known flags distinguish explicit zero counts from absent or invalid usage.
+	SearchUnitsKnown bool           `json:"search_units_known,omitzero"`
+	TokensKnown      bool           `json:"tokens_known,omitzero"`
+	Results          []RerankResult `json:"results"`
 	// SearchUnits is the count a provider that bills by search unit reported.
 	// A provider that bills by token reports none, and the cost seam reads the
 	// offering's own basis rather than guessing from which field arrived.

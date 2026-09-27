@@ -155,6 +155,8 @@ type Record struct {
 	// converts into it: a Cohere turn reports a search unit and no tokens at
 	// all, and a record that read tokens alone would meter it as free.
 	SearchUnits int64 `json:"search_units,omitempty"`
+	// SearchUnitsKnown preserves explicit zero separately from missing usage.
+	SearchUnitsKnown bool `json:"search_units_known,omitzero"`
 	// TokensEstimated marks counts the gateway synthesized with a
 	// tokenizer because the provider reported none.
 	TokensEstimated bool `json:"tokens_estimated,omitempty"`

@@ -28,7 +28,7 @@ func rerankAnswer() inference.RerankResponse {
 			{Index: 1, RelevanceScore: 0.91},
 			{Index: 2, RelevanceScore: 0.42},
 		},
-		Usage: inference.Usage{TotalTokens: 38, SearchUnits: 1},
+		Usage: inference.Usage{TotalTokens: 38, SearchUnits: 1, SearchUnitsKnown: true},
 	}
 }
 
@@ -54,8 +54,8 @@ func TestTheRerankCodecRoundTripsThePublishedShape(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "list", encoded.Object)
 	require.Equal(t, "rerank-v3.5", encoded.Model)
-	require.Equal(t, 38, encoded.Usage.TotalTokens)
-	require.Equal(t, 1, encoded.Usage.SearchUnits)
+	require.Equal(t, 38, *encoded.Usage.TotalTokens)
+	require.Equal(t, 1, *encoded.Usage.SearchUnits)
 	require.Equal(t, []RerankResult{
 		{Index: 1, RelevanceScore: 0.91},
 		{Index: 2, RelevanceScore: 0.42},
@@ -189,4 +189,28 @@ func TestADocumentListLongerThanTheOfferingIsRefused(t *testing.T) {
 	// A catalog that publishes no document count states no bound, which is
 	// not the same as a bound of zero.
 	require.NoError(t, decoding.Request.CheckDocumentBound(0))
+}
+
+func TestRerankUsagePreservesZeroAndMissing(t *testing.T) {
+	decoding, err := DecodeRerank(strings.NewReader(rerankRequestBody))
+	require.NoError(t, err)
+	for _, known := range []bool{false, true} {
+		answer := rerankAnswer()
+		answer.Usage = inference.Usage{TokensUnknown: !known, SearchUnitsKnown: known}
+		encoded, err := EncodeRerank(answer, decoding)
+		require.NoError(t, err)
+		wire, err := json.Marshal(encoded)
+		require.NoError(t, err)
+		if known {
+			require.NotNil(t, encoded.Usage.TotalTokens)
+			require.NotNil(t, encoded.Usage.SearchUnits)
+			require.Contains(t, string(wire), `"total_tokens":0`)
+			require.Contains(t, string(wire), `"search_units":0`)
+		} else {
+			require.Nil(t, encoded.Usage.TotalTokens)
+			require.Nil(t, encoded.Usage.SearchUnits)
+			require.NotContains(t, string(wire), `"total_tokens"`)
+			require.NotContains(t, string(wire), `"search_units"`)
+		}
+	}
 }

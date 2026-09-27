@@ -62,8 +62,8 @@ type RerankResponse struct {
 // unit: one bills a search unit and another bills tokens, so the answer states
 // whichever one the provider reported and omits the other.
 type RerankUsage struct {
-	TotalTokens int `json:"total_tokens,omitempty"`
-	SearchUnits int `json:"search_units,omitempty"`
+	TotalTokens *int `json:"total_tokens,omitempty"`
+	SearchUnits *int `json:"search_units,omitempty"`
 }
 
 // DecodeRerank decodes one strict rerank request. An unknown field fails the
@@ -112,13 +112,21 @@ func EncodeRerank(
 			results[index].Document = &documents[index]
 		}
 	}
+	var totalTokens, searchUnits *int
+	if !response.Usage.TokensUnknown {
+		totalTokens = &response.Usage.TotalTokens
+	}
+	if response.Usage.SearchUnitsKnown {
+		searchUnits = &response.Usage.SearchUnits
+	}
+
 	return RerankResponse{
 		Object:  ListObject,
 		Model:   responseModel(response.Model, decoding.Request.Model),
 		Results: results,
 		Usage: RerankUsage{
-			TotalTokens: response.Usage.TotalTokens,
-			SearchUnits: response.Usage.SearchUnits,
+			TotalTokens: totalTokens,
+			SearchUnits: searchUnits,
 		},
 	}, nil
 }

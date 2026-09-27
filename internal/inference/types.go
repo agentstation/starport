@@ -403,6 +403,8 @@ type Usage struct {
 	// it, and the offering's own basis says whether to read this field or the
 	// token counts beside it.
 	SearchUnits int
+	// SearchUnitsKnown marks a nonnegative measured count, including zero.
+	SearchUnitsKnown bool
 
 	// Estimated marks counts the gateway synthesized with a tokenizer
 	// because the provider reported no usage. Estimated counts never
