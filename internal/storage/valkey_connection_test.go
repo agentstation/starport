@@ -85,7 +85,7 @@ func TestValkeyTLSIdentity(t *testing.T) {
 			if !tc.trusted {
 				caFile = ""
 			}
-			store, err := OpenValkey(ValkeyConfig{URL: endpoint, CAFile: caFile})
+			store, err := openUnscopedValkeyForTest(ValkeyConfig{URL: endpoint, CAFile: caFile})
 			valid := tc.trusted && !tc.expired && !tc.wrongHost
 			if !valid {
 				require.Error(t, err)
@@ -118,7 +118,7 @@ func TestValkeyUsernamePassword(t *testing.T) {
 	if raw == "" {
 		t.Skip("UNVERIFIED: TEST_VALKEY_URL is required")
 	}
-	control, err := OpenValkey(ValkeyConfig{URL: raw})
+	control, err := openUnscopedValkeyForTest(ValkeyConfig{URL: raw})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, control.Close()) })
 	client := control.(*ValkeyStore).client
@@ -137,12 +137,12 @@ func TestValkeyUsernamePassword(t *testing.T) {
 			u.User = url.UserPassword(username, password)
 			cfg.URL = u.String()
 		}
-		store, err := OpenValkey(cfg)
+		store, err := openUnscopedValkeyForTest(cfg)
 		require.NoError(t, err)
 		require.NoError(t, store.Ping(t.Context()))
 		require.NoError(t, store.Close())
 		cfg.Password = "incorrect-private-value"
-		_, err = OpenValkey(cfg)
+		_, err = openUnscopedValkeyForTest(cfg)
 		require.Error(t, err)
 		require.NotContains(t, err.Error(), "private-value")
 		require.NotContains(t, err.Error(), password)
@@ -157,11 +157,11 @@ func TestValkeyEffectiveConnectionOptions(t *testing.T) {
 	cfg := ValkeyConfig{URL: raw, MaxConnections: 3, MinIdleConns: 1,
 		DialTimeout: 100 * time.Millisecond, ReadTimeout: 100 * time.Millisecond,
 		WriteTimeout: 100 * time.Millisecond, IdleTimeout: 20 * time.Millisecond}
-	store, err := OpenValkey(cfg)
+	store, err := openUnscopedValkeyForTest(cfg)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, store.Close()) })
 	client := store.(*ValkeyStore).client
-	control, err := OpenValkey(ValkeyConfig{URL: raw})
+	control, err := openUnscopedValkeyForTest(ValkeyConfig{URL: raw})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, control.Close()) })
 	admin := control.(*ValkeyStore).client

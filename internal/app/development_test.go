@@ -23,7 +23,7 @@ func TestDevUsesInMemoryBadger(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, runtime.Close(context.Background())) })
 
-	projected := cfg.Storage.RuntimeStorage()
+	projected := cfg.RuntimeStorage()
 	require.Equal(t, storage.StorageTypeBadger, projected.Type)
 	require.True(t, projected.Badger.InMemory)
 	require.Empty(t, projected.Badger.Path)

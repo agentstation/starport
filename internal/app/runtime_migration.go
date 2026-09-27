@@ -34,7 +34,7 @@ func MigrateRuntime(ctx context.Context, cfg *config.Config, phase string, migra
 	if err != nil {
 		return result, err
 	}
-	selected := cfg.Storage.RuntimeStorage()
+	selected := cfg.RuntimeStorage()
 	if selected.Type == storage.StorageTypeBadger {
 		if selected.Badger.InMemory {
 			return result, fmt.Errorf("runtime migration requires persistent catalog storage")

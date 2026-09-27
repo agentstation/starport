@@ -61,6 +61,7 @@ func TestSharedStorageRecipeSupportedModes(t *testing.T) {
 func TestDurableKVConnectionSettings(t *testing.T) {
 	paths := PathsForConfigDir(t.TempDir())
 	cfg, err := NewLoader().WithPaths(paths).WithEnvFiles().WithEnvironment(map[string]string{
+		"STARPORT_DEPLOYMENT_ID":               "team:west/{blue}",
 		"STARPORT_STORAGE_MODE":                "valkey",
 		"STARPORT_STORAGE_VALKEY_URL":          "valkeys://durable.example/2",
 		"STARPORT_STORAGE_VALKEY_USERNAME":     "explicit-user",
@@ -75,7 +76,9 @@ func TestDurableKVConnectionSettings(t *testing.T) {
 		"STARPORT_RELATIVE_PATH_BASE":          "config",
 	}).Load(t.Context())
 	require.NoError(t, err)
-	connection := cfg.Storage.RuntimeStorage().Valkey
+	connection := cfg.RuntimeStorage().Valkey
+	require.Equal(t, "team:west/{blue}", connection.DeploymentID)
+	require.Equal(t, cfg.EffectivePaths().DeploymentID, connection.DeploymentID)
 	require.Equal(t, "explicit-user", connection.Username)
 	require.Equal(t, "field-private-value", connection.Password)
 	require.Equal(t, 2*time.Second, connection.DialTimeout)

@@ -80,7 +80,7 @@ func TestDevelopmentDoesNotReadSelectedConfigurationFiles(t *testing.T) {
 		"STARPORT_CATALOG_ACQUISITION_ENABLED": "false",
 	}).LoadDevelopment(t.Context())
 	require.NoError(t, err)
-	require.True(t, cfg.Storage.RuntimeStorage().Badger.InMemory)
+	require.True(t, cfg.RuntimeStorage().Badger.InMemory)
 	require.Empty(t, cfg.EffectivePaths().BaselineDir)
 	require.Empty(t, cfg.EffectivePaths().DataDir)
 	require.NoDirExists(t, paths.DataDir)

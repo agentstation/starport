@@ -13,7 +13,7 @@ func (b *runtimeBuilder) validateCatalogStorage() error {
 }
 
 func (b *runtimeBuilder) guardLocalSetup() error {
-	selected := b.config.Storage.RuntimeStorage()
+	selected := b.config.RuntimeStorage()
 	if selected.Type == storage.StorageTypeValkey || selected.Badger.InMemory {
 		return nil
 	}

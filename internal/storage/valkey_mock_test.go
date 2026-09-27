@@ -24,7 +24,7 @@ func TestValkeyStoreWithMock(t *testing.T) {
 		config: ValkeyConfig{
 			URL: "mock://localhost",
 		},
-		pubsub: NewValkeyPubSub(client),
+		pubsub: newValkeyPubSub(client, ""),
 	}
 
 	ctx := context.Background()
@@ -266,7 +266,7 @@ func TestPubSubWithMock(t *testing.T) {
 	defer ctrl.Finish()
 
 	client := mock.NewClient(ctrl)
-	pubsub := NewValkeyPubSub(client)
+	pubsub := newValkeyPubSub(client, "")
 
 	ctx := context.Background()
 

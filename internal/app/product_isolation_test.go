@@ -47,7 +47,7 @@ func TestStartupKeepsStarmapFilesAndServerSettingsIsolated(t *testing.T) {
 	require.NotEqual(t, 9199, cfg.Server.Port)
 	require.Empty(t, cfg.Catalog.WorkspacePath)
 	require.Equal(t, filepath.Join(starportHome, "state", "catalog", "runtime", "isolation-test"), cfg.Catalog.StateDirectory)
-	store, err := openStorage(cfg.Storage)
+	store, err := openStorage(cfg.RuntimeStorage())
 	require.NoError(t, err)
 	keys, err := apikey.Open(store)
 	require.NoError(t, err)

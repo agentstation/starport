@@ -392,7 +392,7 @@ func TestDevelopmentLoaderUsesProcessSettingsAndGuardedRuntime(t *testing.T) {
 	if cfg.Server.Host != "127.0.0.1" || cfg.Server.Port != 18994 {
 		t.Fatalf("development server = %s:%d", cfg.Server.Host, cfg.Server.Port)
 	}
-	storageConfig := cfg.Storage.RuntimeStorage()
+	storageConfig := cfg.RuntimeStorage()
 	if storageConfig.Type != "badger" || !storageConfig.Badger.InMemory || storageConfig.Badger.Path != "" {
 		t.Fatalf("development storage = %#v", storageConfig)
 	}

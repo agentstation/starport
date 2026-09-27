@@ -32,16 +32,19 @@ func (c StorageConfig) Distributed() bool {
 }
 
 // RuntimeStorage projects external storage settings into the storage adapter contract.
-func (c StorageConfig) RuntimeStorage() storage.Config {
+func (c *Config) RuntimeStorage() storage.Config {
+	selected := c.Storage
+	connection := selected.Valkey.RuntimeConnection()
+	connection.DeploymentID = c.EffectivePaths().DeploymentID
 	return storage.Config{
-		Type: c.Mode,
+		Type: selected.Mode,
 		Badger: storage.BadgerConfig{
-			Path: c.Badger.Path, InMemory: c.Badger.inMemory,
-			SyncWrites:  c.Badger.SyncWrites,
-			Compression: c.Badger.Compression != compressionNone, NumVersions: 1,
+			Path: selected.Badger.Path, InMemory: selected.Badger.inMemory,
+			SyncWrites:  selected.Badger.SyncWrites,
+			Compression: selected.Badger.Compression != compressionNone, NumVersions: 1,
 			NumLevelZero: 5, MemTableSize: 64 << 20,
 		},
-		Valkey: c.Valkey.RuntimeConnection(),
+		Valkey: connection,
 	}
 }
 

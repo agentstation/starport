@@ -20,7 +20,7 @@ func TestIncompleteFleetRecipeRefusesBeforeStorageAccess(t *testing.T) {
 			cfg.Files.Backend = config.BlobBackendFilesystem
 			factories := explicitTestFactories()
 			opened := false
-			factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
+			factories.openStorage = func(storage.Config) (storage.KVStore, error) {
 				opened = true
 				t.Fatal("incomplete fleet recipe reached storage")
 				return nil, nil

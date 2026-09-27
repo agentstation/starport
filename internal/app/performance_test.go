@@ -130,7 +130,7 @@ func newPerformanceFixtureWithApproval(tb testing.TB, wait time.Duration, catalo
 	}
 
 	// Seed and reopen the real on-disk adapter as application startup does.
-	store, err := openStorage(cfg.Storage)
+	store, err := openStorage(cfg.RuntimeStorage())
 	require.NoError(tb, err)
 	keys, err := apikey.Open(store)
 	require.NoError(tb, err)

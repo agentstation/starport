@@ -16,10 +16,10 @@ func TestValkeyURLDatabaseSelection(t *testing.T) {
 	u, err := url.Parse(raw)
 	require.NoError(t, err)
 	u.Path = "/1"
-	selected, err := OpenValkey(ValkeyConfig{URL: u.String()})
+	selected, err := openUnscopedValkeyForTest(ValkeyConfig{URL: u.String()})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, selected.Close()) })
-	baseline, err := OpenValkey(ValkeyConfig{URL: raw})
+	baseline, err := openUnscopedValkeyForTest(ValkeyConfig{URL: raw})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, baseline.Close()) })
 	key := "endpoint-database-selection"

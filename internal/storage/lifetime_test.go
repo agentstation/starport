@@ -21,7 +21,7 @@ func TestValueLifetimeSnapshot(t *testing.T) {
 				if address == "" {
 					t.Skip("UNVERIFIED: TEST_VALKEY_URL is not set")
 				}
-				store, err = OpenValkey(ValkeyConfig{URL: address})
+				store, err = openUnscopedValkeyForTest(ValkeyConfig{URL: address})
 			}
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, store.Close()) })

@@ -25,7 +25,7 @@ func freshTestStores(t *testing.T) (*Witness, storage.KVStore, storage.FreshData
 	require.NoError(t, db.Migrate(t.Context()))
 	w, err := New(db)
 	require.NoError(t, err)
-	kv, err := storage.OpenValkey(storage.ValkeyConfig{URL: kvURL, DB: 14})
+	kv, err := storage.OpenValkey(storage.ValkeyConfig{DeploymentID: "contract-tests", URL: kvURL, DB: 14})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, kv.Close()) })
 	keys, err := kv.ScanWithPrefix(t.Context(), "", 100)

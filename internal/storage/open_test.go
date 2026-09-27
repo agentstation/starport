@@ -29,7 +29,7 @@ func TestOpen(t *testing.T) {
 			config: Config{
 				Type: "valkey",
 				Valkey: ValkeyConfig{
-					URL: "redis://localhost:6379",
+					URL: "redis://127.0.0.1:1", DeploymentID: "open-test",
 				},
 			},
 			wantErr: true, // Connection will fail in test environment

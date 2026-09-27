@@ -98,7 +98,7 @@ func (b *valkeyIncarnationStore) ReadWithLifetime(ctx context.Context, key strin
 if redis.call('EXISTS', KEYS[1]) == 0 then return false end
 if redis.call('STRLEN', KEYS[1]) > tonumber(ARGV[2]) then return redis.error_reply('STARPORT_VALUE_TOO_LARGE') end
 return {redis.call('GET', KEYS[1]), redis.call('PTTL', KEYS[1])}`
-	cmd := b.store.client.B().Eval().Script(script).Numkeys(1).Key(key).Arg(b.identity, strconv.Itoa(maxBytes)).Build()
+	cmd := b.store.client.B().Eval().Script(script).Numkeys(1).Key(b.store.prefix+key).Arg(b.identity, strconv.Itoa(maxBytes)).Build()
 	values, err := b.store.do(ctx, cmd).ToArray()
 	if valkey.IsValkeyNil(err) {
 		return nil, 0, ErrNotFound
@@ -161,7 +161,7 @@ func (b *valkeyIncarnationStore) CompareAndSwap(ctx context.Context, mutations [
 		if m.TTL > 0 && millis == 0 {
 			millis = 1
 		}
-		keys = append(keys, m.Key)
+		keys = append(keys, b.store.prefix+m.Key)
 		args = append(args, exists, string(m.ExpectedValue), next, string(m.NewValue), strconv.FormatInt(millis, 10), requireLive)
 	}
 	for _, found := range live {

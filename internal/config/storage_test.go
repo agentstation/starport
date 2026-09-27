@@ -46,7 +46,7 @@ func TestRuntimeStorageProjectsAdapterSettings(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			test.check(t, test.input.RuntimeStorage())
+			test.check(t, (&Config{Storage: test.input}).RuntimeStorage())
 		})
 	}
 }

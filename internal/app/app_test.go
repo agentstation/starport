@@ -48,7 +48,7 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 		{
 			name: "missing storage",
 			mutate: func(_ *config.Config, factories *runtimeFactories) {
-				factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) { return nil, nil }
+				factories.openStorage = func(storage.Config) (storage.KVStore, error) { return nil, nil }
 			},
 			cause: ErrStorageRequired,
 		},
@@ -77,7 +77,7 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 		{
 			name: "missing API key",
 			mutate: func(_ *config.Config, factories *runtimeFactories) {
-				factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
+				factories.openStorage = func(storage.Config) (storage.KVStore, error) {
 					return storage.NewMockStore(), nil
 				}
 			},
@@ -148,9 +148,9 @@ func TestDefaultFactoryErrorsReturnNilInterfaces(t *testing.T) {
 
 	storagePath := filepath.Join(t.TempDir(), "not-a-directory")
 	require.NoError(t, os.WriteFile(storagePath, []byte("occupied"), 0o600))
-	store, err := openStorage(config.StorageConfig{
+	store, err := openStorage((&config.Config{Storage: config.StorageConfig{
 		Mode: "badger", Badger: config.BadgerConfig{Path: storagePath, Compression: "snappy"},
-	})
+	}}).RuntimeStorage())
 	require.Error(t, err)
 	require.True(t, store == nil, "failed storage constructor must return a nil interface")
 }
@@ -163,7 +163,7 @@ func TestProductionCompositionReturnsStorageOpenError(t *testing.T) {
 				cfg.Storage.Badger.Path = filepath.Join(t.TempDir(), "occupied")
 				require.NoError(t, os.WriteFile(cfg.Storage.Badger.Path, []byte("occupied"), 0o600))
 			} else {
-				store, err := openStorage(cfg.Storage)
+				store, err := openStorage(cfg.RuntimeStorage())
 				require.NoError(t, err)
 				t.Cleanup(func() { require.NoError(t, store.Close()) })
 			}
@@ -378,7 +378,7 @@ func explicitTestFactories() runtimeFactories {
 	store := storage.NewMockStore()
 	apiKeys, _ := apikey.Open(store)
 	_, _ = apiKeys.Create(context.Background(), testAPIKey())
-	factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
+	factories.openStorage = func(storage.Config) (storage.KVStore, error) {
 		return store, nil
 	}
 	factories.newConnector = func(

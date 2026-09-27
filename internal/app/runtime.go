@@ -44,7 +44,7 @@ type catalogRuntime interface {
 }
 
 type runtimeFactories struct {
-	openStorage  func(config.StorageConfig) (storage.KVStore, error)
+	openStorage  func(storage.Config) (storage.KVStore, error)
 	openSQL      func(config.StorageConfig) (*sqlstore.DB, error)
 	openBlob     func(context.Context, config.FilesConfig) (blob.Store, error)
 	openCatalog  func(context.Context, storage.KVStore, *sqlstore.DB, runtimecatalog.Settings, runtimecatalog.DeploymentLookup) (catalogRuntime, error)

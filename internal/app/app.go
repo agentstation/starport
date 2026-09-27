@@ -253,7 +253,7 @@ func (b *runtimeBuilder) compose() error {
 }
 
 func (b *runtimeBuilder) openStorage() error {
-	store, err := b.factories.openStorage(b.config.Storage)
+	store, err := b.factories.openStorage(b.config.RuntimeStorage())
 	if err != nil {
 		if store != nil {
 			if closeErr := store.Close(); closeErr != nil {
@@ -1605,8 +1605,8 @@ func validateFactories(factories runtimeFactories) error {
 	return nil
 }
 
-func openStorage(cfg config.StorageConfig) (storage.KVStore, error) {
-	return storage.Open(cfg.RuntimeStorage())
+func openStorage(cfg storage.Config) (storage.KVStore, error) {
+	return storage.Open(cfg)
 }
 
 func openSQL(cfg config.StorageConfig) (*sqlstore.DB, error) {

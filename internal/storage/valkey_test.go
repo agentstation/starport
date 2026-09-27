@@ -27,7 +27,7 @@ func TestValkeyStore(t *testing.T) {
 		DB:             15, // Use DB 15 for tests
 	}
 
-	store, err := OpenValkey(config)
+	store, err := openUnscopedValkeyForTest(config)
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -284,7 +284,7 @@ func TestValkeyPubSub(t *testing.T) {
 		DB:  15,
 	}
 
-	store, err := OpenValkey(config)
+	store, err := openUnscopedValkeyForTest(config)
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -342,7 +342,7 @@ func BenchmarkValkeyStore(b *testing.B) {
 		MinIdleConns: 10,
 	}
 
-	store, err := OpenValkey(config)
+	store, err := openUnscopedValkeyForTest(config)
 	require.NoError(b, err)
 	defer store.Close()
 

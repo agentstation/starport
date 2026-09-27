@@ -58,7 +58,7 @@ func TestRuntimeMigrationOperatorLifecycle(t *testing.T) {
 	}
 	cfg := load()
 	require.NoError(t, os.MkdirAll(cfg.EffectivePaths().BadgerDir, 0700))
-	store, err := storage.Open(cfg.Storage.RuntimeStorage())
+	store, err := storage.Open(cfg.RuntimeStorage())
 	require.NoError(t, err)
 	original, err := catalog.OpenRuntime(t.Context(), store, catalogSettings(cfg), nil)
 	require.NoError(t, err)
@@ -84,7 +84,7 @@ func TestRuntimeMigrationOperatorLifecycle(t *testing.T) {
 	require.Equal(t, "completed", completed.Phase)
 	require.Equal(t, identity, completed.SchedulerIdentity)
 	require.NoFileExists(t, cfg.EffectivePaths().SQLiteFile, "migration must not open SQL")
-	store, err = storage.Open(cfg.Storage.RuntimeStorage())
+	store, err = storage.Open(cfg.RuntimeStorage())
 	require.NoError(t, err)
 	defer store.Close()
 	generations, err := catalog.NewGenerationStore(store)

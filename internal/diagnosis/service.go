@@ -110,7 +110,7 @@ func (s service) run(ctx context.Context, options Options) Report {
 		report.addSkip("storage", "use --probe to open configured storage in read-only mode")
 		report.addSkip("api_keys", "use --probe to inspect configured API key storage")
 	} else {
-		store, err = s.dependencies.openStorage(cfg.Storage.RuntimeStorage())
+		store, err = s.dependencies.openStorage(cfg.RuntimeStorage())
 		switch {
 		case errors.Is(err, storage.ErrReadOnlyRecoveryRequired):
 			report.addSkip(

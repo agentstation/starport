@@ -111,6 +111,7 @@ type BadgerConfig struct {
 
 // ValkeyConfig represents Valkey/Redis-specific configuration
 type ValkeyConfig struct {
+	DeploymentID   string
 	URL            string `env:"URL,default=redis://localhost:6379"`
 	Username       string
 	CAFile         string

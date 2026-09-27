@@ -36,7 +36,7 @@ func TestAppWithValkey(t *testing.T) {
 	cfg.Storage.SQL.Postgres.URL = postgresURL
 	cfg.Cache.Enabled = true
 	cfg = isolatedFleetConfig(t, cfg)
-	store, err := openStorage(cfg.Storage)
+	store, err := openStorage(cfg.RuntimeStorage())
 	require.NoError(t, err)
 	apiKeys, err := apikey.Open(store)
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestSharedStartupDoesNotCreateLocalDatabases(t *testing.T) {
 	cfg.Storage.SQL.SQLite.Path = filepath.Join(local, "sqlite", "starport.db")
 	cfg.Catalog.StateDirectory = filepath.Join(t.TempDir(), "runtime")
 	cfg = isolatedFleetConfig(t, cfg)
-	seed, err := openStorage(cfg.Storage)
+	seed, err := openStorage(cfg.RuntimeStorage())
 	require.NoError(t, err)
 	keys, err := apikey.Open(seed)
 	require.NoError(t, err)

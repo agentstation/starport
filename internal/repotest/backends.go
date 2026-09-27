@@ -58,7 +58,7 @@ func runBackends(t *testing.T, contract func(*testing.T, storage.KVStore), clock
 			if url == "" {
 				t.Skip("UNVERIFIED: TEST_VALKEY_URL is not set")
 			}
-			store, err := storage.OpenValkey(storage.ValkeyConfig{URL: url})
+			store, err := storage.OpenValkey(storage.ValkeyConfig{DeploymentID: "contract-tests", URL: url})
 			if err != nil {
 				t.Fatalf("open Valkey: %v", err)
 			}

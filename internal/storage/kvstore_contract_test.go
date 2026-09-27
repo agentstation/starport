@@ -42,7 +42,7 @@ func TestKVStoreContract(t *testing.T) {
 		t.Run("valkey", func(t *testing.T) {
 			runKVStoreContract(t, func(t *testing.T) KVStore {
 				t.Helper()
-				store, err := OpenValkey(ValkeyConfig{URL: valkeyURL})
+				store, err := openUnscopedValkeyForTest(ValkeyConfig{URL: valkeyURL})
 				if err != nil {
 					t.Fatalf("open valkey: %v", err)
 				}
