@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/agentstation/starport/internal/routing"
@@ -35,27 +36,17 @@ type AccountingEntry struct {
 	TerminalAt  time.Time
 }
 
-// Accountant records what one finished job cost.
-//
-// This package declares the interface rather than importing the usage seam,
-// because internal/jobs is a leaf that owns state and nothing about spend. The
-// recipient prices the entry from the catalog and writes one usage record.
-//
-// A failure here is not the job's failure. The work happened, the caller holds
-// the answer, and a job that reported an accounting failure back to a caller
-// would tell it the wrong thing. The service therefore absorbs the error.
+// Accountant records optional usage for a terminal job.
+// RecordJob must accept exact retries without duplicate charges or counters.
+// A delivery can succeed before the service stores its acknowledgement.
+// Errors retain pending reporting and do not change the provider result.
 type Accountant interface {
 	RecordJob(ctx context.Context, entry AccountingEntry) error
 }
 
-// Notifier hears each job that reached its terminal state, exactly once.
-//
-// It is declared here for the reason Accountant is: the event surface
-// lives in another package, and this leaf owns state alone. The settle
-// stamp that keeps the accounting entry single keeps the notification
-// single too, so a receiver hears one end per job however often a caller
-// polls. A failure to notify is absorbed the way an accounting failure
-// is: the caller holds its answer either way.
+// Notifier receives a best-effort terminal notification independently of billing.
+// The service claims one attempt before calling JobEnded. A crash between the
+// claim and the call can lose the event. This is not a durable delivery contract.
 type Notifier interface {
 	JobEnded(ctx context.Context, entry AccountingEntry)
 }
@@ -77,34 +68,47 @@ func (s *Service) settle(ctx context.Context, job Job) Job {
 	return settled
 }
 
-// settleAccounting checks required settlement before the optional reporting mark.
-// A previous optional mark cannot replace durable settlement evidence.
+// settleAccounting confirms required settlement before it retries reporting.
+// Notifications and slot release do not depend on settlement or reporting.
 func (s *Service) settleAccounting(ctx context.Context, job Job) (Job, error) {
 	if !job.State.Terminal() {
 		return job, nil
 	}
 	job = s.settleSlot(ctx, job)
+	job, notificationErr := s.notifyTerminal(ctx, job)
 	if err := s.confirmSettlement(ctx, job); err != nil {
-		return job, err
+		return job, errors.Join(notificationErr, err)
 	}
 	if job.Accounted() {
-		return job, nil
+		return job, notificationErr
+	}
+	if s.accountant != nil {
+		if err := s.accountant.RecordJob(ctx, entryFor(job)); err != nil {
+			return job, errors.Join(notificationErr, err)
+		}
 	}
 	settled := job
 	if err := settled.MarkAccounted(s.now()); err != nil {
-		return job, err
+		return job, errors.Join(notificationErr, err)
 	}
 	if err := s.records.Replace(ctx, job, settled); err != nil {
+		return job, errors.Join(notificationErr, err)
+	}
+	return settled, notificationErr
+}
+
+// notifyTerminal claims one optional notification across concurrent replicas.
+func (s *Service) notifyTerminal(ctx context.Context, job Job) (Job, error) {
+	if s.notifier == nil || !job.NotificationAttemptedAt.IsZero() {
+		return job, nil
+	}
+	next := job
+	next.NotificationAttemptedAt = s.now()
+	if err := s.records.Replace(ctx, job, next); err != nil {
 		return job, err
 	}
-	if s.accountant != nil {
-		// The caller holds its answer either way. See the note above.
-		_ = s.accountant.RecordJob(ctx, entryFor(settled))
-	}
-	if s.notifier != nil {
-		s.notifier.JobEnded(ctx, entryFor(settled))
-	}
-	return settled, nil
+	s.notifier.JobEnded(ctx, entryFor(next))
+	return next, nil
 }
 
 // entryFor projects a settled record into what the accounting seam reads.

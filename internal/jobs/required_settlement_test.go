@@ -119,13 +119,17 @@ func TestRequiredSettlementDoesNotRetainTerminalSlot(t *testing.T) {
 		reopened, err := jobs.NewService(records, jobs.WithRequiredSettlement(owner), jobs.WithAccountant(optional))
 		require.NoError(t, err)
 		result, err := reopened.Sweep(t.Context())
+		require.ErrorIs(t, err, optional.err)
+		require.Zero(t, result.Accounted)
+		optional.err = nil
+		result, err = reopened.Sweep(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, 1, result.Accounted)
-		require.Len(t, optional.all(), 1)
+		require.Len(t, optional.all(), 2)
 		// A previous optional mark must not bypass required evidence after recovery.
 		owner.confirmErr = errors.New("authority no longer approved")
 		_, err = reopened.Sweep(t.Context())
 		require.ErrorIs(t, err, jobs.ErrSettlementPending)
-		require.Len(t, optional.all(), 1)
+		require.Len(t, optional.all(), 2)
 	})
 }

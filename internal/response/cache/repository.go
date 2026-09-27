@@ -131,7 +131,8 @@ func (r *repository) GetEmbedding(ctx context.Context, key string) (inference.Em
 
 func (r *repository) PutEmbedding(ctx context.Context, key string, response inference.EmbeddingResponse) error {
 	response = response.Clone()
-	return r.put(ctx, key, record{Kind: "embedding", Embedding: &response, EmbeddingTokensKnown: new(!response.Usage.TokensUnknown)})
+	tokensKnown := !response.Usage.TokensUnknown
+	return r.put(ctx, key, record{Kind: "embedding", Embedding: &response, EmbeddingTokensKnown: &tokensKnown})
 }
 
 func (r *repository) get(ctx context.Context, key, kind string) (record, bool, error) {

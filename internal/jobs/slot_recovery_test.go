@@ -33,7 +33,7 @@ func (m *interruptedSlotRelease) Release(ctx context.Context, account, id string
 	return m.Store.Release(ctx, account, id)
 }
 
-func TestVideoSlotReleaseRecoversAfterAccountingAndRestart(t *testing.T) {
+func TestVideoSlotReleaseRecoversWhileReportingRemainsPending(t *testing.T) {
 	for _, after := range []bool{false, true} {
 		name := "before commit"
 		if after {
@@ -56,7 +56,7 @@ func TestVideoSlotReleaseRecoversAfterAccountingAndRestart(t *testing.T) {
 				require.NoError(t, err)
 				ended, err := service.Refresh(ctx, runner, accountA, job.ID)
 				require.NoError(t, err)
-				require.True(t, ended.Accounted())
+				require.False(t, ended.Accounted())
 				require.False(t, ended.SlotReleased)
 				reopened, err := jobs.NewService(records, jobs.WithJobMeter(meter))
 				require.NoError(t, err)
@@ -242,8 +242,12 @@ func TestLegacyJobSchemasRequireMigration(t *testing.T) {
 			require.Len(t, keys, 1)
 			data, err := backing.Get(t.Context(), keys[0])
 			require.NoError(t, err)
-			require.Contains(t, string(data), `"schema_version":2`)
-			legacy := bytes.Replace(data, []byte(`"schema_version":2`), []byte(`"schema_version":1`), 1)
+			current := []byte(`"schema_version":2`)
+			if prefix == jobs.StoragePrefix {
+				current = []byte(`"schema_version":3`)
+			}
+			require.Contains(t, string(data), string(current))
+			legacy := bytes.Replace(data, current, []byte(`"schema_version":1`), 1)
 			require.NoError(t, backing.Set(t.Context(), keys[0], legacy))
 		}
 		_, err = records.Get(t.Context(), accountA, job.ID)

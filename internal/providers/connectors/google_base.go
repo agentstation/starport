@@ -610,7 +610,7 @@ func extractThoughtSummary(text string) (content, reasoning string) {
 			end += start
 			reasoning = strings.TrimSpace(text[start+10 : end])
 			content = strings.TrimSpace(text[:start] + text[end+11:])
-			return
+			return content, reasoning
 		}
 	}
 
@@ -622,7 +622,7 @@ func extractThoughtSummary(text string) (content, reasoning string) {
 				// Found empty line, split here
 				reasoning = strings.Join(lines[:i], "\n")
 				content = strings.Join(lines[i+1:], "\n")
-				return
+				return content, reasoning
 			}
 		}
 	}
@@ -640,7 +640,7 @@ func extractThoughtSummary(text string) (content, reasoning string) {
 			}
 			reasoning = strings.TrimSpace(text[idx:endIdx])
 			content = strings.TrimSpace(text[:idx] + text[endIdx:])
-			return
+			return content, reasoning
 		}
 	}
 

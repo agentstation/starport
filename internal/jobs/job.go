@@ -178,11 +178,12 @@ type Job struct {
 	// which is a different answer from a job that produced none.
 	AssetExpiredAt time.Time
 
-	// AccountedAt is when this job drew its one usage record and gave back the
-	// slot it held. It lives on the record rather than in the accounting seam
-	// because a poll is free and a caller may poll a finished job forever: the
-	// stamp is what makes the second poll draw nothing.
+	// AccountedAt records acknowledged optional reporting after required settlement.
+	// It does not own slot release or terminal notification.
 	AccountedAt time.Time
+	// NotificationAttemptedAt claims one best-effort terminal notification.
+	// It does not prove delivery to a webhook recipient.
+	NotificationAttemptedAt time.Time
 
 	providerJobID string
 }
@@ -235,6 +236,8 @@ func (j Job) Validate() error {
 		return fmt.Errorf("%w: the stored asset states no retention window", ErrInvalidJob)
 	case j.AssetKey == "" && !j.AssetExpiredAt.IsZero():
 		return fmt.Errorf("%w: an expiry marker names no stored asset", ErrInvalidJob)
+	case !j.NotificationAttemptedAt.IsZero() && !j.State.Terminal():
+		return fmt.Errorf("%w: state %q has a terminal notification claim", ErrInvalidJob, j.State)
 	case !j.AccountedAt.IsZero() && !j.State.Terminal():
 		return fmt.Errorf("%w: state %q was already accounted", ErrInvalidJob, j.State)
 	}
@@ -360,11 +363,8 @@ func (j *Job) ExpireAsset(now time.Time) error {
 	return nil
 }
 
-// MarkAccounted stamps the job as priced and refuses a second stamp.
-//
-// The refusal is the invariant, not a convenience. Two concurrent polls of the
-// same finished job both read a record with no stamp, and the one that loses
-// the write refuses here rather than drawing a second cost for one video.
+// MarkAccounted records acknowledged reporting for a terminal job.
+// Delivery precedes this marker and must be idempotent across retries.
 func (j *Job) MarkAccounted(now time.Time) error {
 	switch {
 	case !j.State.Terminal():

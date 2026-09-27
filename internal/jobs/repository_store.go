@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	// StorageSchemaVersion identifies the job record schema with durable slot ownership.
-	StorageSchemaVersion = 2
+	// StorageSchemaVersion separates reporting acknowledgement from notification attempts.
+	StorageSchemaVersion = 3
 	// StoragePrefix is the job record v1 namespace.
 	StoragePrefix = "jobs:v1:account:"
 
@@ -53,7 +53,8 @@ type jobRecord struct {
 	AssetExpiresAt   time.Time `json:"asset_expires_at,omitempty"`
 	AssetExpiredAt   time.Time `json:"asset_expired_at,omitempty"`
 
-	AccountedAt time.Time `json:"accounted_at,omitempty"`
+	AccountedAt             time.Time `json:"accounted_at,omitempty"`
+	NotificationAttemptedAt time.Time `json:"notification_attempted_at,omitempty"`
 }
 
 // OpenRepository returns a storage-backed job record repository.
@@ -232,7 +233,8 @@ func encodeJob(job Job) ([]byte, error) {
 		AssetExpiresAt:   job.AssetExpiresAt,
 		AssetExpiredAt:   job.AssetExpiredAt,
 
-		AccountedAt: job.AccountedAt,
+		AccountedAt:             job.AccountedAt,
+		NotificationAttemptedAt: job.NotificationAttemptedAt,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("jobs: encode record: %w", err)
@@ -272,7 +274,8 @@ func decodeJob(data []byte) (Job, error) {
 		AssetExpiresAt:   stored.AssetExpiresAt,
 		AssetExpiredAt:   stored.AssetExpiredAt,
 
-		AccountedAt: stored.AccountedAt,
+		AccountedAt:             stored.AccountedAt,
+		NotificationAttemptedAt: stored.NotificationAttemptedAt,
 	}
 	if err := job.Validate(); err != nil {
 		return Job{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)

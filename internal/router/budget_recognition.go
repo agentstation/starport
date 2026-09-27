@@ -88,7 +88,8 @@ func recognitionBound(offering catalogs.ProviderOffering, request *connectors.Re
 		if output > math.MaxInt {
 			return 0, admission.ErrBoundUnknown
 		}
-		request.MaxTokens = new(int(output))
+		maxTokens := int(output)
+		request.MaxTokens = &maxTokens
 		return bound, nil
 	case catalogs.RecognitionBillingPages:
 		if offering.Billing.Recognition.RequestCharge != nil {

@@ -23,7 +23,7 @@ func (a Attempt) money(amount int64) *int64 {
 	if a.TokenOnly {
 		return nil
 	}
-	return new(amount)
+	return &amount
 }
 
 func (r *Record) moneyMatches(amount int64) bool {
