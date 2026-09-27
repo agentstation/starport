@@ -72,6 +72,9 @@ type KVStore interface {
 	BatchDelete(ctx context.Context, keys []string) error
 	BatchSetWithTTL(ctx context.Context, items map[string][]byte, ttl time.Duration) error
 
+	// ScanPage preserves native continuation for background recovery.
+	ScanPage(ctx context.Context, prefix, cursor string, count int) (KeyPage, error)
+
 	// Scan operations for listing keys
 	Scan(ctx context.Context, pattern string, limit int) ([]string, error)
 	ScanWithPrefix(ctx context.Context, prefix string, limit int) ([]string, error)

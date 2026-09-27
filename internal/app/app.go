@@ -102,6 +102,7 @@ type App struct {
 	blobStore           blob.Store
 	files               *files.Service
 	jobs                *jobs.Service
+	batches             *jobs.BatchService
 	events              *events.Dispatcher
 	cacheManager        *cache.Manager
 	extractionCache     *cache.BufferedLocalCache
@@ -606,6 +607,7 @@ func (b *runtimeBuilder) openJobService() error {
 	if err != nil {
 		return fmt.Errorf("open batch service: %w", err)
 	}
+	b.application.batches = b.batches
 	return nil
 }
 
@@ -1571,19 +1573,30 @@ func (a *App) jobSweepLoop(ctx context.Context) {
 // sweepJobAssets runs one pass and reports what it reclaimed. A quiet pass logs
 // nothing, for the reason the file sweep gives.
 func (a *App) sweepJobAssets(ctx context.Context) {
+	if a.batches != nil {
+		result, err := a.batches.Sweep(ctx)
+		if err != nil {
+			log.Warn().Err(err).Int("scanned", result.Scanned).Int("failed", result.Failed).
+				Msg("batch recovery requires another pass")
+		}
+		if result.Released > 0 {
+			log.Info().Int("released", result.Released).Msg("batch recovery released finished work")
+		}
+	}
 	result, err := a.jobs.Sweep(ctx)
 	if err != nil {
 		log.Warn().Err(err).
 			Int("reclaimed", result.Expired).
 			Msg("job sweep did not finish; the next pass retries the rest")
 	}
-	if result.Expired == 0 && result.Abandoned == 0 && result.Accounted == 0 {
+	if result.Expired == 0 && result.Abandoned == 0 && result.Accounted == 0 && result.Released == 0 {
 		return
 	}
 	log.Info().
 		Int("expired", result.Expired).
 		Int("abandoned", result.Abandoned).
 		Int("accounted", result.Accounted).
+		Int("released", result.Released).
 		Msg("job sweep reclaimed storage and closed finished work")
 }
 

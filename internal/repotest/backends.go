@@ -224,3 +224,14 @@ func (s *namespacedStore) logicalKeys(keys []string) []string {
 	}
 	return logical
 }
+
+func (s *namespacedStore) ScanPage(ctx context.Context, prefix, cursor string, count int) (storage.KeyPage, error) {
+	page, err := s.KVStore.ScanPage(ctx, s.key(prefix), cursor, count)
+	if err != nil {
+		return storage.KeyPage{}, err
+	}
+	for i, key := range page.Keys {
+		page.Keys[i] = s.logicalKey(key)
+	}
+	return page, nil
+}

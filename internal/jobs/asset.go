@@ -136,6 +136,12 @@ func (s *Service) Open(ctx context.Context, account, id string) (Job, io.ReadClo
 // SweepResult counts what one pass reclaimed. An operator reads it to tell a
 // deployment with nothing to reclaim from a sweep that never runs.
 type SweepResult struct {
+	// Scanned counts records read during this invocation.
+	Scanned int
+	// Released counts records whose slot release this pass confirms.
+	Released int
+	// Failed counts records that need another recovery attempt.
+	Failed int
 	// Expired counts jobs whose asset passed its window and went.
 	Expired int
 	// Abandoned counts jobs nobody polled that outlived their polling budget.
@@ -162,27 +168,25 @@ type SweepResult struct {
 // error would let one unreachable object hold every later one hostage, and the
 // caller runs on a ticker that would repeat the same failure forever.
 func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
-	records, err := s.records.Scan(ctx, 0)
-	if err != nil {
-		return SweepResult{}, err
-	}
-	now := s.now()
-	var result SweepResult
-	var failures error
-	for _, job := range records {
-		swept, err := s.sweepOne(ctx, job, now, &result)
+	return recoverPages(ctx, &s.recovery, s.records.RecoveryPage, func(ctx context.Context, job Job, result *SweepResult) error {
+		swept, err := s.sweepOne(ctx, job, s.now(), result)
 		if err != nil {
-			failures = errors.Join(failures, fmt.Errorf("jobs: sweep %s: %w", job.ID, err))
-			continue
+			return err
 		}
-		job = swept
-		if job.State.Terminal() {
-			if settled := s.settle(ctx, job); !job.Accounted() && settled.Accounted() {
+		if swept.State.Terminal() {
+			settled := s.settle(ctx, swept)
+			if !swept.SlotReleased && settled.SlotReleased {
+				result.Released++
+			}
+			if !swept.Accounted() && settled.Accounted() {
 				result.Accounted++
 			}
+			if settled.SlotID != "" && !settled.SlotReleased && s.meter != nil {
+				return ErrSlotReleasePending
+			}
 		}
-	}
-	return result, failures
+		return nil
+	})
 }
 
 // sweepOne runs the two reclaims one record may need and reports what it became.

@@ -35,6 +35,7 @@ type Repository interface {
 	Get(context.Context, string, string) (Job, error)
 	List(context.Context, string, int) ([]Job, error)
 	Scan(context.Context, int) ([]Job, error)
+	RecoveryPage(context.Context, string) (RecoveryPage[Job], error)
 	// Replace binds the change to the caller's observed record.
 	// Concurrent changes refuse with storage.ErrConflict, even within one state.
 	Replace(ctx context.Context, expected, next Job) error

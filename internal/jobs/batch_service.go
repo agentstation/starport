@@ -76,6 +76,7 @@ type BatchSubmission struct {
 
 // BatchService owns the batch lifecycle: the record, the run, and the cancel.
 type BatchService struct {
+	recovery    recoveryState[Batch]
 	repository  BatchRepository
 	meter       Meter
 	now         func() time.Time

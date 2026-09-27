@@ -122,7 +122,7 @@ func sortNewestFirst(records []Job) {
 	})
 }
 
-// Scan answers every job record this deployment holds, newest first.
+// Scan answers a bounded set of deployment records, sorted newest first.
 //
 // It reads across accounts because the sweep that reclaims expired asset storage
 // is a deployment-wide pass. Nothing on a request path calls it: a caller reads

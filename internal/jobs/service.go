@@ -76,8 +76,9 @@ type Runner interface {
 // accounting rule and the retention rule that later read the state see one
 // history rather than several writers' versions of one.
 type Service struct {
-	records Repository
-	assets  blob.Store
+	recovery recoveryState[Job]
+	records  Repository
+	assets   blob.Store
 	// accountant prices a job once, at its terminal state. A service without
 	// one still runs: it keeps the same stamp on the record, so a deployment
 	// that later gains an accountant does not re-price the jobs it already

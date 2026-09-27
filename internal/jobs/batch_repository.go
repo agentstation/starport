@@ -40,6 +40,7 @@ type BatchRepository interface {
 	Create(context.Context, Batch) error
 	Get(context.Context, string, string) (Batch, error)
 	List(context.Context, string, int) ([]Batch, error)
+	RecoveryPage(context.Context, string) (RecoveryPage[Batch], error)
 	Replace(ctx context.Context, expected, next Batch) error
 }
 
