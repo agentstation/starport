@@ -7,6 +7,8 @@ import (
 
 // Extraction records one fresh provider recognition call. Cache hits add no call.
 type Extraction struct {
+	ProcessedPages         int64     `json:"processed_pages,omitzero"`
+	ProcessedPagesKnown    bool      `json:"processed_pages_known,omitzero"`
 	TokensUnknown          bool      `json:"tokens_unknown,omitempty"`
 	CacheReadTokensUnknown bool      `json:"cache_read_tokens_unknown,omitempty"`
 	StartedAt              time.Time `json:"started_at,omitzero"`

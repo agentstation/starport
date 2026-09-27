@@ -136,6 +136,13 @@ func RecognitionResponseToInference(response *RecognitionResponse) (inference.Re
 		}
 		measured = &converted
 	}
+	if response.ProcessedPages != nil && *response.ProcessedPages >= 0 {
+		if measured == nil {
+			measured = &inference.Usage{TokensUnknown: true, CacheReadTokensUnknown: true}
+		}
+		measured.ProcessedPages = *response.ProcessedPages
+		measured.ProcessedPagesKnown = true
+	}
 	return inference.RecognitionResponse{Pages: pages, Usage: measured}, nil
 }
 

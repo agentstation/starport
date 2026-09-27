@@ -68,6 +68,7 @@ func TestTransportAuthenticationRegistriesUsePrimitives(t *testing.T) {
 		// count, the result list, and the billing unit.
 		catalogs.EndpointTypeCohere,
 		catalogs.EndpointTypeVoyage,
+		catalogs.EndpointTypeMistralOCR,
 	}, transports.EndpointTypes())
 	require.True(t, transports.Supports(
 		catalogs.EndpointTypeOpenAI,

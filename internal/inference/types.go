@@ -372,6 +372,10 @@ type ChatRequest struct {
 // and cache writes; CacheReadTokens and CacheWriteTokens break out the
 // cached portions for pricing.
 type Usage struct {
+	// ProcessedPages counts pages the recognition provider reports as billed.
+	ProcessedPages int
+	// ProcessedPagesKnown distinguishes a measured zero from absent page usage.
+	ProcessedPagesKnown bool
 	// TokensUnknown marks incomplete or invalid provider token evidence.
 	TokensUnknown bool
 	// CacheReadTokensUnknown distinguishes an omitted cache count from measured zero.

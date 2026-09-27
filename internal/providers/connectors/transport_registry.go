@@ -212,6 +212,11 @@ func ProductionTransportRegistry() (*TransportRegistry, error) {
 			Factory:      newVoyageConnector,
 		},
 		TransportDescriptor{
+			EndpointType: catalogs.EndpointTypeMistralOCR,
+			Operations:   []catalogs.ProviderOperation{catalogs.ProviderOperationDocumentsRecognition},
+			Factory:      newMistralOCRConnector,
+		},
+		TransportDescriptor{
 			EndpointType: catalogs.EndpointTypeOllama,
 			Operations:   []catalogs.ProviderOperation{chat, embeddings},
 			Factory: func(providerID catalogs.ProviderID, config ProviderConfig) (Connector, error) {
