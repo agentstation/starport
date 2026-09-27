@@ -167,7 +167,9 @@ type Totals struct {
 
 // Repository is the durable usage contract.
 type Repository interface {
-	// Put persists one record and advances the aggregate counters.
+	// Put atomically persists one record and its aggregate changes.
+	// An exact retry is idempotent during retention. Conflicting reuse refuses.
+	// Preserve the event timestamp and all recorded values across retries.
 	Put(context.Context, Record) error
 	// List returns records newest-first.
 	List(context.Context, Query) (Page, error)
@@ -178,8 +180,8 @@ type Repository interface {
 
 // Options configure a repository.
 type Options struct {
-	// Retention bounds record and counter lifetime; DefaultRetention
-	// when zero.
+	// Retention bounds lifetime from the event timestamp for records and
+	// from each window end for counters. Zero selects DefaultRetention.
 	Retention time.Duration
 }
 
@@ -213,54 +215,7 @@ func (r *repository) Put(ctx context.Context, record Record) error {
 	if err != nil {
 		return fmt.Errorf("encode usage record: %w", err)
 	}
-	if err := r.store.SetWithTTL(ctx, recordKey(record.KeyID, record.Timestamp, record.RequestID), data, r.retention); err != nil {
-		return fmt.Errorf("put usage record: %w", err)
-	}
-	return r.accumulate(ctx, record)
-}
-
-func (r *repository) accumulate(ctx context.Context, record Record) error {
-	spend := record.knownSpendNanoUSD()
-	counters := []struct {
-		name  string
-		delta int64
-	}{
-		{counterRequests, 1},
-		{counterTokens, record.Tokens.Total},
-		{counterSpend, spend},
-	}
-	// A record advances one counter set per population that can cap it. The
-	// account set is skipped for a record written before account attribution
-	// existed: counting it under no account is worse than not counting it.
-	scopes := []Scope{KeyScope(record.KeyID), GatewayScope()}
-	if record.AccountID != "" {
-		scopes = append(scopes, AccountScope(record.AccountID))
-	}
-	if record.TeamID != "" {
-		scopes = append(scopes, TeamScope(record.TeamID))
-	}
-	for _, scope := range scopes {
-		for _, interval := range []string{IntervalDay, IntervalWeek, IntervalMonth} {
-			start, end := window(interval, record.Timestamp)
-			for _, counter := range counters {
-				if counter.delta == 0 && counter.name != counterRequests {
-					continue
-				}
-				key := aggregateKey(scope, interval, start, counter.name)
-				value, err := r.store.Increment(ctx, key, counter.delta)
-				if err != nil {
-					return fmt.Errorf("advance usage counter: %w", err)
-				}
-				if value == counter.delta {
-					// First write in this window: bound its lifetime.
-					if err := r.store.ExpireAt(ctx, key, end.Add(r.retention)); err != nil {
-						return fmt.Errorf("expire usage counter: %w", err)
-					}
-				}
-			}
-		}
-	}
-	return nil
+	return r.commitRecord(ctx, record, data)
 }
 
 func (r *repository) List(ctx context.Context, query Query) (Page, error) {

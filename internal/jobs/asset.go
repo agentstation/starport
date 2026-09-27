@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/agentstation/starport/internal/blob"
+	"github.com/agentstation/starport/internal/storage"
 )
 
 var (
@@ -83,11 +84,18 @@ func (s *Service) collect(ctx context.Context, runner Runner, job Job) Job {
 		s.discard(ctx, key)
 		return job
 	}
-	if err := s.records.Replace(ctx, stored); err != nil {
-		// The record is the only thing that names the bytes, so bytes no record
-		// names are unreachable and go now rather than at a sweep that would
-		// never find them.
-		s.discard(ctx, key)
+	if err := s.records.Replace(ctx, job, stored); err != nil {
+		if errors.Is(err, storage.ErrConflict) || errors.Is(err, ErrJobNotFound) {
+			// A definite refusal leaves this candidate unreferenced.
+			s.discard(ctx, key)
+			return job
+		}
+		// An interrupted response can hide a successful commit. Keep the bytes
+		// until the stored record resolves that uncertainty.
+		current, readErr := s.records.Get(ctx, job.Account, job.ID)
+		if readErr == nil && current.AssetKey == key {
+			return current
+		}
 		return job
 	}
 	return stored
@@ -183,13 +191,14 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 // budget just ended may hold no asset at all, and a job that holds one is
 // already terminal and cannot be ended again.
 func (s *Service) sweepOne(ctx context.Context, job Job, now time.Time, result *SweepResult) (Job, error) {
+	previous := job
 	if !job.State.Terminal() && s.policy.Spent(job, now) {
 		// FailSpent needs no runner. A job past its budget has outlived what
 		// this gateway is willing to ask a provider about.
 		if err := s.policy.FailSpent(&job, now); err != nil {
 			return job, err
 		}
-		ended, err := s.commit(ctx, job)
+		ended, err := s.commit(ctx, previous, job)
 		if err != nil {
 			return job, err
 		}
@@ -226,7 +235,7 @@ func (s *Service) expire(ctx context.Context, job Job) (Job, error) {
 	if err := marked.ExpireAsset(s.now()); err != nil {
 		return Job{}, err
 	}
-	return s.commit(ctx, marked)
+	return s.commit(ctx, job, marked)
 }
 
 // discard removes bytes no record names and reports nothing. Every caller is

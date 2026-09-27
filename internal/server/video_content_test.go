@@ -162,8 +162,9 @@ func TestAListedJobStatesWhetherItsBytesAreStillThere(t *testing.T) {
 	// stops travelling with it.
 	stored, err := records.Get(t.Context(), "acme", job.ID)
 	require.NoError(t, err)
+	previous := stored
 	require.NoError(t, stored.ExpireAsset(time.Now()))
-	require.NoError(t, records.Replace(t.Context(), stored))
+	require.NoError(t, records.Replace(t.Context(), previous, stored))
 
 	gone := decodeVideoJob(t, videoRequest(server, http.MethodGet, "/v1/videos/"+job.ID, key))
 	require.Equal(t, "completed", gone["status"],

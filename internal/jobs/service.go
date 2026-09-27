@@ -314,12 +314,13 @@ func (s *Service) Refresh(ctx context.Context, runner Runner, account, id string
 	if job.State.Terminal() {
 		return s.settle(ctx, s.collect(ctx, runner, job)), nil
 	}
+	previous := job
 	now := s.now()
 	if s.policy.Spent(job, now) {
 		if err := s.policy.FailSpent(&job, now); err != nil {
 			return Job{}, err
 		}
-		spent, err := s.commit(ctx, job)
+		spent, err := s.commit(ctx, previous, job)
 		if err != nil {
 			return Job{}, err
 		}
@@ -338,7 +339,7 @@ func (s *Service) Refresh(ctx context.Context, runner Runner, account, id string
 	if err := applyReport(&job, report, now); err != nil {
 		return Job{}, err
 	}
-	moved, err := s.commit(ctx, job)
+	moved, err := s.commit(ctx, previous, job)
 	if err != nil {
 		return Job{}, err
 	}
@@ -362,6 +363,7 @@ func (s *Service) Cancel(ctx context.Context, runner Runner, account, id string)
 	if job.State.Terminal() {
 		return job, fmt.Errorf("%w: it is %s", ErrJobAlreadyEnded, job.State)
 	}
+	previous := job
 	if _, err := runner.Cancel(ctx, s.handle(job)); err != nil {
 		return Job{}, err
 	}
@@ -373,7 +375,7 @@ func (s *Service) Cancel(ctx context.Context, runner Runner, account, id string)
 	if err := job.Transition(JobStateCancelled, now); err != nil {
 		return Job{}, err
 	}
-	stopped, err := s.commit(ctx, job)
+	stopped, err := s.commit(ctx, previous, job)
 	if err != nil {
 		return Job{}, err
 	}
@@ -387,8 +389,8 @@ func (s *Service) handle(job Job) Handle {
 	return Handle{Provider: job.Provider, Model: job.Model, ProviderJobID: job.providerJobID}
 }
 
-func (s *Service) commit(ctx context.Context, job Job) (Job, error) {
-	if err := s.records.Replace(ctx, job); err != nil {
+func (s *Service) commit(ctx context.Context, previous, job Job) (Job, error) {
+	if err := s.records.Replace(ctx, previous, job); err != nil {
 		return Job{}, err
 	}
 	return job, nil

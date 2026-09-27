@@ -11,6 +11,8 @@ import (
 
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/repotest"
+	"github.com/agentstation/starport/internal/storage"
 )
 
 // assetBound is the bound these tests hand the service. It is small enough to
@@ -23,6 +25,40 @@ const assetBound int64 = 4096
 // retentionWindow is short so a test can pass it by moving a clock rather than
 // by waiting.
 const retentionWindow = time.Hour
+
+type assetAcknowledgementLost struct{ jobs.Repository }
+
+func (r assetAcknowledgementLost) Replace(ctx context.Context, expected, next jobs.Job) error {
+	if err := r.Repository.Replace(ctx, expected, next); err != nil {
+		return err
+	}
+	if expected.AssetKey == "" && next.AssetKey != "" {
+		return errors.New("asset record acknowledgement lost")
+	}
+	return nil
+}
+
+func TestAssetSurvivesLostRecordAcknowledgement(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		records, err := jobs.OpenRepository(store)
+		require.NoError(t, err)
+		assets, err := blob.NewFilesystem(t.TempDir())
+		require.NoError(t, err)
+		service, err := jobs.NewService(assetAcknowledgementLost{records}, jobs.WithAssetStore(assets))
+		require.NoError(t, err)
+		runner := finishingRunner()
+		job, err := service.Submit(t.Context(), open(runner), submissionFor(accountA))
+		require.NoError(t, err)
+		_, err = service.Refresh(t.Context(), runner, accountA, job.ID)
+		require.NoError(t, err)
+		_, reader, err := service.Open(t.Context(), accountA, job.ID)
+		require.NoError(t, err, "a lost acknowledgement cannot delete an asset the durable job references")
+		t.Cleanup(func() { _ = reader.Close() })
+		data, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		require.Equal(t, runner.asset.Bytes, data)
+	})
+}
 
 // errProviderUnreachable stands for any failure at the fetch. The rule under
 // test does not read the reason.

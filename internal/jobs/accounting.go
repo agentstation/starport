@@ -90,7 +90,7 @@ func (s *Service) settle(ctx context.Context, job Job) Job {
 	if err := settled.MarkAccounted(s.now()); err != nil {
 		return job
 	}
-	if err := s.records.Replace(ctx, settled); err != nil {
+	if err := s.records.Replace(ctx, job, settled); err != nil {
 		return job
 	}
 	if s.accountant != nil {

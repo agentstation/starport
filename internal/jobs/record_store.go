@@ -8,10 +8,9 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// The job store and the batch store keep separate records under separate
-// prefixes, and they walk and guard those records the same way. The shared
-// walk and the shared replace guard live here, so the two repositories state
-// only what differs: the record shape, the prefix, and the error vocabulary.
+// The job and batch stores share the prefix reader below.
+// Batch replacement checks state transitions here. Job replacement also binds
+// the caller's observed record in repository_store.go.
 
 // readRecordsUnder reads and decodes every record under one prefix. A record
 // deleted between the scan and the read is skipped, not an error: a listing

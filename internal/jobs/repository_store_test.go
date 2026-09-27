@@ -2,12 +2,15 @@ package jobs_test
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/repotest"
 	"github.com/agentstation/starport/internal/routing"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -46,6 +49,65 @@ func TestOpenRepositoryRefusesAnAbsentStore(t *testing.T) {
 	require.ErrorIs(t, err, jobs.ErrRepositoryRequired)
 }
 
+func TestStaleJobCannotEraseAccountingOrAssetState(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		records, err := jobs.OpenRepository(store)
+		require.NoError(t, err)
+		job := storedJob(t, "job_stale", accountA, submitted)
+		require.NoError(t, job.Transition(jobs.JobStateCompleted, submitted.Add(time.Minute)))
+		require.NoError(t, records.Create(t.Context(), job))
+		accounted, asset := job, job
+		require.NoError(t, accounted.MarkAccounted(submitted.Add(2*time.Minute)))
+		require.NoError(t, asset.StoreAsset("asset", "video/mp4", 10, submitted.Add(time.Hour)))
+		require.NoError(t, records.Replace(t.Context(), job, accounted))
+		require.ErrorIs(t, records.Replace(t.Context(), job, asset), storage.ErrConflict)
+		kept, err := records.Get(t.Context(), accountA, job.ID)
+		require.NoError(t, err)
+		require.True(t, kept.Accounted())
+		require.Empty(t, kept.AssetKey)
+		merged := kept
+		require.NoError(t, merged.StoreAsset("asset", "video/mp4", 10, submitted.Add(time.Hour)))
+		require.NoError(t, records.Replace(t.Context(), kept, merged))
+		require.ErrorIs(t, records.Replace(t.Context(), job, accounted), storage.ErrConflict)
+		final, err := records.Get(t.Context(), accountA, job.ID)
+		require.NoError(t, err)
+		require.True(t, final.Accounted())
+		require.Equal(t, "asset", final.AssetKey)
+	})
+}
+
+func TestConcurrentJobAccountingClaimsHaveOneWinner(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		records, err := jobs.OpenRepository(store)
+		require.NoError(t, err)
+		job := storedJob(t, "job_claim", accountA, submitted)
+		require.NoError(t, job.Transition(jobs.JobStateCompleted, submitted.Add(time.Minute)))
+		require.NoError(t, records.Create(t.Context(), job))
+		claimed := job
+		require.NoError(t, claimed.MarkAccounted(submitted.Add(2*time.Minute)))
+		var wg sync.WaitGroup
+		results := make(chan error, 16)
+		for range 16 {
+			wg.Go(func() { results <- records.Replace(t.Context(), job, claimed) })
+		}
+		wg.Wait()
+		close(results)
+		winners, conflicts := 0, 0
+		for err := range results {
+			switch {
+			case err == nil:
+				winners++
+			case errors.Is(err, storage.ErrConflict):
+				conflicts++
+			default:
+				require.NoError(t, err)
+			}
+		}
+		require.Equal(t, 1, winners)
+		require.Equal(t, 15, conflicts)
+	})
+}
+
 // TestAJobIsUnreadableByAnotherAccount holds the isolation the whole seam rests
 // on. The answer is not found rather than forbidden, because a refusal would
 // confirm that the identifier exists.
@@ -77,7 +139,7 @@ func TestAJobIsUnreadableByAnotherAccount(t *testing.T) {
 	// A replace by the wrong account finds no record to replace.
 	stolen := job
 	stolen.Account = accountB
-	require.ErrorIs(t, records.Replace(ctx, stolen), jobs.ErrJobNotFound)
+	require.ErrorIs(t, records.Replace(ctx, stolen, stolen), jobs.ErrJobNotFound)
 }
 
 func TestCreateRefusesAnIdentifierAlreadyInUse(t *testing.T) {
@@ -159,20 +221,20 @@ func TestAnIllegalStateWriteFailsAtTheRepository(t *testing.T) {
 	ended := submitted.Add(time.Minute)
 	completed := job
 	require.NoError(t, completed.Transition(jobs.JobStateCompleted, ended))
-	require.NoError(t, records.Replace(ctx, completed))
+	require.NoError(t, records.Replace(ctx, job, completed))
 
 	// Completed is terminal, so nothing moves out of it.
 	revived := completed
 	revived.State = jobs.JobStateRunning
 	revived.TerminalAt = time.Time{}
-	require.ErrorIs(t, records.Replace(ctx, revived), jobs.ErrIllegalTransition)
+	require.ErrorIs(t, records.Replace(ctx, completed, revived), jobs.ErrIllegalTransition)
 
 	// The record itself is valid, so the transition check is what refuses it.
 	restated := completed
 	restated.State = jobs.JobStateFailed
 	restated.Reason = "the provider rejected the prompt"
 	require.NoError(t, restated.Validate())
-	require.ErrorIs(t, records.Replace(ctx, restated), jobs.ErrIllegalTransition)
+	require.ErrorIs(t, records.Replace(ctx, completed, restated), jobs.ErrIllegalTransition)
 
 	// The refused writes changed nothing.
 	read, err := records.Get(ctx, accountA, job.ID)
@@ -199,7 +261,7 @@ func TestReplaceAcceptsAChangeThatKeepsTheState(t *testing.T) {
 
 	adopted := job
 	require.NoError(t, adopted.AdoptProviderJob("video_4f19c0a7"))
-	require.NoError(t, records.Replace(ctx, adopted))
+	require.NoError(t, records.Replace(ctx, job, adopted))
 
 	read, err := records.Get(ctx, accountA, job.ID)
 	require.NoError(t, err)
@@ -212,7 +274,8 @@ func TestReplaceFindsNoRecordForAnUnknownJob(t *testing.T) {
 
 	ctx := context.Background()
 	records, _ := newRepository(t)
-	require.ErrorIs(t, records.Replace(ctx, storedJob(t, "job_01", accountA, submitted)), jobs.ErrJobNotFound)
+	job := storedJob(t, "job_01", accountA, submitted)
+	require.ErrorIs(t, records.Replace(ctx, job, job), jobs.ErrJobNotFound)
 }
 
 func TestARepeatedDeleteIsSafe(t *testing.T) {

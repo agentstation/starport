@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -133,16 +134,36 @@ func (r *repository) Scan(ctx context.Context, limit int) ([]Job, error) {
 	return records, nil
 }
 
-func (r *repository) Replace(ctx context.Context, job Job) error {
+func (r *repository) Replace(ctx context.Context, expected, job Job) error {
+	if expected.Account != job.Account || expected.ID != job.ID {
+		return ErrInvalidJob
+	}
+	previous, err := encodeJob(expected)
+	if err != nil {
+		return err
+	}
 	data, err := encodeJob(job)
 	if err != nil {
 		return err
 	}
-	return replaceRecord(ctx, r.store, storageKey(job.Account, job.ID), data,
-		func(current []byte) (JobState, error) {
-			stored, err := decodeJob(current)
-			return stored.State, err
-		}, job.State, ErrJobNotFound, "job")
+	key := storageKey(job.Account, job.ID)
+	current, err := r.store.Get(ctx, key)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return ErrJobNotFound
+		}
+		return fmt.Errorf("jobs: read record for replace: %w", err)
+	}
+	if !bytes.Equal(current, previous) {
+		return storage.ErrConflict
+	}
+	if expected.State != job.State && !CanTransition(expected.State, job.State) {
+		return fmt.Errorf("%w: %q to %q", ErrIllegalTransition, expected.State, job.State)
+	}
+	if err := r.store.CompareAndSwap(ctx, key, previous, data); err != nil {
+		return fmt.Errorf("jobs: replace record: %w", err)
+	}
+	return nil
 }
 
 func (r *repository) Delete(ctx context.Context, account, id string) error {
