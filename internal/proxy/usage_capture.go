@@ -289,6 +289,8 @@ func captureOperation[Request, Response any](
 		record.Attempts = response.Attempts
 		record.RoutingMS = response.RoutingDuration.Milliseconds()
 		record.Tokens = usageTokens(operationUsage(response.Response))
+		record.TokensUnknown = operationUsage(response.Response).TokensUnknown
+		record.TokensEstimated = operationUsage(response.Response).Estimated
 		record.Media = usageMedia(operationUsage(response.Response))
 		record.SearchUnits = int64(operationUsage(response.Response).SearchUnits)
 		snapshot = response.CatalogSnapshot
@@ -686,6 +688,9 @@ func usageCost(snapshot *runtimecatalog.RoutableSnapshot, record usage.Record) (
 	}
 	if snapshot == nil || record.ModelUsed == "" {
 		return nil, usage.CostReasonNoRoute
+	}
+	if record.Operation == usage.OperationModerations {
+		return moderationUsageCost(snapshot, record)
 	}
 	if record.Operation == usage.OperationEmbeddings {
 		return embeddingUsageCost(snapshot, record)

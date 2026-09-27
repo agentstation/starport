@@ -67,7 +67,9 @@ func TestModerationGuardrailRidesTheAccountIdentity(t *testing.T) {
 	}
 	service := moderatedService(t, core, guardrails.Settings{})
 
-	_, err := service.ProcessChatCompletion(context.Background(), moderatedChatRequest("threats"))
+	request := moderatedChatRequest("threats")
+	request.APIKeyConfig = &APIKeyRoutingConfig{AllowedModels: []string{"openai/omni-moderation-latest"}, AllowedProviders: []string{"openai"}}
+	_, err := service.ProcessChatCompletion(t.Context(), request)
 	require.ErrorIs(t, err, guardrails.ErrRefused)
 	var refusal *guardrails.RefusalError
 	require.ErrorAs(t, err, &refusal)
@@ -76,6 +78,7 @@ func TestModerationGuardrailRidesTheAccountIdentity(t *testing.T) {
 
 	require.Len(t, core.moderationRequests, 1)
 	routed := core.moderationRequests[0]
+	require.Same(t, request.APIKeyConfig, routed.APIKeyConfig)
 	require.Equal(t, "acct", routed.AccountID)
 	require.Equal(t, "key-1", routed.KeyID)
 	require.Equal(t, "req-1-guardrail", routed.RequestID)
