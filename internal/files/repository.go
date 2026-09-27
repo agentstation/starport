@@ -15,7 +15,7 @@ import (
 
 const (
 	// StorageSchemaVersion identifies the only file record schema.
-	StorageSchemaVersion = 1
+	StorageSchemaVersion = 2
 	// StoragePrefix is the file record v1 namespace.
 	StoragePrefix = "files:v1:account:"
 
@@ -41,6 +41,7 @@ var (
 // bytes, which is why every method here is cheap and none of them streams.
 type Repository interface {
 	Create(context.Context, File) error
+	CreateClaimed(context.Context, File, storage.CompareAndSwapMutation) error
 	Get(context.Context, string, string) (File, error)
 	List(context.Context, string, int) ([]File, error)
 	Replace(context.Context, File) error
@@ -63,6 +64,7 @@ type fileRecord struct {
 	CreatedAt     time.Time `json:"created_at"`
 	ExpiresAt     time.Time `json:"expires_at,omitempty"`
 	BlobKey       string    `json:"blob_key"`
+	Metered       bool      `json:"metered"`
 }
 
 // OpenRepository returns a storage-backed file record repository.
@@ -74,11 +76,30 @@ func OpenRepository(store storage.KVStore) (Repository, error) {
 }
 
 func (r *repository) Create(ctx context.Context, file File) error {
+	if file.metered {
+		return ErrInvalidFile
+	}
+	return r.create(ctx, file, nil)
+}
+
+// CreateClaimed publishes metadata and its byte claim in one transaction.
+func (r *repository) CreateClaimed(ctx context.Context, file File, claim storage.CompareAndSwapMutation) error {
+	if !file.metered || file.State != FileStatePending || claim.Key == "" || len(claim.ExpectedValue) == 0 || len(claim.NewValue) == 0 {
+		return ErrInvalidFile
+	}
+	return r.create(ctx, file, &claim)
+}
+
+func (r *repository) create(ctx context.Context, file File, claim *storage.CompareAndSwapMutation) error {
 	data, err := encodeFile(file)
 	if err != nil {
 		return err
 	}
-	if err := r.store.CompareAndSwap(ctx, storageKey(file.Account, file.ID), nil, data); err != nil {
+	writes := []storage.CompareAndSwapMutation{{Key: storageKey(file.Account, file.ID), NewValue: data}}
+	if claim != nil {
+		writes = append(writes, *claim)
+	}
+	if err := r.store.CompareAndSwapBatch(ctx, writes); err != nil {
 		if errors.Is(err, storage.ErrConflict) {
 			return ErrFileExists
 		}
@@ -159,6 +180,19 @@ func (r *repository) Replace(ctx context.Context, file File) error {
 		}
 		return fmt.Errorf("files: read record for replace: %w", err)
 	}
+	previous, err := decodeFile(current)
+	if err != nil {
+		return err
+	}
+	if previous.ID != file.ID || previous.Account != file.Account || previous.Filename != file.Filename || previous.Purpose != file.Purpose || previous.blobKey != file.blobKey || previous.metered != file.metered || !previous.CreatedAt.Equal(file.CreatedAt) || !previous.ExpiresAt.Equal(file.ExpiresAt) {
+		return storage.ErrConflict
+	}
+	if previous.State == FileStateDeleting && file.State != FileStateDeleting || previous.State == FileStateReady && file.State == FileStatePending {
+		return storage.ErrConflict
+	}
+	if previous.Bytes != file.Bytes && !(previous.State == FileStatePending && file.State == FileStateReady) {
+		return storage.ErrConflict
+	}
 	if err := r.store.CompareAndSwap(ctx, key, current, data); err != nil {
 		return fmt.Errorf("files: replace record: %w", err)
 	}
@@ -203,6 +237,7 @@ func encodeFile(file File) ([]byte, error) {
 		CreatedAt:     file.CreatedAt,
 		ExpiresAt:     file.ExpiresAt,
 		BlobKey:       file.blobKey,
+		Metered:       file.metered,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("files: encode record: %w", err)
@@ -228,6 +263,7 @@ func decodeFile(data []byte) (File, error) {
 		CreatedAt: stored.CreatedAt,
 		ExpiresAt: stored.ExpiresAt,
 		blobKey:   stored.BlobKey,
+		metered:   stored.Metered,
 	}
 	if err := file.Validate(); err != nil {
 		return File{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)

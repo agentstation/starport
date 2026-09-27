@@ -102,6 +102,7 @@ type File struct {
 	ExpiresAt time.Time
 
 	blobKey string
+	metered bool
 }
 
 // Validate reports whether the record can be stored.

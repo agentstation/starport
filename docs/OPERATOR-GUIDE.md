@@ -1335,6 +1335,19 @@ gateway answers a full account with HTTP 413 and tells the caller to delete a
 file to make room. A stored-byte bound is a level and not a rate: an upload
 raises it and a delete lowers it, and no interval resets it.
 
+Each file has a durable byte claim in the same KV store as its metadata.
+Cleanup releases that claim once, after deleting the bytes. Concurrent cleanup
+and lost acknowledgments cannot release another file's capacity. A failed
+release keeps the deleting record for the next sweep.
+
+An abandoned preparation can hold capacity for ten minutes. Recovery then
+closes its unattached claim. Attached files follow normal file retention.
+Missing or invalid accounting state refuses new uploads. Do not delete quota
+keys to restore capacity.
+
+File schema 2 and byte-accounting schema 2 require
+coordinated migration. CSP13 owns that qualification.
+
 ### Choosing a backend
 
 The default writes to the platform data directory:

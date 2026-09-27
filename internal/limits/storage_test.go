@@ -2,181 +2,108 @@ package limits
 
 import (
 	"context"
-	"errors"
+	"encoding/json/v2"
+	"fmt"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/agentstation/starport/internal/repotest"
+	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
 
-// atomicCounter is an in-memory counter whose increment and decrement are
-// atomic against concurrent callers, which is exactly what the meter's
-// contract asks of a durable store.
-//
-// The lock is the point of the fake. A meter that read the total, decided, and
-// then wrote would still pass a serial test, and would still admit two uploads
-// that together pass the bound. Only a counter that is genuinely atomic can
-// tell the two implementations apart.
-type atomicCounter struct {
-	mu     sync.Mutex
-	values map[string]int64
-	fail   error
-}
-
-func newAtomicCounter() *atomicCounter {
-	return &atomicCounter{values: make(map[string]int64)}
-}
-
-func (c *atomicCounter) Increment(_ context.Context, key string, delta int64) (int64, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.fail != nil {
-		return 0, c.fail
-	}
-	c.values[key] += delta
-	return c.values[key], nil
-}
-
-func (c *atomicCounter) Decrement(ctx context.Context, key string, delta int64) (int64, error) {
-	return c.Increment(ctx, key, -delta)
-}
-
-func newTestMeter(t *testing.T) (*StorageMeter, *atomicCounter) {
-	t.Helper()
-	counter := newAtomicCounter()
-	meter, err := NewStorageMeter(counter)
-	require.NoError(t, err)
-	return meter, counter
-}
-
-// TestConcurrentReservationsCannotBothPassABoundThatAdmitsOne holds FIL-V17.
-//
-// Two uploads arrive at once and each one fits on its own. The bound admits a
-// single one of them, and the pair must not both land. This is the property
-// that forces the meter to claim before it checks: a read-then-write meter
-// lets both callers read a total of zero, both decide they fit, and both
-// write.
 func TestConcurrentReservationsCannotBothPassABoundThatAdmitsOne(t *testing.T) {
-	t.Parallel()
-	meter, counter := newTestMeter(t)
-	ctx := context.Background()
-
-	const (
-		size    = 600
-		bound   = 1000
-		callers = 8
-	)
-
-	var wg sync.WaitGroup
-	results := make([]error, callers)
-	start := make(chan struct{})
-	for i := range callers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start
-			results[i] = meter.Reserve(ctx, "account-a", size, bound)
-		}()
-	}
-	close(start)
-	wg.Wait()
-
-	admitted := 0
-	for _, err := range results {
-		if err == nil {
-			admitted++
-			continue
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		meter, err := NewStorageMeter(store)
+		require.NoError(t, err)
+		ctx := t.Context()
+		require.NoError(t, meter.InitializeEmpty(ctx, "a"))
+		var wg sync.WaitGroup
+		results := make([]error, 8)
+		start := make(chan struct{})
+		for i := range results {
+			wg.Go(func() { <-start; results[i] = meter.Reserve(ctx, "a", fmt.Sprint(i), 600, 1000) })
 		}
-		require.ErrorIs(t, err, ErrStorageFull)
-	}
-	require.Equal(t, 1, admitted, "the bound admits one reservation of this size")
-
-	// Every refusal gave its claim back, so the total counts only the bytes
-	// that landed. A refusal that kept its claim would leave the holder
-	// permanently short by the size of every upload it ever tried.
-	total, err := meter.Total(ctx, "account-a")
-	require.NoError(t, err)
-	require.Equal(t, int64(size), total)
-	require.Equal(t, int64(size), counter.values[StoredBytesPrefix+"account-a"])
+		close(start)
+		wg.Wait()
+		admitted := 0
+		for _, err := range results {
+			if err == nil {
+				admitted++
+			} else {
+				require.ErrorIs(t, err, ErrStorageFull)
+			}
+		}
+		require.Equal(t, 1, admitted)
+		total, err := meter.Total(ctx, "a")
+		require.NoError(t, err)
+		require.Equal(t, int64(600), total)
+	})
 }
 
-// TestReleaseLowersTheTotalByTheFileSize states the other half of the pair. A
-// delete has to give the bytes back, or an account that stayed under its bound
-// would still run out of room after enough uploads and deletes.
-func TestReleaseLowersTheTotalByTheFileSize(t *testing.T) {
-	t.Parallel()
-	meter, _ := newTestMeter(t)
-	ctx := context.Background()
-
-	require.NoError(t, meter.Reserve(ctx, "account-a", 400, 1000))
-	require.NoError(t, meter.Reserve(ctx, "account-a", 500, 1000))
-	total, err := meter.Total(ctx, "account-a")
-	require.NoError(t, err)
-	require.Equal(t, int64(900), total)
-
-	require.NoError(t, meter.Release(ctx, "account-a", 400))
-	total, err = meter.Total(ctx, "account-a")
-	require.NoError(t, err)
-	require.Equal(t, int64(500), total)
-
-	// The room the delete gave back is usable room, not just a smaller number.
-	require.NoError(t, meter.Reserve(ctx, "account-a", 400, 1000))
+func TestStoredByteClaimsPreserveIdentityAndCapacity(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		ctx := t.Context()
+		meter, err := NewStorageMeter(store)
+		require.NoError(t, err)
+		for _, account := range []string{"a", "b"} {
+			require.NoError(t, meter.InitializeEmpty(ctx, account))
+		}
+		require.NoError(t, meter.Reserve(ctx, "a", "one", 400, 1000))
+		require.NoError(t, meter.Reserve(ctx, "a", "one", 400, 1000))
+		require.ErrorIs(t, meter.Reserve(ctx, "a", "one", 401, 1000), ErrStorageClaimConflict)
+		require.NoError(t, meter.Reserve(ctx, "a", "two", 500, 1000))
+		require.NoError(t, meter.Reserve(ctx, "b", "one", 5000, 0))
+		require.ErrorIs(t, meter.Reserve(ctx, "a", "three", 200, 1000), ErrStorageFull)
+		claim, err := meter.Attachment(ctx, "a", "one")
+		require.NoError(t, err)
+		require.NoError(t, store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{claim}))
+		require.ErrorIs(t, meter.Abort(ctx, "a", "one"), ErrStorageClaimConflict)
+		require.NoError(t, meter.Resize(ctx, "a", "one", 300))
+		require.NoError(t, meter.Resize(ctx, "a", "one", 300))
+		require.ErrorIs(t, meter.Resize(ctx, "a", "one", 200), ErrStorageClaimConflict)
+		require.NoError(t, meter.Release(ctx, "a", "one"))
+		reopened, err := NewStorageMeter(store)
+		require.NoError(t, err)
+		require.NoError(t, reopened.Release(ctx, "a", "one"))
+		require.ErrorIs(t, reopened.Reserve(ctx, "a", "one", 400, 1000), ErrStorageClaimReleased)
+		total, err := reopened.Total(ctx, "a")
+		require.NoError(t, err)
+		require.Equal(t, int64(500), total)
+		total, err = reopened.Total(ctx, "b")
+		require.NoError(t, err)
+		require.Equal(t, int64(5000), total)
+		require.NoError(t, reopened.Reserve(ctx, "a", "three", 400, 1000))
+	})
 }
 
-// TestEachHolderCountsOnlyItsOwnBytes states the isolation the bound depends
-// on. One shared counter would let a busy account exhaust every other account.
-func TestEachHolderCountsOnlyItsOwnBytes(t *testing.T) {
-	t.Parallel()
-	meter, _ := newTestMeter(t)
-	ctx := context.Background()
-
-	require.NoError(t, meter.Reserve(ctx, "account-a", 900, 1000))
-	require.NoError(t, meter.Reserve(ctx, "account-b", 900, 1000))
-
-	total, err := meter.Total(ctx, "account-b")
-	require.NoError(t, err)
-	require.Equal(t, int64(900), total)
-	require.ErrorIs(t, meter.Reserve(ctx, "account-a", 200, 1000), ErrStorageFull)
-	require.NoError(t, meter.Reserve(ctx, "account-b", 100, 1000))
+func TestStoredByteHistoryCannotResetImplicitly(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		ctx := t.Context()
+		m, err := NewStorageMeter(store)
+		require.NoError(t, err)
+		require.ErrorIs(t, m.Reserve(ctx, "a", "one", 100, 1000), storage.ErrNotFound)
+		require.NoError(t, m.InitializeEmpty(ctx, "a"))
+		require.NoError(t, m.Reserve(ctx, "a", "one", 100, 1000))
+		require.NoError(t, store.Delete(ctx, byteTotalKey("a")))
+		require.ErrorIs(t, m.InitializeEmpty(ctx, "a"), ErrStorageHistoryUnknown)
+		require.ErrorIs(t, m.Release(ctx, "a", "one"), storage.ErrNotFound)
+		require.NoError(t, store.Set(ctx, byteTotalKey("a"), []byte(`{"version":2,"bytes":-1}`)))
+		require.ErrorIs(t, m.Reserve(ctx, "a", "two", 100, 1000), ErrStorageHistoryUnknown)
+		require.NoError(t, store.Set(ctx, "limits:v1:stored_bytes:b", []byte("100")))
+		require.ErrorIs(t, m.InitializeEmpty(ctx, "b"), ErrStorageHistoryUnknown)
+	})
 }
 
-// TestAnUnboundedHolderStillCountsItsBytes states why the meter runs even when
-// nothing bounds the holder. An operator that sets a bound later would
-// otherwise read a total of zero over storage that is already full.
-func TestAnUnboundedHolderStillCountsItsBytes(t *testing.T) {
-	t.Parallel()
-	meter, _ := newTestMeter(t)
-	ctx := context.Background()
-
-	require.NoError(t, meter.Reserve(ctx, "account-a", 5000, 0))
-	total, err := meter.Total(ctx, "account-a")
-	require.NoError(t, err)
-	require.Equal(t, int64(5000), total)
-}
-
-// TestReserveReportsACounterFailure states that an unreachable counter refuses
-// the write. Admitting the upload would spend storage the meter cannot see,
-// and the total would understate the holder from then on.
-func TestReserveReportsACounterFailure(t *testing.T) {
-	t.Parallel()
-	meter, counter := newTestMeter(t)
-	counter.fail = errors.New("counter unreachable")
-
-	require.Error(t, meter.Reserve(context.Background(), "account-a", 100, 1000))
-}
-
-// TestTheMeterNamesItsHolder states the guard. A reservation under an empty
-// holder would put every anonymous caller on one counter.
 func TestTheMeterNamesItsHolder(t *testing.T) {
-	t.Parallel()
-	meter, _ := newTestMeter(t)
+	meter, err := NewStorageMeter(storage.NewMockStore())
+	require.NoError(t, err)
 	ctx := context.Background()
-
-	require.ErrorIs(t, meter.Reserve(ctx, "", 100, 1000), ErrInvalidHolder)
-	require.ErrorIs(t, meter.Release(ctx, "", 100), ErrInvalidHolder)
-	_, err := meter.Total(ctx, "")
+	require.ErrorIs(t, meter.Reserve(ctx, "", "one", 100, 1000), ErrInvalidHolder)
+	require.ErrorIs(t, meter.Release(ctx, "", "one"), ErrInvalidHolder)
+	_, err = meter.Total(ctx, "")
 	require.ErrorIs(t, err, ErrInvalidHolder)
-
 	_, err = NewStorageMeter(nil)
 	require.ErrorIs(t, err, ErrCounterRequired)
 }
@@ -200,4 +127,95 @@ func TestStoredBytesJoinsTheLimitVocabulary(t *testing.T) {
 	require.ErrorIs(t, (&Limits{StoredBytes: &zero}).Validate(), ErrInvalidStoredBytes)
 	negative := int64(-1)
 	require.ErrorIs(t, (&Limits{StoredBytes: &negative}).Validate(), ErrInvalidStoredBytes)
+}
+
+func TestUnattachedByteRecoveryFencesDelayedPublication(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		ctx := t.Context()
+		m, err := NewStorageMeter(store)
+		require.NoError(t, err)
+		require.NoError(t, m.InitializeEmpty(ctx, "a"))
+		for _, id := range []string{"old", "attached", "new"} {
+			require.NoError(t, m.Reserve(ctx, "a", id, 100, 1000))
+		}
+		attach, err := m.Attachment(ctx, "a", "attached")
+		require.NoError(t, err)
+		require.NoError(t, store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{attach}))
+		for _, id := range []string{"old", "attached"} {
+			c, old, err := m.readClaim(ctx, "a", id)
+			require.NoError(t, err)
+			c.CreatedAt = time.Now().Add(-2 * StoredBytesPendingGrace)
+			data, err := json.Marshal(c)
+			require.NoError(t, err)
+			require.NoError(t, store.CompareAndSwap(ctx, byteClaimKey("a", id), old, data))
+		}
+		delayed, err := m.Attachment(ctx, "a", "old")
+		require.NoError(t, err)
+		require.NoError(t, m.RecoverPending(ctx))
+		require.ErrorIs(t, store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{delayed}), storage.ErrConflict)
+		require.ErrorIs(t, m.Reserve(ctx, "a", "old", 100, 1000), ErrStorageClaimReleased)
+		require.NoError(t, m.RecoverPending(ctx))
+		total, err := m.Total(ctx, "a")
+		require.NoError(t, err)
+		require.Equal(t, int64(200), total)
+	})
+}
+
+type byteClaimLostAck struct {
+	storage.KVStore
+	fail bool
+}
+
+func (s *byteClaimLostAck) CompareAndSwapBatch(ctx context.Context, writes []storage.CompareAndSwapMutation) error {
+	err := s.KVStore.CompareAndSwapBatch(ctx, writes)
+	if err == nil && s.fail {
+		s.fail = false
+		return context.DeadlineExceeded
+	}
+	return err
+}
+
+func TestByteReservationLostAckAndBackendFailure(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, backend storage.KVStore) {
+		store := &byteClaimLostAck{KVStore: backend}
+		m, err := NewStorageMeter(store)
+		require.NoError(t, err)
+		ctx := t.Context()
+		require.NoError(t, m.InitializeEmpty(ctx, "a"))
+		store.fail = true
+		require.ErrorIs(t, m.Reserve(ctx, "a", "one", 100, 1000), context.DeadlineExceeded)
+		require.NoError(t, m.Reserve(ctx, "a", "one", 100, 1000))
+		total, err := m.Total(ctx, "a")
+		require.NoError(t, err)
+		require.Equal(t, int64(100), total)
+		canceled, cancel := context.WithCancel(ctx)
+		cancel()
+		require.Error(t, m.Reserve(canceled, "a", "two", 100, 1000))
+		total, err = m.Total(ctx, "a")
+		require.NoError(t, err)
+		require.Equal(t, int64(100), total)
+	})
+}
+
+func TestByteClaimRecoveryReachesLaterPages(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		ctx := t.Context()
+		m, err := NewStorageMeter(store)
+		require.NoError(t, err)
+		require.NoError(t, m.InitializeEmpty(ctx, "a"))
+		for i := range 270 {
+			id := fmt.Sprint(i)
+			require.NoError(t, m.Reserve(ctx, "a", id, 1, 1000))
+			c, old, err := m.readClaim(ctx, "a", id)
+			require.NoError(t, err)
+			c.CreatedAt = time.Now().Add(-2 * StoredBytesPendingGrace)
+			data, err := json.Marshal(c)
+			require.NoError(t, err)
+			require.NoError(t, store.CompareAndSwap(ctx, byteClaimKey("a", id), old, data))
+		}
+		require.NoError(t, m.RecoverPending(ctx))
+		total, err := m.Total(ctx, "a")
+		require.NoError(t, err)
+		require.Zero(t, total)
+	})
 }
