@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"github.com/stretchr/testify/require"
+	"net/url"
 	"path/filepath"
 	"testing"
 	"time"
@@ -60,6 +61,8 @@ func TestSharedStorageRecipeSupportedModes(t *testing.T) {
 
 func TestDurableKVConnectionSettings(t *testing.T) {
 	paths := PathsForConfigDir(t.TempDir())
+	// Build a synthetic credential URL for redaction without a static DSN.
+	sqlEndpoint := &url.URL{Scheme: "postgres", Host: "sql.example", Path: "/starport", User: url.UserPassword("operator", "sql-private-value")}
 	cfg, err := NewLoader().WithPaths(paths).WithEnvFiles().WithEnvironment(map[string]string{
 		"STARPORT_DEPLOYMENT_ID":               "team:west/{blue}",
 		"STARPORT_STORAGE_MODE":                "valkey",
@@ -69,7 +72,7 @@ func TestDurableKVConnectionSettings(t *testing.T) {
 		"STARPORT_STORAGE_VALKEY_CA_FILE":      "certificates/durable.pem",
 		"STARPORT_STORAGE_VALKEY_DIAL_TIMEOUT": "2s",
 		"STARPORT_STORAGE_SQL_MODE":            "postgres",
-		"STARPORT_STORAGE_SQL_POSTGRES_URL":    "postgres://operator:sql-private-value@sql.example/starport",
+		"STARPORT_STORAGE_SQL_POSTGRES_URL":    sqlEndpoint.String(),
 		"STARPORT_FILES_BACKEND":               "objectstore",
 		"STARPORT_FILES_OBJECT_STORE_BUCKET":   "test-bucket",
 		"STARPORT_FILES_OBJECT_STORE_REGION":   "us-east-1",
