@@ -112,8 +112,8 @@ func (o *ObjectStore) objectKey(key string) string {
 //
 // The uploader sends the whole object in one request, or in parts when the
 // stream is large. Either way the object becomes reachable only after the last
-// part lands, so a failed put leaves no readable object at a key that held
-// none, and leaves the prior object intact at a key that did.
+// part lands. A lost acknowledgment or a failed size lookup can return an
+// error after publication. The owner must verify the retained object.
 func (o *ObjectStore) Put(ctx context.Context, key string, r io.Reader) (Info, error) {
 	if err := ValidateKey(key); err != nil {
 		return Info{}, err

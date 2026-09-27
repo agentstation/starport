@@ -101,8 +101,11 @@ type File struct {
 	CreatedAt time.Time
 	ExpiresAt time.Time
 
-	blobKey string
-	metered bool
+	blobKey        string
+	metered        bool
+	outputIdentity string
+	outputDigest   string
+	outputBound    int64
 }
 
 // Validate reports whether the record can be stored.
@@ -118,6 +121,13 @@ func (f File) Validate() error {
 		return fmt.Errorf("%w: it reports a negative size", ErrInvalidFile)
 	case f.CreatedAt.IsZero():
 		return fmt.Errorf("%w: it has no creation time", ErrInvalidFile)
+	}
+	if f.outputIdentity != "" {
+		if f.Purpose != PurposeBatchOutput || !f.ExpiresAt.After(f.CreatedAt) || len(f.outputIdentity) > 512 || f.outputBound < 0 || f.outputDigest != "" && !validOutputDigest(f.outputDigest) || f.State == FileStateReady && f.outputDigest == "" {
+			return ErrInvalidFile
+		}
+	} else if f.outputDigest != "" || f.outputBound != 0 {
+		return ErrInvalidFile
 	}
 	if !f.Purpose.Valid() {
 		return fmt.Errorf("%w: %q", ErrInvalidPurpose, f.Purpose)

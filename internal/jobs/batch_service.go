@@ -44,12 +44,21 @@ var (
 // the file store lives outside, because this package's imports stop at the
 // storage seam and the caller already holds a file service.
 type BatchIO interface {
+	PrepareResult(context.Context, BatchLine) (ResultFile, error)
+	StoreResult(context.Context, string, int64, string, io.Reader) error
+	OpenResult(context.Context, string) (io.ReadCloser, error)
 	// OpenInput opens the stored input file for one full read.
 	OpenInput(ctx context.Context) (io.ReadCloser, error)
 	// StoreOutput stores one result file and answers its file identifier. It
 	// reads the content to its end, so the caller streams rather than
 	// buffering a whole result file.
 	StoreOutput(ctx context.Context, name string, content io.Reader) (string, error)
+}
+
+// ResultFile binds a retained file to its original retention deadline.
+type ResultFile struct {
+	ID        string
+	ExpiresAt time.Time
 }
 
 // LineRunner executes one input line. The runner owns the codec and the
@@ -307,7 +316,8 @@ type runOutcome struct {
 	outputFileID string
 	errorFileID  string
 	// failure names why the whole batch failed, or is empty when it did not.
-	failure string
+	failure          string
+	recoveryRequired bool
 }
 
 // countLines reads the input once and counts its request lines. The count
@@ -354,6 +364,8 @@ func (s *BatchService) scanFailure(err error) error {
 func (s *BatchService) runLines(
 	ctx, dispatchCtx context.Context, batch Batch, batchIO BatchIO, runner LineRunner,
 ) runOutcome {
+	dispatchCtx, stopDispatch := context.WithCancel(dispatchCtx)
+	defer stopDispatch()
 	input, err := batchIO.OpenInput(ctx)
 	if err != nil {
 		return runOutcome{failure: fmt.Sprintf("open the input file: %v", err)}
@@ -366,6 +378,7 @@ func (s *BatchService) runLines(
 	type lineResult struct {
 		body   []byte
 		failed bool
+		err    error
 	}
 	results := make(chan lineResult)
 	var workers sync.WaitGroup
@@ -404,12 +417,26 @@ func (s *BatchService) runLines(
 				}
 				break scan
 			}
+			resultFile, err := batchIO.PrepareResult(ctx, claim)
+			if err == nil {
+				claim, err = s.repository.BindLineOutput(ctx, claim, resultFile)
+			}
+			if err != nil {
+				<-slots
+				claimErr = err
+				stopDispatch()
+				break scan
+			}
 			workers.Add(1)
 			go func(claim BatchLine, line []byte) {
 				defer workers.Done()
 				defer func() { <-slots }()
 				body, failed := runner.RunLine(ctx, claim, line)
-				results <- lineResult{body: body, failed: failed}
+				err := s.retainLineResult(ctx, batchIO, claim, body, failed)
+				if err != nil {
+					stopDispatch()
+				}
+				results <- lineResult{body: body, failed: failed, err: err}
 			}(claim, line)
 		}
 		scanErr = scanner.Err()
@@ -419,6 +446,12 @@ func (s *BatchService) runLines(
 	outcome := runOutcome{}
 	var writeErr error
 	for result := range results {
+		if result.err != nil {
+			if writeErr == nil {
+				writeErr = result.err
+			}
+			continue
+		}
 		destination := output
 		if result.failed {
 			destination = errorFile
@@ -443,10 +476,12 @@ func (s *BatchService) runLines(
 	switch {
 	case claimErr != nil:
 		outcome.failure = "batch_line_claim_unavailable"
+		outcome.recoveryRequired = true
 	case scanErr != nil:
 		outcome.failure = s.scanFailure(scanErr).Error()
 	case writeErr != nil:
-		outcome.failure = fmt.Sprintf("store a result file: %v", writeErr)
+		outcome.failure = "batch_result_storage_unavailable"
+		outcome.recoveryRequired = true
 	}
 	return outcome
 }
@@ -459,7 +494,7 @@ func (s *BatchService) finish(ctx context.Context, batch Batch, outcome runOutco
 		if outcome.total > b.TotalLines {
 			b.TotalLines = outcome.total
 		}
-		b.RunFinished = true
+		b.RunFinished = !outcome.recoveryRequired
 		b.CompletedLines = outcome.completed
 		b.FailedLines = outcome.failed
 		b.OutputFileID = outcome.outputFileID

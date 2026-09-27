@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -80,6 +81,11 @@ type Service struct {
 	pendingGrace time.Duration
 	retention    time.Duration
 	meter        Meter
+	sweepMu      sync.Mutex
+	sweepCursor  string
+	sweepNext    string
+	sweepPending []File
+	sweepLoaded  bool
 }
 
 // Option changes one service setting.
@@ -333,18 +339,37 @@ func (s *Service) Open(ctx context.Context, account, id string) (File, io.ReadCl
 
 // List returns the readable files one account owns.
 func (s *Service) List(ctx context.Context, account string, limit int) ([]File, error) {
-	records, err := s.records.List(ctx, account, limit)
-	if err != nil {
-		return nil, err
+	if limit <= 0 {
+		limit = defaultListLimit
 	}
+	if strings.TrimSpace(account) == "" {
+		return nil, nil
+	}
+	limit = min(limit, defaultListLimit)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	now := s.now().UTC()
-	readable := make([]File, 0, len(records))
-	for _, file := range records {
-		if file.State == FileStateReady && !file.Expired(now) {
-			readable = append(readable, file)
+	var readable []File
+	cursor := ""
+	for {
+		page, err := s.records.Page(ctx, account, cursor)
+		if err != nil {
+			return nil, err
+		}
+		for _, file := range page.Records {
+			if file.State == FileStateReady && file.outputIdentity == "" && !file.Expired(now) {
+				readable = append(readable, file)
+				if len(readable) == limit {
+					return readable, nil
+				}
+			}
+		}
+		cursor = page.Next
+		if cursor == "" {
+			return readable, nil
 		}
 	}
-	return readable, nil
+
 }
 
 // Delete removes a file this account owns.
@@ -400,30 +425,57 @@ func (r SweepResult) Total() int { return r.Abandoned + r.Expired + r.Resumed }
 // first error would let one unreachable object hold every later one hostage,
 // and the caller runs on a ticker that would repeat the same failure forever.
 func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
-	records, err := s.records.Scan(ctx, 0)
-	if err != nil {
-		return SweepResult{}, err
+	if !s.sweepMu.TryLock() {
+		return SweepResult{}, storage.ErrConflict
 	}
-	now := s.now().UTC()
-	abandonedBefore := now.Add(-s.pendingGrace)
-
-	var result SweepResult
+	defer s.sweepMu.Unlock()
 	var failures error
 	if s.meter != nil {
 		failures = s.meter.RecoverPending(ctx)
 	}
-	for _, file := range records {
-		counter := s.sweepReason(file, now, abandonedBefore, &result)
-		if counter == nil {
-			continue
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	now := s.now().UTC()
+	abandonedBefore := now.Add(-s.pendingGrace)
+	var result SweepResult
+	for {
+		if err := ctx.Err(); err != nil {
+			return result, errors.Join(failures, err)
 		}
-		if err := s.retire(ctx, file); err != nil {
-			failures = errors.Join(failures, fmt.Errorf("files: sweep %s: %w", file.ID, err))
-			continue
+		if !s.sweepLoaded {
+			page, err := s.records.Page(ctx, "", s.sweepCursor)
+			if err != nil && failures == nil {
+				failures = err
+			}
+			if !page.Scanned {
+				return result, failures
+			}
+			s.sweepPending, s.sweepNext, s.sweepLoaded = page.Records, page.Next, true
 		}
-		*counter++
+		for len(s.sweepPending) > 0 {
+			if err := ctx.Err(); err != nil {
+				return result, errors.Join(failures, err)
+			}
+			file := s.sweepPending[0]
+			counter := s.sweepReason(file, now, abandonedBefore, &result)
+			if counter != nil {
+				if err := s.retire(ctx, file); err != nil {
+					if !errors.Is(err, ErrFileNotFound) && failures == nil {
+						failures = fmt.Errorf("files: sweep %s: %w", file.ID, err)
+					}
+				} else {
+					*counter++
+				}
+			}
+			s.sweepPending[0] = File{}
+			s.sweepPending = s.sweepPending[1:]
+		}
+		s.sweepCursor, s.sweepLoaded, s.sweepPending = s.sweepNext, false, nil
+		if s.sweepCursor == "" {
+			return result, failures
+		}
 	}
-	return result, failures
+
 }
 
 // sweepReason reports which counter one record belongs to, or nil when the
@@ -435,6 +487,12 @@ func (s *Service) sweepReason(file File, now, abandonedBefore time.Time, result 
 		// finishes it.
 		return &result.Resumed
 	case FileStatePending:
+		if file.outputIdentity != "" {
+			if file.Expired(now) {
+				return &result.Expired
+			}
+			return nil
+		}
 		if file.CreatedAt.After(abandonedBefore) {
 			// A live upload looks exactly like an abandoned one. Only time
 			// separates them, and the grace window is that time.

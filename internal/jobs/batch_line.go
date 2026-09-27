@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/google/uuid"
@@ -22,23 +23,40 @@ var (
 // BatchLine binds one invocation to its immutable input and request identity.
 // A claim can represent uncertain work. Its presence never authorizes a replay.
 type BatchLine struct {
-	Version     int    `json:"version"`
-	Account     string `json:"account"`
-	BatchID     string `json:"batch_id"`
-	Number      int    `json:"number"`
-	InputDigest string `json:"input_digest"`
-	RequestID   string `json:"request_id"`
+	OutputFileID    string    `json:"output_file_id,omitempty"`
+	OutputExpiresAt time.Time `json:"output_expires_at,omitzero"`
+	ResultDigest    string    `json:"result_digest,omitempty"`
+	ResultBytes     int64     `json:"result_bytes,omitzero"`
+	ResultFailed    bool      `json:"result_failed,omitzero"`
+	ResultReady     bool      `json:"result_ready,omitzero"`
+	Version         int       `json:"version"`
+	Account         string    `json:"account"`
+	BatchID         string    `json:"batch_id"`
+	Number          int       `json:"number"`
+	InputDigest     string    `json:"input_digest"`
+	RequestID       string    `json:"request_id"`
 }
 
 func (line BatchLine) valid() bool {
 	digest, err := hex.DecodeString(line.InputDigest)
-	return line.Version == 1 && line.Account != "" && line.BatchID != "" && line.Number > 0 && line.RequestID != "" && err == nil && len(digest) == 32
+	if (line.OutputFileID == "") != line.OutputExpiresAt.IsZero() || line.ResultBytes < 0 {
+		return false
+	}
+	if line.ResultDigest != "" {
+		result, err := hex.DecodeString(line.ResultDigest)
+		if err != nil || len(result) != 32 || line.OutputFileID == "" {
+			return false
+		}
+	} else if line.ResultReady || line.ResultFailed || line.ResultBytes != 0 {
+		return false
+	}
+	return line.Version == 2 && line.Account != "" && line.BatchID != "" && line.Number > 0 && line.RequestID != "" && err == nil && len(digest) == 32
 }
 
 // ClaimLine atomically records one invocation against the current batch state.
 // Only a successful return permits execution. A lost acknowledgment cannot retry it.
 func (r *batchRepository) ClaimLine(ctx context.Context, account, id string, number int, digest string) (BatchLine, error) {
-	line := BatchLine{Version: 1, Account: account, BatchID: id, Number: number, InputDigest: digest, RequestID: uuid.NewString()}
+	line := BatchLine{Version: 2, Account: account, BatchID: id, Number: number, InputDigest: digest, RequestID: uuid.NewString()}
 	if !line.valid() {
 		return BatchLine{}, ErrInvalidBatch
 	}
@@ -93,7 +111,7 @@ func (r *batchRepository) ClaimLine(ctx context.Context, account, id string, num
 
 // ReadLine returns retained identity without granting permission to execute.
 func (r *batchRepository) ReadLine(ctx context.Context, account, id string, number int) (BatchLine, error) {
-	data, err := r.store.Get(ctx, batchLineKey(account, id, number))
+	data, err := r.store.GetBounded(ctx, batchLineKey(account, id, number), 8192)
 	if errors.Is(err, storage.ErrNotFound) {
 		return BatchLine{}, ErrBatchLineNotFound
 	}

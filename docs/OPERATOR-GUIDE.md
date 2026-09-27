@@ -259,7 +259,15 @@ Each queued batch line checks current policy before execution. Its account and c
 Before each batch line runs, Starport atomically records its input digest and request identity against the current batch state.
 Cancellation through another replica prevents later line claims. Lines claimed before cancellation can finish.
 A failed or ambiguous claim acknowledgment permits no dispatch. Reading a retained claim does not permit another execution.
-Interrupted-run and result recovery remain incomplete in this candidate.
+Each claimed line receives a stable output file before dispatch. Starport records the result digest and writes its bytes before starting another line in that worker slot.
+A process restart preserves completed line files. If result storage fails, Starport stops further dispatch and retains the outstanding batch claim.
+The record reports `batch_result_storage_unavailable`. It does not repeat the provider call.
+
+Prepared line files retain their original expiry. Internal checkpoints do not appear in ordinary file listings.
+The storage bound counts checkpoints and aggregate files while both exist. File scans continue beyond the first page.
+Automatic interrupted-run recovery, aggregate reconstruction, and early checkpoint cleanup remain incomplete in this candidate.
+
+Prepared-output retirement also needs a backend fence against delayed publication. Full recovery qualification remains open.
 
 The console account picker remains incomplete in this candidate.
 API clients must supply the selection header when the grants name multiple accounts.
@@ -1345,7 +1353,7 @@ closes its unattached claim. Attached files follow normal file retention.
 Missing or invalid accounting state refuses new uploads. Do not delete quota
 keys to restore capacity.
 
-File schema 2 and byte-accounting schema 2 require
+File schema 3 and byte-accounting schema 2 require
 coordinated migration. CSP13 owns that qualification.
 
 ### Choosing a backend

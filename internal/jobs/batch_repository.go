@@ -39,6 +39,9 @@ var (
 type BatchRepository interface {
 	ClaimLine(context.Context, string, string, int, string) (BatchLine, error)
 	ReadLine(context.Context, string, string, int) (BatchLine, error)
+	BindLineOutput(context.Context, BatchLine, ResultFile) (BatchLine, error)
+	RecordLineResult(context.Context, BatchLine, string, int64, bool) (BatchLine, error)
+	ConfirmLineResult(context.Context, BatchLine) (BatchLine, error)
 	Create(context.Context, Batch) error
 	// CreateClaimed atomically stores the batch and its prepared claim attachment.
 	CreateClaimed(context.Context, Batch, storage.CompareAndSwapMutation) error

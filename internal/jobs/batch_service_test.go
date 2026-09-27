@@ -2,6 +2,8 @@ package jobs_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"strings"
@@ -22,13 +24,15 @@ import (
 type memoryBatchIO struct {
 	input string
 
-	mu     sync.Mutex
-	stored map[string]string
-	nextID int
+	mu          sync.Mutex
+	stored      map[string]string
+	checkpoints map[string]string
+	prepared    map[string]jobs.ResultFile
+	nextID      int
 }
 
 func newMemoryBatchIO(input string) *memoryBatchIO {
-	return &memoryBatchIO{input: input, stored: map[string]string{}}
+	return &memoryBatchIO{input: input, stored: map[string]string{}, checkpoints: map[string]string{}, prepared: map[string]jobs.ResultFile{}}
 }
 
 func (m *memoryBatchIO) OpenInput(context.Context) (io.ReadCloser, error) {
@@ -309,4 +313,41 @@ func TestASubmissionWithoutARunnerLeavesNoRecord(t *testing.T) {
 	records, err := service.List(context.Background(), "account_a", 10)
 	require.NoError(t, err)
 	require.Empty(t, records)
+}
+
+func (m *memoryBatchIO) PrepareResult(_ context.Context, claim jobs.BatchLine) (jobs.ResultFile, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if file, ok := m.prepared[claim.RequestID]; ok {
+		return file, nil
+	}
+	file := jobs.ResultFile{ID: "result-" + claim.RequestID, ExpiresAt: time.Now().Add(24 * time.Hour)}
+	m.prepared[claim.RequestID] = file
+	return file, nil
+}
+func (m *memoryBatchIO) StoreResult(_ context.Context, id string, size int64, digest string, reader io.Reader) error {
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(data)
+	if int64(len(data)) != size || hex.EncodeToString(sum[:]) != digest {
+		return fmt.Errorf("invalid retained output")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if previous, ok := m.checkpoints[id]; ok && previous != string(data) {
+		return fmt.Errorf("changed retained output")
+	}
+	m.checkpoints[id] = string(data)
+	return nil
+}
+func (m *memoryBatchIO) OpenResult(_ context.Context, id string) (io.ReadCloser, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	data, ok := m.checkpoints[id]
+	if !ok {
+		return nil, fmt.Errorf("missing retained output")
+	}
+	return io.NopCloser(strings.NewReader(data)), nil
 }

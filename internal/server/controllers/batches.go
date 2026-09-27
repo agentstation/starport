@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -509,4 +510,17 @@ func bestEffortCustomID(line []byte) string {
 	}
 	_ = json.Unmarshal(line, &probe)
 	return probe.CustomID
+}
+
+func (b *batchFileIO) PrepareResult(ctx context.Context, claim jobs.BatchLine) (jobs.ResultFile, error) {
+	file, err := b.files.PrepareOutput(ctx, b.account, "batch-line:"+claim.RequestID, claim.BatchID+"_line_"+strconv.Itoa(claim.Number)+".jsonl", b.storedBytesBound)
+	return jobs.ResultFile{ID: file.ID, ExpiresAt: file.ExpiresAt}, err
+}
+func (b *batchFileIO) StoreResult(ctx context.Context, id string, size int64, digest string, body io.Reader) error {
+	_, err := b.files.CommitOutput(ctx, b.account, id, size, digest, body)
+	return err
+}
+func (b *batchFileIO) OpenResult(ctx context.Context, id string) (io.ReadCloser, error) {
+	_, reader, err := b.files.Open(ctx, b.account, id)
+	return reader, err
 }
