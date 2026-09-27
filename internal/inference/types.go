@@ -372,6 +372,10 @@ type ChatRequest struct {
 // and cache writes; CacheReadTokens and CacheWriteTokens break out the
 // cached portions for pricing.
 type Usage struct {
+	// InputCharacters counts Unicode code points submitted for speech.
+	InputCharacters      int64
+	InputCharactersKnown bool
+
 	// ProcessedPages counts pages the recognition provider reports as billed.
 	ProcessedPages int
 	// ProcessedPagesKnown distinguishes a measured zero from absent page usage.

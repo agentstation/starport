@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -94,7 +95,8 @@ func (c *OpenAICompatibleConnector) SynthesizeSpeech(
 	if err != nil {
 		return nil, fmt.Errorf("failed to read audio response: %w", err)
 	}
-	return &SpeechResponse{Audio: audio, ContentType: resp.Header.Get("Content-Type")}, nil
+	characters := int64(utf8.RuneCountInString(req.Input))
+	return &SpeechResponse{InputCharacters: &characters, Audio: audio, ContentType: resp.Header.Get("Content-Type")}, nil
 }
 
 // Transcribe performs a speech-to-text call. One method serves transcription

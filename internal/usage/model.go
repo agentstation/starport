@@ -112,6 +112,10 @@ type Cost struct {
 
 // Record is one completed inference request.
 type Record struct {
+	// InputCharacters preserves the measured Unicode code-point count for speech.
+	InputCharacters      int64 `json:"input_characters,omitempty"`
+	InputCharactersKnown bool  `json:"input_characters_known,omitzero"`
+
 	RequestID string `json:"request_id"`
 	KeyID     string `json:"key_id"`
 	// AccountID is the account the key belongs to. It is what an account-wide

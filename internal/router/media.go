@@ -69,6 +69,7 @@ func (r *modelRouter) RouteSpeech(ctx context.Context, req *SpeechRequest) (*Spe
 	}
 	call := providerCall[*connectors.SpeechRequest, *connectors.SpeechResponse, inference.SpeechResponse]{
 		transport: speechTransport,
+		charge:    speechCharge,
 		build:     func() *connectors.SpeechRequest { return connectors.SpeechRequestFromInference(req.Request) },
 		convert:   connectors.SpeechResponseToInference,
 	}

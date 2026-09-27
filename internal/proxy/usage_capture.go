@@ -294,6 +294,8 @@ func captureOperation[Request, Response any](
 		record.Media = usageMedia(operationUsage(response.Response))
 		record.SearchUnits = int64(operationUsage(response.Response).SearchUnits)
 		record.SearchUnitsKnown = operationUsage(response.Response).SearchUnitsKnown
+		record.InputCharacters = operationUsage(response.Response).InputCharacters
+		record.InputCharactersKnown = operationUsage(response.Response).InputCharactersKnown
 		snapshot = response.CatalogSnapshot
 	}
 	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
@@ -689,6 +691,9 @@ func usageCost(snapshot *runtimecatalog.RoutableSnapshot, record usage.Record) (
 	}
 	if snapshot == nil || record.ModelUsed == "" {
 		return nil, usage.CostReasonNoRoute
+	}
+	if record.Operation == usage.OperationSpeech {
+		return speechUsageCost(snapshot, record)
 	}
 	if record.Operation == usage.OperationRerank {
 		return rerankUsageCost(snapshot, record)

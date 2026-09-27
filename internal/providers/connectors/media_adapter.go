@@ -67,12 +67,17 @@ func SpeechResponseToInference(response *SpeechResponse) (inference.SpeechRespon
 		return inference.SpeechResponse{}, fmt.Errorf("speech response is required")
 	}
 	if len(response.Audio) == 0 {
-		// A speech call that answered 200 with no bytes produced no audio.
-		// Reporting it as a result would hand the caller an empty file and
-		// charge for it.
+		// Empty audio is not a usable result. Admission retains its charge
+		// independently of this response conversion.
 		return inference.SpeechResponse{}, fmt.Errorf("speech response carries no audio")
 	}
+	measured := inference.Usage{TokensUnknown: true}
+	if response.InputCharacters != nil && *response.InputCharacters >= 0 {
+		measured.InputCharacters = *response.InputCharacters
+		measured.InputCharactersKnown = true
+	}
 	return inference.SpeechResponse{
+		Usage:       measured,
 		Audio:       append([]byte(nil), response.Audio...),
 		ContentType: response.ContentType,
 	}, nil

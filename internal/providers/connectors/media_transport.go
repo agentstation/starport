@@ -102,6 +102,9 @@ type SpeechRequest struct {
 // file itself rather than with JSON, so the bytes and their media type are the
 // whole answer.
 type SpeechResponse struct {
+	// InputCharacters counts submitted Unicode code points after a completed provider response.
+	InputCharacters *int64
+
 	Audio       []byte
 	ContentType string
 }
