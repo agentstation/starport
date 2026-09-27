@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
@@ -280,17 +281,43 @@ func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
 	cfg := validProductionConfig(t)
 	fakeHTTP := newBlockingHTTPRuntime()
 	factories := explicitTestFactories()
+	var catalogDependency *lifecycleCatalogRuntime
+	// This test owns cancellation and dependency closure. The container recipe
+	// tests qualify real catalog persistence and startup separately.
+	factories.openCatalog = func(ctx context.Context, store storage.KVStore, _ *sqlstore.DB, _ runtimecatalog.Settings, _ runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
+		client, err := starmap.NewContext(ctx)
+		if err != nil {
+			return nil, err
+		}
+		plane, err := runtimecatalog.Open(client)
+		if err != nil {
+			return nil, err
+		}
+		accepted, err := runtimecatalog.NewGenerationStore(store)
+		if err != nil {
+			return nil, err
+		}
+		catalogDependency = &lifecycleCatalogRuntime{
+			runtimeSyncFixture: runtimeSyncFixture{plane: plane, state: client.CurrentCatalogState()},
+			accepted:           accepted,
+		}
+		return catalogDependency, nil
+	}
 	factories.newServer = func(*server.Config, server.Dependencies) (httpRuntime, error) {
 		return fakeHTTP, nil
 	}
 	application, err := New(cfg, withRuntimeFactories(factories))
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 	result := make(chan error, 1)
 	go func() { result <- application.Run(ctx) }()
 	select {
 	case <-fakeHTTP.started:
+	case err := <-result:
+		t.Fatalf("application stopped before HTTP startup: %v", err)
 	case <-time.After(2 * time.Second):
 		t.Fatal("HTTP runtime did not start")
 	}
@@ -302,6 +329,22 @@ func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
 		t.Fatal("application did not stop after cancellation")
 	}
 	require.True(t, fakeHTTP.wasStopped())
+	require.True(t, catalogDependency.closed)
+}
+
+type lifecycleCatalogRuntime struct {
+	runtimeSyncFixture
+	accepted *runtimecatalog.GenerationStore
+	closed   bool
+}
+
+func (r *lifecycleCatalogRuntime) AcceptedStore() *runtimecatalog.GenerationStore {
+	return r.accepted
+}
+
+func (r *lifecycleCatalogRuntime) Close(context.Context) error {
+	r.closed = true
+	return nil
 }
 
 func validProductionConfig(t testing.TB) *config.Config {

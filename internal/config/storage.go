@@ -41,7 +41,8 @@ func (c *Config) RuntimeStorage() storage.Config {
 		Badger: storage.BadgerConfig{
 			Path: selected.Badger.Path, InMemory: selected.Badger.inMemory,
 			SyncWrites:  selected.Badger.SyncWrites,
-			Compression: selected.Badger.Compression != compressionNone, NumVersions: 1,
+			Compression: selected.Badger.Compression, NumVersions: 1,
+			GCInterval: selected.Badger.GCInterval, GCDiscardRatio: selected.Badger.GCDiscardRatio,
 			NumLevelZero: 5, MemTableSize: 64 << 20,
 		},
 		Valkey: connection,
@@ -64,6 +65,7 @@ func (c *Config) ConfigureDevelopmentRuntime() error {
 	// sets STARPORT_CATALOG_ACQUISITION_ENABLED=false.
 	c.Storage.Mode = storageModeBadger
 	c.Storage.Badger.inMemory = true
+	c.Storage.Badger.SyncWrites = false
 	c.Storage.SQL.Mode = sqlModeSQLite
 	c.Files.Backend = BlobBackendFilesystem
 	// Development can read an existing machine token for local authentication.

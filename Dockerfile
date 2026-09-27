@@ -29,7 +29,7 @@ RUN CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build \
     -buildvcs=false \
     -ldflags="-s -w -X main.version=$VERSION -X main.buildTime=$BUILD_TIME -X main.gitCommit=$COMMIT -X main.gitBranch=release" \
     -o /out/starport ./cmd/starport \
-    && mkdir -p /out/config /out/data
+    && mkdir -p /out/config /out/data /out/state /out/cache
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35
 
@@ -49,9 +49,14 @@ COPY --from=build --chown=65532:65532 /out/starport /usr/local/bin/starport
 COPY --from=build --chown=65532:65532 /out/config /var/lib/starport/config
 COPY --from=build --chown=65532:65532 /out/data /var/lib/starport/data
 
-ENV XDG_CONFIG_HOME=/var/lib/starport/config \
-    STARPORT_SERVER_HOST=0.0.0.0 \
-    STARPORT_STORAGE_BADGER_PATH=/var/lib/starport/data/badger
+COPY --from=build --chown=65532:65532 /out/state /var/lib/starport/state
+COPY --from=build --chown=65532:65532 /out/cache /var/lib/starport/cache
+
+ENV STARPORT_CONFIG_DIR=/var/lib/starport/config/starport \
+    STARPORT_DATA_DIR=/var/lib/starport/data \
+    STARPORT_STATE_ROOT=/var/lib/starport/state \
+    STARPORT_CACHE_DIR=/var/lib/starport/cache \
+    STARPORT_SERVER_HOST=0.0.0.0
 
 WORKDIR /var/lib/starport
 USER 65532:65532

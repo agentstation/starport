@@ -269,7 +269,7 @@ func localConfig(masterKey string) ([]byte, error) {
 
 func openLocalStore(path string) (storage.KVStore, error) {
 	return storage.OpenBadger(storage.BadgerConfig{
-		Path: path, SyncWrites: true, Compression: true,
+		Path: path, SyncWrites: true, Compression: "snappy",
 		NumVersions: 1, NumLevelZero: 5, MemTableSize: 64 << 20,
 	})
 }

@@ -100,13 +100,15 @@ type Config struct {
 
 // BadgerConfig represents Badger-specific configuration
 type BadgerConfig struct {
-	Path         string `env:"PATH,default=./data/badger"`
-	InMemory     bool
-	SyncWrites   bool  `env:"SYNC_WRITES,default=false"`
-	Compression  bool  `env:"COMPRESSION,default=true"`
-	NumVersions  int   `env:"NUM_VERSIONS,default=1"`
-	NumLevelZero int   `env:"NUM_LEVEL_ZERO,default=5"`
-	MemTableSize int64 `env:"MEM_TABLE_SIZE,default=67108864"` // 64MB
+	GCInterval     time.Duration
+	GCDiscardRatio float64
+	Path           string `env:"PATH,default=./data/badger"`
+	InMemory       bool
+	SyncWrites     bool   `env:"SYNC_WRITES,default=true"`
+	Compression    string `env:"COMPRESSION,default=snappy"`
+	NumVersions    int    `env:"NUM_VERSIONS,default=1"`
+	NumLevelZero   int    `env:"NUM_LEVEL_ZERO,default=5"`
+	MemTableSize   int64  `env:"MEM_TABLE_SIZE,default=67108864"` // 64MB
 }
 
 // ValkeyConfig represents Valkey/Redis-specific configuration

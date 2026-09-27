@@ -120,8 +120,8 @@ func (c *BadgerConfig) Validate() error {
 		return fmt.Errorf("GC interval must be positive")
 	}
 
-	if c.GCDiscardRatio < 0 || c.GCDiscardRatio > 1 {
-		return fmt.Errorf("GC discard ratio must be between 0 and 1")
+	if !(c.GCDiscardRatio > 0 && c.GCDiscardRatio < 1) {
+		return fmt.Errorf("GC discard ratio must be greater than 0 and less than 1")
 	}
 
 	return nil

@@ -184,7 +184,7 @@ func TestRemoteCatalogDuplicateAndDigestEqualIdentity(t *testing.T) {
 		t.Context(), runtimecatalog.Candidate{State: duplicate},
 	))
 	require.Same(t, before, fixture.registry.Snapshot())
-	require.Equal(t, int32(0), updates.accepted.Load())
+	require.Equal(t, int32(1), updates.accepted.Load())
 
 	digestEqual := duplicate
 	digestEqual.GenerationID = "digest-equal-new-identity"
@@ -197,7 +197,7 @@ func TestRemoteCatalogDuplicateAndDigestEqualIdentity(t *testing.T) {
 	require.Equal(t, digestEqual.GenerationID, after.GenerationID())
 	require.Equal(t, duplicate.PayloadChecksum, after.PayloadChecksum())
 	require.Same(t, duplicate.Catalog, after.Catalog())
-	require.Equal(t, int32(1), updates.accepted.Load())
+	require.Equal(t, int32(2), updates.accepted.Load())
 }
 
 func TestRemoteCatalogAcceptanceFailureRetainsRuntime(t *testing.T) {

@@ -107,18 +107,16 @@ bash scripts/smoke-openrouter-sdks.sh
 This scene tests raw HTTP plus the pinned official Python, TypeScript, and Go
 OpenRouter clients.
 
-## Run Valkey integration tests
+## Run storage integration tests
 
 ```bash
 make test-integration
 ```
 
-The target uses an isolated Compose project and host port `16379`. A shell trap
-removes its container, network, and volume on success, test failure, or
-interruption.
-
-The base Compose file does not publish Valkey to the host. The integration
-target adds a loopback-only port override.
+The target uses a separate Compose file and a unique project. It runs Valkey
+on loopback port `16379` and PostgreSQL on loopback port `15432`. A shell trap
+removes these test containers, their network, and volumes when the command ends.
+Set `POSTGRES_INTEGRATION_PORT` to change the PostgreSQL port.
 
 Set `VALKEY_INTEGRATION_PORT` to use another host port:
 
@@ -135,7 +133,23 @@ make dev-docker-stop
 ```
 
 `make dev-docker-clean` also removes the Compose volumes. Use that target only
-when you intend to remove local Valkey data.
+when you intend to remove the local application data. Initialize the local
+recipe first through the [container procedure](docs/OPERATOR-GUIDE.md#container-start).
+
+Test the actual container paths, fresh startup, recreation, and cold restore:
+
+```bash
+docker build -t starport-storage-recipe:local .
+STARPORT_RECIPE_IMAGE=starport-storage-recipe:local go test -race -count=1 \
+  -timeout 5m ./internal/config -run '^Test(ComposeStorageRecipes|ContainerRecipePersistence)$'
+```
+
+Build the image from the same tree as the test. The probe uses temporary
+credentials, fresh volumes, and an offline catalog. It verifies authenticated
+KV records, SQLite audit records, uploaded bytes, and catalog access after both
+container recreation and a cold backup restore. It deletes only its own Compose
+project. The CI Storage Recipes job runs this check and retains its evidence.
+The check does not qualify host power loss or populated fleet recovery.
 
 ## Format and lint
 

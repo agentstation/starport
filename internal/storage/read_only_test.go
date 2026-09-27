@@ -42,7 +42,7 @@ func TestReadOnlyStoreRejectsEveryWriteContract(t *testing.T) {
 func TestOpenBadgerReadOnlyDoesNotChangeStoredValues(t *testing.T) {
 	ctx := context.Background()
 	configuration := BadgerConfig{
-		Path: t.TempDir(), Compression: true, NumVersions: 1,
+		Path: t.TempDir(), Compression: "snappy", NumVersions: 1,
 		NumLevelZero: 5, MemTableSize: 64 << 20,
 	}
 	writable, err := OpenBadger(configuration)

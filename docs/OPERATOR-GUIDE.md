@@ -1213,14 +1213,37 @@ Badger is the default for one process:
 ```text
 STARPORT_STORAGE_MODE=badger
 STARPORT_STORAGE_BADGER_PATH=/absolute/path/to/starport/data/badger
+STARPORT_STORAGE_BADGER_SYNC_WRITES=true
 ```
 
 Stop Starport before copying a Badger directory for backup or restore. Keep
 the directory on persistent storage.
 
+Persistent configuration now defaults `SYNC_WRITES` to `true`.
+An explicit `false` remains effective and produces a startup warning about acknowledged-write loss after a host failure.
+Check this setting when upgrading an installation that relied on the previous asynchronous default.
+Development mode uses memory and reports synchronous disk writes disabled.
+
+`STARPORT_STORAGE_BADGER_COMPRESSION` selects `none`, `snappy`, or `zstd`. The default is `snappy`.
+`STARPORT_STORAGE_BADGER_GC_INTERVAL` defaults to `5m` and controls value-log collection attempts.
+`STARPORT_STORAGE_BADGER_GC_DISCARD_RATIO` defaults to `0.5` and must be greater than zero and less than one.
+Memory and read-only modes do not start background collection.
+
+The adapter uses a 256 MiB block cache and five 64 MiB memtables.
+These values describe engine capacities, separate from application caches and measured process memory.
+They do not promise host power-loss recovery. That qualification remains separate.
+
 Shared deployments require Valkey, PostgreSQL, and shared object storage for file bytes.
 Selecting Valkey with local SQLite or local file bytes fails configuration validation.
 Cluster mode remains unsupported.
+
+Set `STARPORT_DEPLOYMENT_ID` to the same identity on every replica of one deployment.
+Durable keys and notification channels include that encoded identity and a schema version.
+Changing the identity selects different storage. It does not rename or migrate existing records.
+
+Do not upgrade an existing shared deployment to this candidate.
+Its populated-state migration and recovery commands are not yet available.
+A database number or key prefix does not isolate service memory, eviction, persistence, or failure.
 
 Use a TLS endpoint for durable KV:
 
@@ -1713,35 +1736,53 @@ behind each preset row, with a restore action per old revision.
 
 ## Container Start
 
-The Compose file starts Starport with Valkey. Its optional `.env` file passes
-catalog-declared provider values into the Starport container without a provider
-roster in the Compose file. Copy the example, set the master key, and set the
-provider values that this deployment needs. This example uses OpenAI:
+The default Compose file starts one Starport process with Badger, SQLite, and
+local file storage. Its optional `.env` file passes catalog-declared provider
+values into the container. Copy the example and set the master key and provider
+values that this deployment needs. This example uses OpenAI:
 
 ```bash
 cp .env.example .env
+chmod 600 .env
 # Edit .env. Set STARPORT_SECURITY_MASTER_KEY and OPENAI_API_KEY.
-docker compose up --build -d valkey
+docker compose build starport
 docker compose run --rm starport init --configured-storage --name primary-admin
 docker compose run --rm starport auth rotate
 docker compose up -d starport
 ```
 
-Save the gateway key from the initialization output. Do not run the
-initialization command again for the same Valkey data set.
+Save the gateway key from initialization. Do not initialize the same identity
+repository again. Rotation prepares the local admin token for the container's
+network bind. Keep its printed value private.
 
-Rotation prepares the local admin token for the container's network bind. Keep its printed value private.
-The example runs one Starport process. Its named volumes retain the following state with the default paths:
+The host publishes the API on `127.0.0.1:8080`. Set `STARPORT_PORT` to change the
+host port. Add an authenticated TLS ingress before exposing the service remotely.
+The container binds `0.0.0.0` inside its own network namespace.
+
+The image selects four explicit roots. These defaults apply when an operator
+has not supplied a path override:
 
 | Volume | Container path | State |
 | --- | --- | --- |
-| `valkey-data` | `/data` in Valkey | Gateway keys and other KV records. |
-| `starport-config` | `/var/lib/starport/config` | SQLite, uploaded files, local admin token, and local configuration under `starport/`. |
-| `starport-data` | `/var/lib/starport/data` | Accepted catalog under `catalog/`. The image also reserves `badger/` for the Badger backend. |
+| `starport-config` | `/var/lib/starport/config` | Primary configuration at `starport/config.env`. |
+| `starport-data` | `/var/lib/starport/data` | Badger at `badger/`, SQLite at `sqlite/starport.db`, file bytes at `files/`, local admin token, and catalog baseline at `catalog/baseline/`. |
+| `starport-state` | `/var/lib/starport/state` | Catalog runtime at `catalog/runtime/default/` and credential state. |
+| Container layer | `/var/lib/starport/cache` | Reconstructible cache data. |
 
-Back up all three volumes and the master key. Container replacement preserves the volumes. `docker compose down --volumes` deletes them.
-Do not scale this example to multiple Starport processes. SQLite, catalog state, and local files belong to one process.
-See [production status](PRODUCTION-STATUS.md) for the shared storage requirements and qualification limits.
+Run `docker compose run --rm starport config paths --json` to inspect the
+selected paths. Badger uses synchronous writes in this recipe.
+Back up all three named volumes and the master key. Container replacement
+preserves the volumes. `docker compose down --volumes` deletes them.
+
+This recipe requires fresh storage. Earlier Compose versions used Valkey for KV
+records and different local path defaults. Changing the storage mode does not
+migrate those records. Retain the prior configuration and volumes until the operator verifies an
+explicit migration. CSP13 owns that migration procedure.
+
+Do not scale the local recipe to multiple processes. The separate
+[fleet recipe](FLEET_INITIALIZATION.md#container-recipe) requires shared Valkey,
+PostgreSQL, and object storage. See [production status](PRODUCTION-STATUS.md)
+for its remaining recovery and qualification limits.
 
 ## Limits and Shutdown
 

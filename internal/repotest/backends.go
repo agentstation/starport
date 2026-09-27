@@ -40,7 +40,7 @@ func runBackends(t *testing.T, contract func(*testing.T, storage.KVStore), clock
 			store, err := storage.OpenBadger(storage.BadgerConfig{
 				Path:         t.TempDir(),
 				SyncWrites:   true,
-				Compression:  true,
+				Compression:  "snappy",
 				NumVersions:  1,
 				NumLevelZero: 5,
 				MemTableSize: 64 << 20,

@@ -179,7 +179,7 @@ type SQLMySQLConfig struct {
 // BadgerConfig defines Badger DB settings
 type BadgerConfig struct {
 	Path           string        `env:"PATH,overwrite"`
-	SyncWrites     bool          `env:"SYNC_WRITES,default=false"`
+	SyncWrites     bool          `env:"SYNC_WRITES,default=true"`
 	Compression    string        `env:"COMPRESSION,default=snappy"`
 	GCInterval     time.Duration `env:"GC_INTERVAL,default=5m"`
 	GCDiscardRatio float64       `env:"GC_DISCARD_RATIO,default=0.5"`

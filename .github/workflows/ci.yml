@@ -152,6 +152,10 @@ jobs:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
           TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
         run: go test -json -race -count=1 -timeout 3m ./internal/app -run '^(TestAppWithValkey|TestSharedStartupDoesNotCreateLocalDatabases)$' > shared-startup.jsonl
+      - name: Verify durable adapter security and deployment isolation
+        env:
+          TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+        run: go test -json -race -count=1 -timeout 3m ./internal/storage ./internal/app -run '^Test(ValkeyURLDatabaseSelection|ValkeyConnectionRefusesUnsafeSettings|ValkeyCredentialConflicts|ValkeyTLSIdentity|ValkeyUsernamePassword|ValkeyEffectiveConnectionOptions|ValkeyRequiresDeploymentIdentity|ValkeyDeploymentNamespace|ValkeyDeploymentNotificationIsolation|DeploymentIsolationIncludesGatewayRecords)$' > durable-adapters.jsonl
       - name: Verify authorization source and fleet enforcement
         env:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
@@ -168,6 +172,7 @@ jobs:
           name: shared-storage-startup
           path: |
             shared-startup.jsonl
+            durable-adapters.jsonl
             authorization-storage.jsonl
             shared-cache.jsonl
           retention-days: 7
@@ -261,10 +266,45 @@ jobs:
           path: authorization-capacity.jsonl
           retention-days: 7
 
+  storage-recipes:
+    name: Storage Recipes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.1"
+          cache: true
+      - name: Set up container builder
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build recipe image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: starport-storage-recipe:ci
+          cache-from: type=gha,scope=storage-recipe
+          cache-to: type=gha,mode=max,scope=storage-recipe
+      - name: Verify complete recipes and local restore
+        env:
+          STARPORT_RECIPE_IMAGE: starport-storage-recipe:ci
+        run: go test -json -race -count=1 -timeout 5m ./internal/config -run '^Test(ComposeStorageRecipes|ContainerRecipePersistence)$' > storage-recipes.jsonl
+      - name: Retain recipe evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: storage-recipes
+          path: storage-recipes.jsonl
+          if-no-files-found: error
+          retention-days: 7
+
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test, shared-storage, catalog-fleet, authorization-capacity, release-contract, sdk-smoke]
+    needs: [lint, test, shared-storage, catalog-fleet, authorization-capacity, storage-recipes, release-contract, sdk-smoke]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

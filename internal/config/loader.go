@@ -242,6 +242,10 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 
 func validateLoadedConfiguration(cfg *Config, paths *Paths, development bool) error {
 	if err := cfg.Validate(); err != nil {
+		var safe *loadFailure
+		if errors.As(err, &safe) {
+			return OperatorError(err)
+		}
 		return newLoadFailure("configuration values are invalid", err)
 	}
 	if development {

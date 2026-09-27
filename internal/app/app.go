@@ -1438,6 +1438,11 @@ func (a *App) applyCandidate(ctx context.Context, candidate runtimecatalog.Candi
 	if current != nil &&
 		current.GenerationID() == state.GenerationID &&
 		current.PayloadChecksum() == state.PayloadChecksum {
+		// Matching bootstrap bytes can precede durable acceptance. Recheck the
+		// original publication fence without rebuilding unchanged routes.
+		if a.catalogRuntime != nil {
+			return a.catalogRuntime.Accept(ctx, candidate)
+		}
 		return nil
 	}
 	resolved, failures, err := a.config.ResolveProviderSetLocalIsolated(

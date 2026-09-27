@@ -1,6 +1,7 @@
 .git
 .github
 .env
+.env.fleet
 local.env
 data
 dist

@@ -395,29 +395,31 @@ gh attestation verify "oci://ghcr.io/agentstation/starport:$STARPORT_VERSION" \
 docker run --rm "ghcr.io/agentstation/starport:$STARPORT_VERSION" --version
 ```
 
-The Compose file builds one Starport process locally and uses Valkey for KV records. Put
-the master key and any catalog-declared provider values in the ignored `.env`
-file. This example uses OpenAI:
+The default Compose file builds one Starport process with persistent Badger,
+SQLite, and file storage. Use fresh volumes for this recipe. See the
+[container procedure](docs/OPERATOR-GUIDE.md#container-start) before changing an
+existing deployment.
 
 ```bash
 cp .env.example .env
+chmod 600 .env
 # Edit .env. Set STARPORT_SECURITY_MASTER_KEY and OPENAI_API_KEY.
-docker compose up --build -d valkey
+docker compose build starport
 docker compose run --rm starport init --configured-storage --name primary-admin
 docker compose run --rm starport auth rotate
 docker compose up -d starport
 ```
 
-Save the gateway key from initialization. Do not initialize the same identity
-repository again.
+Save the gateway key from initialization and the local admin token from rotation.
+Keep both values private. Do not initialize the same identity repository again.
+The API is available at `http://127.0.0.1:8080`. The three named volumes retain
+configuration, application data, and catalog state through container replacement.
+Back up all three volumes and the master key.
 
-Rotation prepares the local admin token for the container's network bind.
-Keep its printed value private. The named Starport volumes retain SQLite records,
-uploaded files, local admin state, and the accepted catalog through container replacement.
-The Valkey volume retains gateway keys and other KV records. Back up all three volumes and the master key.
-
-Do not scale this example to multiple Starport processes. It uses local SQLite and file storage.
-See [current production limits](docs/PRODUCTION-STATUS.md) for replicated deployments.
+Run one process with this recipe. The separate
+[fleet recipe](docs/FLEET_INITIALIZATION.md#container-recipe) requires shared
+Valkey, PostgreSQL, and object storage. Its production recovery qualification
+remains incomplete.
 
 ## Develop
 

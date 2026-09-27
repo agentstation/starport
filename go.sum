@@ -42,6 +42,12 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/agentstation/starmap v0.16.6-0.20260927014455-47991a5649f2 h1:wfiThYQbm8BBXqalhaf+LBCCB02KJQXTNVF6Fet9AQw=
 github.com/agentstation/starmap v0.16.6-0.20260927014455-47991a5649f2/go.mod h1:AdrgfZxWhCLcd1jgQmhXvXA0yRJR2pwi8aOJA5cGL40=
+github.com/agentstation/starmap v0.16.6-0.20260927035311-b5763dd6a0be h1:8uBgI8MM93OCNDKqTdtbc3vSy/maJuNzMu4jolmCOJg=
+github.com/agentstation/starmap v0.16.6-0.20260927035311-b5763dd6a0be/go.mod h1:AdrgfZxWhCLcd1jgQmhXvXA0yRJR2pwi8aOJA5cGL40=
+github.com/agentstation/starmap v0.16.6-0.20260927041244-cd6a158ba162 h1:Zh7umk11KobZpgCQp7hMrkSlJc6DXzRoCGgy+Y2s7Yc=
+github.com/agentstation/starmap v0.16.6-0.20260927041244-cd6a158ba162/go.mod h1:AdrgfZxWhCLcd1jgQmhXvXA0yRJR2pwi8aOJA5cGL40=
+github.com/agentstation/starmap v0.16.6-0.20260927042126-8fa31111716b h1:8Q0jCFk5tpZksYSpfQvfv2Nps78BVLufF7+jQx07os4=
+github.com/agentstation/starmap v0.16.6-0.20260927042126-8fa31111716b/go.mod h1:AdrgfZxWhCLcd1jgQmhXvXA0yRJR2pwi8aOJA5cGL40=
 github.com/agentstation/utc v0.2.0 h1:zKeYoUA65am9lL9k70iKDci17hXlt9l+N9OCAJvD/Wk=
 github.com/agentstation/utc v0.2.0/go.mod h1:6/sYtnBRR4MhH8Oj9JTG9buSeBgWA9c1ppctsY1nFa8=
 github.com/agentstation/uuidkey v1.2.0 h1:kR6oaO5irgmo3Nbp0/y68SFFAGSzObLY6x44m5/ff24=

@@ -193,8 +193,8 @@ func TestBadgerConfig_Defaults(t *testing.T) {
 	if config.SyncWrites != false {
 		t.Errorf("SyncWrites should be false by default")
 	}
-	if config.Compression != false {
-		t.Errorf("Compression should be false by default")
+	if config.Compression != "" {
+		t.Errorf("Compression has no explicit mode in a zero-value configuration")
 	}
 }
 

@@ -9,13 +9,18 @@ func (c *Config) validateStorageRecipe() error {
 		return nil
 	}
 	if c.Storage.SQL.Mode != sqlModePostgres {
-		return errors.New("shared storage requires PostgreSQL for relational state and recovery approval")
+		return storageRecipeFailure("shared storage requires PostgreSQL for relational state and recovery approval")
 	}
 	if c.Files.SelectedBackend() != BlobBackendObjectStore {
-		return errors.New("shared storage requires object storage for file bytes")
+		return storageRecipeFailure("shared storage requires object storage for file bytes")
 	}
 	if c.Storage.Valkey.ClusterMode {
-		return errors.New("shared storage requires a controlled single-primary Valkey service. Cluster recovery is unqualified")
+		return storageRecipeFailure("shared storage requires a controlled single-primary Valkey service. Cluster recovery is unqualified")
 	}
 	return nil
+}
+
+// storageRecipeFailure publishes only a fixed operator instruction.
+func storageRecipeFailure(message string) error {
+	return newLoadFailure(message, errors.New(message))
 }
