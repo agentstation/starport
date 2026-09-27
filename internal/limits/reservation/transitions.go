@@ -3,7 +3,7 @@ package reservation
 import (
 	"context"
 	"errors"
-	"reflect"
+	"maps"
 
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/storage"
@@ -94,10 +94,13 @@ func (r *Repository) finish(ctx context.Context, id string, evidence *Evidence) 
 			if record.State != Reserved {
 				return ErrTransition
 			}
-			record.State, record.NanoUSD = Canceled, 0
+			record.State, record.NanoUSD = Canceled, record.Attempt.money(0)
 		} else {
+			if record.Pending != nil && !sameEvidence(record.Pending, evidence) {
+				return ErrIdentityConflict
+			}
 			if record.State == Settled {
-				if reflect.DeepEqual(record.Evidence, evidence) {
+				if sameEvidence(record.Evidence, evidence) {
 					return nil
 				}
 				return ErrIdentityConflict
@@ -105,19 +108,21 @@ func (r *Repository) finish(ctx context.Context, id string, evidence *Evidence) 
 			if record.State != Dispatched && record.State != Uncertain {
 				return ErrTransition
 			}
-			amount, err = record.Attempt.Valuation.NanoUSD(evidence.Quantities)
+			amount, err = record.Attempt.amount(evidence.Quantities)
 			overflow = errors.Is(err, ErrOverflow)
 			if err != nil && !overflow {
 				return err
 			}
 			if overflow {
-				if reflect.DeepEqual(record.Unresolved, evidence) {
+				if sameEvidence(record.Unresolved, evidence) {
 					return ErrOverflow
 				}
 				record.State, record.Unresolved, record.Reason = Uncertain, evidence, "valuation_overflow"
+				record.Pending = nil
 			} else {
-				record.State, record.Evidence, record.NanoUSD, record.Reason = Settled, evidence, amount, ""
+				record.State, record.Evidence, record.NanoUSD, record.Reason = Settled, evidence, record.Attempt.money(amount), ""
 				record.Unresolved = nil
+				record.Pending = nil
 			}
 		}
 		mutations := make([]storage.CompareAndSwapMutation, 0, len(record.Bindings)+1)
@@ -159,4 +164,13 @@ func (r *Repository) finish(ctx context.Context, id string, evidence *Evidence) 
 		}
 	}
 	return ErrUnavailable
+}
+
+// JSON normalizes an absent quantity map to an empty object. Both represent no
+// monetary components for token-only evidence and must preserve exact retries.
+func sameEvidence(first, second *Evidence) bool {
+	if first == nil || second == nil {
+		return first == second
+	}
+	return first.ID == second.ID && first.Tokens == second.Tokens && maps.Equal(first.Quantities, second.Quantities)
 }

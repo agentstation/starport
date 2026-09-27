@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -17,7 +18,13 @@ import (
 func TestFleetRuntimeRejectsUnapprovedBackend(t *testing.T) {
 	kv, witness, db := fleetTestStores(t)
 	settings := identityTestSettings(filepath.Join(t.TempDir(), "state"), "", "127.0.0.1:0")
-	settings.DeploymentID = "unapproved-" + t.Name()
+	settings.DeploymentID = "unapproved-" + rand.Text()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, err := db.ExecContext(ctx, db.Bind("DELETE FROM catalog_recovery WHERE deployment_id = ?"), settings.DeploymentID)
+		require.NoError(t, err)
+	})
 	lookup := func(string) (string, bool) { return "", false }
 	_, err := OpenRuntimeWithRecovery(t.Context(), kv, nil, settings, lookup)
 	require.ErrorContains(t, err, "PostgreSQL witness")
@@ -39,6 +46,13 @@ func TestFleetRuntimeRejectsUnapprovedBackend(t *testing.T) {
 	require.NoError(t, err)
 	fleet, err := NewFleetStore(t.Context(), provider, witness, settings.DeploymentID)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		keys, err := kv.ScanWithPrefix(ctx, fleet.prefix, 10000)
+		require.NoError(t, err)
+		require.NoError(t, kv.BatchDelete(ctx, keys))
+	})
 	grant, err := fleet.AcquireLease(t.Context(), "publisher", time.Minute)
 	require.NoError(t, err)
 	publication := fleetTestPublication(t, grant, runtime.FleetHead{}, "diagnostic")

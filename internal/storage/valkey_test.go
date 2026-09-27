@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"crypto/rand"
 	"os"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ func TestValkeyStore(t *testing.T) {
 
 	config := ValkeyConfig{
 		URL:            valkeyURL,
+		DeploymentID:   "store-contract-" + rand.Text(),
 		MaxConnections: 50,
 		MinIdleConns:   1,
 		ReadTimeout:    3 * time.Second,
@@ -27,18 +29,20 @@ func TestValkeyStore(t *testing.T) {
 		DB:             15, // Use DB 15 for tests
 	}
 
-	store, err := openUnscopedValkeyForTest(config)
+	store, err := OpenValkey(config)
 	require.NoError(t, err)
-	defer store.Close()
 
 	ctx := context.Background()
 
-	// Clean up test DB
+	// Each run owns one namespace. Cleanup must run before closing the client.
 	t.Cleanup(func() {
-		// Note: FLUSHDB is not available in valkey-go yet, so we'll clean manually
-		keys, _ := store.Scan(ctx, "test:*", 1000)
+		defer func() { require.NoError(t, store.Close()) }()
+		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		keys, err := store.Scan(cleanup, "test:*", 1000)
+		require.NoError(t, err)
 		if len(keys) > 0 {
-			_ = store.BatchDelete(ctx, keys)
+			require.NoError(t, store.BatchDelete(cleanup, keys))
 		}
 	})
 

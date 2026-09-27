@@ -51,8 +51,7 @@ func (r *Repository) InitializeTeamHistory(ctx context.Context, authority TeamHi
 	if err != nil {
 		return err
 	}
-	identity := holderIdentity{Scope: limits.ScopeTeam, ID: teamID}
-	holder, err := encodeMutation(storageKey("holder", identity), nil, identity)
+	holder, err := FreshHolderIdentity(limits.ScopeTeam, teamID)
 	if err != nil {
 		return err
 	}

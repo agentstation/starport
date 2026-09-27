@@ -61,6 +61,9 @@ type Attempt struct {
 	Valuation         Valuation  `json:"valuation"`
 	Bound             Quantities `json:"bound"`
 	TokenBound        int64      `json:"token_bound"`
+	// TokenOnly records unknown monetary cost when every required meter counts
+	// tokens. It cannot bypass a spend meter or represent unknown tokens as zero.
+	TokenOnly bool `json:"token_only,omitempty"`
 }
 
 // State names a persisted attempt transition.
@@ -104,8 +107,10 @@ type Record struct {
 	Bindings   []Binding `json:"bindings"`
 	Evidence   *Evidence `json:"evidence,omitempty"`
 	Unresolved *Evidence `json:"unresolved,omitempty"`
-	NanoUSD    int64     `json:"nano_usd"`
-	Reason     string    `json:"reason,omitempty"`
+	Pending    *Evidence `json:"pending,omitempty"`
+	// NanoUSD is null when only tokens were metered and monetary cost is unknown.
+	NanoUSD *int64 `json:"nano_usd"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 // WindowState contains verified consumption and reserved capacity for one meter.

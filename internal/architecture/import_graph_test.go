@@ -38,7 +38,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../authorization/revision",
 		"../policyrecord",
 		"../sqlstore",
-		"../limits",
+		"../limits/...",
 		"../credentials",
 		"../ratelimit",
 		"../presets",
@@ -120,10 +120,13 @@ func TestImportGraphArchitecture(t *testing.T) {
 		)
 	}
 	// Policy repositories publish revisions and enforce record bounds without importing the cache.
+	// Account and key creation include reservation-owned history mutations in
+	// their atomic create batch. Identity uses its independent SQL origin grant.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/account"],
 		"github.com/agentstation/starport/internal/storage",
 		"github.com/agentstation/starport/internal/sqlstore",
 		"github.com/agentstation/starport/internal/limits",
+		"github.com/agentstation/starport/internal/limits/reservation",
 		"github.com/agentstation/starport/internal/authorization/revision",
 		"github.com/agentstation/starport/internal/policyrecord",
 	)
@@ -145,6 +148,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/policyrecord",
 		"github.com/agentstation/starport/internal/storage",
 		"github.com/agentstation/starport/internal/limits",
+		"github.com/agentstation/starport/internal/limits/reservation",
 		"github.com/agentstation/starport/internal/account",
 	)
 	// Revision publication knows storage but cannot read policy or request orchestration.
@@ -159,11 +163,23 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/apikey",
 		"github.com/agentstation/starport/internal/identity",
 		"github.com/agentstation/starport/internal/authorization/revision",
+		"github.com/agentstation/starport/internal/limits",
 	)
 	assertNoImports(t, packages["github.com/agentstation/starport/internal/authorization"], "net/http")
 	// Limits is the vocabulary both a gateway API key and an account hold. It
 	// stays a leaf so neither owner can reach the other through it.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/limits"])
+	// Reservation owns durable capacity without reading identities or calling
+	// providers. Admission reads the inherited permission and the limits vocabulary.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/limits/reservation"],
+		"github.com/agentstation/starport/internal/limits",
+		"github.com/agentstation/starport/internal/storage",
+	)
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/limits/admission"],
+		"github.com/agentstation/starport/internal/inference",
+		"github.com/agentstation/starport/internal/limits",
+		"github.com/agentstation/starport/internal/limits/reservation",
+	)
 	// Blob stores opaque bytes at an opaque key. It has no internal imports.
 	// The key owner interprets the bytes. The store cannot reach a Starport concept to interpret them.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/blob"])

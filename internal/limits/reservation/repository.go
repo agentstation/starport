@@ -83,7 +83,7 @@ func (r *Repository) Reserve(ctx context.Context, attempt Attempt) (*Record, err
 	if err := json.Unmarshal(data, &owned); err != nil {
 		return nil, err
 	}
-	amount, err := owned.Valuation.NanoUSD(owned.Bound)
+	amount, err := owned.amount(owned.Bound)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (r *Repository) Reserve(ctx context.Context, attempt Attempt) (*Record, err
 		if err != nil {
 			return nil, err
 		}
-		record := &Record{Version: recordVersion, Attempt: owned, State: Reserved, AdmittedAt: now, NanoUSD: amount}
+		record := &Record{Version: recordVersion, Attempt: owned, State: Reserved, AdmittedAt: now, NanoUSD: owned.money(amount)}
 		mutations := make([]storage.CompareAndSwapMutation, 0, 2*len(owned.Rules)+1)
 		for _, rule := range owned.Rules {
 			window := windowFor(rule.Meter.Interval, now)
@@ -251,7 +251,7 @@ func validateAttempt(attempt Attempt) error {
 		}
 		seen[rule.Meter] = true
 	}
-	_, err := attempt.Valuation.NanoUSD(attempt.Bound)
+	_, err := attempt.amount(attempt.Bound)
 	return err
 }
 

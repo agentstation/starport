@@ -6,7 +6,7 @@ import (
 )
 
 func validateBindings(record *Record) error {
-	amount, err := record.Attempt.Valuation.NanoUSD(record.Attempt.Bound)
+	amount, err := record.Attempt.amount(record.Attempt.Bound)
 	if err != nil {
 		return ErrUnavailable
 	}
@@ -24,30 +24,39 @@ func validateBindings(record *Record) error {
 }
 
 func validateSettlement(record *Record, amount int64) error {
+	if record.Pending != nil {
+		if record.State != Uncertain || record.Unresolved != nil || !validID(record.Pending.ID) || record.Pending.Tokens < 0 {
+			return ErrUnavailable
+		}
+		_, err := record.Attempt.amount(record.Pending.Quantities)
+		if err != nil && !errors.Is(err, ErrOverflow) {
+			return ErrUnavailable
+		}
+	}
 	if record.Unresolved != nil {
 		if record.State != Uncertain || !validID(record.Unresolved.ID) || record.Unresolved.Tokens < 0 {
 			return ErrUnavailable
 		}
-		_, err := record.Attempt.Valuation.NanoUSD(record.Unresolved.Quantities)
+		_, err := record.Attempt.amount(record.Unresolved.Quantities)
 		if !errors.Is(err, ErrOverflow) {
 			return ErrUnavailable
 		}
 	}
 	switch record.State {
 	case Reserved, Dispatched, Uncertain:
-		if record.Evidence != nil || record.NanoUSD != amount {
+		if record.Evidence != nil || !record.moneyMatches(amount) {
 			return ErrUnavailable
 		}
 	case Canceled:
-		if record.Evidence != nil || record.NanoUSD != 0 {
+		if record.Evidence != nil || !record.moneyMatches(0) {
 			return ErrUnavailable
 		}
 	case Settled:
 		if record.Evidence == nil || !validID(record.Evidence.ID) || record.Evidence.Tokens < 0 {
 			return ErrUnavailable
 		}
-		actual, err := record.Attempt.Valuation.NanoUSD(record.Evidence.Quantities)
-		if err != nil || actual != record.NanoUSD {
+		actual, err := record.Attempt.amount(record.Evidence.Quantities)
+		if err != nil || !record.moneyMatches(actual) {
 			return ErrUnavailable
 		}
 	default:

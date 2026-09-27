@@ -14,6 +14,17 @@ type holderIdentity struct {
 	ID    string       `json:"id"`
 }
 
+// FreshHolderIdentity describes the retained identity of a new meter population.
+// Creation must share the holder's atomic transaction. Setup rollback can compare
+// this exact record before removing an unpublished, unused local database.
+func FreshHolderIdentity(scope limits.Scope, id string) (storage.CompareAndSwapMutation, error) {
+	if !validID(id) || (scope != limits.ScopeAccount && scope != limits.ScopeKey && scope != limits.ScopeTeam) {
+		return storage.CompareAndSwapMutation{}, ErrInvalid
+	}
+	identity := holderIdentity{Scope: scope, ID: id}
+	return encodeMutation(storageKey("holder", identity), nil, identity)
+}
+
 // HolderCreationMutations belong in the holder repository's atomic create batch.
 // A retained identity prevents deletion and recreation from resetting usage.
 // Recreated holders and newly added budgets require explicit history reconciliation.
@@ -37,10 +48,11 @@ func HolderCreationMutations(ctx context.Context, store storage.KVStore, scope l
 			return nil, ErrUnavailable
 		}
 	}
-	marker, err := encodeMutation(key, prior, identity)
+	marker, err := FreshHolderIdentity(scope, id)
 	if err != nil {
 		return nil, err
 	}
+	marker.ExpectedValue = prior
 	mutations := []storage.CompareAndSwapMutation{marker}
 	if !fresh || policy == nil {
 		return mutations, nil
