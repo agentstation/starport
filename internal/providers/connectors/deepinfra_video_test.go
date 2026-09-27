@@ -1,12 +1,14 @@
 package connectors
 
 import (
+	"context"
 	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
@@ -34,7 +36,7 @@ func TestNativeVideoWireAndMeasuredUsage(t *testing.T) {
 	require.True(t, ok)
 	seed := int64(0)
 	request := approveConnectorFixture(t, &NativeVideoRequest{MediaTarget: MediaTarget{Model: "exact/model", Endpoint: InferenceEndpoint{Type: catalogs.EndpointTypeDeepInfraVideo, URL: server.URL + "/inference/exact/model"}, Credential: testAPIMaterial("video-key")}, Prompt: "A cloud", NegativePrompt: "text", Size: "1280x720", Seconds: 5, Seed: &seed, MaxBytes: 3})
-	result, err := generator.GenerateVideo(t.Context(), request)
+	result, err := generator.GenerateVideo(nativeTestContext(t), request)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), calls.Load())
 	require.Equal(t, "provider-request", result.RequestID)
@@ -129,10 +131,10 @@ func TestNativeVideoRefusesInvalidInputsBeforeDispatch(t *testing.T) {
 	} {
 		request := valid
 		change(&request)
-		_, err := generator.GenerateVideo(t.Context(), &request)
+		_, err := generator.GenerateVideo(nativeTestContext(t), &request)
 		require.Error(t, err)
 	}
-	_, err = generator.GenerateVideo(t.Context(), nil)
+	_, err = generator.GenerateVideo(nativeTestContext(t), nil)
 	require.ErrorIs(t, err, ErrInvalidMediaRequest)
 }
 
@@ -149,8 +151,23 @@ func TestNativeVideoDoesNotRetryProviderFailure(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, connector.Close()) })
 	request := approveConnectorFixture(t, &NativeVideoRequest{MediaTarget: MediaTarget{Endpoint: InferenceEndpoint{Type: catalogs.EndpointTypeDeepInfraVideo, URL: server.URL}, Credential: testAPIMaterial("video-key")}, Prompt: "Cloud", Size: "1280x720", Seconds: 5, MaxBytes: 3})
-	_, err = connector.(NativeVideoGenerator).GenerateVideo(t.Context(), request)
+	_, err = connector.(NativeVideoGenerator).GenerateVideo(nativeTestContext(t), request)
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "private")
 	require.Equal(t, int64(1), calls.Load())
+}
+
+func nativeTestContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+func TestNativeVideoRequiresExecutionDeadline(t *testing.T) {
+	connector, err := newDeepInfraVideoConnector("fixture", mediaTestConfig("https://provider.example"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, connector.Close()) })
+	_, err = connector.(NativeVideoGenerator).GenerateVideo(context.Background(), nil)
+	require.ErrorContains(t, err, "execution deadline")
 }

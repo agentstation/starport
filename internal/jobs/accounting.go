@@ -5,29 +5,24 @@ import (
 	"errors"
 	"time"
 
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/routing"
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// AccountingEntry is what one finished job reports to whoever prices it.
-//
-// The entry carries a state and a chargeable flag rather than a price. This
-// package owns when a job ends and whether the end produced work; it owns no
-// price, no catalog, and no currency. The half that reads a Starmap offering
-// reads them here.
-//
-// The provider job identifier is absent, as it is from every other value that
-// leaves this package. Invariant J1 keeps it inside.
+// AccountingEntry reports a terminal job with its pinned rates and measured usage.
+// Provider request identifiers remain private to the job record.
 type AccountingEntry struct {
-	JobID     string
-	Account   string
-	KeyID     string
-	Provider  string
-	Model     string
-	Operation routing.Operation
-	State     JobState
-	// Chargeable reports whether this end produced work the account pays for.
-	// The recipient still decides what it costs, and may find no price at all.
+	Valuation   *reservation.Valuation
+	Measurement *reservation.Evidence
+	JobID       string
+	Account     string
+	KeyID       string
+	Provider    string
+	Model       string
+	Operation   routing.Operation
+	State       JobState
+	// Chargeable reports completed output for display. It does not prove cost.
 	Chargeable bool
 	// SubmittedAt and TerminalAt bound the work. A record of the two is what
 	// lets an operator tell a job that took two minutes from one that took two
@@ -114,6 +109,7 @@ func (s *Service) notifyTerminal(ctx context.Context, job Job) (Job, error) {
 // entryFor projects a settled record into what the accounting seam reads.
 func entryFor(job Job) AccountingEntry {
 	return AccountingEntry{
+		Valuation: copyValuation(job.Valuation), Measurement: copyMeasurement(job.Measurement),
 		JobID:       job.ID,
 		Account:     job.Account,
 		KeyID:       job.KeyID,

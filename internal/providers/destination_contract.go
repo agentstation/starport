@@ -69,7 +69,22 @@ func approvedDestinationBindings(profile catalogs.ProviderCredentialProfile, bin
 func contractDestinations(service *catalogs.ProviderInference, baseURL string, bindings map[string]string) ([]credentials.Destination, error) {
 	var destinations []credentials.Destination
 	seen := make(map[credentials.Destination]bool)
+	endpoints := slices.Clone(service.Endpoints)
 	for _, endpoint := range service.Endpoints {
+		for _, model := range slices.Sorted(maps.Keys(endpoint.OverridesByModel)) {
+			if strings.ContainsAny(string(model), "{}") {
+				return nil, credentials.ErrDestinationUnapproved
+			}
+			override := endpoint.OverridesByModel[model]
+			// Model overrides grant only their exact model, not the whole namespace.
+			endpoints = append(endpoints, catalogs.ProviderInferenceEndpoint{
+				Operation: endpoint.Operation, Type: override.Type,
+				Path:       strings.ReplaceAll(override.Path, "{provider_model_id}", string(model)),
+				StreamPath: strings.ReplaceAll(override.StreamPath, "{provider_model_id}", string(model)),
+			})
+		}
+	}
+	for _, endpoint := range endpoints {
 		paths := []string{endpoint.Path, endpoint.StreamPath}
 		for _, author := range slices.Sorted(maps.Keys(endpoint.PathsByAuthor)) {
 			paths = append(paths, endpoint.PathsByAuthor[author])

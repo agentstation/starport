@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/agentstation/starport/internal/limits/reservation"
 )
 
 // ErrSubmissionRecorderRequired refuses dispatch without durable job ownership.
@@ -29,6 +31,8 @@ func (e *SubmissionError) Unwrap() error { return errors.Join(ErrSubmissionUncon
 // Dispatch binds the selected catalog offering and its required reservation.
 // An empty ReservationID means no budget reservation applies to this attempt.
 type Dispatch struct {
+	Native            bool
+	Valuation         *reservation.Valuation
 	Provider          string
 	Model             string
 	CatalogGeneration string
@@ -44,11 +48,12 @@ type SubmissionRecorder interface {
 }
 
 type submissionRecorder struct {
-	service    *Service
-	submission Submission
-	job        Job
-	attempted  bool
-	accepted   bool
+	onNativeDispatch func(Job)
+	service          *Service
+	submission       Submission
+	job              Job
+	attempted        bool
+	accepted         bool
 }
 
 func (j Job) validateSubmission() error {
@@ -62,7 +67,7 @@ func (j Job) validateSubmission() error {
 		if strings.TrimSpace(j.CatalogGeneration) == "" {
 			return fmt.Errorf("%w: unconfirmed submission has no catalog generation", ErrInvalidJob)
 		}
-	} else if j.CatalogGeneration != "" && !j.HasProviderJob() {
+	} else if j.CatalogGeneration != "" && !j.HasProviderJob() && !j.Native {
 		return fmt.Errorf("%w: confirmed dispatch names no provider job", ErrInvalidJob)
 	}
 	if j.ReservationID != "" && j.CatalogGeneration == "" {
@@ -87,6 +92,15 @@ func (r *submissionRecorder) BeforeDispatch(ctx context.Context, dispatch Dispat
 	job.CatalogGeneration = dispatch.CatalogGeneration
 	job.ReservationID = dispatch.ReservationID
 	job.SubmissionPending = true
+	job.Native = dispatch.Native
+	job.Valuation = copyValuation(dispatch.Valuation)
+	if job.Native {
+		if r.service.assets == nil {
+			return ErrAssetNotFound
+		}
+		job.nativeReceiptKey, job.nativeAssetKey = newAssetKey(), newAssetKey()
+		job.nativeAssetBound, job.nativeRetention = r.service.maxAssetBytes, r.service.retention
+	}
 	if err := r.service.bindReservation(ctx, job); err != nil {
 		return err
 	}
@@ -105,12 +119,18 @@ func (r *submissionRecorder) BeforeDispatch(ctx context.Context, dispatch Dispat
 	if errors.Is(err, ErrJobExists) || errors.Is(err, ErrClaimUnavailable) {
 		r.attempted = false
 	}
+	if err == nil && job.Native && r.onNativeDispatch != nil {
+		r.onNativeDispatch(job)
+	}
 	return err
 }
 
 func (r *submissionRecorder) Accepted(ctx context.Context, answer Acceptance) error {
 	if !r.attempted || r.accepted || answer.Provider != r.job.Provider || answer.Model != r.job.Model {
 		return ErrInvalidJob
+	}
+	if r.job.Native {
+		return r.acceptNative(ctx, answer)
 	}
 	job := r.job
 	if err := job.AdoptProviderJob(answer.ProviderJobID); err != nil {

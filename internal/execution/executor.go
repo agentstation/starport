@@ -59,6 +59,17 @@ func New(
 	}, nil
 }
 
+// WithElapsedBudget copies the executor with an operation-owned time bound.
+// Attempt limits, availability policy, and outcome publication remain unchanged.
+func (e *Executor) WithElapsedBudget(bound time.Duration) *Executor {
+	if e == nil || bound <= 0 {
+		return e
+	}
+	result := *e
+	result.config.MaxElapsed = bound
+	return &result
+}
+
 // ExecuteChat executes one immutable plan for a non-streaming request.
 func (e *Executor) ExecuteChat(
 	ctx context.Context,

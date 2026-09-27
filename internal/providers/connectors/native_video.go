@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starport/internal/jobs"
 )
 
 // NativeVideoRequest runs video inference to completion in one provider request.
@@ -21,6 +22,8 @@ type NativeVideoRequest struct {
 // NativeVideoResponse separates measured usage from the generated asset.
 // Asset errors must not discard valid usage from the same provider response.
 type NativeVideoResponse struct {
+	State     jobs.JobState
+	Reason    string
 	RequestID string
 	// OutputSeconds is nil when provider duration is absent or invalid.
 	OutputSeconds *int64

@@ -21,6 +21,10 @@ func (s *Service) Reconcile(ctx context.Context, runner Runner, account, id stri
 	if err != nil {
 		return Job{}, err
 	}
+	if job.Native {
+		recovered, err := s.recoverNative(bounded, job)
+		return s.settle(bounded, recovered), err
+	}
 	if job.SubmissionPending {
 		return job, &SubmissionError{JobID: job.ID}
 	}

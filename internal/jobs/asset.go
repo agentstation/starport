@@ -64,6 +64,10 @@ type Asset struct {
 // once the bytes land, and the retention window is what ends it if they never
 // do.
 func (s *Service) collect(ctx context.Context, runner Runner, job Job) Job {
+	if job.Native {
+		recovered, _ := s.recoverNative(ctx, job)
+		return recovered
+	}
 	if s.assets == nil || runner == nil {
 		return job
 	}
@@ -179,6 +183,16 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 
 // sweepOne expires retained assets and reports work that needs reconciliation.
 func (s *Service) sweepOne(ctx context.Context, job Job, now time.Time, result *SweepResult) (Job, error) {
+	if job.Native {
+		var err error
+		job, err = s.recoverNative(ctx, job)
+		if err != nil {
+			return job, err
+		}
+		if job.SubmissionPending {
+			result.AwaitingReconciliation++
+		}
+	}
 	if job.SubmissionPending {
 		return job, nil
 	}

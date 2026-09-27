@@ -78,7 +78,7 @@ func (h *VideosController) Submit(w http.ResponseWriter, r *http.Request) {
 	// without spending either. The gateway failure is held aside because it
 	// answers a caller in the credential vocabulary, not the job one.
 	var gatewayErr error
-	job, err := h.jobs.Submit(ctx, func(ctx context.Context) (jobs.Runner, error) {
+	job, err := h.jobs.SubmitBackground(ctx, func(ctx context.Context) (jobs.Runner, error) {
 		gateway, buildErr := mediaGatewayRequest(ctx, h.BaseHandler, request)
 		if buildErr != nil {
 			gatewayErr = buildErr
@@ -379,6 +379,10 @@ func (h *VideosController) writeJobError(
 		// existed. Any other answer would report that the identifier is real,
 		// and an identifier is the only thing a caller has to guess.
 		h.writeVideoStatus(w, http.StatusNotFound, errorTypeNotFound, "No such video job")
+	case errors.Is(err, jobs.ErrWorkersBusy), errors.Is(err, jobs.ErrServiceClosed):
+		h.writeVideoStatus(w, http.StatusServiceUnavailable, errorTypeServiceUnavailable, err.Error())
+	case errors.Is(err, jobs.ErrNativeCancellationUnsupported):
+		h.writeVideoStatus(w, http.StatusConflict, errorTypeInvalidRequest, err.Error())
 	case errors.Is(err, jobs.ErrJobAlreadyEnded):
 		h.writeVideoStatus(w, http.StatusConflict, errorTypeInvalidRequest, err.Error())
 	case errors.Is(err, jobs.ErrInvalidJob), errors.Is(err, jobs.ErrIllegalTransition):

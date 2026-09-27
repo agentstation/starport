@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"reflect"
 	"strings"
 
 	"github.com/agentstation/starport/internal/jobs"
@@ -37,6 +38,14 @@ func (o *budgetOwner) ConfirmJob(ctx context.Context, job jobs.Job) error {
 	}
 	if record.JobID != job.ID || record.JobID == "" {
 		return reservation.ErrIdentityConflict
+	}
+	if job.Measurement != nil {
+		if job.Valuation == nil || !reflect.DeepEqual(record.Attempt.Valuation, *job.Valuation) {
+			return reservation.ErrIdentityConflict
+		}
+		if err := o.ledger.Reconcile(ctx, job.ReservationID, *job.Measurement); err != nil {
+			return err
+		}
 	}
 	if err := o.ledger.ReconcileRetained(ctx, job.ReservationID); err != nil {
 		return err

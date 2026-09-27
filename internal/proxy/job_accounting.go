@@ -9,43 +9,18 @@ import (
 	"github.com/agentstation/starport/internal/usage"
 )
 
-// JobAccountant prices one finished job and writes its single usage record.
-//
-// It lives here rather than in internal/jobs because pricing reads a Starmap
-// offering, and internal/jobs owns job state and nothing else. It lives here
-// rather than in the composition root because this package already holds the
-// catalog-to-cost rules that every other operation uses, and a video priced by
-// a second copy of them would drift from the rest of the bill.
-//
-// It is deliberately not a method on Proxy. Nothing on the request path calls
-// it: a job settles when a poll, a cancel, or the sweep reaches its terminal
-// state, which may be long after the submitting request returned.
+// JobAccountant reports measured usage at the rates pinned before dispatch.
+// A terminal state alone establishes neither a charge nor a free request.
 type JobAccountant struct {
-	// snapshots reads the catalog at the moment the job ends, not the one that
-	// routed its submission. A record cannot hold a snapshot, and a poll may
-	// land minutes later. The alternative is no price at all, and a price from
-	// a catalog that moved between the two is closer to the truth than that.
-	snapshots func() *runtimecatalog.RoutableSnapshot
-	recorder  UsageRecorder
+	recorder UsageRecorder
 }
 
-// NewJobAccountant returns an accountant over one catalog reader and one record
-// store. Either may be absent, which is what a deployment with usage recording
-// switched off gets: the job still settles and still frees its slot.
-func NewJobAccountant(
-	snapshots func() *runtimecatalog.RoutableSnapshot,
-	recorder UsageRecorder,
-) *JobAccountant {
-	return &JobAccountant{snapshots: snapshots, recorder: recorder}
+// NewJobAccountant returns an optional usage reporter.
+func NewJobAccountant(recorder UsageRecorder) *JobAccountant {
+	return &JobAccountant{recorder: recorder}
 }
 
-// RecordJob writes the one usage record a terminal job draws.
-//
-// A failed job and a cancelled job draw a record with no cost rather than no
-// record. The work is a real event in the account's history, and a spend report
-// that showed only the jobs that succeeded would answer "what did this account
-// do" with a shorter list than the truth. Their cost is zero, which is what
-// CostReasonNoUsage already means everywhere else.
+// RecordJob records a terminal result without consulting the current catalog.
 func (a *JobAccountant) RecordJob(ctx context.Context, entry jobs.AccountingEntry) error {
 	if a == nil || a.recorder == nil {
 		return nil
@@ -62,21 +37,30 @@ func (a *JobAccountant) RecordJob(ctx context.Context, entry jobs.AccountingEntr
 		Status:         jobStatus(entry.State),
 		LatencyMS:      entry.TerminalAt.Sub(entry.SubmittedAt).Milliseconds(),
 	}
-	// ErrorClass stays empty. internal/jobs holds a caller-facing reason string
-	// and no failure kind, and the failure vocabulary is not reachable from a
-	// leaf that owns job state. A class invented here would be a guess an
-	// operator could not act on, and Status already says the job ended badly.
-	if !entry.Chargeable {
-		// Nothing was produced, so nothing is priced. The reason names the gap
-		// rather than reporting a zero that reads like a free video.
-		record.CostUnavailableReason = usage.CostReasonNoUsage
-		return a.put(ctx, record)
+	if entry.State == jobs.JobStateCompleted {
+		record.Media = &usage.Media{GeneratedVideos: 1}
 	}
-	media := usage.Media{GeneratedVideos: 1}
-	record.Media = &media
-	cost, reason := usageCost(a.snapshot(), record)
-	record.Cost = cost
-	record.CostUnavailableReason = reason
+	if entry.Measurement != nil {
+		if seconds, known := entry.Measurement.Quantities[runtimecatalog.VideoOutputSecondUnit]; known && seconds >= 0 {
+			if record.Media == nil {
+				record.Media = &usage.Media{}
+			}
+			record.Media.VideoOutputSeconds, record.Media.VideoOutputSecondsKnown = seconds, true
+		}
+	}
+	switch {
+	case entry.Measurement == nil:
+		record.CostUnavailableReason = usage.CostReasonNoUsage
+	case entry.Valuation == nil:
+		record.CostUnavailableReason = usage.CostReasonNoPricing
+	default:
+		amount, err := entry.Valuation.NanoUSD(entry.Measurement.Quantities)
+		if err != nil {
+			record.CostUnavailableReason = usage.CostReasonInvalidUsage
+		} else {
+			record.Cost = &usage.Cost{NanoUSD: amount, Currency: "USD"}
+		}
+	}
 	return a.put(ctx, record)
 }
 
@@ -85,13 +69,6 @@ func (a *JobAccountant) put(ctx context.Context, record usage.Record) error {
 		return fmt.Errorf("proxy: account for job %s: %w", record.RequestID, err)
 	}
 	return a.recorder.Put(ctx, record)
-}
-
-func (a *JobAccountant) snapshot() *runtimecatalog.RoutableSnapshot {
-	if a.snapshots == nil {
-		return nil
-	}
-	return a.snapshots()
 }
 
 // jobStatus maps the terminal job vocabulary onto the usage vocabulary. The two

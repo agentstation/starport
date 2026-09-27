@@ -1519,9 +1519,18 @@ A video takes minutes, so a submission answers with a job identifier rather
 than with a video. The caller comes back to that identifier until the job
 reaches a terminal state, and then reads the bytes this gateway stored for it.
 
-Starport polls the provider itself. A caller never learns the provider's own
-job identifier, so a deployment can move a model between providers without
-breaking a caller that is mid-poll.
+Starport polls providers that return asynchronous job handles.
+For native video inference, Starport retains one provider connection in a bounded worker.
+The submission returns after Starport stores dispatch ownership.
+The caller reads the gateway job while the worker waits for the result.
+Native request identifiers do not permit provider polling or cancellation.
+Starport returns HTTP 409 for native cancellation requests.
+
+A native response receipt retains the result, measured duration, and asset bytes.
+Recovery reads this receipt without another inference request.
+A lost response leaves `submission_status` as `unconfirmed` and retains required budget capacity.
+Starport never automatically repeats uncertain inference.
+External asset URL downloads remain unimplemented. Inline video assets support durable recovery.
 
 ### The routes and their scopes
 
@@ -1547,7 +1556,7 @@ A job holds one of five states:
 
 | State | Meaning |
 | --- | --- |
-| `queued` | the provider accepted the submission and has not started |
+| `queued` | dispatch ownership exists, or the provider accepted work that has not started |
 | `running` | the provider is working |
 | `completed` | the video is ready, and this gateway may still hold the bytes |
 | `failed` | the provider refused or gave up, and `error.message` says why |
@@ -1572,12 +1581,28 @@ finished and the video went, without spending a request to find out.
 STARPORT_JOBS_ASSET_RETENTION=24h
 STARPORT_JOBS_MAX_ASSET_BYTES=268435456
 STARPORT_JOBS_SWEEP_INTERVAL=1h
+STARPORT_JOBS_MAX_WORKERS=2
+STARPORT_JOBS_EXECUTION_TIMEOUT=10m
 ```
 
-The retention window defaults to 24 hours, measured from the moment this
-gateway stored the asset. It is short beside the 30 days a file gets. A
-generated video is an answer a caller collects rather than a document it keeps.
-Both provider families publish their own links with windows measured in hours.
+Each replica permits two simultaneous video submission workers by default.
+A full worker set returns HTTP 503 before provider dispatch.
+Native inference uses the configured execution deadline, including response transfer.
+A timeout retains uncertain work and does not prove provider cancellation.
+Shutdown cancels workers before the provider registry and storage close.
+
+Optional usage reports use submission prices and measured duration.
+Provider cost estimates and terminal states cannot establish a charge.
+An explicit measured zero differs from absent usage.
+The job record preserves unknown usage for required settlement.
+
+The retention window defaults to 24 hours.
+Native jobs measure it from the stored response receipt.
+Other jobs measure it from asset storage.
+Native recovery retains the submission asset bound and retention window.
+
+A generated video is an answer a caller collects.
+Provider retention does not change the gateway retention window.
 A caller that comes back past the window reads HTTP 410 and the window length
 in the refusal.
 
@@ -1587,7 +1612,7 @@ reclaims expired bytes every hour. The sweep is a floor on how long expired
 bytes survive on disk. It is not a floor on how long an asset reads: an expired
 asset stops reading the moment it expires.
 
-For one hour after submission, a single-job GET can check the provider.
+For asynchronous provider jobs, a single-job GET can check the provider during the first hour after submission.
 After that window, GET retains the last provider state and returns `polling_status: "paused"`.
 A listing reads stored records without provider calls.
 A local timeout does not prove that provider work stopped.

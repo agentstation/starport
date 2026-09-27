@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starport/internal/jobs"
 )
 
 // deepInfraVideoConnector implements the native duration-based video protocol.
@@ -26,6 +27,8 @@ func newDeepInfraVideoConnector(id catalogs.ProviderID, config ProviderConfig) (
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
+	// Native generation has no headers until the bounded operation completes.
+	config.Timeout = 0
 	return &deepInfraVideoConnector{providerID: id, client: newProviderHTTPClient(config)}, nil
 }
 
@@ -42,6 +45,9 @@ func (c *deepInfraVideoConnector) Embeddings(context.Context, *EmbeddingsRequest
 }
 
 func (c *deepInfraVideoConnector) GenerateVideo(ctx context.Context, request *NativeVideoRequest) (*NativeVideoResponse, error) {
+	if _, bounded := ctx.Deadline(); !bounded {
+		return nil, fmt.Errorf("%w: native video requires an execution deadline", ErrInvalidMediaRequest)
+	}
 	if request == nil || strings.TrimSpace(request.Prompt) == "" || request.Seconds <= 0 || request.MaxBytes <= 0 || request.MaxBytes > (math.MaxInt64-65536)/2 {
 		return nil, fmt.Errorf("%w: native video requires resolved inputs and an asset bound", ErrInvalidMediaRequest)
 	}
@@ -124,7 +130,7 @@ func decodeDeepInfraVideo(reader io.Reader, maxBytes int64) (*NativeVideoRespons
 		// Decoder errors can contain provider content. Expose only the failure class.
 		return nil, fmt.Errorf("%w: invalid native video response", ErrInvalidMediaRequest)
 	}
-	result := &NativeVideoResponse{RequestID: payload.RequestID}
+	result := &NativeVideoResponse{RequestID: payload.RequestID, State: jobs.JobStateCompleted}
 	if payload.Status != nil {
 		if payload.Status.OutputSeconds != nil && *payload.Status.OutputSeconds >= 0 {
 			result.OutputSeconds = payload.Status.OutputSeconds
@@ -134,6 +140,11 @@ func decodeDeepInfraVideo(reader io.Reader, maxBytes int64) (*NativeVideoRespons
 		}
 		// The schema defaults an omitted status to succeeded. An explicit value must agree.
 		if payload.Status.State != nil && *payload.Status.State != "succeeded" {
+			result.State = ""
+			if *payload.Status.State == "failed" {
+				result.State = jobs.JobStateFailed
+				result.Reason = "The provider reported native inference failure."
+			}
 			return result, fmt.Errorf("%w: native video completion is unconfirmed", ErrInvalidMediaRequest)
 		}
 	}

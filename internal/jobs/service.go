@@ -34,6 +34,7 @@ type Handle struct {
 
 // Acceptance is what a provider answered when it took the work.
 type Acceptance struct {
+	NativeResult *NativeResult
 	// Provider names who accepted it, and Model names what the route resolved
 	// to. Both come from the route rather than from the request, because a
 	// request names a catalog model and a route names a provider's own.
@@ -76,9 +77,12 @@ type Runner interface {
 // accounting rule and the retention rule that later read the state see one
 // history rather than several writers' versions of one.
 type Service struct {
-	recovery recoveryState[Job]
-	records  Repository
-	assets   blob.Store
+	workers          workerState
+	executionTimeout time.Duration
+	maxWorkers       int
+	recovery         recoveryState[Job]
+	records          Repository
+	assets           blob.Store
 	// accountant prices a job once, at its terminal state. A service without
 	// one still runs: it keeps the same stamp on the record, so a deployment
 	// that later gains an accountant does not re-price the jobs it already
@@ -175,12 +179,14 @@ func NewService(records Repository, options ...ServiceOption) (*Service, error) 
 		return nil, ErrRepositoryRequired
 	}
 	service := &Service{
-		records:       records,
-		policy:        DefaultPollPolicy(),
-		retention:     DefaultAssetRetention,
-		maxAssetBytes: DefaultMaxAssetBytes,
-		now:           time.Now,
-		mint:          newJobID,
+		records:          records,
+		executionTimeout: DefaultExecutionTimeout,
+		maxWorkers:       DefaultMaxWorkers,
+		policy:           DefaultPollPolicy(),
+		retention:        DefaultAssetRetention,
+		maxAssetBytes:    DefaultMaxAssetBytes,
+		now:              time.Now,
+		mint:             newJobID,
 	}
 	for _, option := range options {
 		option(service)
@@ -231,34 +237,46 @@ type OpenRunner func(ctx context.Context) (Runner, error)
 // Submit records one selected dispatch before the provider can accept work.
 // An uncertain submission retains its record and outstanding slot for recovery.
 func (s *Service) Submit(ctx context.Context, open OpenRunner, submission Submission) (Job, error) {
+	runner, recorder, err := s.beginSubmission(ctx, open, submission)
+	if err != nil {
+		return Job{}, err
+	}
+	return s.executeSubmission(ctx, runner, recorder)
+}
+
+func (s *Service) beginSubmission(ctx context.Context, open OpenRunner, submission Submission) (Runner, *submissionRecorder, error) {
 	if open == nil {
-		return Job{}, ErrRunnerRequired
+		return nil, nil, ErrRunnerRequired
 	}
 	submission.Account = strings.TrimSpace(submission.Account)
 	if submission.Account == "" {
-		return Job{}, fmt.Errorf("%w: it names no account", ErrInvalidJob)
+		return nil, nil, fmt.Errorf("%w: it names no account", ErrInvalidJob)
 	}
 	submission.jobID = s.mint()
 	if s.meter != nil {
 		submission.slotID = newJobID()
 	}
 	if err := s.reserveSlot(ctx, submission); err != nil {
-		return Job{}, err
+		return nil, nil, err
 	}
-	recorder := &submissionRecorder{service: s, submission: submission}
+	runner, err := open(ctx)
+	if err == nil && runner == nil {
+		err = ErrRunnerRequired
+	}
+	if err != nil {
+		_ = s.releaseSlot(ctx, Job{Account: submission.Account, SlotID: submission.slotID})
+		return nil, nil, err
+	}
+	return runner, &submissionRecorder{service: s, submission: submission}, nil
+}
+
+func (s *Service) executeSubmission(ctx context.Context, runner Runner, recorder *submissionRecorder) (Job, error) {
 	defer func() {
 		if !recorder.attempted {
-			_ = s.releaseSlot(ctx, Job{Account: submission.Account, SlotID: submission.slotID})
+			_ = s.releaseSlot(ctx, Job{Account: recorder.submission.Account, SlotID: recorder.submission.slotID})
 		}
 	}()
-	runner, err := open(ctx)
-	if err != nil {
-		return Job{}, err
-	}
-	if runner == nil {
-		return Job{}, ErrRunnerRequired
-	}
-	_, err = runner.Submit(ctx, recorder)
+	_, err := runner.Submit(ctx, recorder)
 	if recorder.attempted && !recorder.accepted {
 		return recorder.job, &SubmissionError{JobID: recorder.job.ID, Cause: err}
 	}
@@ -294,6 +312,10 @@ func (s *Service) Refresh(ctx context.Context, runner Runner, account, id string
 	if err != nil {
 		return Job{}, err
 	}
+	if job.Native {
+		recovered, err := s.recoverNative(ctx, job)
+		return s.settle(ctx, recovered), err
+	}
 	if job.SubmissionPending {
 		return job, &SubmissionError{JobID: job.ID}
 	}
@@ -319,6 +341,9 @@ func (s *Service) Cancel(ctx context.Context, runner Runner, account, id string)
 	job, err := s.records.Get(ctx, account, id)
 	if err != nil {
 		return Job{}, err
+	}
+	if job.Native {
+		return job, ErrNativeCancellationUnsupported
 	}
 	if job.SubmissionPending {
 		return job, &SubmissionError{JobID: job.ID}

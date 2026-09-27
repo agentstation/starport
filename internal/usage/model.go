@@ -101,10 +101,11 @@ type Media struct {
 	ImageSize       string `json:"image_size,omitempty"`
 	ImagesEdited    bool   `json:"images_edited,omitzero"`
 	GeneratedImages int64  `json:"generated_images,omitempty"`
-	// GeneratedVideos counts finished videos. A provider prices a video per
-	// video, not per second and not per token, so this is the whole meter for
-	// the operation rather than a share of another one.
+	// GeneratedVideos counts completed outputs. It does not establish billing units.
 	GeneratedVideos int64 `json:"generated_videos,omitempty"`
+	// VideoOutputSeconds preserves provider duration, including an explicit zero.
+	VideoOutputSeconds      int64 `json:"video_output_seconds,omitempty"`
+	VideoOutputSecondsKnown bool  `json:"video_output_seconds_known,omitzero"`
 }
 
 // Cost is the Starmap-derived cost of one request in integer nano-USD.

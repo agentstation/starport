@@ -167,3 +167,38 @@ func TestDestinationContractScopesJobTargets(t *testing.T) {
 		require.ErrorIs(t, err, credentials.ErrDestinationUnapproved)
 	}
 }
+
+func TestDestinationContractIncludesOnlyDeclaredModelOverrides(t *testing.T) {
+	snapshot, err := destinationContractBaseline()
+	require.NoError(t, err)
+	provider, err := snapshot.Provider(catalogs.ProviderIDDeepInfra)
+	require.NoError(t, err)
+	var profile catalogs.ProviderCredentialProfile
+	for _, candidate := range provider.Credentials.Profiles {
+		if candidate.ID == provider.Credentials.Inference.Alternatives[0] {
+			profile = candidate
+		}
+	}
+	identity := credentials.DestinationIdentity{Provider: provider.ID, Role: string(keyring.SourceEnvironment), Handle: "fixture"}
+	grant, err := CompileDestinationGrant(provider, identity, profile.ID, "https://provider.example/v1", nil)
+	require.NoError(t, err)
+	material := credentials.NewMaterial(profile, nil, credentials.MaterialMetadata{Handle: identity.Handle})
+	for _, tc := range []struct {
+		method, path string
+		allowed      bool
+	}{
+		{http.MethodPost, "/inference/Wan-AI/Wan2.2-T2V-A14B", true},
+		{http.MethodGet, "/inference/Wan-AI/Wan2.2-T2V-A14B", false},
+		{http.MethodPost, "/inference/Wan-AI/another-model", false},
+		{http.MethodGet, "/inference/Wan-AI/Wan2.2-T2V-A14B/job/content", false},
+	} {
+		req, err := http.NewRequestWithContext(t.Context(), tc.method, "https://provider.example/v1"+tc.path, nil)
+		require.NoError(t, err)
+		_, err = grant.Authorize(identity, material, catalogs.ProviderOperationVideosGenerations, req)
+		if tc.allowed {
+			require.NoError(t, err)
+		} else {
+			require.ErrorIs(t, err, credentials.ErrDestinationUnapproved)
+		}
+	}
+}

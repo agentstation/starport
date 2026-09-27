@@ -11,6 +11,7 @@ import (
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/routing"
 	"github.com/agentstation/starport/internal/usage"
 )
@@ -40,7 +41,7 @@ func TestAFinishedJobDrawsOneValidRecord(t *testing.T) {
 	t.Parallel()
 
 	recorder := &recordingUsageRepository{}
-	accountant := NewJobAccountant(nil, recorder)
+	accountant := NewJobAccountant(recorder)
 
 	require.NoError(t, accountant.RecordJob(context.Background(), videoEntry(jobs.JobStateCompleted)))
 
@@ -58,14 +59,12 @@ func TestAFinishedJobDrawsOneValidRecord(t *testing.T) {
 	require.Equal(t, int64(1), record.Media.GeneratedVideos)
 }
 
-// TestAFailedJobRecordsNoCostAndNoMediaUnit is the rule an account reads its bill
-// through. The provider produced nothing, so nothing is priced, and the record
-// carries a named reason rather than a zero that would read as a free video.
+// Missing usage leaves a failed job unpriced. Failure does not prove a free request.
 func TestAFailedJobRecordsNoCostAndNoMediaUnit(t *testing.T) {
 	t.Parallel()
 
 	recorder := &recordingUsageRepository{}
-	accountant := NewJobAccountant(nil, recorder)
+	accountant := NewJobAccountant(recorder)
 
 	require.NoError(t, accountant.RecordJob(context.Background(), videoEntry(jobs.JobStateFailed)))
 
@@ -78,14 +77,12 @@ func TestAFailedJobRecordsNoCostAndNoMediaUnit(t *testing.T) {
 	require.Equal(t, usage.StatusError, records[0].Status)
 }
 
-// TestACancelledJobIsNotAFailure separates the two free ends. Both cost
-// nothing, and an account reading its own history needs to tell a provider that
-// broke from a caller that changed its mind.
+// Cancellation remains distinct from failure and does not establish cost.
 func TestACancelledJobIsNotAFailure(t *testing.T) {
 	t.Parallel()
 
 	recorder := &recordingUsageRepository{}
-	accountant := NewJobAccountant(nil, recorder)
+	accountant := NewJobAccountant(recorder)
 
 	require.NoError(t, accountant.RecordJob(context.Background(), videoEntry(jobs.JobStateCancelled)))
 
@@ -168,6 +165,35 @@ func TestAVideoAloneIsUsage(t *testing.T) {
 func TestAJobWithNoRecorderStillSettles(t *testing.T) {
 	t.Parallel()
 
-	accountant := NewJobAccountant(nil, nil)
+	accountant := NewJobAccountant(nil)
 	require.NoError(t, accountant.RecordJob(context.Background(), videoEntry(jobs.JobStateCompleted)))
+}
+
+func TestJobReportingUsesPinnedMeasurementInEveryTerminalState(t *testing.T) {
+	for _, state := range []jobs.JobState{jobs.JobStateCompleted, jobs.JobStateFailed, jobs.JobStateCancelled} {
+		for _, quantity := range []int64{0, 5} {
+			entry := videoEntry(state)
+			entry.Valuation = &reservation.Valuation{Version: reservation.ArithmeticVersion, Components: []reservation.Component{{Unit: "video_output_seconds", Price: reservation.Price{USD: "0.075", PerUnits: 1}}}}
+			entry.Measurement = &reservation.Evidence{ID: entry.JobID + ":usage", Quantities: reservation.Quantities{"video_output_seconds": quantity}}
+			recorder := &recordingUsageRepository{}
+			accountant := NewJobAccountant(recorder)
+			require.NoError(t, accountant.RecordJob(t.Context(), entry))
+			record := recorder.all()[0]
+			require.NotNil(t, record.Cost)
+			require.Equal(t, quantity*75_000_000, record.Cost.NanoUSD)
+			require.Empty(t, record.CostUnavailableReason)
+			require.True(t, record.Media.VideoOutputSecondsKnown)
+			require.Equal(t, quantity, record.Media.VideoOutputSeconds)
+		}
+	}
+}
+
+func TestJobReportingDoesNotInventMissingMeasurement(t *testing.T) {
+	for _, state := range []jobs.JobState{jobs.JobStateCompleted, jobs.JobStateFailed, jobs.JobStateCancelled} {
+		recorder := &recordingUsageRepository{}
+		require.NoError(t, NewJobAccountant(recorder).RecordJob(t.Context(), videoEntry(state)))
+		record := recorder.all()[0]
+		require.Nil(t, record.Cost)
+		require.Equal(t, usage.CostReasonNoUsage, record.CostUnavailableReason)
+	}
 }

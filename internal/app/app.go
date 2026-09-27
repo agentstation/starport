@@ -575,12 +575,11 @@ func (b *runtimeBuilder) openJobService() error {
 		return fmt.Errorf("open job meter: %w", err)
 	}
 	b.application.jobClaims = meter
-	// The accountant reads the catalog through a closure rather than a captured
-	// snapshot. A job ends long after the request that started it, so the price
-	// it draws comes from whatever the catalog holds at that moment.
-	accountant := proxy.NewJobAccountant(b.application.currentRoutableSnapshot, b.usageRecords)
+	// The reporter uses rates and measured usage retained by the job.
+	accountant := proxy.NewJobAccountant(b.usageRecords)
 	serviceOptions := []jobs.ServiceOption{
 		jobs.WithAssetStore(b.application.blobStore),
+		jobs.WithWorkers(b.config.Jobs.WorkerBound(), b.config.Jobs.ExecutionWindow()),
 		jobs.WithRetention(b.config.Jobs.AssetRetentionWindow()),
 		jobs.WithAssetBound(b.config.Jobs.AssetBound()),
 		jobs.WithJobMeter(meter),
@@ -974,6 +973,8 @@ func (b *runtimeBuilder) deployment() controllers.Deployment {
 }
 
 func (b *runtimeBuilder) openHTTPServer() error {
+	// Workers stop before the registry and storage close. HTTP drains first.
+	b.application.own("video workers", b.jobs.Close)
 	serverCfg := serverConfig(b.config, b.auth)
 	serverCfg.Build = b.application.build
 	httpServer, err := b.factories.newServer(serverCfg, server.Dependencies{

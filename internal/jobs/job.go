@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/routing"
 )
 
@@ -46,7 +47,7 @@ const (
 	JobStateFailed JobState = "failed"
 	// JobStateCancelled marks a job its owner stopped. It is separate from
 	// JobStateFailed because a caller that stops its own work did not fail,
-	// and the two answer the caller differently even though neither costs.
+	// and the two answer the caller differently. Neither state proves a cost.
 	JobStateCancelled JobState = "cancelled"
 )
 
@@ -74,9 +75,7 @@ func (s JobState) Terminal() bool {
 	return s.Valid() && len(legalTransitions[s]) == 0
 }
 
-// Chargeable reports whether a job in this state produced work an account pays
-// for. Only a completed job did. A failed job produced no asset, and a
-// cancelled job is a caller stopping its own work, so neither draws a cost.
+// Chargeable reports a completed output for display. Billing requires measured usage.
 func (s JobState) Chargeable() bool { return s == JobStateCompleted }
 
 // legalTransitions is the one transition table. Every state this package knows
@@ -127,6 +126,15 @@ func CanTransition(from, to JobState) bool {
 // learned it could poll the provider directly, outside every limit and every
 // usage record Starport keeps.
 type Job struct {
+	// Native identifies inference that returns its result in one response.
+	Native bool
+	// Valuation pins submission prices. Measurement contains provider usage only.
+	Valuation        *reservation.Valuation
+	Measurement      *reservation.Evidence
+	nativeAssetBound int64
+	nativeRetention  time.Duration
+	nativeReceiptKey string
+	nativeAssetKey   string
 	// SlotID binds this job to its durable outstanding-work claim.
 	SlotID       string
 	SlotReleased bool
@@ -202,6 +210,9 @@ func (j Job) String() string {
 
 // Validate reports whether the record can be stored.
 func (j Job) Validate() error {
+	if err := j.validateNative(); err != nil {
+		return err
+	}
 	if err := j.validateSubmission(); err != nil {
 		return err
 	}
@@ -314,7 +325,7 @@ func (j *Job) AdoptProviderJob(id string) error {
 // HasProviderJob reports whether the provider named a job to poll. It answers
 // the only question anything outside this package has to ask about the
 // identifier, and it answers it without disclosing the value.
-func (j Job) HasProviderJob() bool { return j.providerJobID != "" }
+func (j Job) HasProviderJob() bool { return !j.Native && j.providerJobID != "" }
 
 // StoreAsset records bytes this gateway now holds for a completed job.
 //

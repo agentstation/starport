@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -49,10 +50,11 @@ func (r *OperationRequest[Request]) policy(model string) operationPolicy {
 // operationPolicy is everything the shared path reads that is not the
 // provider call itself.
 type operationPolicy struct {
-	RequestID    string
-	Model        string
-	APIKeyConfig *APIKeyConfig
-	AccountID    string
+	ElapsedBudget time.Duration
+	RequestID     string
+	Model         string
+	APIKeyConfig  *APIKeyConfig
+	AccountID     string
 	// Provider pins the plan to one provider. It is empty for every operation
 	// that finishes inside its request, and set only when a request carries an
 	// identifier a single provider issued.
@@ -148,7 +150,7 @@ func routeOperation[Response any](
 	}
 
 	requestID := budgetRequestID(policy.RequestID)
-	result, err := execution.Execute(ctx, r.executor, plan, func(
+	result, err := execution.Execute(ctx, r.executor.WithElapsedBudget(policy.ElapsedBudget), plan, func(
 		attemptCtx context.Context,
 		planned routing.Attempt,
 	) (*Response, *failure.Failure, execution.AttemptAction) {
@@ -278,6 +280,7 @@ type providerCall[Request requestBinder, ProviderResponse, Response any] struct 
 	build     func() Request
 	convert   func(ProviderResponse) (Response, error)
 	charge    func(*runtimecatalog.RoutableSnapshot, routing.Route, Request) operationCharge[ProviderResponse]
+	prepare   func(*runtimecatalog.RoutableSnapshot, routing.Route, Request) error
 	// Dispatch hooks persist asynchronous ownership before and after the call.
 	// Once dispatch starts, an asynchronous operation cannot retry automatically.
 	beforeDispatch func(context.Context, routing.Route, admission.Ticket) error
@@ -320,6 +323,11 @@ func (call providerCall[Request, ProviderResponse, Response]) attempt(
 			connectors.InferenceEndpoint{Type: endpointTypeOf(route), URL: route.Endpoint.URL},
 			selected.material,
 		)
+		if call.prepare != nil {
+			if err := call.prepare(budget.snapshot, route, request); err != nil {
+				return nil, offeringBoundExceeded(route, err), execution.AttemptActionStop
+			}
+		}
 		var charge operationCharge[ProviderResponse]
 		if call.charge != nil {
 			charge = call.charge(budget.snapshot, route, request)

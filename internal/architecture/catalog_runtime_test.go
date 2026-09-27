@@ -69,6 +69,7 @@ func TestTransportAuthenticationRegistriesUsePrimitives(t *testing.T) {
 		catalogs.EndpointTypeCohere,
 		catalogs.EndpointTypeVoyage,
 		catalogs.EndpointTypeMistralOCR,
+		catalogs.EndpointTypeDeepInfraVideo,
 	}, transports.EndpointTypes())
 	require.True(t, transports.Supports(
 		catalogs.EndpointTypeOpenAI,

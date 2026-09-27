@@ -244,7 +244,7 @@ func TestLegacyJobSchemasRequireMigration(t *testing.T) {
 			require.NoError(t, err)
 			current := []byte(`"schema_version":2`)
 			if prefix == jobs.StoragePrefix {
-				current = []byte(`"schema_version":3`)
+				current = []byte(`"schema_version":4`)
 			}
 			require.Contains(t, string(data), string(current))
 			legacy := bytes.Replace(data, current, []byte(`"schema_version":1`), 1)
