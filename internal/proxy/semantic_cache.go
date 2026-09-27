@@ -13,11 +13,12 @@ import (
 // SemanticEmbedIdentity carries the gateway identity a cache embedding call
 // runs under, so the call pays and meters like the account's own request.
 type SemanticEmbedIdentity struct {
-	AccountID string
-	KeyID     string
-	TeamID    string
-	RequestID string
-	Protocol  string
+	APIKeyConfig *APIKeyRoutingConfig
+	AccountID    string
+	KeyID        string
+	TeamID       string
+	RequestID    string
+	Protocol     string
 }
 
 // SemanticEmbedder turns canonical prompt text into one vector.
@@ -48,9 +49,10 @@ func (e *GatewayEmbedder) Embed(ctx context.Context, identity SemanticEmbedIdent
 			Model: e.model,
 			Input: inference.EmbeddingInput{Texts: []string{text}},
 		},
-		AccountID: identity.AccountID,
-		KeyID:     identity.KeyID,
-		TeamID:    identity.TeamID,
+		APIKeyConfig: identity.APIKeyConfig,
+		AccountID:    identity.AccountID,
+		KeyID:        identity.KeyID,
+		TeamID:       identity.TeamID,
 		// The embedding draws its own usage record beside the turn that
 		// asked for it, so the suffix keeps the two apart while the
 		// shared stem joins them.
@@ -106,11 +108,12 @@ func (s *cachedService) semanticProbe(ctx context.Context, req *ChatCompletionRe
 		return nil
 	}
 	vector, err := s.cacheConfig.SemanticEmbedder.Embed(ctx, SemanticEmbedIdentity{
-		AccountID: req.AccountID,
-		KeyID:     req.KeyID,
-		TeamID:    req.TeamID,
-		RequestID: req.RequestID,
-		Protocol:  req.Protocol,
+		APIKeyConfig: req.APIKeyConfig,
+		AccountID:    req.AccountID,
+		KeyID:        req.KeyID,
+		TeamID:       req.TeamID,
+		RequestID:    req.RequestID,
+		Protocol:     req.Protocol,
 	}, promptText)
 	if err != nil || len(vector) == 0 {
 		log.Warn().Err(err).Msg("semantic cache embedding failed, continuing without it")

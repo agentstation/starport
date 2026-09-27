@@ -77,12 +77,14 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 			URL:  boundRoute.Endpoint.URL,
 		}
 		request.Credential = selected.material
-		ticket, refusal := r.admit(attemptCtx, requestID, req.AccountID, boundRoute, string(routing.OperationEmbeddings), nil)
+		var billing *catalogs.EmbeddingBilling
+		quote := embeddingQuote(runtime.Snapshot(), boundRoute, &request, &billing)
+		ticket, refusal := r.admit(attemptCtx, requestID, req.AccountID, boundRoute, string(routing.OperationEmbeddings), quote)
 		if refusal != nil {
 			return nil, refusal, execution.AttemptActionStop
 		}
 		response, requestErr := connector.Embeddings(attemptCtx, &request)
-		if settlementErr := ticket.Finish(attemptCtx, nil); settlementErr != nil {
+		if settlementErr := finishEmbeddingBudget(attemptCtx, ticket, response, billing); settlementErr != nil {
 			return nil, budgetFailure(settlementErr), execution.AttemptActionStop
 		}
 		if requestErr != nil {

@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -101,12 +102,17 @@ func newPerformanceFixtureWithApproval(tb testing.TB, wait time.Duration, catalo
 
 func newPerformanceFixtureWithAdmission(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool, budgets *limits.Limits, upstream http.Handler) *performanceFixture {
 	tb.Helper()
+	return newPerformanceFixtureForOperation(tb, wait, catalog, approve, budgets, upstream, []string{"/v1/chat/completions"})
+}
+
+func newPerformanceFixtureForOperation(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool, budgets *limits.Limits, upstream http.Handler, providerPaths []string, configure ...func(*config.Config)) *performanceFixture {
+	tb.Helper()
 	f := &performanceFixture{samples: make(chan performanceUpstreamSample, 1), handlers: make(chan time.Duration, 1), wait: wait}
 	if upstream != nil {
 		f.handlers = make(chan time.Duration, 8)
 	}
 	f.upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer sk-test-key" {
+		if !slices.Contains(providerPaths, r.URL.Path) || r.Header.Get("Authorization") != "Bearer sk-test-key" {
 			tb.Errorf("unexpected fixture request: path=%s credential_match=%t", r.URL.Path, r.Header.Get("Authorization") == "Bearer sk-test-key")
 		}
 		if upstream != nil {
@@ -118,6 +124,9 @@ func newPerformanceFixtureWithAdmission(tb testing.TB, wait time.Duration, catal
 	}))
 	tb.Cleanup(f.upstream.Close)
 	cfg := validProductionConfig(tb)
+	for _, change := range configure {
+		change(cfg)
+	}
 	if catalog != nil {
 		cfg.Catalog = *catalog
 	}

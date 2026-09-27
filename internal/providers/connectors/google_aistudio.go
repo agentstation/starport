@@ -68,7 +68,7 @@ func (c *GoogleAIStudioConnector) Embeddings(ctx context.Context, req *Embedding
 		return nil, err
 	}
 
-	result := &EmbeddingsResponse{Object: objectList, Model: req.Model}
+	result := &EmbeddingsResponse{Object: objectList, Model: req.Model, Usage: Usage{decoded: true}}
 	for index, input := range inputs {
 		payload := map[string]any{
 			"content": map[string]any{"parts": []map[string]string{{contentTypeText: input}}},

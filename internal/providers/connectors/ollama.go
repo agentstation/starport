@@ -259,6 +259,7 @@ func (c *OllamaConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest
 		},
 		Model: req.Model,
 		Usage: Usage{
+			decoded:      true,
 			PromptTokens: 0, // Ollama doesn't report token usage for embeddings
 			TotalTokens:  0,
 		},

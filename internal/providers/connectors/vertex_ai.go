@@ -137,6 +137,7 @@ func (c *VertexAIConnector) Embeddings(ctx context.Context, req *EmbeddingsReque
 		},
 		Model: req.Model,
 		Usage: Usage{
+			decoded:      true,
 			PromptTokens: len(strings.Fields(req.Input.(string))),
 			TotalTokens:  len(strings.Fields(req.Input.(string))),
 		},
