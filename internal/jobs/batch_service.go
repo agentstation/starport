@@ -454,7 +454,7 @@ func (s *BatchService) mutate(
 }
 
 func (s *BatchService) reserveBatchSlot(ctx context.Context, account string, bound int64) error {
-	if s.meter == nil || bound <= 0 {
+	if s.meter == nil {
 		return nil
 	}
 	return s.meter.Reserve(ctx, account, 1, bound)
