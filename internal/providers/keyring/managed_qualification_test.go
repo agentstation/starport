@@ -4,6 +4,7 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/agentstation/starport/internal/credentials"
@@ -11,37 +12,39 @@ import (
 )
 
 func TestManagedMaterialRefreshServesOldestScopesWithoutStarvation(t *testing.T) {
-	provider := syntheticCredentialProvider()
-	reader := newSyntheticProviderKeys(t, provider).(*keyManager)
-	defer reader.materials.close()
-	writer := *reader
-	writer.materials = newManagedMaterials()
-	defer writer.materials.close()
-	reader.materials.limits.ConcurrentLoads = 2
-	now := time.Now()
-	reader.materials.now = func() time.Time { return now }
-	handles := make([]credentials.Material, 5)
-	for i := range handles {
-		scope := AccountScope(fmt.Sprintf("account-%d", i))
-		_, err := writer.AddKey(t.Context(), scope, string(provider.ID), map[string]string{"api-key": "before"}, nil, false, 0)
-		require.NoError(t, err)
-		handles[i], err = reader.ResolveStoredMaterial(t.Context(), scope, provider)
-		require.NoError(t, err)
-		now = now.Add(100 * time.Millisecond)
-		_, err = writer.UpdateKey(t.Context(), scope, string(provider.ID), map[string]string{"api-key": "after"}, nil, nil, nil)
-		require.NoError(t, err)
-	}
-	now = now.Add(2500 * time.Millisecond)
-	for turn := range 3 {
-		reader.refreshMaterials(t.Context())
-		for i, handle := range handles {
-			if i < min((turn+1)*2, len(handles)) {
-				require.ErrorIs(t, handle.CheckValidity(now), credentials.ErrMaterialRevoked)
-			} else {
-				require.NoError(t, handle.CheckValidity(now))
+	synctest.Test(t, func(t *testing.T) {
+		provider := syntheticCredentialProvider()
+		reader := newSyntheticProviderKeys(t, provider).(*keyManager)
+		defer reader.materials.close()
+		writer := *reader
+		writer.materials = newManagedMaterials()
+		defer writer.materials.close()
+		reader.materials.limits.ConcurrentLoads = 2
+		now := time.Now()
+		reader.materials.now = func() time.Time { return now }
+		handles := make([]credentials.Material, 5)
+		for i := range handles {
+			scope := AccountScope(fmt.Sprintf("account-%d", i))
+			_, err := writer.AddKey(t.Context(), scope, string(provider.ID), map[string]string{"api-key": "before"}, nil, false, 0)
+			require.NoError(t, err)
+			handles[i], err = reader.ResolveStoredMaterial(t.Context(), scope, provider)
+			require.NoError(t, err)
+			now = now.Add(100 * time.Millisecond)
+			_, err = writer.UpdateKey(t.Context(), scope, string(provider.ID), map[string]string{"api-key": "after"}, nil, nil, nil)
+			require.NoError(t, err)
+		}
+		now = now.Add(2500 * time.Millisecond)
+		for turn := range 3 {
+			reader.refreshMaterials(t.Context())
+			for i, handle := range handles {
+				if i < min((turn+1)*2, len(handles)) {
+					require.ErrorIs(t, handle.CheckValidity(now), credentials.ErrMaterialRevoked)
+				} else {
+					require.NoError(t, handle.CheckValidity(now))
+				}
 			}
 		}
-	}
+	})
 }
 
 func TestManagedMaterialCachePreservesCiphertextAndRedaction(t *testing.T) {
