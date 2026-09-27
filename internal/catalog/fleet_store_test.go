@@ -53,6 +53,9 @@ func fleetTestStore(t *testing.T) (*FleetStore, storage.KVStore, *recovery.Witne
 	require.NoError(t, err)
 	_, err = witness.Approve(t.Context(), closed, identity, "isolated-test-backend")
 	require.NoError(t, err)
+	// This isolated fixture explicitly starts unused. Real initialization has its own native tests.
+	_, err = db.ExecContext(t.Context(), db.Bind("UPDATE catalog_recovery SET bootstrap_allowed = 1 WHERE deployment_id = ?"), deployment)
+	require.NoError(t, err)
 	fleet, err := NewFleetStore(t.Context(), provider, witness, deployment)
 	require.NoError(t, err)
 	t.Cleanup(func() {

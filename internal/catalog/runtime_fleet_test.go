@@ -34,6 +34,9 @@ func TestFleetRuntimeRejectsUnapprovedBackend(t *testing.T) {
 	require.NoError(t, err)
 	_, err = witness.Approve(t.Context(), closed, identity, "isolated-runtime-test")
 	require.NoError(t, err)
+	// This isolated fixture explicitly starts unused. Real initialization has its own native tests.
+	_, err = db.ExecContext(t.Context(), db.Bind("UPDATE catalog_recovery SET bootstrap_allowed = 1 WHERE deployment_id = ?"), settings.DeploymentID)
+	require.NoError(t, err)
 	fleet, err := NewFleetStore(t.Context(), provider, witness, settings.DeploymentID)
 	require.NoError(t, err)
 	grant, err := fleet.AcquireLease(t.Context(), "publisher", time.Minute)

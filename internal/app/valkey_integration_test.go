@@ -163,4 +163,7 @@ func approveTestFleet(t *testing.T, cfg *config.Config, store storage.KVStore) {
 	require.NoError(t, err)
 	_, err = witness.Approve(t.Context(), closed, identity, "isolated-app-test-backend")
 	require.NoError(t, err)
+	// This isolated fixture explicitly starts unused. Real initialization has its own native tests.
+	_, err = db.ExecContext(t.Context(), db.Bind("UPDATE catalog_recovery SET bootstrap_allowed = 1 WHERE deployment_id = ?"), cfg.EffectivePaths().DeploymentID)
+	require.NoError(t, err)
 }

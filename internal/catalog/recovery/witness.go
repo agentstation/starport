@@ -125,7 +125,7 @@ func (w *Witness) replace(ctx context.Context, expected, next Record) (Record, e
 		return Record{}, err
 	}
 	result, err := w.db.ExecContext(ctx, w.db.Bind(`UPDATE catalog_recovery
-SET epoch = ?, gate_open = ?, backend_id = ?, evidence = ?
+SET epoch = ?, gate_open = ?, backend_id = ?, evidence = ?, bootstrap_allowed = 0
 WHERE deployment_id = ? AND epoch = ? AND gate_open = ? AND backend_id = ? AND evidence = ?`),
 		next.Epoch, gateValue(next.Open), next.BackendID, next.Evidence,
 		expected.DeploymentID, expected.Epoch, gateValue(expected.Open), expected.BackendID, expected.Evidence)

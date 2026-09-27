@@ -24,7 +24,9 @@ The pending descriptor remains durable until every chunk deletion completes.
 No catalog chunk expires by time. An outage cannot expire the selected catalog bytes.
 
 Collection protects the current publication, accepted publication, accepted rollback history, and active generation readers.
-It also retains the most recent 32 publication receipts for exact retries. Explicit required generation IDs receive the same protection.
+Accepted history retains up to 32 distinct generation IDs in most-recent-acceptance order.
+An input-only publication does not consume another generation slot.
+The adapter also retains the most recent 32 publication receipts for exact retries. Explicit required generation IDs receive the same protection.
 
 Configured generation and byte limits control other retained generations. Limits cannot remove protected content.
 When protected content exceeds a limit, collection reports `OverLimit`.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
@@ -85,7 +86,10 @@ func (s *FleetStore) AcceptPublication(ctx context.Context, selected, expected r
 	if err != nil {
 		return err
 	}
-	history := append(current.History, entry)
+	history := slices.DeleteFunc(slices.Clone(current.History), func(prior GenerationIndexEntry) bool {
+		return prior.GenerationID == entry.GenerationID
+	})
+	history = append(history, entry)
 	if len(history) > catalogGenerationIndexCap {
 		history = history[len(history)-catalogGenerationIndexCap:]
 	}

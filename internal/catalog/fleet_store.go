@@ -18,11 +18,17 @@ import (
 
 const fleetPublicationResource = "fleet publication"
 
+type fleetRecoveryWitness interface {
+	Approved(context.Context, string) (recovery.Record, error)
+	CheckBootstrap(context.Context, recovery.Record) error
+	ConsumeBootstrap(context.Context, recovery.Record) error
+}
+
 // FleetStore binds shared catalog publication to an independent recovery approval.
 // It uses native backend expiry and retains complete acquisition inputs outside local directories.
 type FleetStore struct {
 	store    storage.IncarnationStore
-	witness  *recovery.Witness
+	witness  fleetRecoveryWitness
 	approval recovery.Record
 	identity runtime.FleetIdentity
 	prefix   string
@@ -245,6 +251,8 @@ func (s *FleetStore) CommitPublication(ctx context.Context, publication runtime.
 	var initialized []byte
 	if publication.Expected != (runtime.FleetHead{}) {
 		initialized = []byte("fleet-head/1")
+	} else if err := s.witness.ConsumeBootstrap(ctx, s.approval); err != nil {
+		return runtime.FleetHead{}, err
 	}
 	err = m.mutate(ctx, []storage.CompareAndSwapMutation{
 		{Key: s.prefix + "lease", ExpectedValue: grant, NewValue: grant},
@@ -282,6 +290,9 @@ var _ runtime.FleetStore = (*FleetStore)(nil)
 
 // checkEmptyHead distinguishes an unused publication store from lost or uncertain state.
 func (s *FleetStore) checkEmptyHead(ctx context.Context) error {
+	if err := s.witness.CheckBootstrap(ctx, s.approval); err != nil {
+		return err
+	}
 	_, _, err := s.store.ReadWithLifetime(ctx, s.prefix+"head-initialized", 64)
 	if !errors.Is(err, storage.ErrNotFound) {
 		return fleetStoreConflict("initialized catalog head is missing or uncertain; recovery is required")

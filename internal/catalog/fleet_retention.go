@@ -112,6 +112,9 @@ func (m *fleetMaintenance) close() error {
 func (m *fleetMaintenance) load(ctx context.Context) error {
 	encoded, _, err := m.owner.store.ReadWithLifetime(ctx, m.owner.prefix+"inventory", fleetRetentionRecordBytes)
 	if errors.Is(err, storage.ErrNotFound) {
+		if err := m.owner.witness.CheckBootstrap(ctx, m.owner.approval); err != nil {
+			return err
+		}
 		_, _, guardErr := m.owner.store.ReadWithLifetime(ctx, m.owner.prefix+"inventory-initialized", 64)
 		if !errors.Is(guardErr, storage.ErrNotFound) {
 			return errors.New("initialized fleet storage lost its inventory or its state is uncertain")

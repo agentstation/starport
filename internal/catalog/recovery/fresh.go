@@ -55,7 +55,7 @@ func (w *Witness) InitializeFresh(ctx context.Context, backend storage.FreshData
 		if err := backend.ClaimEmptyDatabase(ctx, identity, "catalog:bootstrap:v1", claim); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, w.db.Bind(`INSERT INTO catalog_recovery (deployment_id, epoch, gate_open, backend_id, evidence) VALUES (?, 1, 1, ?, ?)`), deployment, identity, request.Evidence)
+		_, err := tx.ExecContext(ctx, w.db.Bind(`INSERT INTO catalog_recovery (deployment_id, epoch, gate_open, backend_id, evidence, bootstrap_allowed) VALUES (?, 1, 1, ?, ?, 1)`), deployment, identity, request.Evidence)
 		return err
 	})
 	if err != nil {
