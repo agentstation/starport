@@ -1,0 +1,158 @@
+package app
+
+import (
+	"encoding/base64"
+	"encoding/json/v2"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starport/internal/apikey"
+	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/reservation"
+	"github.com/stretchr/testify/require"
+)
+
+func TestProductionRecognitionBudget(t *testing.T) {
+	for _, test := range []struct {
+		name, usage                     string
+		short                           bool
+		chatFailure, repeat, tokensOnly bool
+		state                           reservation.State
+		cost                            int64
+	}{
+		{"measured", `,"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":20,"thoughtsTokenCount":10,"totalTokenCount":130,"cachedContentTokenCount":15}`, false, false, false, false, reservation.Settled, 100950},
+		{"short document", `,"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":20,"thoughtsTokenCount":10,"totalTokenCount":130,"cachedContentTokenCount":0}`, true, false, false, false, reservation.Settled, 105000},
+		{"missing usage", ``, true, false, false, false, reservation.Uncertain, 509870080},
+		{"missing cache count", `,"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":20,"totalTokenCount":120}`, true, false, false, false, reservation.Uncertain, 509870080},
+		{"inconsistent total", `,"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":20,"totalTokenCount":110,"cachedContentTokenCount":0}`, true, false, false, false, reservation.Uncertain, 509870080},
+		{"explicit zero", `,"usageMetadata":{"promptTokenCount":0,"candidatesTokenCount":0,"totalTokenCount":0,"cachedContentTokenCount":0}`, true, false, false, false, reservation.Settled, 0},
+		{"outer provider failure", `,"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":20,"totalTokenCount":120,"cachedContentTokenCount":0}`, false, true, false, false, reservation.Settled, 80000},
+		{"extraction cache hit", `,"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":20,"totalTokenCount":120,"cachedContentTokenCount":0}`, false, false, true, false, reservation.Settled, 80000},
+		{"token budget without cache count", `,"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":20,"totalTokenCount":120}`, true, false, false, true, reservation.Settled, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			const googlePath = "/gemini-2.5-flash:generateContent"
+			budgets := &limits.Limits{Spend: &limits.Budget{Limit: 2_000_000_000, Interval: limits.IntervalDay}}
+			if test.tokensOnly {
+				budgets = &limits.Limits{Tokens: &limits.Budget{Limit: 2_000_000, Interval: limits.IntervalDay}}
+			}
+			fixture := newPerformanceFixtureForProviders(t, 0, nil, true, budgets, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.URL.Path == googlePath {
+					var request struct {
+						GenerationConfig struct {
+							MaxOutputTokens int `json:"maxOutputTokens"`
+						} `json:"generationConfig"`
+					}
+					require.NoError(t, json.UnmarshalRead(r.Body, &request))
+					require.Equal(t, 65536, request.GenerationConfig.MaxOutputTokens)
+					content := `"candidates":[]`
+					if !test.short {
+						content = `"candidates":[{"content":{"role":"model","parts":[{"text":"<<<STARPORT_PAGE_1>>>\nInvoice"}]},"finishReason":"STOP"}]`
+					}
+					_, _ = io.WriteString(w, `{`+content+test.usage+`}`)
+					return
+				}
+				if test.chatFailure {
+					http.Error(w, "provider failed", http.StatusBadRequest)
+					return
+				}
+				_, _ = io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11,"prompt_tokens_details":{"cached_tokens":0}}}`)
+			}), []performanceProvider{
+				{catalogs.ProviderIDOpenAI, "OPENAI_API_KEY", "Authorization", "Bearer sk-test-key", []string{"/v1/chat/completions"}},
+				{catalogs.ProviderIDGoogleAIStudio, "GOOGLE_API_KEY", "X-Goog-Api-Key", "sk-test-key", []string{googlePath}},
+			}, func(key *apikey.APIKey) {
+				key.AllowedModels = []string{"openai/gpt-4o-mini", "google-ai-studio/gemini-2.5-flash"}
+			}, func(cfg *config.Config) {
+				if test.repeat {
+					cfg.Cache.Enabled = true
+					cfg.Cache.ChatEnabled = false
+					cfg.Cache.ExtractionsEnabled = true
+				}
+			})
+			response, data := sendRecognitionRequest(t, fixture)
+			if test.short || test.chatFailure {
+				require.NotEqual(t, http.StatusOK, response.StatusCode, string(data))
+			} else {
+				require.Equal(t, http.StatusOK, response.StatusCode, string(data))
+			}
+			if test.repeat {
+				again, body := sendRecognitionRequest(t, fixture)
+				require.Equal(t, http.StatusOK, again.StatusCode, string(body))
+			}
+			keys, err := fixture.application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 10)
+			require.NoError(t, err)
+			want := 1
+			if !test.short {
+				want = 2
+			}
+			if test.repeat {
+				want = 3
+			}
+			require.Len(t, keys, want, string(data))
+			require.EqualValues(t, want, fixture.calls.Load())
+			var child *reservation.Record
+			childCount := 0
+			for _, key := range keys {
+				encoded, err := fixture.application.store.Get(t.Context(), key)
+				require.NoError(t, err)
+				var record reservation.Record
+				require.NoError(t, json.Unmarshal(encoded, &record))
+				if record.Attempt.OfferingID == "google-ai-studio/gemini-2.5-flash" {
+					child = &record
+					childCount++
+				}
+			}
+			require.Equal(t, 1, childCount)
+			require.NotNil(t, child)
+			require.Equal(t, test.state, child.State)
+			if test.tokensOnly {
+				require.Nil(t, child.NanoUSD)
+				require.NotNil(t, child.Evidence)
+				require.EqualValues(t, 120, child.Evidence.Tokens)
+			} else {
+				require.Equal(t, test.cost, *child.NanoUSD)
+			}
+			require.Equal(t, "recognition-parent", child.Attempt.RequestID)
+		})
+	}
+}
+
+func sendRecognitionRequest(t *testing.T, fixture *performanceFixture) (*http.Response, []byte) {
+	t.Helper()
+	pdf, err := os.ReadFile("../document/testdata/scanned.pdf")
+	require.NoError(t, err)
+	body := fmt.Sprintf(`{"model":"openai/gpt-4o-mini","max_tokens":32,"messages":[{"role":"user","content":[{"type":"file","file":{"filename":"scanned.pdf","file_data":"data:application/pdf;base64,%s"}}]}],"plugins":[{"id":"file-parser","pdf":{"engine":"recognition"}}]}`, base64.StdEncoding.EncodeToString(pdf))
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, fixture.gateway.URL+"/api/v1/chat/completions", strings.NewReader(body))
+	require.NoError(t, err)
+	request.Header.Set("Authorization", "Bearer "+performanceGatewayKey)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Request-ID", "recognition-parent")
+	response, err := fixture.client.Do(request)
+	require.NoError(t, err)
+	data, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	return response, data
+}
+
+func TestProductionRecognitionRefusesInsufficientBudget(t *testing.T) {
+	fixture := newPerformanceFixtureForProviders(t, 0, nil, true, &limits.Limits{Spend: &limits.Budget{Limit: 1_000_000, Interval: limits.IntervalDay}}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("refused recognition reached provider")
+		w.WriteHeader(http.StatusInternalServerError)
+	}), []performanceProvider{{catalogs.ProviderIDOpenAI, "OPENAI_API_KEY", "Authorization", "Bearer sk-test-key", []string{"/v1/chat/completions"}}, {catalogs.ProviderIDGoogleAIStudio, "GOOGLE_API_KEY", "X-Goog-Api-Key", "sk-test-key", []string{"/gemini-2.5-flash:generateContent"}}}, func(key *apikey.APIKey) {
+		key.AllowedModels = []string{"openai/gpt-4o-mini", "google-ai-studio/gemini-2.5-flash"}
+	})
+	response, data := sendRecognitionRequest(t, fixture)
+	require.Equal(t, http.StatusPaymentRequired, response.StatusCode, string(data))
+	require.Zero(t, fixture.calls.Load())
+	keys, err := fixture.application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 10)
+	require.NoError(t, err)
+	require.Empty(t, keys)
+}

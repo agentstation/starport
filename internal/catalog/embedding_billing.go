@@ -29,7 +29,7 @@ func EmbeddingValuation(offering catalogs.ProviderOffering, at time.Time) (reser
 		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
 			return reservation.Valuation{}, reservation.ErrValuation
 		}
-		result.Components = append(result.Components, reservation.Component{Unit: "request", Price: reservation.Price{USD: strconv.FormatFloat(value, 'g', -1, 64), PerUnits: 1}})
+		result.Components = append(result.Components, reservation.Component{Unit: requestBillingUnit, Price: reservation.Price{USD: strconv.FormatFloat(value, 'g', -1, 64), PerUnits: 1}})
 	}
 	return result, nil
 }

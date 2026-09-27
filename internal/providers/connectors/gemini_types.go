@@ -25,6 +25,7 @@ type geminiCandidate struct {
 type geminiUsageMetadata struct {
 	zeroReported            bool
 	decoded                 bool
+	cachedReported          bool
 	PromptTokenCount        int `json:"promptTokenCount"`
 	CandidatesTokenCount    int `json:"candidatesTokenCount"`
 	TotalTokenCount         int `json:"totalTokenCount"`
@@ -38,7 +39,7 @@ func (m *geminiUsageMetadata) UnmarshalJSON(data []byte) error {
 		Prompt     *int `json:"promptTokenCount"`
 		Total      *int `json:"totalTokenCount"`
 		Candidates int  `json:"candidatesTokenCount"`
-		Cached     int  `json:"cachedContentTokenCount"`
+		Cached     *int `json:"cachedContentTokenCount"`
 		Thoughts   int  `json:"thoughtsTokenCount"`
 	}
 	if err := json.Unmarshal(data, &decoded); err != nil {
@@ -46,9 +47,12 @@ func (m *geminiUsageMetadata) UnmarshalJSON(data []byte) error {
 	}
 	*m = geminiUsageMetadata{
 		decoded:              true,
-		CandidatesTokenCount: decoded.Candidates, CachedContentTokenCount: decoded.Cached,
+		CandidatesTokenCount: decoded.Candidates, cachedReported: decoded.Cached != nil,
 		ThoughtsTokenCount: decoded.Thoughts,
 		zeroReported:       decoded.Prompt != nil && decoded.Total != nil,
+	}
+	if decoded.Cached != nil {
+		m.CachedContentTokenCount = *decoded.Cached
 	}
 	if decoded.Prompt != nil {
 		m.PromptTokenCount = *decoded.Prompt

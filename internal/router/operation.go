@@ -11,6 +11,8 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
+	"github.com/agentstation/starport/internal/limits/admission"
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/routing"
 )
@@ -93,6 +95,7 @@ type operationAttempt[Response any] func(
 	connector connectors.Connector,
 	route routing.Route,
 	selected credentialSelection,
+	budget operationBudget,
 ) (*Response, *failure.Failure, execution.AttemptAction)
 
 // routeOperation runs one operation through the shared route plan and budget.
@@ -166,14 +169,10 @@ func routeOperation[Response any](
 		if purpose == "" {
 			purpose = billingPurpose(operation)
 		}
-		ticket, refusal := r.admit(attemptCtx, requestID, policy.AccountID, boundRoute, string(purpose), nil)
-		if refusal != nil {
-			return nil, refusal, execution.AttemptActionStop
-		}
-		response, attemptFailure, action := attempt(attemptCtx, connector, boundRoute, selected)
-		if settlementErr := ticket.Finish(attemptCtx, nil); settlementErr != nil {
-			return nil, budgetFailure(settlementErr), execution.AttemptActionStop
-		}
+		budget := operationBudget{snapshot: runtime.Snapshot(), start: func(quote admission.QuoteFunc) (admission.Ticket, *failure.Failure) {
+			return r.admit(attemptCtx, requestID, policy.AccountID, boundRoute, string(purpose), quote)
+		}}
+		response, attemptFailure, action := attempt(attemptCtx, connector, boundRoute, selected, budget)
 		if attemptFailure != nil {
 			if action == execution.AttemptActionDefault {
 				action = credentialPolicy.afterFailure(planned.Route, attemptFailure)
@@ -273,6 +272,7 @@ type providerCall[Request requestBinder, ProviderResponse, Response any] struct 
 	transport func(connectors.Connector, catalogs.EndpointType) (providerInvoke[Request, ProviderResponse], bool)
 	build     func() Request
 	convert   func(ProviderResponse) (Response, error)
+	charge    func(*runtimecatalog.RoutableSnapshot, routing.Route, Request) operationCharge[ProviderResponse]
 
 	// bounded refuses one route whose offering states a limit the request
 	// exceeds. Most operations leave it nil: a limit that every offering
@@ -294,6 +294,7 @@ func (call providerCall[Request, ProviderResponse, Response]) attempt(
 		connector connectors.Connector,
 		route routing.Route,
 		selected credentialSelection,
+		budget operationBudget,
 	) (*Response, *failure.Failure, execution.AttemptAction) {
 		invoke, implemented := call.transport(connector, endpointTypeOf(route))
 		if !implemented {
@@ -310,7 +311,29 @@ func (call providerCall[Request, ProviderResponse, Response]) attempt(
 			connectors.InferenceEndpoint{Type: endpointTypeOf(route), URL: route.Endpoint.URL},
 			selected.material,
 		)
+		var charge operationCharge[ProviderResponse]
+		if call.charge != nil {
+			charge = call.charge(budget.snapshot, route, request)
+		}
+		var ticket admission.Ticket
+		if budget.start != nil {
+			var refusal *failure.Failure
+			ticket, refusal = budget.start(charge.quote)
+			if refusal != nil {
+				return nil, refusal, execution.AttemptActionStop
+			}
+		}
 		response, requestErr := invoke(attemptCtx, request)
+		var evidence *reservation.Evidence
+		if ticket.ID() != "" && charge.evidence != nil {
+			evidence = charge.evidence(response, requestErr)
+			if evidence != nil {
+				evidence.ID = ticket.ID() + ":usage"
+			}
+		}
+		if err := ticket.Finish(attemptCtx, evidence); err != nil {
+			return nil, budgetFailure(err), execution.AttemptActionStop
+		}
 		if requestErr != nil {
 			return nil, connectors.NormalizeFailure(route.ProviderID, requestErr), execution.AttemptActionDefault
 		}
@@ -371,4 +394,16 @@ func transportInterfaceMissing(route routing.Route, operation string) *failure.F
 		failure.ProviderDetails{Provider: route.ProviderID},
 		nil,
 	)
+}
+
+// operationBudget binds admission to the selected request, route, and catalog.
+type operationBudget struct {
+	snapshot *runtimecatalog.RoutableSnapshot
+	start    func(admission.QuoteFunc) (admission.Ticket, *failure.Failure)
+}
+
+// operationCharge keeps raw provider evidence available before response conversion.
+type operationCharge[Response any] struct {
+	quote    admission.QuoteFunc
+	evidence func(Response, error) *reservation.Evidence
 }

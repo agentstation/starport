@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -33,6 +34,22 @@ import (
 // provider receives. A plugin therefore changes what the model reads and never
 // which model reads it, which is the invariant that keeps the same prompt
 // reaching the same provider with the plugin on and off.
+
+// retainParserRuntime binds recognition, cache identity, and chat to one generation.
+// The caller owns the returned lease until completion or stream closure.
+func (p *proxy) retainParserRuntime(ctx context.Context, req *ChatCompletionRequest) (context.Context, connectors.RuntimeLease, bool, error) {
+	if p.registry == nil || !req.Request.DocumentParser.Requested() || !carriesDocument(req.Request.Messages) {
+		return ctx, nil, false, nil
+	}
+	runtime, owned, err := p.acquireRuntime(ctx)
+	if err != nil {
+		return ctx, nil, false, err
+	}
+	if owned {
+		ctx = connectors.ContextWithRuntimeLease(ctx, runtime)
+	}
+	return ctx, runtime, owned, nil
+}
 
 // parseDocuments returns the request the provider receives, with every
 // attached document replaced by its text.
@@ -460,6 +477,9 @@ func (p *proxy) recognize(
 // was named, and the gateway did not read it. The cause carries which of them
 // happened to the operator.
 func recognitionFailure(filename string, cause error) error {
+	if admission, ok := errors.AsType[*failure.Failure](cause); ok && (admission.Kind() == failure.Quota || admission.Kind() == failure.GatewayUnavailable) {
+		return admission
+	}
 	named := filename
 	if named == "" {
 		named = "the attached document"

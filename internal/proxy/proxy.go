@@ -328,6 +328,14 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 		return nil, err
 	}
 
+	ctx, runtime, owned, err := p.retainParserRuntime(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if owned {
+		defer runtime.Release()
+	}
+
 	// The route is planned from the request the caller sent, and the parser
 	// below rewrites the request the provider receives. Reading the metadata
 	// first is what keeps those two facts separate: a document turned into
@@ -450,6 +458,16 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 		return nil, err
 	}
 
+	ctx, runtime, owned, err := p.retainParserRuntime(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if owned {
+			runtime.Release()
+		}
+	}()
+
 	// A stream plans its route from the caller's own request for the same
 	// reason a completion does. See ProcessChatCompletion above.
 	keyConfig := transformAPIKeyConfig(req.APIKeyConfig)
@@ -513,7 +531,12 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 			Err:    err,
 		}
 	}
-	return newUsageNormalizingStream(stream, req.Request.Messages, p.estimator), nil
+	normalized := newUsageNormalizingStream(stream, req.Request.Messages, p.estimator)
+	if owned {
+		owned = false
+		return newRuntimeLeaseStream(normalized, runtime), nil
+	}
+	return normalized, nil
 }
 
 func stripCacheControlFromMessages(messages []connectors.Message) []connectors.Message {

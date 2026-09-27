@@ -9,6 +9,8 @@ import (
 	"github.com/agentstation/starport/internal/limits/reservation"
 )
 
+const requestBillingUnit = "request"
+
 // TextChatValuation projects every declared charge from one selected offering.
 // Missing prices, non-USD currencies, and unresolved pricing tiers remain unknown.
 // The caller must enforce the text-chat request scope before dispatch.
@@ -37,7 +39,7 @@ func TextChatValuation(offering catalogs.ProviderOffering, at time.Time) (reserv
 		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
 			return reservation.Valuation{}, reservation.ErrValuation
 		}
-		result.Components = append(result.Components, reservation.Component{Unit: "request", Price: reservation.Price{USD: strconv.FormatFloat(value, 'g', -1, 64), PerUnits: 1}})
+		result.Components = append(result.Components, reservation.Component{Unit: requestBillingUnit, Price: reservation.Price{USD: strconv.FormatFloat(value, 'g', -1, 64), PerUnits: 1}})
 	}
 	return result, nil
 }

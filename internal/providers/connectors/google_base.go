@@ -362,8 +362,8 @@ func convertGeminiUsage(m geminiUsageMetadata) Usage {
 	if m.ThoughtsTokenCount > 0 {
 		usage.CompletionTokensDetails = &CompletionTokensDetails{ReasoningTokens: m.ThoughtsTokenCount}
 	}
-	if m.CachedContentTokenCount > 0 {
-		usage.PromptTokensDetails = &PromptTokensDetails{CachedTokens: m.CachedContentTokenCount}
+	if m.cachedReported || m.CachedContentTokenCount > 0 {
+		usage.PromptTokensDetails = &PromptTokensDetails{CachedTokens: m.CachedContentTokenCount, decoded: m.decoded, cachedReported: m.cachedReported}
 	}
 	return usage
 }

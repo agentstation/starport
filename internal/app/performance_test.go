@@ -107,13 +107,34 @@ func newPerformanceFixtureWithAdmission(tb testing.TB, wait time.Duration, catal
 
 func newPerformanceFixtureForOperation(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool, budgets *limits.Limits, upstream http.Handler, providerPaths []string, configure ...func(*config.Config)) *performanceFixture {
 	tb.Helper()
+	return newPerformanceFixtureForProviders(tb, wait, catalog, approve, budgets, upstream,
+		[]performanceProvider{{catalogs.ProviderIDOpenAI, "OPENAI_API_KEY", "Authorization", "Bearer sk-test-key", providerPaths}}, nil, configure...)
+}
+
+type performanceProvider struct {
+	id                               catalogs.ProviderID
+	environment, header, headerValue string
+	paths                            []string
+}
+
+func newPerformanceFixtureForProviders(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool, budgets *limits.Limits, upstream http.Handler, fixtureProviders []performanceProvider, configureKey func(*apikey.APIKey), configure ...func(*config.Config)) *performanceFixture {
+	tb.Helper()
 	f := &performanceFixture{samples: make(chan performanceUpstreamSample, 1), handlers: make(chan time.Duration, 1), wait: wait}
 	if upstream != nil {
 		f.handlers = make(chan time.Duration, 8)
 	}
 	f.upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !slices.Contains(providerPaths, r.URL.Path) || r.Header.Get("Authorization") != "Bearer sk-test-key" {
-			tb.Errorf("unexpected fixture request: path=%s credential_match=%t", r.URL.Path, r.Header.Get("Authorization") == "Bearer sk-test-key")
+		matched := false
+		for _, provider := range fixtureProviders {
+			if slices.Contains(provider.paths, r.URL.Path) && r.Header.Get(provider.header) == provider.headerValue {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			tb.Errorf("unexpected fixture destination or credential: path=%s", r.URL.Path)
+			http.Error(w, "unexpected fixture destination or credential", http.StatusBadRequest)
+			return
 		}
 		if upstream != nil {
 			f.calls.Add(1)
@@ -134,11 +155,15 @@ func newPerformanceFixtureForOperation(tb testing.TB, wait time.Duration, catalo
 	cfg.Storage.SQL.SQLite.Path = filepath.Join(tb.TempDir(), "starport.db")
 	cfg.Telemetry.Metrics = config.TelemetryMetricsOn
 	cfg.RateLimiting.DefaultRequestsPerMinute = 1_000_000
-	provider := cfg.Providers[catalogs.ProviderIDOpenAI]
-	provider.BaseURL = f.upstream.URL
-	provider.CredentialReferences = nil
-	cfg.Providers[catalogs.ProviderIDOpenAI] = provider
-	loaded, err := config.NewLoader().WithEnvironment(map[string]string{"OPENAI_API_KEY": "sk-test-key"}).WithEnvFiles().
+	environment := make(map[string]string, len(fixtureProviders))
+	for _, fixtureProvider := range fixtureProviders {
+		provider := cfg.Providers[catalogs.ProviderIDOpenAI]
+		provider.BaseURL = f.upstream.URL
+		provider.CredentialReferences = nil
+		cfg.Providers[fixtureProvider.id] = provider
+		environment[fixtureProvider.environment] = "sk-test-key"
+	}
+	loaded, err := config.NewLoader().WithEnvironment(environment).WithEnvFiles().
 		WithPaths(config.PathsForConfigDir(tb.TempDir())).Load(tb.Context(), func(target *config.Config) { *target = *cfg })
 	require.NoError(tb, err)
 	cfg = loaded
@@ -146,11 +171,15 @@ func newPerformanceFixtureForOperation(tb testing.TB, wait time.Duration, catalo
 	if approve {
 		bundled, err := runtimecatalog.Bundled()
 		require.NoError(tb, err)
-		provider, err := bundled.Provider(catalogs.ProviderIDOpenAI)
-		require.NoError(tb, err)
-		policy, err := providers.CompileDestinationPolicy(provider, string(keyring.SourceEnvironment), provider.Credentials.Inference.Alternatives[0], f.upstream.URL, nil)
-		require.NoError(tb, err)
-		cfg.InferenceDestinationApprovals, err = credentials.NewDestinationApprovals(nil, policy)
+		var policies []*credentials.DestinationPolicy
+		for _, fixtureProvider := range fixtureProviders {
+			provider, err := bundled.Provider(fixtureProvider.id)
+			require.NoError(tb, err)
+			policy, err := providers.CompileDestinationPolicy(provider, string(keyring.SourceEnvironment), provider.Credentials.Inference.Alternatives[0], f.upstream.URL, nil)
+			require.NoError(tb, err)
+			policies = append(policies, policy)
+		}
+		cfg.InferenceDestinationApprovals, err = credentials.NewDestinationApprovals(nil, policies...)
 		require.NoError(tb, err)
 	}
 
@@ -163,6 +192,9 @@ func newPerformanceFixtureForOperation(tb testing.TB, wait time.Duration, catalo
 	key := testAPIKey()
 	key.Hash = hex.EncodeToString(hash[:])
 	key.Limits = budgets
+	if configureKey != nil {
+		configureKey(&key)
+	}
 	_, err = keys.Create(tb.Context(), key)
 	require.NoError(tb, err)
 	require.NoError(tb, store.Close())

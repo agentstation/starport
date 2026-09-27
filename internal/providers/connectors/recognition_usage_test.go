@@ -91,3 +91,29 @@ func TestGoogleRecognitionRetainsUsageWithoutCandidates(t *testing.T) {
 	require.Equal(t, 10, canonical.Usage.ReasoningTokens)
 	require.Equal(t, 110, canonical.Usage.TotalTokens)
 }
+
+func TestGeminiCachedUsagePresence(t *testing.T) {
+	for _, test := range []struct {
+		name, cache string
+		known       bool
+		count       int
+	}{
+		{"absent", "", false, 0},
+		{"null", `,"cachedContentTokenCount":null`, false, 0},
+		{"zero", `,"cachedContentTokenCount":0`, true, 0},
+		{"measured", `,"cachedContentTokenCount":15`, true, 15},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var raw geminiUsageMetadata
+			require.NoError(t, json.Unmarshal([]byte(`{"promptTokenCount":100,"candidatesTokenCount":20,"totalTokenCount":120`+test.cache+`}`), &raw))
+			measured := convertGeminiUsage(raw)
+			if !test.known {
+				require.Nil(t, measured.PromptTokensDetails)
+				return
+			}
+			require.NotNil(t, measured.PromptTokensDetails)
+			require.Equal(t, test.count, measured.PromptTokensDetails.CachedTokens)
+			require.True(t, measured.PromptTokensDetails.cachedReported)
+		})
+	}
+}

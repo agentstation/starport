@@ -161,3 +161,13 @@ func TestRecognitionPageTierRequiresContextMeasurement(t *testing.T) {
 	require.Nil(t, cost)
 	require.Equal(t, usage.CostReasonNoPricing, reason)
 }
+
+func TestRecognitionUnknownTokensCannotReportFreeUsage(t *testing.T) {
+	offering := catalogs.ProviderOffering{
+		Billing: &catalogs.ModelBilling{Recognition: &catalogs.RecognitionBilling{Basis: catalogs.RecognitionBillingTokens}},
+		Pricing: &catalogs.ModelPricing{Currency: "USD", Tokens: &catalogs.ModelTokenPricing{Input: &catalogs.ModelTokenCost{Per1M: 1}, Output: &catalogs.ModelTokenCost{Per1M: 1}}},
+	}
+	cost, reason := recognitionCost(offering, 1, &inference.Usage{TokensUnknown: true}, time.Now())
+	require.Nil(t, cost)
+	require.Equal(t, usage.CostReasonNoUsage, reason)
+}
