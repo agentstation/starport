@@ -13,6 +13,7 @@ import (
 
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -255,7 +256,7 @@ func TestALinePastTheByteBoundFailsTheWholeBatch(t *testing.T) {
 // a bound of one refuses a second submission while the first runs, and the
 // first batch's end gives the slot back.
 func TestABatchHoldsOneOutstandingJobSlot(t *testing.T) {
-	meter, err := limits.NewJobMeter(storage.NewMockStore())
+	meter, err := jobslots.Open(storage.NewMockStore())
 	require.NoError(t, err)
 	service := newBatchService(t, jobs.WithBatchJobMeter(meter), jobs.WithBatchConcurrency(1))
 	runner := newBlockingRunner()

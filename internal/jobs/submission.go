@@ -52,6 +52,9 @@ type submissionRecorder struct {
 }
 
 func (j Job) validateSubmission() error {
+	if j.SlotReleased && (j.SlotID == "" || !j.State.Terminal()) {
+		return ErrInvalidJob
+	}
 	if j.SubmissionPending {
 		if j.State != JobStateQueued || j.HasProviderJob() || j.Accounted() {
 			return fmt.Errorf("%w: unconfirmed submission has accepted state", ErrInvalidJob)
@@ -75,11 +78,12 @@ func (r *submissionRecorder) BeforeDispatch(ctx context.Context, dispatch Dispat
 	if strings.TrimSpace(dispatch.CatalogGeneration) == "" {
 		return ErrInvalidJob
 	}
-	job, err := New(r.service.mint(), r.submission.Account, dispatch.Provider, dispatch.Model, r.submission.Operation, r.service.now().UTC())
+	job, err := New(r.submission.jobID, r.submission.Account, dispatch.Provider, dispatch.Model, r.submission.Operation, r.service.now().UTC())
 	if err != nil {
 		return err
 	}
 	job.KeyID = r.submission.KeyID
+	job.SlotID = r.submission.slotID
 	job.CatalogGeneration = dispatch.CatalogGeneration
 	job.ReservationID = dispatch.ReservationID
 	job.SubmissionPending = true

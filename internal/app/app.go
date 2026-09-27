@@ -32,6 +32,7 @@ import (
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
@@ -569,7 +570,7 @@ func (b *runtimeBuilder) openJobService() error {
 	if err != nil {
 		return fmt.Errorf("open job repository: %w", err)
 	}
-	meter, err := limits.NewJobMeter(b.application.store)
+	meter, err := jobslots.Open(b.application.store)
 	if err != nil {
 		return fmt.Errorf("open job meter: %w", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,6 +41,17 @@ func TestProductionVideoSubmissionPersistsBeforeDispatch(t *testing.T) {
 					require.True(t, held[0].SubmissionPending)
 					require.False(t, held[0].HasProviderJob())
 					require.Equal(t, fixture.generation, held[0].CatalogGeneration)
+					meter, err := jobslots.Open(fixture.application.store)
+					require.NoError(t, err)
+					slot, err := meter.Get(r.Context(), "default", held[0].SlotID)
+					require.NoError(t, err, "the HTTP provider call requires durable slot ownership")
+					require.Equal(t, held[0].ID, slot.JobID)
+					require.Equal(t, "video", slot.Kind)
+					require.False(t, slot.Released)
+					total, err := meter.Total(r.Context(), "default")
+					require.NoError(t, err)
+					require.Equal(t, int64(1), total)
+
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(tc.status)
 					_, _ = io.WriteString(w, tc.body)

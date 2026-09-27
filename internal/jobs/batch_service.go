@@ -173,11 +173,16 @@ func (s *BatchService) Submit(ctx context.Context, submission BatchSubmission) (
 	}
 	batch.KeyID = strings.TrimSpace(submission.KeyID)
 
-	if err := s.reserveBatchSlot(ctx, batch.Account, submission.OutstandingBound); err != nil {
+	if s.meter != nil {
+		batch.SlotID = newJobID()
+	}
+	if err := s.reserveBatchSlot(ctx, batch, submission.OutstandingBound); err != nil {
 		return Batch{}, err
 	}
 	if err := s.repository.Create(ctx, batch); err != nil {
-		s.releaseBatchSlot(batch.Account)
+		if errors.Is(err, ErrBatchExists) {
+			_ = s.releaseBatchSlot(batch)
+		}
 		return Batch{}, err
 	}
 	// The batch outlives the request that submitted it, so the run detaches
@@ -189,7 +194,22 @@ func (s *BatchService) Submit(ctx context.Context, submission BatchSubmission) (
 
 // Get answers one batch record the account owns.
 func (s *BatchService) Get(ctx context.Context, account, id string) (Batch, error) {
-	return s.repository.Get(ctx, account, id)
+	batch, err := s.repository.Get(ctx, account, id)
+	if err != nil {
+		return Batch{}, err
+	}
+	if !batch.RunFinished || batch.SlotReleased || batch.SlotID == "" || s.meter == nil {
+		return batch, nil
+	}
+	if err := s.releaseBatchSlot(batch); err != nil {
+		return batch, nil
+	}
+	next := batch
+	next.SlotReleased = true
+	if err := s.repository.Replace(ctx, batch, next); err != nil {
+		return batch, nil
+	}
+	return next, nil
 }
 
 // List answers the account's batches, newest first.
@@ -223,7 +243,7 @@ func (s *BatchService) Cancel(ctx context.Context, account, id string) (Batch, e
 // goroutine with its own context, because the batch outlives the request
 // that submitted it.
 func (s *BatchService) run(batch Batch, batchIO BatchIO, runner LineRunner) {
-	defer s.releaseBatchSlot(batch.Account)
+	defer func() { _, _ = s.Get(context.Background(), batch.Account, batch.ID) }()
 	ctx := context.Background()
 
 	// The dispatch context gates new lines and nothing else. A cancel ends
@@ -243,8 +263,14 @@ func (s *BatchService) run(batch Batch, batchIO BatchIO, runner LineRunner) {
 	if _, err := s.mutate(ctx, batch.Account, batch.ID, func(b *Batch) error {
 		return b.Transition(JobStateRunning, s.now())
 	}); err != nil {
-		// The one legal reason the move fails is a cancel that beat it. The
-		// record is terminal, no line started, and there is nothing to store.
+		// No line dispatched. Only a confirmed terminal record can finish here.
+		_, _ = s.mutate(ctx, batch.Account, batch.ID, func(b *Batch) error {
+			if !b.State.Terminal() {
+				return err
+			}
+			b.RunFinished = true
+			return nil
+		})
 		return
 	}
 
@@ -415,6 +441,7 @@ func (s *BatchService) finish(ctx context.Context, batch Batch, outcome runOutco
 		if outcome.total > b.TotalLines {
 			b.TotalLines = outcome.total
 		}
+		b.RunFinished = true
 		b.CompletedLines = outcome.completed
 		b.FailedLines = outcome.failed
 		b.OutputFileID = outcome.outputFileID
@@ -441,10 +468,11 @@ func (s *BatchService) mutate(
 		if err != nil {
 			return Batch{}, err
 		}
+		previous := batch
 		if err := change(&batch); err != nil {
 			return batch, err
 		}
-		if err := s.repository.Replace(ctx, batch); err != nil {
+		if err := s.repository.Replace(ctx, previous, batch); err != nil {
 			lastErr = err
 			continue
 		}
@@ -453,20 +481,20 @@ func (s *BatchService) mutate(
 	return Batch{}, fmt.Errorf("jobs: write batch record: %w", lastErr)
 }
 
-func (s *BatchService) reserveBatchSlot(ctx context.Context, account string, bound int64) error {
+func (s *BatchService) reserveBatchSlot(ctx context.Context, batch Batch, bound int64) error {
 	if s.meter == nil {
 		return nil
 	}
-	return s.meter.Reserve(ctx, account, 1, bound)
+	return s.meter.Reserve(ctx, batch.Account, batch.SlotID, batch.ID, "batch", bound)
 }
 
-func (s *BatchService) releaseBatchSlot(account string) {
-	if s.meter == nil {
-		return
+func (s *BatchService) releaseBatchSlot(batch Batch) error {
+	if s.meter == nil || batch.SlotID == "" {
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = s.meter.Release(ctx, account, 1)
+	return s.meter.Release(ctx, batch.Account, batch.SlotID)
 }
 
 // batchResultFile streams result lines into one stored file. The pipe means

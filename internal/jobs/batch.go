@@ -24,8 +24,13 @@ var (
 
 // Batch is one offline run over a stored input file.
 type Batch struct {
-	ID      string
-	Account string
+	// SlotID identifies the durable outstanding-work claim.
+	SlotID       string
+	SlotReleased bool
+	// RunFinished means all admitted lines drained and the final outcome persisted.
+	RunFinished bool
+	ID          string
+	Account     string
 	// KeyID names the gateway API key that submitted the work. It is optional
 	// for the reason Job.KeyID is: a deployment with authentication off
 	// submits batches no key signed.
@@ -61,6 +66,10 @@ type Batch struct {
 // Validate reports whether the record can be stored.
 func (b Batch) Validate() error {
 	switch {
+	case b.RunFinished && !b.State.Terminal():
+		return ErrInvalidBatch
+	case b.SlotReleased && (b.SlotID == "" || !b.RunFinished):
+		return ErrInvalidBatch
 	case strings.TrimSpace(b.ID) == "":
 		return fmt.Errorf("%w: it has no identifier", ErrInvalidBatch)
 	case strings.TrimSpace(b.Account) == "":

@@ -269,6 +269,8 @@ func (h *BatchesController) writeBatchError(
 		errors.Is(err, jobs.ErrInvalidBatch),
 		errors.Is(err, jobs.ErrIllegalTransition):
 		h.writeBatchStatus(w, http.StatusConflict, errorTypeInvalidRequest, err.Error())
+	case errors.Is(err, limits.ErrOutstandingJobsRecoveryRequired):
+		h.writeBatchStatus(w, http.StatusServiceUnavailable, errorTypeServiceUnavailable, "Outstanding job ownership requires recovery.")
 	case errors.Is(err, limits.ErrTooManyOutstandingJobs):
 		// The submission is legal. What it would not fit inside is the number
 		// of jobs this account already holds open, which a finished batch

@@ -16,6 +16,7 @@ import (
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -239,7 +240,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	// The outstanding job meter is production composition as well. Without it
 	// every submission is admitted, and the refusal this surface publishes
 	// would be untestable through the router.
-	outstandingJobs, err := limits.NewJobMeter(testConfig.store)
+	outstandingJobs, err := jobslots.Open(testConfig.store)
 	if err != nil {
 		tb.Fatal(err)
 	}

@@ -176,8 +176,8 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 			continue
 		}
 		job = swept
-		if job.State.Terminal() && !job.Accounted() {
-			if settled := s.settle(ctx, job); settled.Accounted() {
+		if job.State.Terminal() {
+			if settled := s.settle(ctx, job); !job.Accounted() && settled.Accounted() {
 				result.Accounted++
 			}
 		}

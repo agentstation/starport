@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -14,8 +15,8 @@ import (
 )
 
 const (
-	// BatchStorageSchemaVersion identifies the only batch record schema.
-	BatchStorageSchemaVersion = 1
+	// BatchStorageSchemaVersion identifies the batch record schema with durable slot ownership.
+	BatchStorageSchemaVersion = 2
 	// BatchStoragePrefix is the batch record v1 namespace.
 	BatchStoragePrefix = "batches:v1:account:"
 )
@@ -39,13 +40,16 @@ type BatchRepository interface {
 	Create(context.Context, Batch) error
 	Get(context.Context, string, string) (Batch, error)
 	List(context.Context, string, int) ([]Batch, error)
-	Replace(context.Context, Batch) error
+	Replace(ctx context.Context, expected, next Batch) error
 }
 
 type batchRepository struct{ store storage.KVStore }
 
 // batchRecord is the durable form.
 type batchRecord struct {
+	SlotID         string    `json:"slot_id,omitempty"`
+	SlotReleased   bool      `json:"slot_released,omitzero"`
+	RunFinished    bool      `json:"run_finished,omitzero"`
 	SchemaVersion  int       `json:"schema_version"`
 	ID             string    `json:"id"`
 	Account        string    `json:"account"`
@@ -127,16 +131,36 @@ func sortBatchesNewestFirst(records []Batch) {
 
 // Replace writes a record that already exists, and it is the point at which a
 // batch state change meets the one transition table.
-func (r *batchRepository) Replace(ctx context.Context, batch Batch) error {
+func (r *batchRepository) Replace(ctx context.Context, expected, batch Batch) error {
+	if expected.Account != batch.Account || expected.ID != batch.ID || expected.SlotID != batch.SlotID {
+		return ErrInvalidBatch
+	}
+	previous, err := encodeBatch(expected)
+	if err != nil {
+		return err
+	}
 	data, err := encodeBatch(batch)
 	if err != nil {
 		return err
 	}
-	return replaceRecord(ctx, r.store, batchStorageKey(batch.Account, batch.ID), data,
-		func(current []byte) (JobState, error) {
-			stored, err := decodeBatch(current)
-			return stored.State, err
-		}, batch.State, ErrBatchNotFound, "batch")
+	key := batchStorageKey(batch.Account, batch.ID)
+	current, err := r.store.Get(ctx, key)
+	if errors.Is(err, storage.ErrNotFound) {
+		return ErrBatchNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(current, previous) {
+		return storage.ErrConflict
+	}
+	if expected.State != batch.State && !CanTransition(expected.State, batch.State) {
+		return ErrIllegalTransition
+	}
+	if expected.RunFinished && !batch.RunFinished || expected.SlotReleased && !batch.SlotReleased {
+		return ErrInvalidBatch
+	}
+	return r.store.CompareAndSwap(ctx, key, previous, data)
 }
 
 // batchStorageKey puts the account above the identifier, so a read for
@@ -154,6 +178,9 @@ func encodeBatch(batch Batch) ([]byte, error) {
 		return nil, err
 	}
 	data, err := json.Marshal(batchRecord{
+		SlotID:         batch.SlotID,
+		SlotReleased:   batch.SlotReleased,
+		RunFinished:    batch.RunFinished,
 		SchemaVersion:  BatchStorageSchemaVersion,
 		ID:             batch.ID,
 		Account:        batch.Account,
@@ -185,6 +212,9 @@ func decodeBatch(data []byte) (Batch, error) {
 		return Batch{}, fmt.Errorf("%w: unsupported schema %d", ErrCorruptBatchRecord, stored.SchemaVersion)
 	}
 	batch := Batch{
+		SlotID:         stored.SlotID,
+		SlotReleased:   stored.SlotReleased,
+		RunFinished:    stored.RunFinished,
 		ID:             stored.ID,
 		Account:        stored.Account,
 		KeyID:          stored.KeyID,

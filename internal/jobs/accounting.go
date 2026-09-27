@@ -63,27 +63,21 @@ type Notifier interface {
 //
 // The interface is declared here for the same reason Accountant is: the limit
 // vocabulary lives in another package, and a leaf that owns job state may not
-// reach across for it. limits.JobMeter satisfies this shape.
+// reach across for it. jobslots.Store satisfies this shape.
 type Meter interface {
-	Reserve(ctx context.Context, holder string, count, bound int64) error
-	Release(ctx context.Context, holder string, count int64) error
+	Reserve(ctx context.Context, holder, claimID, jobID, kind string, bound int64) error
+	Release(ctx context.Context, holder, claimID string) error
 }
 
-// settle draws the one usage record a terminal job draws and frees the slot it
-// held.
-//
-// It stamps the record before it reports the entry. That order is what makes
-// the count exactly one however often a caller polls: the stamp is a compare
-// and swap against the record store, so of two concurrent polls only one gets
-// past it. Reporting first and stamping after would draw a second cost for one
-// video whenever the stamp lost the race.
-//
-// The other direction of that trade is that a report lost between the stamp and
-// the recipient is lost for good. That is the correct half to give up. The usage
-// seam is best-effort by construction and drops records under load already,
-// while a duplicated charge is money an account did not spend.
+// settle retries slot release independently of the optional accounting stamp.
+// Optional reporting still stamps before delivery. Required budget settlement
+// must use its separate durable reservation contract.
 func (s *Service) settle(ctx context.Context, job Job) Job {
-	if !job.State.Terminal() || job.Accounted() {
+	if !job.State.Terminal() {
+		return job
+	}
+	job = s.settleSlot(ctx, job)
+	if job.Accounted() {
 		return job
 	}
 	settled := job
@@ -100,7 +94,6 @@ func (s *Service) settle(ctx context.Context, job Job) Job {
 	if s.notifier != nil {
 		s.notifier.JobEnded(ctx, entryFor(settled))
 	}
-	s.releaseSlot(ctx, settled)
 	return settled
 }
 
@@ -120,27 +113,36 @@ func entryFor(job Job) AccountingEntry {
 	}
 }
 
-// reserveSlot claims one outstanding job slot for the account.
-//
-// The claim happens before the provider call. A submission refused for being
-// over the limit must not have spent provider work first, or the limit would
-// bound what an account reads rather than what it pays for.
-func (s *Service) reserveSlot(ctx context.Context, account string, bound int64) error {
+// reserveSlot records one claim before routing or provider work.
+func (s *Service) reserveSlot(ctx context.Context, submission Submission) error {
 	if s.meter == nil {
 		return nil
 	}
-	return s.meter.Reserve(ctx, account, 1, bound)
+	return s.meter.Reserve(ctx, submission.Account, submission.slotID, submission.jobID, "video", submission.OutstandingBound)
 }
 
-// releaseSlot gives one slot back and reports nothing.
-//
-// Every caller is either unwinding from a failure it already reports or has
-// just settled a job whose answer the caller holds. A leaked slot costs the
-// account one slot until the sweep settles the record, and a refused release
-// that propagated would turn that into a failed request.
-func (s *Service) releaseSlot(ctx context.Context, job Job) {
-	if s.meter == nil {
-		return
+// releaseSlot retains the same identity through a bounded cleanup attempt.
+func (s *Service) releaseSlot(ctx context.Context, job Job) error {
+	if s.meter == nil || job.SlotID == "" {
+		return nil
 	}
-	_ = s.meter.Release(ctx, job.Account, 1)
+	commit, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return s.meter.Release(commit, job.Account, job.SlotID)
+}
+
+// settleSlot separates retryable release from optional usage reporting.
+func (s *Service) settleSlot(ctx context.Context, job Job) Job {
+	if job.SlotID == "" || job.SlotReleased || s.meter == nil {
+		return job
+	}
+	if err := s.releaseSlot(ctx, job); err != nil {
+		return job
+	}
+	next := job
+	next.SlotReleased = true
+	if err := s.records.Replace(ctx, job, next); err != nil {
+		return job
+	}
+	return next
 }

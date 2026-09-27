@@ -1,4 +1,3 @@
-//nolint:dupl // StorageMeter repeats JobMeter on purpose. See JobMeter.
 package limits
 
 import (

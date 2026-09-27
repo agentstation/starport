@@ -206,6 +206,8 @@ func (s *Service) Retention() time.Duration { return s.retention }
 // bound from the tightest of the account's and the key's limits. A positional
 // list of four strings and a number is the shape that quietly transposes.
 type Submission struct {
+	jobID   string
+	slotID  string
 	Account string
 	// KeyID names the gateway API key that signed the request. It is optional:
 	// a deployment with authentication off submits jobs no key signed.
@@ -234,13 +236,17 @@ func (s *Service) Submit(ctx context.Context, open OpenRunner, submission Submis
 	if submission.Account == "" {
 		return Job{}, fmt.Errorf("%w: it names no account", ErrInvalidJob)
 	}
-	if err := s.reserveSlot(ctx, submission.Account, submission.OutstandingBound); err != nil {
+	submission.jobID = s.mint()
+	if s.meter != nil {
+		submission.slotID = newJobID()
+	}
+	if err := s.reserveSlot(ctx, submission); err != nil {
 		return Job{}, err
 	}
 	recorder := &submissionRecorder{service: s, submission: submission}
 	defer func() {
 		if !recorder.attempted {
-			s.releaseSlot(ctx, Job{Account: submission.Account})
+			_ = s.releaseSlot(ctx, Job{Account: submission.Account, SlotID: submission.slotID})
 		}
 	}()
 	runner, err := open(ctx)

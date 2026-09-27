@@ -7,25 +7,29 @@ import (
 
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/agentstation/starport/internal/repotest"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
 
 type observedJobRelease struct {
-	*limits.JobMeter
+	*jobslots.Store
 	released chan error
 }
 
-func (m *observedJobRelease) Release(ctx context.Context, holder string, count int64) error {
-	err := m.JobMeter.Release(ctx, holder, count)
-	m.released <- err
+func (m *observedJobRelease) Release(ctx context.Context, holder, claimID string) error {
+	err := m.Store.Release(ctx, holder, claimID)
+	select {
+	case m.released <- err:
+	default:
+	}
 	return err
 }
 
 func TestUnboundedBatchPreservesOutstandingVideoSlot(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
-		meter, err := limits.NewJobMeter(store)
+		meter, err := jobslots.Open(store)
 		require.NoError(t, err)
 		videoRecords, err := jobs.OpenRepository(store)
 		require.NoError(t, err)
@@ -36,7 +40,7 @@ func TestUnboundedBatchPreservesOutstandingVideoSlot(t *testing.T) {
 
 		batchRecords, err := jobs.OpenBatchRepository(store)
 		require.NoError(t, err)
-		observed := &observedJobRelease{JobMeter: meter, released: make(chan error, 1)}
+		observed := &observedJobRelease{Store: meter, released: make(chan error, 1)}
 		batches, err := jobs.NewBatchService(batchRecords, jobs.WithBatchJobMeter(observed))
 		require.NoError(t, err)
 		runner := newBlockingRunner()
@@ -56,7 +60,7 @@ func TestUnboundedBatchPreservesOutstandingVideoSlot(t *testing.T) {
 			total, err := meter.Total(t.Context(), accountA)
 			require.NoError(t, err)
 			require.Equal(t, int64(1), total, "batch completion must preserve the active video slot")
-			require.ErrorIs(t, meter.Reserve(t.Context(), accountA, 1, 1), limits.ErrTooManyOutstandingJobs)
+			require.ErrorIs(t, meter.Reserve(t.Context(), accountA, "next", "next-job", "video", 1), limits.ErrTooManyOutstandingJobs)
 			final, err := batches.Get(t.Context(), accountA, batch.ID)
 			require.NoError(t, err)
 			require.Equal(t, jobs.JobStateCompleted, final.State)

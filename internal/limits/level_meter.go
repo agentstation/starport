@@ -29,9 +29,8 @@ type Counter interface {
 // total and a release lowers it, and the total stands until something gives it
 // back.
 //
-// Two limits have that shape, and they differ only in what they count and in
-// which error a refusal carries. The reservation order below is the part worth
-// writing once, because getting it wrong is invisible until two callers race.
+// StorageMeter uses this counter for stored bytes. Outstanding jobs use the
+// separate jobslots repository with durable claim identities.
 type levelMeter struct {
 	counter Counter
 	// prefix namespaces one holder's counter inside the key-value store.

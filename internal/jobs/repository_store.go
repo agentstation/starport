@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	// StorageSchemaVersion identifies the only job record schema.
-	StorageSchemaVersion = 1
+	// StorageSchemaVersion identifies the job record schema with durable slot ownership.
+	StorageSchemaVersion = 2
 	// StoragePrefix is the job record v1 namespace.
 	StoragePrefix = "jobs:v1:account:"
 
@@ -29,6 +29,8 @@ type repository struct{ store storage.KVStore }
 // jobRecord is the durable form. It carries the provider job identifier that
 // Job keeps unexported, because the record store is the one place it belongs.
 type jobRecord struct {
+	SlotID            string            `json:"slot_id,omitempty"`
+	SlotReleased      bool              `json:"slot_released,omitzero"`
 	SubmissionPending bool              `json:"submission_pending,omitzero"`
 	CatalogGeneration string            `json:"catalog_generation,omitempty"`
 	ReservationID     string            `json:"reservation_id,omitempty"`
@@ -138,10 +140,13 @@ func (r *repository) Scan(ctx context.Context, limit int) ([]Job, error) {
 }
 
 func (r *repository) Replace(ctx context.Context, expected, job Job) error {
+	if expected.SlotReleased && !job.SlotReleased {
+		return ErrInvalidJob
+	}
 	if expected.Account != job.Account || expected.ID != job.ID {
 		return ErrInvalidJob
 	}
-	if expected.CatalogGeneration != job.CatalogGeneration || expected.ReservationID != job.ReservationID {
+	if expected.SlotID != job.SlotID || expected.CatalogGeneration != job.CatalogGeneration || expected.ReservationID != job.ReservationID {
 		return ErrInvalidJob
 	}
 	previous, err := encodeJob(expected)
@@ -200,6 +205,8 @@ func encodeJob(job Job) ([]byte, error) {
 		return nil, err
 	}
 	data, err := json.Marshal(jobRecord{
+		SlotID:            job.SlotID,
+		SlotReleased:      job.SlotReleased,
 		SchemaVersion:     StorageSchemaVersion,
 		SubmissionPending: job.SubmissionPending,
 		CatalogGeneration: job.CatalogGeneration,
@@ -239,6 +246,8 @@ func decodeJob(data []byte) (Job, error) {
 		return Job{}, fmt.Errorf("%w: unsupported schema %d", ErrCorruptRecord, stored.SchemaVersion)
 	}
 	job := Job{
+		SlotID:            stored.SlotID,
+		SlotReleased:      stored.SlotReleased,
 		SubmissionPending: stored.SubmissionPending,
 		CatalogGeneration: stored.CatalogGeneration,
 		ReservationID:     stored.ReservationID,

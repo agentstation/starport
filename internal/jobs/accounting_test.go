@@ -45,22 +45,34 @@ type countingMeter struct {
 	releases int
 	holders  []string
 	refuse   error
+	claims   map[string]bool
 }
 
-func (m *countingMeter) Reserve(_ context.Context, holder string, _, _ int64) error {
+func (m *countingMeter) Reserve(_ context.Context, holder, claimID, _, _ string, _ int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.refuse != nil {
 		return m.refuse
 	}
+	if m.claims == nil {
+		m.claims = make(map[string]bool)
+	}
+	if _, exists := m.claims[holder+"/"+claimID]; exists {
+		return nil
+	}
+	m.claims[holder+"/"+claimID] = false
 	m.reserves++
 	m.holders = append(m.holders, holder)
 	return nil
 }
 
-func (m *countingMeter) Release(_ context.Context, holder string, _ int64) error {
+func (m *countingMeter) Release(_ context.Context, holder, claimID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if released, exists := m.claims[holder+"/"+claimID]; !exists || released {
+		return nil
+	}
+	m.claims[holder+"/"+claimID] = true
 	m.releases++
 	m.holders = append(m.holders, holder)
 	return nil

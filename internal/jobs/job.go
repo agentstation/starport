@@ -127,6 +127,9 @@ func CanTransition(from, to JobState) bool {
 // learned it could poll the provider directly, outside every limit and every
 // usage record Starport keeps.
 type Job struct {
+	// SlotID binds this job to its durable outstanding-work claim.
+	SlotID       string
+	SlotReleased bool
 	// SubmissionPending preserves an attempted dispatch without confirmed acceptance.
 	// Polling, cancellation, and timeout cleanup cannot infer its provider outcome.
 	SubmissionPending bool
