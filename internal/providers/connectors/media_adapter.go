@@ -129,6 +129,11 @@ func RecognitionResponseToInference(response *RecognitionResponse) (inference.Re
 	if response.Usage != nil {
 		converted := mediaUsageToInference(response.Usage, 0)
 		converted.TokensUnknown = response.TokenEvidence == nil || !response.TokenEvidence.HasReportedTotals()
+		converted.CacheReadTokensUnknown = true
+		if response.TokenEvidence != nil {
+			_, known := response.TokenEvidence.PromptTokensDetails.ReportedCachedTokens()
+			converted.CacheReadTokensUnknown = !known
+		}
 		measured = &converted
 	}
 	return inference.RecognitionResponse{Pages: pages, Usage: measured}, nil

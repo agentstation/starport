@@ -373,13 +373,15 @@ type ChatRequest struct {
 // cached portions for pricing.
 type Usage struct {
 	// TokensUnknown marks incomplete or invalid provider token evidence.
-	TokensUnknown    bool
-	InputTokens      int
-	OutputTokens     int
-	TotalTokens      int
-	ReasoningTokens  int
-	CacheReadTokens  int
-	CacheWriteTokens int
+	TokensUnknown bool
+	// CacheReadTokensUnknown distinguishes an omitted cache count from measured zero.
+	CacheReadTokensUnknown bool
+	InputTokens            int
+	OutputTokens           int
+	TotalTokens            int
+	ReasoningTokens        int
+	CacheReadTokens        int
+	CacheWriteTokens       int
 
 	// AudioInputTokens and AudioOutputTokens count the audio a provider
 	// metered at its own rate. Both are already inside InputTokens and

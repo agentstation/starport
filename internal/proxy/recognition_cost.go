@@ -26,7 +26,7 @@ func recognitionCost(offering catalogs.ProviderOffering, pages int, measured *in
 		}
 		input := int64(0)
 		if len(offering.Pricing.Tiers) > 0 {
-			if measured == nil || measured.Estimated || measured.TokensUnknown {
+			if measured == nil || measured.Estimated || measured.TokensUnknown || measured.CacheReadTokensUnknown {
 				return nil, usage.CostReasonNoUsage
 			}
 			tokens := usageTokens(*measured)
@@ -95,7 +95,7 @@ func validRecognitionTokens(tokens usage.Tokens) bool {
 // recognitionTokenCost prices measured token dimensions within one context tier.
 func recognitionTokenCost(pricing *catalogs.ModelPricing, measured *inference.Usage) (float64, string) {
 	var total float64
-	if measured == nil || measured.Estimated || measured.TokensUnknown {
+	if measured == nil || measured.Estimated || measured.TokensUnknown || measured.CacheReadTokensUnknown {
 		return 0, usage.CostReasonNoUsage
 	}
 	tokens := usageTokens(*measured)

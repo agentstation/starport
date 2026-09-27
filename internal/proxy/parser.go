@@ -187,10 +187,12 @@ func (r *parseReport) charge(prices catalogPrices, reading documentReading) {
 	if reading.Cached || reading.Offering == "" {
 		return
 	}
-	entry := usage.Extraction{Offering: reading.Offering, GenerationID: r.GenerationID, Pages: int64(reading.Pages), StartedAt: reading.StartedAt}
+	entry := usage.Extraction{TokensUnknown: true, Offering: reading.Offering, GenerationID: r.GenerationID, Pages: int64(reading.Pages), StartedAt: reading.StartedAt}
 	if reading.Usage != nil {
 		tokens := usageTokens(*reading.Usage)
 		entry.Tokens = &tokens
+		entry.TokensUnknown = reading.Usage.TokensUnknown
+		entry.CacheReadTokensUnknown = reading.Usage.CacheReadTokensUnknown
 	}
 	entry.CostUnavailableReason = usage.CostReasonNoPricing
 	if prices != nil {
