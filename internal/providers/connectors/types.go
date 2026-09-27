@@ -226,6 +226,16 @@ type ChatResponse struct {
 	SystemFingerprint string   `json:"system_fingerprint,omitempty"`
 }
 
+// ReportedUsage returns retained provider usage without requiring valid content.
+// An absent or unmarked zero report cannot authorize a budget refund.
+func (r *ChatResponse) ReportedUsage() *Usage {
+	if r == nil || !r.usageReported && r.Usage.TotalTokens == 0 {
+		return nil
+	}
+	usage := r.Usage
+	return &usage
+}
+
 // Choice represents a completion choice
 type Choice struct {
 	Index        int       `json:"index"`

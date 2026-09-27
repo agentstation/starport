@@ -76,6 +76,10 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		request := prepareChatAttempt(req, boundRoute, true)
 		request.Credential = selected.material
 		request.Stream = true
+		ticket, refusal := r.admit(attemptCtx, accountID, boundRoute, string(routing.OperationChatCompletions), chatTokenQuote(runtime.Snapshot(), boundRoute, request))
+		if refusal != nil {
+			return nil, refusal, execution.AttemptActionStop
+		}
 		timer := execution.OverheadTimerFrom(attemptCtx)
 		// The first event is part of establishment: providers such as Groq
 		// reject an attempt inside an established 200 stream (an SSE error
@@ -87,6 +91,17 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		)
 		endUpstream := timer.TrackUpstream()
 		stream, streamErr := connector.ChatStream(callCtx, request)
+		if stream != nil && ticket.ID() != "" {
+			stream = &budgetChatStream{stream: stream, ctx: attemptCtx, ticket: ticket}
+		}
+		if stream == nil {
+			if settlementErr := ticket.Finish(attemptCtx, nil); settlementErr != nil {
+				streamErr = budgetFailure(errors.Join(streamErr, settlementErr))
+			}
+			if streamErr == nil {
+				streamErr = errors.New("provider returned no stream")
+			}
+		}
 		var firstChunk *connectors.ChatStreamChunk
 		if streamErr == nil {
 			firstChunk, streamErr = stream.Recv()

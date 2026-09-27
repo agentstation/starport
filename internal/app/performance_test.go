@@ -69,16 +69,17 @@ type performancePair struct {
 }
 
 type performanceFixture struct {
-	upstream   *httptest.Server
-	gateway    *httptest.Server
-	client     *http.Client
-	samples    chan performanceUpstreamSample
-	handlers   chan time.Duration
-	calls      atomic.Int64
-	wait       time.Duration
-	generation string
-	checksum   string
-	routes     int
+	application *App
+	upstream    *httptest.Server
+	gateway     *httptest.Server
+	client      *http.Client
+	samples     chan performanceUpstreamSample
+	handlers    chan time.Duration
+	calls       atomic.Int64
+	wait        time.Duration
+	generation  string
+	checksum    string
+	routes      int
 }
 
 func newPerformanceFixture(tb testing.TB, wait time.Duration) *performanceFixture {
@@ -92,13 +93,26 @@ func newPerformanceFixtureForCatalog(tb testing.TB, wait time.Duration, catalog 
 }
 
 func newPerformanceFixtureWithApproval(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool) *performanceFixture {
+	return newPerformanceFixtureWithAdmission(tb, wait, catalog, approve,
+		&limits.Limits{Spend: &limits.Budget{Limit: 1_000_000, Interval: limits.IntervalDay}}, nil)
+}
+
+func newPerformanceFixtureWithAdmission(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool, budgets *limits.Limits, upstream http.Handler) *performanceFixture {
 	tb.Helper()
 	f := &performanceFixture{samples: make(chan performanceUpstreamSample, 1), handlers: make(chan time.Duration, 1), wait: wait}
+	if upstream != nil {
+		f.handlers = make(chan time.Duration, 8)
+	}
 	f.upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer sk-test-key" {
 			tb.Errorf("unexpected fixture request: path=%s credential_match=%t", r.URL.Path, r.Header.Get("Authorization") == "Bearer sk-test-key")
 		}
-		f.serveUpstream(w, r)
+		if upstream != nil {
+			f.calls.Add(1)
+			upstream.ServeHTTP(w, r)
+		} else {
+			f.serveUpstream(w, r)
+		}
 	}))
 	tb.Cleanup(f.upstream.Close)
 	cfg := validProductionConfig(tb)
@@ -137,12 +151,13 @@ func newPerformanceFixtureWithApproval(tb testing.TB, wait time.Duration, catalo
 	hash := sha256.Sum256([]byte(performanceGatewayKey))
 	key := testAPIKey()
 	key.Hash = hex.EncodeToString(hash[:])
-	key.Limits = &limits.Limits{Spend: &limits.Budget{Limit: 1_000_000, Interval: limits.IntervalDay}}
+	key.Limits = budgets
 	_, err = keys.Create(tb.Context(), key)
 	require.NoError(tb, err)
 	require.NoError(tb, store.Close())
 	application, err := New(cfg)
 	require.NoError(tb, err)
+	f.application = application
 	tb.Cleanup(func() { require.NoError(tb, application.Close(context.Background())) })
 	httpServer, ok := application.httpServer.(*server.Server)
 	require.True(tb, ok)

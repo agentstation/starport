@@ -689,6 +689,7 @@ func (b *runtimeBuilder) buildGateway() error {
 		}
 	}
 	routerOptions := []router.Option{
+		router.WithBudgetAdmission(b.application.budget.admission),
 		router.WithCatalog(b.application.catalog),
 		router.WithAvailability(availabilityOwner),
 		router.WithOutcomePublisher(b.application.providerStates),

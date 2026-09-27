@@ -165,6 +165,9 @@ func prepareAttempt(policy *limits.BudgetPolicy, target Target, quote QuoteFunc)
 		return reservation.Attempt{}, ErrBoundUnknown
 	}
 	attempt.ID = rand.Text()
+	if attempt.RequestID == "" {
+		attempt.RequestID = attempt.ID
+	}
 	attempt.TokenOnly = !needed.Spend
 	if needed.Spend {
 		attempt.Valuation, attempt.Bound = bound.Valuation, bound.Units

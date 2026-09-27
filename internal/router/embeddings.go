@@ -76,7 +76,14 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 			URL:  boundRoute.Endpoint.URL,
 		}
 		request.Credential = selected.material
+		ticket, refusal := r.admit(attemptCtx, req.AccountID, boundRoute, string(routing.OperationEmbeddings), nil)
+		if refusal != nil {
+			return nil, refusal, execution.AttemptActionStop
+		}
 		response, requestErr := connector.Embeddings(attemptCtx, &request)
+		if settlementErr := ticket.Finish(attemptCtx, nil); settlementErr != nil {
+			return nil, budgetFailure(settlementErr), execution.AttemptActionStop
+		}
 		if requestErr != nil {
 			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)
 			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)

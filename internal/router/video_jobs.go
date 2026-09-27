@@ -85,7 +85,7 @@ func (r *modelRouter) RouteVideoPoll(
 	ctx context.Context,
 	req *VideoJobRequest,
 ) (*VideoJobResponse, error) {
-	return r.routeAcceptedJob(ctx, req, jobPollTransport)
+	return r.routeAcceptedJob(ctx, req, billingVideoPoll, jobPollTransport)
 }
 
 // RouteVideoCancel asks the provider that holds the job to stop it.
@@ -93,7 +93,7 @@ func (r *modelRouter) RouteVideoCancel(
 	ctx context.Context,
 	req *VideoJobRequest,
 ) (*VideoJobResponse, error) {
-	return r.routeAcceptedJob(ctx, req, jobCancelTransport)
+	return r.routeAcceptedJob(ctx, req, billingVideoCancel, jobCancelTransport)
 }
 
 // RouteVideoContent reads the finished asset from the provider that produced it.
@@ -113,6 +113,7 @@ func (r *modelRouter) RouteVideoContent(
 		return nil, err
 	}
 	reference := req.Request
+	policy.Purpose = billingVideoContent
 	call := providerCall[*connectors.JobAssetRef, *connectors.JobAsset, connectors.JobAsset]{
 		transport: jobAssetTransport,
 		build: func() *connectors.JobAssetRef {
@@ -149,6 +150,7 @@ func acceptedJobPolicy(policy operationPolicy, reference VideoJobReference) (ope
 func (r *modelRouter) routeAcceptedJob(
 	ctx context.Context,
 	req *VideoJobRequest,
+	purpose billingPurpose,
 	transport func(connectors.Connector, catalogs.EndpointType) (providerInvoke[*connectors.ProviderJobRef, *connectors.ProviderJob], bool),
 ) (*VideoJobResponse, error) {
 	if req == nil {
@@ -158,6 +160,7 @@ func (r *modelRouter) routeAcceptedJob(
 	if err != nil {
 		return nil, err
 	}
+	policy.Purpose = purpose
 	call := providerCall[*connectors.ProviderJobRef, *connectors.ProviderJob, connectors.ProviderJob]{
 		transport: transport,
 		build: func() *connectors.ProviderJobRef {

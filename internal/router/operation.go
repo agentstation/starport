@@ -47,6 +47,8 @@ type operationPolicy struct {
 	// that finishes inside its request, and set only when a request carries an
 	// identifier a single provider issued.
 	Provider string
+	// Purpose distinguishes submission from calls on an accepted provider job.
+	Purpose billingPurpose
 }
 
 // allows reports whether the key may reach one named provider. An empty
@@ -156,7 +158,18 @@ func routeOperation[Response any](
 		if bindFailure != nil {
 			return nil, bindFailure, execution.AttemptActionStop
 		}
+		purpose := policy.Purpose
+		if purpose == "" {
+			purpose = billingPurpose(operation)
+		}
+		ticket, refusal := r.admit(attemptCtx, policy.AccountID, boundRoute, string(purpose), nil)
+		if refusal != nil {
+			return nil, refusal, execution.AttemptActionStop
+		}
 		response, attemptFailure, action := attempt(attemptCtx, connector, boundRoute, selected)
+		if settlementErr := ticket.Finish(attemptCtx, nil); settlementErr != nil {
+			return nil, budgetFailure(settlementErr), execution.AttemptActionStop
+		}
 		if attemptFailure != nil {
 			if action == execution.AttemptActionDefault {
 				action = credentialPolicy.afterFailure(planned.Route, attemptFailure)
