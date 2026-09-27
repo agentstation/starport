@@ -21,6 +21,17 @@ cp "$repository_root/scripts/testdata/starport-cask.rb.tmpl" "$valid"
 
 "$repository_root/scripts/verify-homebrew-cask.sh" "$valid" >/dev/null
 
+platform_first="$test_root/platform-first.rb"
+cp "$repository_root/scripts/testdata/starport-cask-platform-first.rb.tmpl" "$platform_first"
+"$repository_root/scripts/verify-homebrew-cask.sh" "$platform_first" >/dev/null
+
+platform_intel_mac="$test_root/platform-intel-mac.rb"
+ruby -e 'print File.read(ARGV.fetch(0)).sub("on_arm do", "on_intel do")' "$platform_first" > "$platform_intel_mac"
+if "$repository_root/scripts/verify-homebrew-cask.sh" "$platform_intel_mac" >/dev/null 2>&1; then
+	printf 'Homebrew cask verifier accepted an Intel Mac archive with platform-first guards\n' >&2
+	exit 1
+fi
+
 sed 's|{{staged_path}}/starport|{{staged_path}}|' "$valid" > "$broad"
 if "$repository_root/scripts/verify-homebrew-cask.sh" "$broad" >/dev/null 2>&1; then
 	printf 'Homebrew cask verifier accepted a broad staged path\n' >&2

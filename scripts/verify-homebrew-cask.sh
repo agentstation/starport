@@ -39,12 +39,35 @@ require_text '^[[:space:]]*on_macos do$' 'macOS archives'
 require_text '^[[:space:]]*on_linux do$' 'Linux archives'
 require_text '^[[:space:]]*postflight_steps do$' 'the structured post-install hook'
 
-ruby - "$cask" <<'RUBY'
+ruby -rripper - "$cask" <<'RUBY'
 source = File.read(ARGV.fetch(0))
 architecture = source[/^([ ]*)on_macos do\n\s*depends_on arch: :arm64\n\1end$/m]
 abort "Homebrew cask must require Apple silicon on macOS" unless architecture
-intel = source[/^([ ]*)on_intel do\n.*?^\1end$/m]
-abort "Homebrew cask must retain Linux x86-64 without Intel macOS" unless intel&.include?("on_linux do") && !intel.include?("on_macos do")
+# Parse platform guards in either nesting order without executing the cask.
+def call_name(node)
+  return unless node.is_a?(Array)
+  case node[0]
+  when :command, :fcall then node[1][1]
+  when :method_add_arg then call_name(node[1])
+  end
+end
+
+def checksum_platforms(node, guards = [], result = [])
+  return result unless node.is_a?(Array)
+  if node[0] == :method_add_block
+    name = call_name(node[1])
+    nested = %w[on_macos on_linux on_arm on_intel].include?(name) ? guards + [name] : guards
+    checksum_platforms(node[2], nested, result)
+  elsif call_name(node) == "sha256"
+    result << guards.sort
+  else
+    node.each { |child| checksum_platforms(child, guards, result) }
+  end
+  result
+end
+
+expected_platforms = [%w[on_arm on_macos], %w[on_arm on_linux], %w[on_intel on_linux]].map(&:sort).sort
+abort "Homebrew cask must contain only Apple silicon macOS and ARM/x86-64 Linux archives" unless checksum_platforms(Ripper.sexp(source)).sort == expected_platforms
 expected = <<~'HOOK'
   postflight_steps do
     on_macos do
