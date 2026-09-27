@@ -129,12 +129,15 @@ type Job struct {
 	// Native identifies inference that returns its result in one response.
 	Native bool
 	// Valuation pins submission prices. Measurement contains provider usage only.
-	Valuation        *reservation.Valuation
-	Measurement      *reservation.Evidence
-	nativeAssetBound int64
-	nativeRetention  time.Duration
-	nativeReceiptKey string
-	nativeAssetKey   string
+	Valuation              *reservation.Valuation
+	Measurement            *reservation.Evidence
+	nativeAssetBound       int64
+	nativeRetention        time.Duration
+	nativeReceiptKey       string
+	nativeAssetKey         string
+	nativeAssetDigest      string
+	nativeAssetContentType string
+	assetRecoveryStatus    string
 	// SlotID binds this job to its durable outstanding-work claim.
 	SlotID       string
 	SlotReleased bool
@@ -407,6 +410,12 @@ func (j Job) HasAsset() bool {
 // whose sweep has not yet run, so a read never serves bytes past the window the
 // caller was promised.
 func (j Job) AssetExpired(now time.Time) bool {
+	if j.Native && j.assetRecoveryStatus == "expired" {
+		return true
+	}
+	if j.Native && !j.SubmissionPending && j.State == JobStateCompleted && !now.Before(j.TerminalAt.Add(j.nativeRetention)) {
+		return true
+	}
 	if j.AssetKey == "" {
 		return false
 	}

@@ -22,6 +22,7 @@ type nativeRunner struct {
 	*recordingRunner
 	valuation   *reservation.Valuation
 	measurement *reservation.Evidence
+	assetURL    string
 }
 
 func nativeFixture() *nativeRunner {
@@ -42,7 +43,7 @@ func (r *nativeRunner) Submit(ctx context.Context, recorder jobs.SubmissionRecor
 		return jobs.Acceptance{}, r.submitErr
 	}
 	answer := r.acceptance
-	answer.NativeResult = &jobs.NativeResult{State: jobs.JobStateCompleted, RequestID: "private-native-request", Measurement: r.measurement, Asset: r.asset}
+	answer.NativeResult = &jobs.NativeResult{State: jobs.JobStateCompleted, RequestID: "private-native-request", Measurement: r.measurement, Asset: r.asset, AssetURL: r.assetURL}
 	return answer, recorder.Accepted(ctx, answer)
 }
 
@@ -223,4 +224,18 @@ func TestNativeReceiptRejectsCorruptionBeforeCompletion(t *testing.T) {
 			require.Zero(t, runner.polls)
 		})
 	}
+}
+
+func TestNativeExternalAssetExpiresWithoutDownload(t *testing.T) {
+	service, _, _, clock := newAssetService(t)
+	runner := nativeFixture()
+	runner.asset = jobs.Asset{}
+	runner.assetURL = "https://assets.example/video.mp4?signature=private"
+	job, err := service.Submit(t.Context(), open(runner), submissionFor(accountA))
+	require.NoError(t, err)
+	require.Equal(t, jobs.JobStateCompleted, job.State)
+	clock.now = submitted.Add(retentionWindow)
+	_, _, err = service.Open(t.Context(), accountA, job.ID)
+	require.ErrorIs(t, err, jobs.ErrAssetExpired)
+	require.Equal(t, 1, runner.submits)
 }

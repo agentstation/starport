@@ -1585,6 +1585,35 @@ STARPORT_JOBS_MAX_WORKERS=2
 STARPORT_JOBS_EXECUTION_TIMEOUT=10m
 ```
 
+External video downloads require an explicit origin grant. The default denies every external download.
+
+Set `STARPORT_JOBS_ASSET_DOWNLOAD_ORIGINS` to comma-separated HTTPS origins without paths, queries, or trailing slashes.
+For example, `https://assets.example.com,https://media.example.com:8443` grants those two origins.
+A provider response cannot add a grant. Configuration changes require a restart.
+Literal loopback HTTP origins support local development when explicitly configured.
+
+The download client sends no inference credentials, cookies, or referrer.
+It follows no redirects and uses no environment proxy. HTTPS certificate validation remains mandatory.
+Each transfer has a 30-second deadline and the submitted asset byte bound.
+The submission worker limit also bounds simultaneous native asset recovery on each replica.
+
+The `asset_status` field reports retrieval state.
+
+| Value | Meaning |
+| --- | --- |
+| `pending` | Asset recovery has not finished. |
+| `blocked` | The download requires an operator-approved origin. |
+| `retry` | A later read or sweep can retry the failed transfer. |
+| `invalid` | Content, size, or changed bytes failed validation. |
+| `stored` | Starport holds the asset. |
+| `expired` | The original retention window ended. |
+
+Recovery never starts another generation request. It cannot extend the original retention window.
+Asset failure does not discard measured usage or block budget settlement.
+
+Job reads, content retrieval, cancellation, and reconciliation remain available after budget exhaustion.
+Authentication and account ownership still apply. Routes that start paid work retain budget checks.
+
 Each replica permits two simultaneous video submission workers by default.
 A full worker set returns HTTP 503 before provider dispatch.
 Native inference uses the configured execution deadline, including response transfer.

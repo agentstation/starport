@@ -31,30 +31,33 @@ type repository struct{ store storage.KVStore }
 // jobRecord is the durable form. It carries the provider job identifier that
 // Job keeps unexported, because the record store is the one place it belongs.
 type jobRecord struct {
-	NativeAssetBound  int64                  `json:"native_asset_bound,omitzero"`
-	NativeRetention   time.Duration          `json:"native_retention,omitzero"`
-	Native            bool                   `json:"native,omitzero"`
-	Valuation         *reservation.Valuation `json:"valuation,omitempty"`
-	Measurement       *reservation.Evidence  `json:"measurement,omitempty"`
-	NativeReceiptKey  string                 `json:"native_receipt_key,omitempty"`
-	NativeAssetKey    string                 `json:"native_asset_key,omitempty"`
-	SlotID            string                 `json:"slot_id,omitempty"`
-	SlotReleased      bool                   `json:"slot_released,omitzero"`
-	SubmissionPending bool                   `json:"submission_pending,omitzero"`
-	CatalogGeneration string                 `json:"catalog_generation,omitempty"`
-	ReservationID     string                 `json:"reservation_id,omitempty"`
-	SchemaVersion     int                    `json:"schema_version"`
-	ID                string                 `json:"id"`
-	Account           string                 `json:"account"`
-	KeyID             string                 `json:"key_id,omitempty"`
-	Model             string                 `json:"model"`
-	Operation         routing.Operation      `json:"operation"`
-	Provider          string                 `json:"provider"`
-	State             JobState               `json:"state"`
-	Reason            string                 `json:"reason,omitempty"`
-	CreatedAt         time.Time              `json:"created_at"`
-	TerminalAt        time.Time              `json:"terminal_at,omitempty"`
-	ProviderJobID     string                 `json:"provider_job_id,omitempty"`
+	NativeAssetDigest      string                 `json:"native_asset_digest,omitempty"`
+	NativeAssetContentType string                 `json:"native_asset_content_type,omitempty"`
+	AssetRecoveryStatus    string                 `json:"asset_recovery_status,omitempty"`
+	NativeAssetBound       int64                  `json:"native_asset_bound,omitzero"`
+	NativeRetention        time.Duration          `json:"native_retention,omitzero"`
+	Native                 bool                   `json:"native,omitzero"`
+	Valuation              *reservation.Valuation `json:"valuation,omitempty"`
+	Measurement            *reservation.Evidence  `json:"measurement,omitempty"`
+	NativeReceiptKey       string                 `json:"native_receipt_key,omitempty"`
+	NativeAssetKey         string                 `json:"native_asset_key,omitempty"`
+	SlotID                 string                 `json:"slot_id,omitempty"`
+	SlotReleased           bool                   `json:"slot_released,omitzero"`
+	SubmissionPending      bool                   `json:"submission_pending,omitzero"`
+	CatalogGeneration      string                 `json:"catalog_generation,omitempty"`
+	ReservationID          string                 `json:"reservation_id,omitempty"`
+	SchemaVersion          int                    `json:"schema_version"`
+	ID                     string                 `json:"id"`
+	Account                string                 `json:"account"`
+	KeyID                  string                 `json:"key_id,omitempty"`
+	Model                  string                 `json:"model"`
+	Operation              routing.Operation      `json:"operation"`
+	Provider               string                 `json:"provider"`
+	State                  JobState               `json:"state"`
+	Reason                 string                 `json:"reason,omitempty"`
+	CreatedAt              time.Time              `json:"created_at"`
+	TerminalAt             time.Time              `json:"terminal_at,omitempty"`
+	ProviderJobID          string                 `json:"provider_job_id,omitempty"`
 
 	AssetKey         string    `json:"asset_key,omitempty"`
 	AssetBytes       int64     `json:"asset_bytes,omitempty"`
@@ -156,6 +159,9 @@ func (r *repository) Replace(ctx context.Context, expected, job Job) error {
 	if expected.nativeAssetBound != job.nativeAssetBound || expected.nativeRetention != job.nativeRetention || expected.Native != job.Native || expected.nativeReceiptKey != job.nativeReceiptKey || expected.nativeAssetKey != job.nativeAssetKey || !reflect.DeepEqual(expected.Valuation, job.Valuation) || (expected.Measurement != nil && !reflect.DeepEqual(expected.Measurement, job.Measurement)) {
 		return ErrInvalidJob
 	}
+	if expected.nativeAssetDigest != "" && (expected.nativeAssetDigest != job.nativeAssetDigest || expected.nativeAssetContentType != job.nativeAssetContentType) {
+		return ErrInvalidJob
+	}
 	if expected.SlotReleased && !job.SlotReleased {
 		return ErrInvalidJob
 	}
@@ -221,6 +227,7 @@ func encodeJob(job Job) ([]byte, error) {
 		return nil, err
 	}
 	data, err := json.Marshal(jobRecord{
+		NativeAssetDigest: job.nativeAssetDigest, NativeAssetContentType: job.nativeAssetContentType, AssetRecoveryStatus: job.assetRecoveryStatus,
 		NativeAssetBound: job.nativeAssetBound, NativeRetention: job.nativeRetention,
 		Native: job.Native, Valuation: job.Valuation, Measurement: job.Measurement, NativeReceiptKey: job.nativeReceiptKey, NativeAssetKey: job.nativeAssetKey,
 		SlotID:            job.SlotID,
@@ -265,6 +272,7 @@ func decodeJob(data []byte) (Job, error) {
 		return Job{}, fmt.Errorf("%w: unsupported schema %d", ErrCorruptRecord, stored.SchemaVersion)
 	}
 	job := Job{
+		nativeAssetDigest: stored.NativeAssetDigest, nativeAssetContentType: stored.NativeAssetContentType, assetRecoveryStatus: stored.AssetRecoveryStatus,
 		nativeAssetBound: stored.NativeAssetBound, nativeRetention: stored.NativeRetention,
 		Native: stored.Native, Valuation: stored.Valuation, Measurement: stored.Measurement, nativeReceiptKey: stored.NativeReceiptKey, nativeAssetKey: stored.NativeAssetKey,
 		SlotID:            stored.SlotID,

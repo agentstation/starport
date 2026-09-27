@@ -40,6 +40,8 @@ func (r VideoJobRequest) Clone() VideoJobRequest {
 
 // VideoJob is the canonical answer a caller reads about one job it submitted.
 type VideoJob struct {
+	// AssetStatus reports retrieval state without a provider URL.
+	AssetStatus string
 	// PollingStatus reports paused automatic polling without changing provider state.
 	PollingStatus string
 	// SubmissionStatus reports unconfirmed provider acceptance separately from state.

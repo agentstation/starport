@@ -83,6 +83,8 @@ type Service struct {
 	recovery         recoveryState[Job]
 	records          Repository
 	assets           blob.Store
+	externalAssets   ExternalAssetFetcher
+	nativeRecovery   chan struct{}
 	// accountant prices a job once, at its terminal state. A service without
 	// one still runs: it keeps the same stamp on the record, so a deployment
 	// that later gains an accountant does not re-price the jobs it already
@@ -194,6 +196,7 @@ func NewService(records Repository, options ...ServiceOption) (*Service, error) 
 	if err := service.policy.Validate(); err != nil {
 		return nil, err
 	}
+	service.nativeRecovery = make(chan struct{}, service.maxWorkers)
 	return service, nil
 }
 

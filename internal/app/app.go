@@ -31,6 +31,7 @@ import (
 	"github.com/agentstation/starport/internal/guardrails"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/jobs/assetfetch"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/agentstation/starport/internal/localauth"
@@ -577,7 +578,13 @@ func (b *runtimeBuilder) openJobService() error {
 	b.application.jobClaims = meter
 	// The reporter uses rates and measured usage retained by the job.
 	accountant := proxy.NewJobAccountant(b.usageRecords)
+	assetDownloads, err := assetfetch.New(b.config.Jobs.AssetDownloadOrigins)
+	if err != nil {
+		return fmt.Errorf("configure job asset downloads: %w", err)
+	}
+	b.application.own("video asset downloads", func(context.Context) error { return assetDownloads.Close() })
 	serviceOptions := []jobs.ServiceOption{
+		jobs.WithExternalAssets(assetDownloads),
 		jobs.WithAssetStore(b.application.blobStore),
 		jobs.WithWorkers(b.config.Jobs.WorkerBound(), b.config.Jobs.ExecutionWindow()),
 		jobs.WithRetention(b.config.Jobs.AssetRetentionWindow()),

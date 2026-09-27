@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -87,7 +88,15 @@ func (c *deepInfraVideoConnector) GenerateVideo(ctx context.Context, request *Na
 	if response.StatusCode != http.StatusOK {
 		return nil, &APIError{StatusCode: response.StatusCode, Provider: string(c.providerID), Message: "native video inference failed"}
 	}
-	return decodeDeepInfraVideo(response.Body, request.MaxBytes)
+	result, decodeErr := decodeDeepInfraVideo(response.Body, request.MaxBytes)
+	if result != nil && result.AssetURL != "" {
+		reference, parseErr := url.Parse(result.AssetURL)
+		if parseErr != nil {
+			return result, ErrInvalidMediaRequest
+		}
+		result.AssetURL = req.URL.ResolveReference(reference).String()
+	}
+	return result, decodeErr
 }
 
 func deepInfraVideoSize(size string) (string, string, error) {
@@ -165,10 +174,19 @@ func decodeDeepInfraVideo(reader io.Reader, maxBytes int64) (*NativeVideoRespons
 	}
 	asset, err := url.Parse(payload.VideoURL)
 	if err != nil || asset.User != nil || asset.Fragment != "" || asset.Opaque != "" ||
-		!(asset.Scheme == "https" && asset.Host != "" || asset.Scheme == "" && asset.Host == "" && strings.HasPrefix(asset.Path, "/")) {
+		!((asset.Scheme == "https" || nativeLoopbackAsset(asset)) && asset.Host != "" || asset.Scheme == "" && asset.Host == "" && strings.HasPrefix(asset.Path, "/")) {
 		return result, fmt.Errorf("%w: invalid native video asset reference", ErrInvalidMediaRequest)
 	}
 	// Parsing a provider URL grants no network access and forwards no credential.
 	result.AssetURL = payload.VideoURL
 	return result, nil
+}
+
+// nativeLoopbackAsset permits explicit local fixtures without accepting remote cleartext references.
+func nativeLoopbackAsset(reference *url.URL) bool {
+	if reference.Scheme != "http" {
+		return false
+	}
+	address, err := netip.ParseAddr(reference.Hostname())
+	return err == nil && address.IsLoopback()
 }

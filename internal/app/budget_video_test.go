@@ -2,9 +2,12 @@ package app
 
 import (
 	"encoding/json/v2"
+	"github.com/agentstation/starport/internal/config"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -126,6 +129,152 @@ func TestProductionNativeVideoBudget(t *testing.T) {
 				require.NoError(t, reader.Close())
 				require.Equal(t, "video", string(asset))
 			}
+		})
+	}
+}
+
+func TestProductionNativeExternalVideoAsset(t *testing.T) {
+	for _, allowed := range []bool{false, true} {
+		name := "blocked"
+		if allowed {
+			name = "approved"
+		}
+		t.Run(name, func(t *testing.T) {
+			var downloads atomic.Int64
+			assets := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				downloads.Add(1)
+				require.Empty(t, r.Header.Get("Authorization"))
+				require.Empty(t, r.Header.Get("Cookie"))
+				require.Equal(t, "signature-private", r.URL.Query().Get("signature"))
+				w.Header().Set("Content-Type", "video/mp4")
+				_, _ = io.WriteString(w, "video")
+			}))
+			defer assets.Close()
+			fixture := newPerformanceFixtureForProviders(t, 0, nil, true,
+				&limits.Limits{Spend: &limits.Budget{Limit: 375000000, Interval: limits.IntervalDay}},
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// The asset reference never carries the inference credential.
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = io.WriteString(w, `{"request_id":"private-native","inference_status":{"output_length":5},"video_url":"`+assets.URL+`/video?signature=signature-private"}`)
+				}),
+				[]performanceProvider{{catalogs.ProviderIDDeepInfra, "DEEPINFRA_TOKEN", "Authorization", "Bearer sk-test-key", []string{"/inference/Wan-AI/Wan2.2-T2V-A14B"}}}, nil,
+				func(cfg *config.Config) {
+					if allowed {
+						cfg.Jobs.AssetDownloadOrigins = []string{assets.URL}
+					}
+				})
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, fixture.gateway.URL+"/v1/videos", strings.NewReader(`{"model":"deepinfra/Wan-AI/Wan2.2-T2V-A14B","prompt":"landscape"}`))
+			require.NoError(t, err)
+			req.Header.Set("Authorization", "Bearer "+performanceGatewayKey)
+			req.Header.Set("Content-Type", "application/json")
+			response, err := fixture.client.Do(req)
+			require.NoError(t, err)
+			var object struct {
+				ID string `json:"id"`
+			}
+			require.NoError(t, json.UnmarshalRead(response.Body, &object))
+			require.NoError(t, response.Body.Close())
+			require.Equal(t, 200, response.StatusCode)
+			var job jobs.Job
+			require.Eventually(t, func() bool {
+				records, err := jobs.OpenRepository(fixture.application.store)
+				if err != nil {
+					return false
+				}
+				page, err := records.Scan(t.Context(), 10)
+				if err != nil || len(page) != 1 {
+					return false
+				}
+				job = page[0]
+				return job.Accounted() && (job.HasAsset() || job.AssetStatus(time.Now()) == "blocked")
+			}, 10*time.Second, 10*time.Millisecond)
+			require.EqualValues(t, 1, fixture.calls.Load())
+			require.Equal(t, object.ID, job.ID)
+			require.Equal(t, jobs.JobStateCompleted, job.State)
+			require.NotNil(t, job.Measurement)
+			if allowed {
+				require.EqualValues(t, 1, downloads.Load())
+			} else {
+				require.Zero(t, downloads.Load())
+			}
+			req, err = http.NewRequestWithContext(t.Context(), http.MethodGet, fixture.gateway.URL+"/v1/videos/"+job.ID, nil)
+			require.NoError(t, err)
+			req.Header.Set("Authorization", "Bearer "+performanceGatewayKey)
+			response, err = fixture.client.Do(req)
+			require.NoError(t, err)
+			data, err := io.ReadAll(response.Body)
+			require.NoError(t, err)
+			require.NoError(t, response.Body.Close())
+			require.Equal(t, 200, response.StatusCode, string(data))
+			status := "blocked"
+			if allowed {
+				status = "stored"
+			}
+			require.Contains(t, string(data), `"asset_status":"`+status+`"`)
+			require.NotContains(t, string(data), "signature-private")
+			require.NotContains(t, string(data), "private-native")
+			// Every paid route still refuses new work after the exact allowance is spent.
+			<-fixture.handlers
+			<-fixture.handlers
+			for _, path := range []string{
+				"/v1/chat/completions", "/v1/responses", "/v1/embeddings", "/v1/rerank", "/v1/moderations",
+				"/v1/images/generations", "/v1/images/edits", "/v1/audio/speech", "/v1/audio/transcriptions", "/v1/audio/translations", "/v1/videos", "/v1/batches",
+				"/api/v1/chat/completions", "/api/v1/embeddings", "/api/v1/rerank", "/api/v1/images", "/api/v1/audio/speech", "/api/v1/audio/transcriptions", "/api/v1/videos",
+			} {
+				request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, fixture.gateway.URL+path, strings.NewReader("{}"))
+				require.NoError(t, err)
+				request.Header.Set("Authorization", "Bearer "+performanceGatewayKey)
+				response, err := fixture.client.Do(request)
+				require.NoError(t, err)
+				_, err = io.Copy(io.Discard, response.Body)
+				require.NoError(t, err)
+				require.NoError(t, response.Body.Close())
+				<-fixture.handlers
+				require.Equal(t, http.StatusPaymentRequired, response.StatusCode, path)
+			}
+			for _, prefix := range []string{"/v1", "/api/v1"} {
+				for _, operation := range []struct {
+					method, path string
+					status       int
+				}{
+					{http.MethodGet, "/videos", 200},
+					{http.MethodGet, "/videos/" + job.ID, 200},
+					{http.MethodGet, "/videos/" + job.ID + "/content", func() int {
+						if allowed {
+							return 200
+						}
+						return 404
+					}()},
+					{http.MethodPost, "/videos/" + job.ID + "/cancel", 409},
+					{http.MethodPost, "/videos/" + job.ID + "/reconcile", 200},
+				} {
+					request, err := http.NewRequestWithContext(t.Context(), operation.method, fixture.gateway.URL+prefix+operation.path, nil)
+					require.NoError(t, err)
+					request.Header.Set("Authorization", "Bearer "+performanceGatewayKey)
+					response, err := fixture.client.Do(request)
+					require.NoError(t, err)
+					data, err := io.ReadAll(response.Body)
+					require.NoError(t, err)
+					require.NoError(t, response.Body.Close())
+					<-fixture.handlers
+					require.Equal(t, operation.status, response.StatusCode, prefix+operation.path+" "+string(data))
+					require.NotContains(t, string(data), "signature-private")
+					if operation.path == "/videos/"+job.ID {
+						require.Contains(t, string(data), `"asset_status":"`+status+`"`)
+					}
+				}
+			}
+			require.EqualValues(t, 1, fixture.calls.Load())
+			// Settlement uses measured duration even when download permission is absent.
+			keys, err := fixture.application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 10)
+			require.NoError(t, err)
+			require.Len(t, keys, 1)
+			raw, err := fixture.application.store.Get(t.Context(), keys[0])
+			require.NoError(t, err)
+			var attempt reservation.Record
+			require.NoError(t, json.Unmarshal(raw, &attempt))
+			require.Equal(t, reservation.Settled, attempt.State)
+			require.EqualValues(t, 375000000, *attempt.NanoUSD)
 		})
 	}
 }

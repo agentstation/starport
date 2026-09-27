@@ -29,6 +29,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../document",
 		"../files",
 		"../jobs",
+		"../jobs/assetfetch",
 		"../inference",
 		"../failure",
 		"../apikey",
@@ -218,6 +219,9 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/blob",
 		"github.com/agentstation/starport/internal/routing",
 		"github.com/agentstation/starport/internal/storage",
+	)
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/jobs/assetfetch"],
+		"github.com/agentstation/starport/internal/jobs",
 	)
 	for _, packagePath := range []string{
 		"github.com/agentstation/starport/internal/inference",

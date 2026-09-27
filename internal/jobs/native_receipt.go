@@ -146,10 +146,27 @@ func (s *Service) readNativeReceipt(ctx context.Context, job Job) (nativeReceipt
 	return result, asset, nil
 }
 
-// recoverNative consumes stored evidence. It never contacts a provider.
+// recoverNative consumes stored evidence and approved assets without repeating inference.
 func (s *Service) recoverNative(ctx context.Context, job Job) (Job, error) {
 	if !job.Native || s.assets == nil {
 		return job, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	select {
+	case s.nativeRecovery <- struct{}{}:
+		defer func() { <-s.nativeRecovery }()
+	case <-ctx.Done():
+		return job, ctx.Err()
+	}
+	// A queued recovery can hold an older record while another caller completes it.
+	current, err := s.records.Get(ctx, job.Account, job.ID)
+	if err != nil {
+		return job, err
+	}
+	job = current
+	if job.AssetExpired(s.now()) {
+		return s.expireNativeReceipt(ctx, job)
 	}
 	if !job.SubmissionPending && (job.AssetKey != "" || job.State != JobStateCompleted) {
 		return job, s.assets.Delete(ctx, job.nativeReceiptKey)
@@ -186,26 +203,101 @@ func (s *Service) recoverNative(ctx context.Context, job Job) (Job, error) {
 			next = current
 		}
 	}
-	if len(asset) == 0 || next.AssetKey != "" {
+	if next.AssetKey != "" || next.State != JobStateCompleted {
 		return next, nil
 	}
-	if next.State != JobStateCompleted {
-		return next, ErrCorruptRecord
+	if next.AssetExpired(s.now()) {
+		return s.expireNativeReceipt(ctx, next)
+	}
+	contentType := receipt.ContentType
+	if len(asset) == 0 {
+		if receipt.AssetURL == "" {
+			return s.assetRecoveryResult(ctx, next, "invalid")
+		}
+		if s.externalAssets == nil {
+			return s.assetRecoveryResult(ctx, next, "blocked")
+		}
+		downloaded, fetchErr := s.externalAssets.Fetch(ctx, receipt.AssetURL, next.nativeAssetBound)
+		if next.AssetExpired(s.now()) {
+			return s.expireNativeReceipt(ctx, next)
+		}
+		if fetchErr != nil {
+			return s.assetRecoveryResult(ctx, next, assetFailureStatus(fetchErr))
+		}
+		asset, contentType = downloaded.Bytes, downloaded.ContentType
+		if len(asset) == 0 || int64(len(asset)) > next.nativeAssetBound || contentType == "" {
+			return s.assetRecoveryResult(ctx, next, "invalid")
+		}
+	}
+	// Pin the first accepted bytes before publication. Concurrent downloads cannot replace them.
+	digest := sha256.Sum256(asset)
+	encoded := hex.EncodeToString(digest[:])
+	if next.nativeAssetDigest == "" {
+		claimed := next
+		claimed.nativeAssetDigest, claimed.nativeAssetContentType = encoded, contentType
+		if err := s.records.Replace(ctx, next, claimed); err != nil {
+			current, readErr := s.records.Get(ctx, next.Account, next.ID)
+			if readErr != nil || current.nativeAssetDigest == "" {
+				return next, err
+			}
+			next = current
+		} else {
+			next = claimed
+		}
+	}
+	if next.AssetKey != "" {
+		return next, nil
+	}
+	if next.AssetExpired(s.now()) {
+		return s.expireNativeReceipt(ctx, next)
+	}
+	if next.nativeAssetDigest != encoded || next.nativeAssetContentType != contentType {
+		return s.assetRecoveryResult(ctx, next, "invalid")
 	}
 	info, err := s.assets.Put(ctx, next.nativeAssetKey, bytes.NewReader(asset))
 	if err != nil {
 		return next, err
 	}
-	stored := next
-	if err := stored.StoreAsset(next.nativeAssetKey, receipt.ContentType, info.Size, receipt.RecordedAt.Add(job.nativeRetention)); err != nil {
-		return next, err
+	if next.AssetExpired(s.now()) {
+		return s.expireNativeReceipt(ctx, next)
 	}
-	if err := s.records.Replace(ctx, next, stored); err != nil {
+	return s.publishNativeAsset(ctx, next, contentType, info.Size, receipt.RecordedAt.Add(job.nativeRetention))
+}
+
+// publishNativeAsset preserves concurrent reporting and asset diagnostics during publication.
+func (s *Service) publishNativeAsset(ctx context.Context, job Job, contentType string, size int64, expires time.Time) (Job, error) {
+	next := job
+	for range 4 {
+		current, err := s.records.Get(ctx, job.Account, job.ID)
+		if err != nil {
+			return next, err
+		}
+		next = current
+		if next.AssetKey != "" {
+			return next, nil
+		}
+		if next.AssetExpired(s.now()) {
+			return s.expireNativeReceipt(ctx, next)
+		}
+		if next.nativeAssetDigest != job.nativeAssetDigest || next.nativeAssetContentType != contentType {
+			return next, ErrCorruptRecord
+		}
+		stored := next
+		stored.assetRecoveryStatus = ""
+		if err := stored.StoreAsset(next.nativeAssetKey, contentType, size, expires); err != nil {
+			return next, err
+		}
+		err = s.records.Replace(ctx, next, stored)
+		if err == nil {
+			return stored, nil
+		}
 		current, readErr := s.records.Get(ctx, next.Account, next.ID)
 		if readErr == nil && current.AssetKey == stored.AssetKey {
 			return current, nil
 		}
-		return next, err
+		if !errors.Is(err, storage.ErrConflict) {
+			return next, err
+		}
 	}
-	return stored, nil
+	return next, storage.ErrConflict
 }

@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"encoding/hex"
 	"maps"
 	"slices"
 
@@ -26,6 +27,23 @@ func copyMeasurement(e *reservation.Evidence) *reservation.Evidence {
 }
 
 func (j Job) validateNative() error {
+	if j.nativeAssetDigest != "" {
+		digest, err := hex.DecodeString(j.nativeAssetDigest)
+		if err != nil || len(digest) != 32 || j.nativeAssetContentType == "" || !j.Native || j.State != JobStateCompleted {
+			return ErrInvalidJob
+		}
+	} else if j.nativeAssetContentType != "" {
+		return ErrInvalidJob
+	}
+	switch j.assetRecoveryStatus {
+	case "":
+	case "blocked", "retry", "invalid", "expired":
+		if !j.Native || j.SubmissionPending || j.State != JobStateCompleted {
+			return ErrInvalidJob
+		}
+	default:
+		return ErrInvalidJob
+	}
 	if j.Native {
 		if j.nativeReceiptKey == "" || j.nativeAssetKey == "" || j.CatalogGeneration == "" || j.nativeAssetBound <= 0 || j.nativeRetention <= 0 {
 			return ErrInvalidJob

@@ -161,9 +161,6 @@ type SweepResult struct {
 func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 	return recoverPages(ctx, &s.recovery, s.records.RecoveryPage, func(ctx context.Context, job Job, result *SweepResult) error {
 		swept, err := s.sweepOne(ctx, job, s.now(), result)
-		if err != nil {
-			return err
-		}
 		if swept.State.Terminal() {
 			settled, settlementErr := s.settleAccounting(ctx, swept)
 			if !swept.SlotReleased && settled.SlotReleased {
@@ -173,11 +170,11 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 				result.Accounted++
 			}
 			if settled.SlotID != "" && !settled.SlotReleased && s.meter != nil {
-				return errors.Join(ErrSlotReleasePending, settlementErr)
+				return errors.Join(err, ErrSlotReleasePending, settlementErr)
 			}
-			return settlementErr
+			return errors.Join(err, settlementErr)
 		}
-		return nil
+		return err
 	})
 }
 
@@ -217,6 +214,13 @@ func (s *Service) sweepOne(ctx context.Context, job Job, now time.Time, result *
 // bytes that may already be gone, which the next pass finishes, rather than an
 // object no record names and that nothing can ever find again.
 func (s *Service) expire(ctx context.Context, job Job) (Job, error) {
+	if job.Native && job.AssetExpired(s.now()) {
+		var err error
+		job, err = s.expireNativeReceipt(ctx, job)
+		if err != nil {
+			return job, err
+		}
+	}
 	if job.AssetKey == "" {
 		return job, nil
 	}

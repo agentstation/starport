@@ -230,6 +230,11 @@ func (h *VideosController) writeAssetError(
 ) {
 	switch {
 	case errors.Is(err, jobs.ErrAssetExpired):
+		if job.Native {
+			h.writeVideoStatus(w, http.StatusGone, errorTypeInvalidRequest,
+				"The content for video "+job.ID+" expired under its original retention window.")
+			return
+		}
 		h.writeVideoStatus(w, http.StatusGone, errorTypeInvalidRequest,
 			"The content for video "+job.ID+" expired. This gateway keeps a finished video for "+
 				retentionWindowText(h.jobs.Retention())+" after it stores it.")
@@ -287,6 +292,7 @@ func (h *VideosController) runner(ctx context.Context) (jobs.Runner, error) {
 func (h *VideosController) canonicalVideoJob(job jobs.Job) inference.VideoJob {
 	answer := inference.VideoJob{
 		ID:          job.ID,
+		AssetStatus: job.AssetStatus(time.Now()),
 		Model:       job.Model,
 		Provider:    job.Provider,
 		State:       string(job.State),
@@ -305,7 +311,7 @@ func (h *VideosController) canonicalVideoJob(job jobs.Job) inference.VideoJob {
 	// The window travels only while there are bytes behind it. A record keeps
 	// AssetExpiresAt after the sweep takes the asset, and reporting it then
 	// would tell a caller to come back for a video that is already gone.
-	if job.HasAsset() {
+	if job.HasAsset() && !job.AssetExpired(time.Now()) {
 		answer.ExpiresUnix = job.AssetExpiresAt.Unix()
 	}
 	return answer

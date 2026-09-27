@@ -68,6 +68,7 @@ func TestNativeVideoKeepsUsageWhenAssetOrStateFails(t *testing.T) {
 		{"oversize asset", `"output_length":5`, "data:video/mp4;base64,bXA0eA==", true},
 		{"wrong media", `"output_length":5`, "data:text/html;base64,bXA0", true},
 		{"external reference", `"output_length":5`, "https://assets.example/video.mp4", false},
+		{"loopback reference", `"output_length":5`, "http://127.0.0.1:8080/video.mp4", false},
 		{"relative reference", `"output_length":5`, "/video.mp4", false},
 		{"network relative", `"output_length":5`, "//assets.example/video.mp4", true},
 		{"credential reference", `"output_length":5`, "https://user:password@assets.example/video.mp4", true},
@@ -170,4 +171,22 @@ func TestNativeVideoRequiresExecutionDeadline(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, connector.Close()) })
 	_, err = connector.(NativeVideoGenerator).GenerateVideo(context.Background(), nil)
 	require.ErrorContains(t, err, "execution deadline")
+}
+
+func TestNativeVideoResolvesRelativeAssetWithoutFetching(t *testing.T) {
+	var calls atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		require.Equal(t, http.MethodPost, r.Method)
+		_, _ = w.Write([]byte(`{"request_id":"request","video_url":"/video.mp4?signature=private","inference_status":{"output_length":5}}`))
+	}))
+	defer server.Close()
+	connector, err := newDeepInfraVideoConnector("fixture", mediaTestConfig(server.URL))
+	require.NoError(t, err)
+	defer connector.Close()
+	request := approveConnectorFixture(t, &NativeVideoRequest{MediaTarget: MediaTarget{Model: "exact/model", Endpoint: InferenceEndpoint{Type: catalogs.EndpointTypeDeepInfraVideo, URL: server.URL + "/inference/exact/model"}, Credential: testAPIMaterial("video-key")}, Prompt: "Cloud", Seconds: 5, Size: "1280x720", MaxBytes: 16})
+	result, err := connector.(NativeVideoGenerator).GenerateVideo(nativeTestContext(t), request)
+	require.NoError(t, err)
+	require.Equal(t, server.URL+"/video.mp4?signature=private", result.AssetURL)
+	require.EqualValues(t, 1, calls.Load())
 }

@@ -42,38 +42,39 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		// Apply authentication middleware for API routes
 		r.Use(s.requireAPIKey)
 		r.Use(s.rateLimit)
-		r.Use(s.enforceBudgets)
 
+		// Only routes that start paid work apply the budget precheck.
+		// Job reads and recovery retain authentication without requiring new capacity.
 		// Chat completions
-		r.With(s.requireAnyScope("chat:write")).Post("/chat/completions", s.controllers.Chat.Create)
+		r.With(s.enforceBudgets, s.requireAnyScope("chat:write")).Post("/chat/completions", s.controllers.Chat.Create)
 
 		// Responses (POST /v1/responses): the stateless subset of the
 		// OpenAI Responses API. It rides the chat scope because it is the
 		// same conversation capability in another wire shape.
-		r.With(s.requireAnyScope("chat:write")).Post("/responses", s.controllers.Responses.Create)
+		r.With(s.enforceBudgets, s.requireAnyScope("chat:write")).Post("/responses", s.controllers.Responses.Create)
 
 		// Embeddings
-		r.With(s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.Embeddings.Create)
+		r.With(s.enforceBudgets, s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.Embeddings.Create)
 
 		// Reranking. The scope stands alone rather than riding on
 		// "chat:write", because a rerank request reads a caller's own
 		// documents and a key that only writes chat should not.
-		r.With(s.requireAnyScope("rerank:write")).Post("/rerank", s.controllers.Rerank.Create)
+		r.With(s.enforceBudgets, s.requireAnyScope("rerank:write")).Post("/rerank", s.controllers.Rerank.Create)
 
 		// Moderations. The scope stands alone for the same reason the rerank
 		// scope does: a moderation request reads a caller's own text, and a
 		// key that only writes chat should not.
-		r.With(s.requireAnyScope("moderations:write")).Post("/moderations", s.controllers.Moderations.Create)
+		r.With(s.enforceBudgets, s.requireAnyScope("moderations:write")).Post("/moderations", s.controllers.Moderations.Create)
 
 		// Images. An edit carries a source image, which is why it is a
 		// separate path and a multipart body rather than a flag.
-		r.With(s.requireAnyScope("images:write")).Post("/images/generations", s.controllers.Media.GenerateImages)
-		r.With(s.requireAnyScope("images:write")).Post("/images/edits", s.controllers.Media.EditImages)
+		r.With(s.enforceBudgets, s.requireAnyScope("images:write")).Post("/images/generations", s.controllers.Media.GenerateImages)
+		r.With(s.enforceBudgets, s.requireAnyScope("images:write")).Post("/images/edits", s.controllers.Media.EditImages)
 
 		// Audio. Speech writes an audio file; the other two read one.
-		r.With(s.requireAnyScope("audio:write")).Post("/audio/speech", s.controllers.Media.Speech)
-		r.With(s.requireAnyScope("audio:write")).Post("/audio/transcriptions", s.controllers.Media.Transcribe)
-		r.With(s.requireAnyScope("audio:write")).Post("/audio/translations", s.controllers.Media.Translate)
+		r.With(s.enforceBudgets, s.requireAnyScope("audio:write")).Post("/audio/speech", s.controllers.Media.Speech)
+		r.With(s.enforceBudgets, s.requireAnyScope("audio:write")).Post("/audio/transcriptions", s.controllers.Media.Transcribe)
+		r.With(s.enforceBudgets, s.requireAnyScope("audio:write")).Post("/audio/translations", s.controllers.Media.Translate)
 
 		// Videos. A video generation outlives its request, so the caller gets
 		// an identifier and comes back to it. One scope covers the whole
@@ -81,7 +82,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		// read it, so a separate read scope would name a capability no other
 		// caller can hold.
 		r.Route("/videos", func(r chi.Router) {
-			r.With(s.requireAnyScope("videos:write")).Post("/", s.controllers.Videos.Submit)
+			r.With(s.enforceBudgets, s.requireAnyScope("videos:write")).Post("/", s.controllers.Videos.Submit)
 			r.With(s.requireAnyScope("videos:write")).Get("/", s.controllers.Videos.List)
 			r.With(s.requireAnyScope("videos:write")).Get("/{video_id}", s.controllers.Videos.Get)
 			r.With(s.requireAnyScope("videos:write")).Get("/{video_id}/content", s.controllers.Videos.Content)
@@ -107,7 +108,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		// reason the video scope does: only the submitting account can read
 		// what it submitted.
 		r.Route("/batches", func(r chi.Router) {
-			r.With(s.requireAnyScope("batches:write")).Post("/", s.controllers.Batches.Create)
+			r.With(s.enforceBudgets, s.requireAnyScope("batches:write")).Post("/", s.controllers.Batches.Create)
 			r.With(s.requireAnyScope("batches:write")).Get("/", s.controllers.Batches.List)
 			r.With(s.requireAnyScope("batches:write")).Get("/{batch_id}", s.controllers.Batches.Get)
 			r.With(s.requireAnyScope("batches:write")).Post("/{batch_id}/cancel", s.controllers.Batches.Cancel)
@@ -140,30 +141,29 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			// Apply authentication middleware
 			r.Use(s.requireAPIKey)
 			r.Use(s.rateLimit)
-			r.Use(s.enforceBudgets)
 
 			// Chat completions with routing
-			r.With(s.requireAnyScope("chat:write")).Post("/chat/completions", s.controllers.OpenRouterChat.Create)
+			r.With(s.enforceBudgets, s.requireAnyScope("chat:write")).Post("/chat/completions", s.controllers.OpenRouterChat.Create)
 
 			// Embeddings
-			r.With(s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.OpenRouterEmbeddings.Create)
+			r.With(s.enforceBudgets, s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.OpenRouterEmbeddings.Create)
 
 			// Reranking. OpenRouter publishes this path under its own
 			// prefix, and it plans the same route the /v1 path plans.
-			r.With(s.requireAnyScope("rerank:write")).Post("/rerank", s.controllers.OpenRouterRerank.Create)
+			r.With(s.enforceBudgets, s.requireAnyScope("rerank:write")).Post("/rerank", s.controllers.OpenRouterRerank.Create)
 
 			// Media. OpenRouter publishes one image path, one speech path,
 			// and one transcription path, and no path for an image edit or a
 			// translation. The two it omits stay on the OpenAI family.
-			r.With(s.requireAnyScope("images:write")).Post("/images", s.controllers.OpenRouterMedia.GenerateImages)
-			r.With(s.requireAnyScope("audio:write")).Post("/audio/speech", s.controllers.OpenRouterMedia.Speech)
-			r.With(s.requireAnyScope("audio:write")).Post("/audio/transcriptions", s.controllers.OpenRouterMedia.Transcribe)
+			r.With(s.enforceBudgets, s.requireAnyScope("images:write")).Post("/images", s.controllers.OpenRouterMedia.GenerateImages)
+			r.With(s.enforceBudgets, s.requireAnyScope("audio:write")).Post("/audio/speech", s.controllers.OpenRouterMedia.Speech)
+			r.With(s.enforceBudgets, s.requireAnyScope("audio:write")).Post("/audio/transcriptions", s.controllers.OpenRouterMedia.Transcribe)
 
 			// Videos. The same four paths under this family's prefix, because
 			// a job identifier a caller polls has to be reachable from the
 			// family the caller submitted it through.
 			r.Route("/videos", func(r chi.Router) {
-				r.With(s.requireAnyScope("videos:write")).Post("/", s.controllers.OpenRouterVideos.Submit)
+				r.With(s.enforceBudgets, s.requireAnyScope("videos:write")).Post("/", s.controllers.OpenRouterVideos.Submit)
 				r.With(s.requireAnyScope("videos:write")).Get("/", s.controllers.OpenRouterVideos.List)
 				r.With(s.requireAnyScope("videos:write")).Get("/{video_id}", s.controllers.OpenRouterVideos.Get)
 				r.With(s.requireAnyScope("videos:write")).Get("/{video_id}/content", s.controllers.OpenRouterVideos.Content)

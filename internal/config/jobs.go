@@ -9,6 +9,8 @@ import "time"
 // turn a gateway into unbounded storage that no operator sized, which is what
 // these three settings exist to stop.
 type JobsConfig struct {
+	// AssetDownloadOrigins grants external video downloads to exact origins.
+	AssetDownloadOrigins []string `env:"ASSET_DOWNLOAD_ORIGINS"`
 	// MaxWorkers limits concurrent video submissions per replica.
 	MaxWorkers int `env:"MAX_WORKERS,default=2"`
 	// ExecutionTimeout bounds native generation and its response transfer.
