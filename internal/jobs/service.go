@@ -83,7 +83,8 @@ type Service struct {
 	// one still runs: it keeps the same stamp on the record, so a deployment
 	// that later gains an accountant does not re-price the jobs it already
 	// finished.
-	accountant Accountant
+	accountant         Accountant
+	requiredSettlement RequiredSettlement
 	// notifier hears each terminal state once. A service without one tells
 	// nobody, which is what a deployment with no webhook endpoint gets.
 	notifier Notifier

@@ -241,6 +241,7 @@ func (b *runtimeBuilder) compose() error {
 		b.openEvents,
 		b.openConcepts,
 		b.openBudgetAdmission,
+		b.openJobService,
 		b.openRegistry,
 		b.openCache,
 		b.buildGateway,
@@ -460,9 +461,6 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err := b.openFileService(); err != nil {
 		return err
 	}
-	if err := b.openJobService(); err != nil {
-		return err
-	}
 	masterKey := []byte(b.config.Security.MasterKey)
 	if len(masterKey) < 32 {
 		masterKey = credentials.DeriveKeyFromPassword(b.config.Security.MasterKey)
@@ -587,6 +585,7 @@ func (b *runtimeBuilder) openJobService() error {
 		jobs.WithAssetBound(b.config.Jobs.AssetBound()),
 		jobs.WithJobMeter(meter),
 		jobs.WithAccountant(accountant),
+		jobs.WithRequiredSettlement(b.application.budget),
 	}
 	if b.application.events != nil {
 		serviceOptions = append(serviceOptions,

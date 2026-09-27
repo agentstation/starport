@@ -161,7 +161,7 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 			return err
 		}
 		if swept.State.Terminal() {
-			settled := s.settle(ctx, swept)
+			settled, settlementErr := s.settleAccounting(ctx, swept)
 			if !swept.SlotReleased && settled.SlotReleased {
 				result.Released++
 			}
@@ -169,8 +169,9 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 				result.Accounted++
 			}
 			if settled.SlotID != "" && !settled.SlotReleased && s.meter != nil {
-				return ErrSlotReleasePending
+				return errors.Join(ErrSlotReleasePending, settlementErr)
 			}
+			return settlementErr
 		}
 		return nil
 	})

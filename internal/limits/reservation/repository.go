@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	recordVersion = 1
-	maxRecordSize = 64 << 10
-	maxConflicts  = 64
+	recordVersion        = 1
+	attemptRecordVersion = 2
+	maxRecordSize        = 64 << 10
+	maxConflicts         = 64
 )
 
 // Repository owns reservations over an approved storage authority.
@@ -105,7 +106,7 @@ func (r *Repository) Reserve(ctx context.Context, attempt Attempt) (*Record, err
 		if err != nil {
 			return nil, err
 		}
-		record := &Record{Version: recordVersion, Attempt: owned, State: Reserved, AdmittedAt: now, NanoUSD: owned.money(amount)}
+		record := &Record{Version: attemptRecordVersion, Attempt: owned, State: Reserved, AdmittedAt: now, NanoUSD: owned.money(amount)}
 		mutations := make([]storage.CompareAndSwapMutation, 0, 2*len(owned.Rules)+1)
 		for _, rule := range owned.Rules {
 			window := windowFor(rule.Meter.Interval, now)
@@ -173,7 +174,10 @@ func (r *Repository) readRecordKey(ctx context.Context, key string) (*Record, []
 		return nil, nil, err
 	}
 	var record Record
-	if json.Unmarshal(data, &record) != nil || record.Version != recordVersion || storageKey("attempt", record.Attempt.ID) != key || validateAttempt(record.Attempt) != nil || record.AdmittedAt.IsZero() || len(record.Bindings) != len(record.Attempt.Rules) {
+	if json.Unmarshal(data, &record) != nil || record.Version != attemptRecordVersion || storageKey("attempt", record.Attempt.ID) != key || validateAttempt(record.Attempt) != nil || record.AdmittedAt.IsZero() || len(record.Bindings) != len(record.Attempt.Rules) {
+		return nil, nil, ErrUnavailable
+	}
+	if record.JobID != "" && (!validID(record.JobID) || record.State == Reserved || record.State == Canceled) {
 		return nil, nil, ErrUnavailable
 	}
 	if err := validateBindings(&record); err != nil {

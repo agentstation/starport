@@ -87,6 +87,9 @@ func (r *submissionRecorder) BeforeDispatch(ctx context.Context, dispatch Dispat
 	job.CatalogGeneration = dispatch.CatalogGeneration
 	job.ReservationID = dispatch.ReservationID
 	job.SubmissionPending = true
+	if err := r.service.bindReservation(ctx, job); err != nil {
+		return err
+	}
 	r.job = job
 	if r.service.meter != nil {
 		attachment, attachErr := r.service.meter.Attachment(ctx, job.Account, job.SlotID, job.ID, "video")

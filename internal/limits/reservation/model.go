@@ -111,6 +111,8 @@ type Record struct {
 	// NanoUSD is null when only tokens were metered and monetary cost is unknown.
 	NanoUSD *int64 `json:"nano_usd"`
 	Reason  string `json:"reason,omitempty"`
+	// JobID binds this attempt to one asynchronous job before provider dispatch.
+	JobID string `json:"job_id,omitempty"`
 }
 
 // WindowState contains verified consumption and reserved capacity for one meter.

@@ -71,23 +71,31 @@ type Meter interface {
 	Attachment(ctx context.Context, holder, claimID, jobID, kind string) (storage.CompareAndSwapMutation, error)
 }
 
-// settle retries slot release independently of the optional accounting stamp.
-// Optional reporting still stamps before delivery. Required budget settlement
-// must use its separate durable reservation contract.
+// settle preserves the provider result while required accounting can retry.
 func (s *Service) settle(ctx context.Context, job Job) Job {
+	settled, _ := s.settleAccounting(ctx, job)
+	return settled
+}
+
+// settleAccounting checks required settlement before the optional reporting mark.
+// A previous optional mark cannot replace durable settlement evidence.
+func (s *Service) settleAccounting(ctx context.Context, job Job) (Job, error) {
 	if !job.State.Terminal() {
-		return job
+		return job, nil
 	}
 	job = s.settleSlot(ctx, job)
+	if err := s.confirmSettlement(ctx, job); err != nil {
+		return job, err
+	}
 	if job.Accounted() {
-		return job
+		return job, nil
 	}
 	settled := job
 	if err := settled.MarkAccounted(s.now()); err != nil {
-		return job
+		return job, err
 	}
 	if err := s.records.Replace(ctx, job, settled); err != nil {
-		return job
+		return job, err
 	}
 	if s.accountant != nil {
 		// The caller holds its answer either way. See the note above.
@@ -96,7 +104,7 @@ func (s *Service) settle(ctx context.Context, job Job) Job {
 	if s.notifier != nil {
 		s.notifier.JobEnded(ctx, entryFor(settled))
 	}
-	return settled
+	return settled, nil
 }
 
 // entryFor projects a settled record into what the accounting seam reads.
