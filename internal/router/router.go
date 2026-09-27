@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/agentstation/starmap/pkg/catalogs"
 	"sort"
 	"strings"
 	"time"
@@ -280,7 +281,8 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		}
 		request := prepareChatAttempt(req, boundRoute, false)
 		request.Credential = selected.material
-		ticket, refusal := r.admit(attemptCtx, accountID, boundRoute, string(routing.OperationChatCompletions), chatTokenQuote(runtime.Snapshot(), boundRoute, request))
+		var billing *catalogs.TextChatBilling
+		ticket, refusal := r.admit(attemptCtx, accountID, boundRoute, string(routing.OperationChatCompletions), chatTokenQuote(runtime.Snapshot(), boundRoute, request, &billing))
 		if refusal != nil {
 			return nil, refusal, execution.AttemptActionStop
 		}
@@ -299,7 +301,7 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		if response != nil {
 			reported = response.ReportedUsage()
 		}
-		if settlementErr := finishChatBudget(attemptCtx, ticket, reported); settlementErr != nil {
+		if settlementErr := finishChatBudget(attemptCtx, ticket, reported, billing); settlementErr != nil {
 			return nil, budgetFailure(errors.Join(requestErr, settlementErr)), execution.AttemptActionStop
 		}
 		if requestErr != nil {

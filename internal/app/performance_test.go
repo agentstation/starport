@@ -92,9 +92,11 @@ func newPerformanceFixtureForCatalog(tb testing.TB, wait time.Duration, catalog 
 	return newPerformanceFixtureWithApproval(tb, wait, catalog, true)
 }
 
+// The $1 fixture budget covers 200,002 proxied samples at $0.000003 each,
+// plus the declared provider-limit reservation. Budget refusal has its own test.
 func newPerformanceFixtureWithApproval(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool) *performanceFixture {
 	return newPerformanceFixtureWithAdmission(tb, wait, catalog, approve,
-		&limits.Limits{Spend: &limits.Budget{Limit: 1_000_000, Interval: limits.IntervalDay}}, nil)
+		&limits.Limits{Spend: &limits.Budget{Limit: 1_000_000_000, Interval: limits.IntervalDay}}, nil)
 }
 
 func newPerformanceFixtureWithAdmission(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool, budgets *limits.Limits, upstream http.Handler) *performanceFixture {
@@ -218,10 +220,10 @@ func (f *performanceFixture) serveUpstream(w http.ResponseWriter, r *http.Reques
 			_, _ = fmt.Fprintf(w, "data: {\"id\":\"perf\",\"object\":\"chat.completion.chunk\",\"model\":\"gpt-4o-mini\",\"choices\":[{\"index\":0,\"delta\":{\"content\":%q}}]}\n\n", token)
 			_ = http.NewResponseController(w).Flush()
 		}
-		_, _ = io.WriteString(w, "data: {\"id\":\"perf\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":3,\"total_tokens\":11}}\n\ndata: [DONE]\n\n")
+		_, _ = io.WriteString(w, "data: {\"id\":\"perf\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":3,\"total_tokens\":11,\"prompt_tokens_details\":{\"cached_tokens\":0}}}\n\ndata: [DONE]\n\n")
 	} else {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"id":"perf","object":"chat.completion","model":"gpt-4o-mini","choices":[{"index":0,"message":{"role":"assistant","content":"one two three"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11}}`)
+		_, _ = io.WriteString(w, `{"id":"perf","object":"chat.completion","model":"gpt-4o-mini","choices":[{"index":0,"message":{"role":"assistant","content":"one two three"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11,"prompt_tokens_details":{"cached_tokens":0}}}`)
 	}
 	f.samples <- sample
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"math"
+	"slices"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -55,12 +57,11 @@ func budgetFailure(err error) *failure.Failure {
 	return failure.New(kind, message, false, failure.ProviderDetails{}, err)
 }
 
-// chatTokenQuote uses provider limits, never a local token estimate. This first
-// projection supports token-only accounting. Spend requires a complete billing
-// projection, including every applicable unit, before it can authorize dispatch.
-func chatTokenQuote(snapshot *runtimecatalog.RoutableSnapshot, route routing.Route, request *connectors.ChatRequest) admission.QuoteFunc {
+// chatTokenQuote uses provider limits, never a local token estimate.
+// It retains the exact billing declaration for settlement after catalog refresh.
+func chatTokenQuote(snapshot *runtimecatalog.RoutableSnapshot, route routing.Route, request *connectors.ChatRequest, retained **catalogs.TextChatBilling) admission.QuoteFunc {
 	return func(needed admission.Requirements) (admission.Quote, error) {
-		if needed.Spend || snapshot == nil || snapshot.GenerationID() != route.CatalogGenerationID || request == nil || len(request.ProviderOptions) != 0 {
+		if snapshot == nil || snapshot.GenerationID() != route.CatalogGenerationID || request == nil || len(request.ProviderOptions) != 0 {
 			return admission.Quote{}, admission.ErrBoundUnknown
 		}
 		offering, err := snapshot.Offering(runtimecatalog.Route{ProviderID: catalogs.ProviderID(route.ProviderID), ProviderModelID: catalogs.ProviderModelID(route.ProviderModelID)})
@@ -75,8 +76,68 @@ func chatTokenQuote(snapshot *runtimecatalog.RoutableSnapshot, route routing.Rou
 		if err != nil {
 			return admission.Quote{}, err
 		}
-		return admission.Quote{Tokens: &bound}, nil
+		quote := admission.Quote{Tokens: &bound}
+		if needed.Spend {
+			if !textChatBillingScope(request) {
+				return admission.Quote{}, admission.ErrBoundUnknown
+			}
+			valuation, err := runtimecatalog.TextChatValuation(offering, time.Now())
+			if err != nil {
+				return admission.Quote{}, admission.ErrBoundUnknown
+			}
+			quote.Valuation = valuation
+			quote.Units = make(reservation.Quantities, len(valuation.Components))
+			input, _ := offering.Limits.Value(catalogs.ModelLimitInputTokens)
+			if input <= 0 {
+				input, _ = offering.Limits.Value(catalogs.ModelLimitContextWindow)
+			}
+			output, _ := offering.Limits.Value(catalogs.ModelLimitOutputTokens)
+			for _, class := range offering.Billing.TextChat.Input {
+				quote.Units[string(class)] = input * count
+			}
+			for _, class := range offering.Billing.TextChat.Output {
+				quote.Units[string(class)] = output * count
+			}
+			if *offering.Billing.TextChat.RequestCharge {
+				quote.Units["request"] = 1
+			}
+			*retained = offering.Billing.TextChat
+		}
+		return quote, nil
 	}
+}
+
+func textChatBillingScope(request *connectors.ChatRequest) bool {
+	if len(request.ProviderOptions) != 0 || request.Audio != nil || len(request.Models) != 0 {
+		return false
+	}
+	for _, modality := range request.Modalities {
+		if modality != "text" {
+			return false
+		}
+	}
+	for _, tool := range request.Tools {
+		if tool.Type != "function" {
+			return false
+		}
+	}
+	for _, message := range request.Messages {
+		if message.Audio != nil || len(message.Images) != 0 {
+			return false
+		}
+		switch content := message.Content.(type) {
+		case nil, string:
+		case []connectors.ContentPart:
+			for _, part := range content {
+				if part.Type != "text" || part.ImageURL != nil || part.InputAudio != nil || part.File != nil || part.VideoURL != nil || part.CacheControl != nil {
+					return false
+				}
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func declaredChatTokenBound(limits *catalogs.ModelLimits, count int64) (int64, error) {
@@ -96,7 +157,7 @@ func declaredChatTokenBound(limits *catalogs.ModelLimits, count int64) (int64, e
 	return (input + output) * count, nil
 }
 
-func finishChatBudget(ctx context.Context, ticket admission.Ticket, usage *connectors.Usage) error {
+func finishChatBudget(ctx context.Context, ticket admission.Ticket, usage *connectors.Usage, billing *catalogs.TextChatBilling) error {
 	if ticket.ID() == "" {
 		return nil
 	}
@@ -104,6 +165,63 @@ func finishChatBudget(ctx context.Context, ticket admission.Ticket, usage *conne
 	if usage != nil && usage.PromptTokens >= 0 && usage.CompletionTokens >= 0 && usage.TotalTokens >= 0 &&
 		usage.PromptTokens <= math.MaxInt-usage.CompletionTokens && usage.TotalTokens == usage.PromptTokens+usage.CompletionTokens {
 		evidence = &reservation.Evidence{ID: ticket.ID() + ":usage", Tokens: int64(usage.TotalTokens)}
+		if billing != nil {
+			quantities, known := textChatQuantities(billing, usage)
+			if !known {
+				evidence = nil
+			} else {
+				evidence.Quantities = quantities
+			}
+		}
 	}
 	return ticket.Finish(ctx, evidence)
+}
+
+func textChatQuantities(billing *catalogs.TextChatBilling, usage *connectors.Usage) (reservation.Quantities, bool) {
+	input, output := int64(usage.PromptTokens), int64(usage.CompletionTokens)
+	quantities := reservation.Quantities{}
+	if usage.PromptTokensDetails != nil && usage.PromptTokensDetails.AudioTokens != 0 || usage.CompletionTokensDetails != nil && usage.CompletionTokensDetails.AudioTokens != 0 {
+		return nil, false
+	}
+	for _, class := range billing.Input {
+		switch class {
+		case catalogs.TokenBillingInput:
+		case catalogs.TokenBillingCacheRead:
+			count, known := usage.PromptTokensDetails.ReportedCachedTokens()
+			if !known || count < 0 || int64(count) > input {
+				return nil, false
+			}
+			quantities[string(class)] = int64(count)
+			input -= int64(count)
+		case catalogs.TokenBillingCacheWrite:
+			// The existing normalized field has no absence marker. It cannot
+			// establish a complete cache-write count for strict settlement.
+			return nil, false
+		default:
+			return nil, false
+		}
+	}
+	if !slices.Contains(billing.Input, catalogs.TokenBillingCacheWrite) && usage.CacheWriteTokens != 0 {
+		return nil, false
+	}
+	for _, class := range billing.Output {
+		switch class {
+		case catalogs.TokenBillingOutput:
+		case catalogs.TokenBillingReasoning:
+			count, known := usage.CompletionTokensDetails.ReportedReasoningTokens()
+			if !known || count < 0 || int64(count) > output {
+				return nil, false
+			}
+			quantities[string(class)] = int64(count)
+			output -= int64(count)
+		default:
+			return nil, false
+		}
+	}
+	quantities[string(catalogs.TokenBillingInput)] = input
+	quantities[string(catalogs.TokenBillingOutput)] = output
+	if *billing.RequestCharge {
+		quantities["request"] = 1
+	}
+	return quantities, true
 }

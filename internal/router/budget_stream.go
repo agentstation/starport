@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"errors"
+	"github.com/agentstation/starmap/pkg/catalogs"
 	"io"
 	"sync"
 
@@ -13,13 +14,14 @@ import (
 // budgetChatStream retains capacity until a complete provider stream supplies
 // usage. Close and transport failure cannot turn partial usage into a refund.
 type budgetChatStream struct {
-	stream connectors.ChatStream
-	ctx    context.Context
-	ticket admission.Ticket
-	mu     sync.Mutex
-	usage  *connectors.Usage
-	done   bool
-	err    error
+	stream  connectors.ChatStream
+	ctx     context.Context
+	ticket  admission.Ticket
+	billing *catalogs.TextChatBilling
+	mu      sync.Mutex
+	usage   *connectors.Usage
+	done    bool
+	err     error
 }
 
 func (s *budgetChatStream) Recv() (*connectors.ChatStreamChunk, error) {
@@ -27,7 +29,7 @@ func (s *budgetChatStream) Recv() (*connectors.ChatStreamChunk, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if chunk != nil && chunk.Usage != nil && !s.done {
-		retained := *chunk.Usage
+		retained := chunk.Usage.Copy()
 		s.usage = &retained
 	}
 	if err != nil {
@@ -55,7 +57,7 @@ func (s *budgetChatStream) Close() error {
 func (s *budgetChatStream) finish(usage *connectors.Usage) error {
 	if !s.done {
 		s.done = true
-		s.err = finishChatBudget(s.ctx, s.ticket, usage)
+		s.err = finishChatBudget(s.ctx, s.ticket, usage, s.billing)
 	}
 	return s.err
 }

@@ -13,7 +13,7 @@ const (
 	Authentication Kind = "authentication"
 	// Permission identifies an unauthorized action.
 	Permission Kind = "permission"
-	// Quota identifies an exhausted non-burst provider allocation.
+	// Quota identifies an exhausted non-burst allocation.
 	Quota Kind = "quota"
 	// Billing identifies an account payment or credit failure.
 	Billing Kind = "billing"

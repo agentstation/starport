@@ -6,6 +6,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starport/internal/limits/admission"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,5 +37,23 @@ func TestDeclaredChatTokenBounds(t *testing.T) {
 			}
 			require.Equal(t, test.want, bound)
 		})
+	}
+}
+
+func TestTextChatBillingScopeRejectsExtraChargeSurfaces(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		request connectors.ChatRequest
+		valid   bool
+	}{
+		{"text", connectors.ChatRequest{Messages: []connectors.Message{{Role: "user", Content: "hello"}}}, true},
+		{"text parts", connectors.ChatRequest{Messages: []connectors.Message{{Content: []connectors.ContentPart{{Type: "text", Text: "hello"}}}}}, true},
+		{"image", connectors.ChatRequest{Messages: []connectors.Message{{Content: []connectors.ContentPart{{Type: "image_url"}}}}}, false},
+		{"provider extension", connectors.ChatRequest{ProviderOptions: map[string]any{"service_tier": "priority"}}, false},
+		{"audio", connectors.ChatRequest{Modalities: []string{"audio"}}, false},
+		{"hosted tool", connectors.ChatRequest{Tools: []connectors.Tool{{Type: "web_search"}}}, false},
+		{"unknown content", connectors.ChatRequest{Messages: []connectors.Message{{Content: map[string]any{"type": "image_url"}}}}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) { require.Equal(t, test.valid, textChatBillingScope(&test.request)) })
 	}
 }

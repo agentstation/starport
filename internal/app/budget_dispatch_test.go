@@ -6,6 +6,7 @@ import (
 	"encoding/json/v2"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -26,8 +27,12 @@ func budgetDispatch(t *testing.T, fixture *performanceFixture) int {
 }
 
 func budgetRequest(ctx context.Context, fixture *performanceFixture) (int, string, error) {
+	return budgetRequestForModel(ctx, fixture, "openai/gpt-4o-mini")
+}
+
+func budgetRequestForModel(ctx context.Context, fixture *performanceFixture, model string) (int, string, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, fixture.gateway.URL+"/v1/chat/completions",
-		strings.NewReader(`{"model":"openai/gpt-4o-mini","max_tokens":32,"messages":[{"role":"user","content":"Hello"}]}`))
+		strings.NewReader(`{"model":`+strconv.Quote(model)+`,"max_tokens":32,"messages":[{"role":"user","content":"Hello"}]}`))
 	if err != nil {
 		return 0, "", err
 	}
@@ -87,7 +92,7 @@ func TestProductionBudgetDispatchReservesConcurrentCapacity(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("first request did not reach the real provider connector")
 	}
-	require.NotEqual(t, http.StatusOK, budgetDispatch(t, fixture))
+	require.Equal(t, http.StatusPaymentRequired, budgetDispatch(t, fixture))
 	require.EqualValues(t, 1, fixture.calls.Load())
 	close(release)
 	got := <-first
@@ -118,7 +123,9 @@ func TestProductionBudgetDispatchUnknownCostAndAbsentBudgets(t *testing.T) {
 			}
 			fixture := newPerformanceFixtureWithAdmission(t, 0, nil, true, budgets,
 				http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { budgetReply(w) }))
-			status := budgetDispatch(t, fixture)
+			// This offering has prices but no complete text-chat billing declaration.
+			status, _, requestErr := budgetRequestForModel(t.Context(), fixture, "openai/gpt-4o")
+			require.NoError(t, requestErr)
 			if required {
 				require.Equal(t, http.StatusServiceUnavailable, status)
 				require.Zero(t, fixture.calls.Load())
@@ -192,4 +199,49 @@ func TestProductionBudgetDispatchStreamCompletionAndCancellation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProductionSpendSettlementUsesDeclaredClasses(t *testing.T) {
+	for _, test := range []struct {
+		name, details string
+		state         reservation.State
+	}{
+		{"measured-cache", `,"prompt_tokens_details":{"cached_tokens":4}`, reservation.Settled},
+		{"missing-cache", "", reservation.Uncertain},
+		{"missing-count", `,"prompt_tokens_details":{}`, reservation.Uncertain},
+		{"invalid-cache", `,"prompt_tokens_details":{"cached_tokens":9}`, reservation.Uncertain},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newPerformanceFixtureWithAdmission(t, 0, nil, true, &limits.Limits{Spend: &limits.Budget{Limit: 100_000_000, Interval: limits.IntervalDay}}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"id":"spend-fixture","model":"gpt-4o-mini","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11`+test.details+`}}`)
+			}))
+			require.Equal(t, http.StatusOK, budgetDispatch(t, fixture))
+			require.EqualValues(t, 1, fixture.calls.Load())
+			keys, err := fixture.application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 100)
+			require.NoError(t, err)
+			require.Len(t, keys, 1)
+			data, err := fixture.application.store.Get(t.Context(), keys[0])
+			require.NoError(t, err)
+			var record reservation.Record
+			require.NoError(t, json.Unmarshal(data, &record))
+			require.Equal(t, test.state, record.State)
+			if test.state == reservation.Settled {
+				require.EqualValues(t, 2700, *record.NanoUSD)
+				require.EqualValues(t, 4, record.Evidence.Quantities["cache_read"])
+			} else {
+				require.Nil(t, record.Evidence)
+				require.Greater(t, *record.NanoUSD, int64(2700))
+			}
+		})
+	}
+}
+
+func TestProductionSpendRefusesInsufficientReservation(t *testing.T) {
+	fixture := newPerformanceFixtureWithAdmission(t, 0, nil, true, &limits.Limits{Spend: &limits.Budget{Limit: 1_000_000, Interval: limits.IntervalDay}}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { budgetReply(w) }))
+	require.Equal(t, http.StatusPaymentRequired, budgetDispatch(t, fixture))
+	require.Zero(t, fixture.calls.Load(), "a small expected cost cannot replace the required reservation")
+	keys, err := fixture.application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 100)
+	require.NoError(t, err)
+	require.Empty(t, keys)
 }

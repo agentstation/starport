@@ -76,7 +76,8 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		request := prepareChatAttempt(req, boundRoute, true)
 		request.Credential = selected.material
 		request.Stream = true
-		ticket, refusal := r.admit(attemptCtx, accountID, boundRoute, string(routing.OperationChatCompletions), chatTokenQuote(runtime.Snapshot(), boundRoute, request))
+		var billing *catalogs.TextChatBilling
+		ticket, refusal := r.admit(attemptCtx, accountID, boundRoute, string(routing.OperationChatCompletions), chatTokenQuote(runtime.Snapshot(), boundRoute, request, &billing))
 		if refusal != nil {
 			return nil, refusal, execution.AttemptActionStop
 		}
@@ -92,7 +93,7 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		endUpstream := timer.TrackUpstream()
 		stream, streamErr := connector.ChatStream(callCtx, request)
 		if stream != nil && ticket.ID() != "" {
-			stream = &budgetChatStream{stream: stream, ctx: attemptCtx, ticket: ticket}
+			stream = &budgetChatStream{stream: stream, ctx: attemptCtx, ticket: ticket, billing: billing}
 		}
 		if stream == nil {
 			if settlementErr := ticket.Finish(attemptCtx, nil); settlementErr != nil {
