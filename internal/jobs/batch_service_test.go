@@ -62,12 +62,12 @@ type echoRunner struct {
 	lines []int
 }
 
-func (r *echoRunner) RunLine(_ context.Context, number int, line []byte) ([]byte, bool) {
+func (r *echoRunner) RunLine(_ context.Context, claim jobs.BatchLine, line []byte) ([]byte, bool) {
 	r.mu.Lock()
-	r.lines = append(r.lines, number)
+	r.lines = append(r.lines, claim.Number)
 	r.mu.Unlock()
 	failed := strings.Contains(string(line), "fail")
-	return fmt.Appendf(nil, `{"line":%d}`, number), failed
+	return fmt.Appendf(nil, `{"line":%d}`, claim.Number), failed
 }
 
 func (r *echoRunner) ranLines() []int {
@@ -174,13 +174,13 @@ func newBlockingRunner() *blockingRunner {
 	return &blockingRunner{started: make(chan int, 16), release: make(chan struct{})}
 }
 
-func (r *blockingRunner) RunLine(_ context.Context, number int, _ []byte) ([]byte, bool) {
+func (r *blockingRunner) RunLine(_ context.Context, claim jobs.BatchLine, _ []byte) ([]byte, bool) {
 	r.mu.Lock()
-	r.lines = append(r.lines, number)
+	r.lines = append(r.lines, claim.Number)
 	r.mu.Unlock()
-	r.started <- number
+	r.started <- claim.Number
 	<-r.release
-	return fmt.Appendf(nil, `{"line":%d}`, number), false
+	return fmt.Appendf(nil, `{"line":%d}`, claim.Number), false
 }
 
 func (r *blockingRunner) ranLines() []int {

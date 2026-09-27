@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -54,7 +56,7 @@ type BatchIO interface {
 // gateway call, so this package never learns what a line says. The answer is
 // one encoded result line and which file it belongs in.
 type LineRunner interface {
-	RunLine(ctx context.Context, number int, line []byte) (result []byte, failed bool)
+	RunLine(ctx context.Context, claim BatchLine, line []byte) (result []byte, failed bool)
 }
 
 // BatchSubmission is everything a batch needs to start.
@@ -369,7 +371,7 @@ func (s *BatchService) runLines(
 	var workers sync.WaitGroup
 	slots := make(chan struct{}, s.concurrency)
 
-	var scanErr error
+	var scanErr, claimErr error
 	go func() {
 		defer close(results)
 		scanner := s.newLineScanner(input)
@@ -393,13 +395,22 @@ func (s *BatchService) runLines(
 				<-slots
 				break scan
 			}
+			hash := sha256.Sum256(line)
+			claim, err := s.repository.ClaimLine(ctx, batch.Account, batch.ID, number, hex.EncodeToString(hash[:]))
+			if err != nil {
+				<-slots
+				if !errors.Is(err, ErrBatchAlreadyEnded) {
+					claimErr = err
+				}
+				break scan
+			}
 			workers.Add(1)
-			go func(number int, line []byte) {
+			go func(claim BatchLine, line []byte) {
 				defer workers.Done()
 				defer func() { <-slots }()
-				body, failed := runner.RunLine(ctx, number, line)
+				body, failed := runner.RunLine(ctx, claim, line)
 				results <- lineResult{body: body, failed: failed}
-			}(number, line)
+			}(claim, line)
 		}
 		scanErr = scanner.Err()
 		workers.Wait()
@@ -430,6 +441,8 @@ func (s *BatchService) runLines(
 	}
 
 	switch {
+	case claimErr != nil:
+		outcome.failure = "batch_line_claim_unavailable"
 	case scanErr != nil:
 		outcome.failure = s.scanFailure(scanErr).Error()
 	case writeErr != nil:

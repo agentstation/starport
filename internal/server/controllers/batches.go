@@ -9,7 +9,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/inference"
@@ -339,8 +338,8 @@ type batchLineRunner struct {
 // RunLine decodes, admits, executes, and encodes one line. Every failure
 // answers through the encoded line rather than an error, because a failed
 // line belongs in the error file and the batch keeps going.
-func (r *batchLineRunner) RunLine(ctx context.Context, _ int, line []byte) ([]byte, bool) {
-	requestID := uuid.NewString()
+func (r *batchLineRunner) RunLine(ctx context.Context, claim jobs.BatchLine, line []byte) ([]byte, bool) {
+	requestID := claim.RequestID
 	decoded, err := openai.DecodeBatchLine(line, r.endpoint)
 	if err != nil {
 		return r.failureLine(bestEffortCustomID(line), requestID,

@@ -24,6 +24,8 @@ var (
 
 // Batch is one offline run over a stored input file.
 type Batch struct {
+	// ClaimedLines counts durable, sequential execution claims. It is not a completion count.
+	ClaimedLines int
 	// SlotID identifies the durable outstanding-work claim.
 	SlotID       string
 	SlotReleased bool
@@ -66,6 +68,8 @@ type Batch struct {
 // Validate reports whether the record can be stored.
 func (b Batch) Validate() error {
 	switch {
+	case b.ClaimedLines < 0 || b.ClaimedLines > b.TotalLines:
+		return ErrInvalidBatch
 	case b.RunFinished && !b.State.Terminal():
 		return ErrInvalidBatch
 	case b.SlotReleased && (b.SlotID == "" || !b.RunFinished):

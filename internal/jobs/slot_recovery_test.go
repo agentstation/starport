@@ -242,7 +242,7 @@ func TestLegacyJobSchemasRequireMigration(t *testing.T) {
 			require.Len(t, keys, 1)
 			data, err := backing.Get(t.Context(), keys[0])
 			require.NoError(t, err)
-			current := []byte(`"schema_version":2`)
+			current := []byte(`"schema_version":3`)
 			if prefix == jobs.StoragePrefix {
 				current = []byte(`"schema_version":4`)
 			}

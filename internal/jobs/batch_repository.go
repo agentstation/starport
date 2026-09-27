@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	// BatchStorageSchemaVersion identifies the batch record schema with durable slot ownership.
-	BatchStorageSchemaVersion = 2
+	// BatchStorageSchemaVersion identifies the batch record schema with durable line ownership.
+	BatchStorageSchemaVersion = 3
 	// BatchStoragePrefix is the batch record v1 namespace.
 	BatchStoragePrefix = "batches:v1:account:"
 )
@@ -37,6 +37,8 @@ var (
 // Replace carries the whole record because a state change is never the only
 // change: a terminal move stamps a time and attaches the result files.
 type BatchRepository interface {
+	ClaimLine(context.Context, string, string, int, string) (BatchLine, error)
+	ReadLine(context.Context, string, string, int) (BatchLine, error)
 	Create(context.Context, Batch) error
 	// CreateClaimed atomically stores the batch and its prepared claim attachment.
 	CreateClaimed(context.Context, Batch, storage.CompareAndSwapMutation) error
@@ -50,6 +52,7 @@ type batchRepository struct{ store storage.KVStore }
 
 // batchRecord is the durable form.
 type batchRecord struct {
+	ClaimedLines   int       `json:"claimed_lines,omitzero"`
 	SlotID         string    `json:"slot_id,omitempty"`
 	SlotReleased   bool      `json:"slot_released,omitzero"`
 	RunFinished    bool      `json:"run_finished,omitzero"`
@@ -138,7 +141,7 @@ func sortBatchesNewestFirst(records []Batch) {
 // Replace writes a record that already exists, and it is the point at which a
 // batch state change meets the one transition table.
 func (r *batchRepository) Replace(ctx context.Context, expected, batch Batch) error {
-	if expected.Account != batch.Account || expected.ID != batch.ID || expected.SlotID != batch.SlotID {
+	if expected.Account != batch.Account || expected.ID != batch.ID || expected.SlotID != batch.SlotID || expected.ClaimedLines != batch.ClaimedLines || expected.KeyID != batch.KeyID || expected.InputFileID != batch.InputFileID || expected.Endpoint != batch.Endpoint || !expected.CreatedAt.Equal(batch.CreatedAt) {
 		return ErrInvalidBatch
 	}
 	previous, err := encodeBatch(expected)
@@ -184,6 +187,7 @@ func encodeBatch(batch Batch) ([]byte, error) {
 		return nil, err
 	}
 	data, err := json.Marshal(batchRecord{
+		ClaimedLines:   batch.ClaimedLines,
 		SlotID:         batch.SlotID,
 		SlotReleased:   batch.SlotReleased,
 		RunFinished:    batch.RunFinished,
@@ -218,6 +222,7 @@ func decodeBatch(data []byte) (Batch, error) {
 		return Batch{}, fmt.Errorf("%w: unsupported schema %d", ErrCorruptBatchRecord, stored.SchemaVersion)
 	}
 	batch := Batch{
+		ClaimedLines:   stored.ClaimedLines,
 		SlotID:         stored.SlotID,
 		SlotReleased:   stored.SlotReleased,
 		RunFinished:    stored.RunFinished,

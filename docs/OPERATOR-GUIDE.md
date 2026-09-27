@@ -256,6 +256,11 @@ Identity sessions receive account scopes, without deployment-admin access.
 Removing a user, grant, or team membership invalidates affected authorization.
 Each queued batch line checks current policy before execution. Its account and caller identity remain fixed.
 
+Before each batch line runs, Starport atomically records its input digest and request identity against the current batch state.
+Cancellation through another replica prevents later line claims. Lines claimed before cancellation can finish.
+A failed or ambiguous claim acknowledgment permits no dispatch. Reading a retained claim does not permit another execution.
+Interrupted-run and result recovery remain incomplete in this candidate.
+
 The console account picker remains incomplete in this candidate.
 API clients must supply the selection header when the grants name multiple accounts.
 
