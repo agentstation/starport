@@ -243,7 +243,11 @@ func (s *BatchService) Cancel(ctx context.Context, account, id string) (Batch, e
 // goroutine with its own context, because the batch outlives the request
 // that submitted it.
 func (s *BatchService) run(batch Batch, batchIO BatchIO, runner LineRunner) {
-	defer func() { _, _ = s.Get(context.Background(), batch.Account, batch.ID) }()
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = s.Get(cleanup, batch.Account, batch.ID)
+	}()
 	ctx := context.Background()
 
 	// The dispatch context gates new lines and nothing else. A cancel ends
