@@ -14,7 +14,7 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-const correctionRecordVersion = 1
+const correctionRecordVersion = 2
 
 // Correction binds an authenticated operator decision to one inspected attempt.
 // The caller supplies Actor from its authentication boundary, not request JSON.
@@ -30,10 +30,11 @@ type Correction struct {
 // CorrectionReceipt preserves the prior record and its replacement evidence.
 // Before.CorrectionID links to the previous receipt without an unbounded record.
 type CorrectionReceipt struct {
-	Version    int        `json:"version"`
-	Correction Correction `json:"correction"`
-	Before     Record     `json:"before"`
-	RecordedAt time.Time  `json:"recorded_at"`
+	PublicationDigest string     `json:"publication_digest,omitempty"`
+	Version           int        `json:"version"`
+	Correction        Correction `json:"correction"`
+	Before            Record     `json:"before"`
+	RecordedAt        time.Time  `json:"recorded_at"`
 }
 
 // CorrectionBinding identifies the complete state that the operator inspected.
@@ -74,7 +75,7 @@ func (r *Repository) InspectCorrection(ctx context.Context, attemptID, correctio
 		return nil, err
 	}
 	var receipt CorrectionReceipt
-	if json.Unmarshal(data, &receipt) != nil || receipt.Version != correctionRecordVersion ||
+	if json.Unmarshal(data, &receipt) != nil || receipt.Version != correctionRecordVersion || !validPublicationDigest(receipt.PublicationDigest) ||
 		!receipt.Correction.valid() || receipt.Correction.ID != correctionID ||
 		receipt.Before.Attempt.ID != attemptID || receipt.Before.Version != attemptRecordVersion || receipt.Before.AdmittedAt.IsZero() || receipt.Before.CorrectionID == correctionID ||
 		(receipt.Before.State != Settled && receipt.Before.State != Uncertain && receipt.Before.State != Dispatched) ||
@@ -93,6 +94,10 @@ func (r *Repository) InspectCorrection(ctx context.Context, attemptID, correctio
 // It retains the prior evidence, updates every original window, and clears only
 // this attempt's dispute. Overflowed aggregates require separate window repair.
 func (r *Repository) Correct(ctx context.Context, id string, correction Correction) (*CorrectionReceipt, error) {
+	return r.correct(ctx, id, correction, nil, "")
+}
+
+func (r *Repository) correct(ctx context.Context, id string, correction Correction, publication []storage.CompareAndSwapMutation, digest string) (*CorrectionReceipt, error) {
 	if !validID(id) || !correction.valid() {
 		return nil, ErrInvalid
 	}
@@ -102,12 +107,26 @@ func (r *Repository) Correct(ctx context.Context, id string, correction Correcti
 		}
 		prior, err := r.InspectCorrection(ctx, id, correction.ID)
 		if err == nil {
-			if !sameCorrection(prior.Correction, correction) {
+			if !sameCorrection(prior.Correction, correction) || prior.PublicationDigest != digest {
 				return nil, ErrIdentityConflict
 			}
 			return prior, nil
 		}
 		if !errors.Is(err, storage.ErrNotFound) {
+			return nil, err
+		}
+		if err := r.checkCorrectionPublication(ctx, publication); err != nil {
+			// An exact retry can observe publication after the first receipt read.
+			receipt, readErr := r.InspectCorrection(ctx, id, correction.ID)
+			if readErr == nil {
+				if sameCorrection(receipt.Correction, correction) && receipt.PublicationDigest == digest {
+					return receipt, nil
+				}
+				return nil, ErrIdentityConflict
+			}
+			if !errors.Is(readErr, storage.ErrNotFound) {
+				return nil, readErr
+			}
 			return nil, err
 		}
 		record, old, err := r.readRecord(ctx, id)
@@ -117,7 +136,7 @@ func (r *Repository) Correct(ctx context.Context, id string, correction Correcti
 		if correction.ExpectedBinding != CorrectionBinding(*record) {
 			// A concurrent exact retry can commit between the audit and attempt reads.
 			receipt, err := r.InspectCorrection(ctx, id, correction.ID)
-			if err == nil && sameCorrection(receipt.Correction, correction) {
+			if err == nil && sameCorrection(receipt.Correction, correction) && receipt.PublicationDigest == digest {
 				return receipt, nil
 			}
 			if err != nil && !errors.Is(err, storage.ErrNotFound) {
@@ -142,7 +161,7 @@ func (r *Repository) Correct(ctx context.Context, id string, correction Correcti
 		if at.Before(record.AdmittedAt) || at.IsZero() {
 			return nil, ErrUnavailable
 		}
-		receipt := CorrectionReceipt{Version: correctionRecordVersion, Correction: correction, Before: *record, RecordedAt: at}
+		receipt := CorrectionReceipt{PublicationDigest: digest, Version: correctionRecordVersion, Correction: correction, Before: *record, RecordedAt: at}
 		mutations, err := r.correctWindows(ctx, record, correction.Evidence, amount)
 		if err != nil {
 			_, current, readErr := r.readRecord(ctx, id)
@@ -165,6 +184,7 @@ func (r *Repository) Correct(ctx context.Context, id string, correction Correcti
 			return nil, err
 		}
 		mutations = append(mutations, mutation)
+		mutations = append(mutations, publication...)
 		err = r.store.CompareAndSwapInWindow(ctx, mutations, storage.TimeWindow{})
 		if err == nil {
 			return &receipt, nil

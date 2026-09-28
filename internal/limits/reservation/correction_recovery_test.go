@@ -81,6 +81,7 @@ func TestCorrectionSurvivesProcessLoss(t *testing.T) {
 		Attempt    Attempt
 		Correction Correction
 	}
+	publication := []storage.CompareAndSwapMutation{{Key: "jobs:fixture:correction", ExpectedValue: []byte("intent"), NewValue: []byte("applied")}, {Key: "jobs:fixture:audit", NewValue: []byte("retained")}}
 	if root := os.Getenv(childKey); root != "" {
 		store := openStore(t, root)
 		repository, err := Open(store)
@@ -93,12 +94,13 @@ func TestCorrectionSurvivesProcessLoss(t *testing.T) {
 		settleCorrectionFixture(t, f, attempt, Evidence{ID: "original", NoCharge: true})
 		require.NoError(t, repository.FlagDispute(t.Context(), attempt.ID, "late-evidence"))
 		correction := correctionFixture(t, f, attempt.ID, Evidence{ID: "verified", Quantities: Quantities{"output": 80}, Tokens: 90})
+		require.NoError(t, store.(storage.KVStore).Set(t.Context(), publication[0].Key, publication[0].ExpectedValue))
 		encoded, err := json.Marshal(input{Attempt: attempt, Correction: correction})
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(filepath.Join(root, "input.json"), encoded, 0600))
 		interrupted, err := Open(&correctionCrashStore{TimeBoundStore: store, root: root, stage: os.Getenv(stageKey)})
 		require.NoError(t, err)
-		_, err = interrupted.Correct(t.Context(), attempt.ID, correction)
+		_, err = interrupted.CorrectWith(t.Context(), attempt.ID, correction, publication)
 		t.Fatalf("correction returned before process interruption: %v", err)
 	}
 	for _, stage := range []string{"before", "after"} {
@@ -132,6 +134,13 @@ func TestCorrectionSurvivesProcessLoss(t *testing.T) {
 			record, err := repository.Inspect(t.Context(), config.Attempt.ID)
 			require.NoError(t, err)
 			receipt, err := repository.InspectCorrection(t.Context(), config.Attempt.ID, config.Correction.ID)
+			value, readErr := store.(storage.KVStore).Get(t.Context(), publication[0].Key)
+			require.NoError(t, readErr)
+			if stage == "before" {
+				require.Equal(t, "intent", string(value))
+			} else {
+				require.Equal(t, "applied", string(value))
+			}
 			if stage == "before" {
 				require.ErrorIs(t, err, storage.ErrNotFound)
 				require.Empty(t, record.CorrectionID)
@@ -144,7 +153,7 @@ func TestCorrectionSurvivesProcessLoss(t *testing.T) {
 				require.Empty(t, record.DisputeID)
 				require.EqualValues(t, 80, *record.NanoUSD)
 			}
-			_, err = repository.Correct(t.Context(), config.Attempt.ID, config.Correction)
+			_, err = repository.CorrectWith(t.Context(), config.Attempt.ID, config.Correction, publication)
 			require.NoError(t, err)
 			for _, rule := range config.Attempt.Rules {
 				window, err := repository.Window(t.Context(), rule.Meter, record.AdmittedAt)
