@@ -260,6 +260,12 @@ func (j Job) Validate() error {
 		return fmt.Errorf("%w: a failed job states no reason", ErrInvalidJob)
 	case j.State != JobStateFailed && strings.TrimSpace(j.Reason) != "":
 		return fmt.Errorf("%w: state %q states a failure reason", ErrInvalidJob, j.State)
+	}
+	return j.validateAssetState()
+}
+
+func (j Job) validateAssetState() error {
+	switch {
 	case j.AssetKey != "" && j.State != JobStateCompleted:
 		return fmt.Errorf("%w: state %q holds a stored asset", ErrInvalidJob, j.State)
 	case j.AssetKey != "" && strings.TrimSpace(j.AssetContentType) == "":
@@ -432,7 +438,7 @@ func (j Job) HasAsset() bool {
 // whose sweep has not yet run, so a read never serves bytes past the window the
 // caller was promised.
 func (j Job) AssetExpired(now time.Time) bool {
-	if j.Native && j.assetRecoveryStatus == "expired" {
+	if j.Native && j.assetRecoveryStatus == assetRecoveryExpired {
 		return true
 	}
 	if j.Native && !j.SubmissionPending && j.State == JobStateCompleted && !now.Before(j.TerminalAt.Add(j.nativeRetention)) {

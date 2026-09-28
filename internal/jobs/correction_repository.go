@@ -105,7 +105,7 @@ func (r *repository) verifyCorrectionHeads(ctx context.Context, job Job) error {
 			return errors.Join(ErrCorruptRecord, err)
 		}
 		status, err := decodeCorrectionEvent(data, job, job.correctionReported)
-		if err != nil || (status != "delivered" && status != "expired" && status != "disabled") {
+		if err != nil || (status != correctionReportDelivered && status != correctionReportExpired && status != correctionReportDisabled) {
 			return ErrCorruptRecord
 		}
 	}
@@ -173,7 +173,7 @@ func (r *repository) InspectCorrection(ctx context.Context, account, jobID, id s
 	}
 	if data, exists := values[keys[1]]; exists {
 		status, err := decodeCorrectionEvent(data, job, id)
-		if err != nil || !result.Applied || (status != "delivered" && status != "expired" && status != "disabled") {
+		if err != nil || !result.Applied || (status != correctionReportDelivered && status != correctionReportExpired && status != correctionReportDisabled) {
 			return result, ErrCorruptRecord
 		}
 		result.ReportStatus = status
@@ -270,7 +270,7 @@ func (r *repository) NextCorrectionReport(ctx context.Context, job Job) (*Correc
 
 // MarkCorrectionReported retains one report result without changing required billing.
 func (r *repository) MarkCorrectionReported(ctx context.Context, expected Job, intent CorrectionIntent, status string) (Job, error) {
-	if status != "delivered" && status != "expired" && status != "disabled" {
+	if status != correctionReportDelivered && status != correctionReportExpired && status != correctionReportDisabled {
 		return expected, ErrReconciliationInvalid
 	}
 	pending, err := r.NextCorrectionReport(ctx, expected)

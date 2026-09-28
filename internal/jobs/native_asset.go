@@ -30,7 +30,7 @@ func WithExternalAssets(fetcher ExternalAssetFetcher) ServiceOption {
 func (j Job) AssetStatus(now time.Time) string {
 	switch {
 	case j.AssetExpired(now):
-		return "expired"
+		return assetRecoveryExpired
 	case j.HasAsset():
 		return "stored"
 	case j.assetPending:
@@ -75,5 +75,5 @@ func (s *Service) expireNativeReceipt(ctx context.Context, job Job) (Job, error)
 	if err := s.assets.Retire(ctx, job.nativeAssetKey); err != nil {
 		return job, err
 	}
-	return s.assetRecoveryResult(ctx, job, "expired")
+	return s.assetRecoveryResult(ctx, job, assetRecoveryExpired)
 }

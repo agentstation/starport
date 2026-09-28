@@ -60,7 +60,7 @@ func jobUsageRecord(entry jobs.AccountingEntry) usage.Record {
 	}
 	switch {
 	case evidence != nil && evidence.NoCharge:
-		record.Cost = &usage.Cost{NanoUSD: 0, Currency: "USD"}
+		record.Cost = &usage.Cost{NanoUSD: 0, Currency: usageCurrency}
 	case evidence == nil:
 		record.CostUnavailableReason = usage.CostReasonNoUsage
 	case entry.Valuation == nil:
@@ -70,7 +70,7 @@ func jobUsageRecord(entry jobs.AccountingEntry) usage.Record {
 		if err != nil {
 			record.CostUnavailableReason = usage.CostReasonInvalidUsage
 		} else {
-			record.Cost = &usage.Cost{NanoUSD: amount, Currency: "USD"}
+			record.Cost = &usage.Cost{NanoUSD: amount, Currency: usageCurrency}
 		}
 	}
 	return record

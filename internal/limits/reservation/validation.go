@@ -36,6 +36,10 @@ func validateSettlement(record *Record, amount int64) error {
 	if record.DisputeID != "" && (!validID(record.DisputeID) || record.State == Reserved || record.State == Canceled) {
 		return ErrUnavailable
 	}
+	return validateSettlementEvidence(record, amount)
+}
+
+func validateSettlementEvidence(record *Record, amount int64) error {
 	if record.Pending != nil {
 		if record.State != Uncertain || record.Unresolved != nil || !record.Pending.valid() {
 			return ErrUnavailable

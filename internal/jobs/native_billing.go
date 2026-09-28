@@ -8,6 +8,8 @@ import (
 	"github.com/agentstation/starport/internal/limits/reservation"
 )
 
+const assetRecoveryExpired = "expired"
+
 func copyValuation(v *reservation.Valuation) *reservation.Valuation {
 	if v == nil {
 		return nil
@@ -37,7 +39,7 @@ func (j Job) validateNative() error {
 	}
 	switch j.assetRecoveryStatus {
 	case "":
-	case "blocked", "retry", "invalid", "expired":
+	case "blocked", "retry", "invalid", assetRecoveryExpired:
 		if !j.Native || j.SubmissionPending || j.State != JobStateCompleted {
 			return ErrInvalidJob
 		}
@@ -63,6 +65,10 @@ func (j Job) validateNative() error {
 			return ErrInvalidJob
 		}
 	}
+	return j.validateNativeMeasurement()
+}
+
+func (j Job) validateNativeMeasurement() error {
 	if j.Measurement != nil {
 		id := j.ID
 		if j.ReservationID != "" {

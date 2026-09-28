@@ -10,7 +10,7 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// `Begin` consumes dispatch permission once. Only a successful return permits a
+// Begin consumes dispatch permission once. Only a successful return permits a
 // provider call. An ambiguous storage response must not trigger dispatch.
 func (r *Repository) Begin(ctx context.Context, id string) error {
 	for range maxConflicts {
@@ -93,62 +93,9 @@ attempts:
 		if err != nil {
 			return err
 		}
-		if record.DisputeID != "" {
-			return ErrUnavailable
-		}
-		var amount int64
-		var overflow bool
-		if evidence == nil {
-			if record.State == Canceled {
-				return nil
-			}
-			if record.State != Reserved {
-				return ErrTransition
-			}
-			record.State, record.NanoUSD = Canceled, record.Attempt.money(0)
-		} else {
-			if record.Pending != nil && !sameEvidence(record.Pending, evidence) {
-				return ErrIdentityConflict
-			}
-			if record.Unresolved != nil && !sameEvidence(record.Unresolved, evidence) {
-				return ErrIdentityConflict
-			}
-			if record.State == Settled {
-				if sameEvidence(record.Evidence, evidence) {
-					return nil
-				}
-				return ErrIdentityConflict
-			}
-			if record.State != Dispatched && record.State != Uncertain {
-				return ErrTransition
-			}
-			amount, err = record.Attempt.evidenceAmount(evidence)
-			overflow = errors.Is(err, ErrOverflow)
-			if err != nil && !overflow {
-				return err
-			}
-			if overflow {
-				if sameEvidence(record.Unresolved, evidence) {
-					return ErrOverflow
-				}
-				record.State, record.Unresolved, record.Reason = Uncertain, evidence, "valuation_overflow"
-				record.Pending = nil
-			} else {
-				at, clockErr := r.store.AuthorityTime(ctx)
-				if clockErr != nil {
-					return clockErr
-				}
-				if at.IsZero() || at.Before(record.AdmittedAt) {
-					return ErrUnavailable
-				}
-				record.SettledAt = at
-				record.State, record.Evidence, record.NanoUSD, record.Reason = Settled, evidence, record.Attempt.money(amount), ""
-				if evidence.NoCharge {
-					record.NanoUSD = &amount
-				}
-				record.Unresolved = nil
-				record.Pending = nil
-			}
+		amount, overflow, done, err := r.finishRecord(ctx, record, evidence)
+		if err != nil || done {
+			return err
 		}
 		keys := make([]string, len(record.Bindings))
 		for i, binding := range record.Bindings {
@@ -223,4 +170,65 @@ func sameEvidence(first, second *Evidence) bool {
 		return first == second
 	}
 	return first.NoCharge == second.NoCharge && first.ID == second.ID && first.Tokens == second.Tokens && maps.Equal(first.Quantities, second.Quantities)
+}
+
+// finishRecord prepares settlement without writing the record.
+// A completed exact retry needs no further window mutation.
+func (r *Repository) finishRecord(ctx context.Context, record *Record, evidence *Evidence) (amount int64, overflow, done bool, err error) {
+	if record.DisputeID != "" {
+		return 0, false, false, ErrUnavailable
+	}
+	if evidence == nil {
+		if record.State == Canceled {
+			return 0, false, true, nil
+		}
+		if record.State != Reserved {
+			return 0, false, false, ErrTransition
+		}
+		record.State, record.NanoUSD = Canceled, record.Attempt.money(0)
+	} else {
+		if record.Pending != nil && !sameEvidence(record.Pending, evidence) {
+			return 0, false, false, ErrIdentityConflict
+		}
+		if record.Unresolved != nil && !sameEvidence(record.Unresolved, evidence) {
+			return 0, false, false, ErrIdentityConflict
+		}
+		if record.State == Settled {
+			if sameEvidence(record.Evidence, evidence) {
+				return 0, false, true, nil
+			}
+			return 0, false, false, ErrIdentityConflict
+		}
+		if record.State != Dispatched && record.State != Uncertain {
+			return 0, false, false, ErrTransition
+		}
+		amount, err = record.Attempt.evidenceAmount(evidence)
+		overflow = errors.Is(err, ErrOverflow)
+		if err != nil && !overflow {
+			return 0, false, false, err
+		}
+		if overflow {
+			if sameEvidence(record.Unresolved, evidence) {
+				return 0, false, false, ErrOverflow
+			}
+			record.State, record.Unresolved, record.Reason = Uncertain, evidence, "valuation_overflow"
+			record.Pending = nil
+		} else {
+			at, clockErr := r.store.AuthorityTime(ctx)
+			if clockErr != nil {
+				return 0, false, false, clockErr
+			}
+			if at.IsZero() || at.Before(record.AdmittedAt) {
+				return 0, false, false, ErrUnavailable
+			}
+			record.SettledAt = at
+			record.State, record.Evidence, record.NanoUSD, record.Reason = Settled, evidence, record.Attempt.money(amount), ""
+			if evidence.NoCharge {
+				record.NanoUSD = &amount
+			}
+			record.Unresolved = nil
+			record.Pending = nil
+		}
+	}
+	return amount, overflow, false, nil
 }

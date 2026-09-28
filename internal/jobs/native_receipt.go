@@ -128,7 +128,7 @@ func (s *Service) readNativeReceipt(ctx context.Context, job Job) (nativeReceipt
 	if err != nil {
 		return nativeReceipt{}, nil, err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	var prefix [8]byte
 	if _, err := io.ReadFull(reader, prefix[:]); err != nil {
 		return nativeReceipt{}, nil, ErrCorruptRecord
@@ -219,6 +219,10 @@ func (s *Service) recoverNative(ctx context.Context, job Job) (Job, error) {
 			next = current
 		}
 	}
+	return s.publishNativeReceiptAsset(ctx, next, receipt, asset, receipt.RecordedAt.Add(job.nativeRetention))
+}
+
+func (s *Service) publishNativeReceiptAsset(ctx context.Context, next Job, receipt nativeReceipt, asset []byte, expires time.Time) (Job, error) {
 	if next.AssetKey != "" || next.State != JobStateCompleted {
 		return next, nil
 	}
@@ -284,7 +288,7 @@ func (s *Service) recoverNative(ctx context.Context, job Job) (Job, error) {
 	if next.AssetExpired(s.now()) {
 		return s.expireNativeReceipt(ctx, next)
 	}
-	return s.publishNativeAsset(ctx, next, contentType, info.Size, receipt.RecordedAt.Add(job.nativeRetention))
+	return s.publishNativeAsset(ctx, next, contentType, info.Size, expires)
 }
 
 // publishNativeAsset preserves concurrent reporting and asset diagnostics during publication.

@@ -160,8 +160,12 @@ func decodeDeepInfraVideo(reader io.Reader, maxBytes int64) (*NativeVideoRespons
 	if strings.TrimSpace(result.RequestID) == "" {
 		return result, fmt.Errorf("%w: native video response has no request ID", ErrInvalidMediaRequest)
 	}
-	if strings.HasPrefix(payload.VideoURL, "data:") {
-		prefix, content, found := strings.Cut(payload.VideoURL, ",")
+	return decodeNativeVideoAsset(result, payload.VideoURL, maxBytes)
+}
+
+func decodeNativeVideoAsset(result *NativeVideoResponse, reference string, maxBytes int64) (*NativeVideoResponse, error) {
+	if strings.HasPrefix(reference, "data:") {
+		prefix, content, found := strings.Cut(reference, ",")
 		if !found || prefix != "data:video/mp4;base64" {
 			return result, fmt.Errorf("%w: unsupported native video data URL", ErrInvalidMediaRequest)
 		}
@@ -172,13 +176,17 @@ func decodeDeepInfraVideo(reader io.Reader, maxBytes int64) (*NativeVideoRespons
 		result.Asset = JobAsset{ContentType: "video/mp4", Bytes: asset}
 		return result, nil
 	}
-	asset, err := url.Parse(payload.VideoURL)
-	if err != nil || asset.User != nil || asset.Fragment != "" || asset.Opaque != "" ||
-		!((asset.Scheme == "https" || nativeLoopbackAsset(asset)) && asset.Host != "" || asset.Scheme == "" && asset.Host == "" && strings.HasPrefix(asset.Path, "/")) {
+	asset, err := url.Parse(reference)
+	if err != nil {
+		return result, fmt.Errorf("%w: invalid native video asset reference", ErrInvalidMediaRequest)
+	}
+	absolute := (asset.Scheme == "https" || nativeLoopbackAsset(asset)) && asset.Host != ""
+	relative := asset.Scheme == "" && asset.Host == "" && strings.HasPrefix(asset.Path, "/")
+	if asset.User != nil || asset.Fragment != "" || asset.Opaque != "" || (!absolute && !relative) {
 		return result, fmt.Errorf("%w: invalid native video asset reference", ErrInvalidMediaRequest)
 	}
 	// Parsing a provider URL grants no network access and forwards no credential.
-	result.AssetURL = payload.VideoURL
+	result.AssetURL = reference
 	return result, nil
 }
 

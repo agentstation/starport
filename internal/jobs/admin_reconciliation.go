@@ -16,6 +16,11 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
+const (
+	reconciliationNoCharge       = "no_charge"
+	anonymousReconciliationActor = "anonymous"
+)
+
 var (
 	// ErrReconciliationInvalid refuses incomplete administrator evidence.
 	ErrReconciliationInvalid = errors.New("jobs: invalid administrator reconciliation")
@@ -85,7 +90,7 @@ func (r ReconciliationRequest) valid(v *reservation.Valuation) bool {
 		return false
 	}
 	switch r.Disposition {
-	case "no_charge":
+	case reconciliationNoCharge:
 		return len(r.Quantities) == 0 && r.Tokens == 0
 	case "usage":
 		if v == nil {
@@ -122,7 +127,7 @@ func (j Job) originalBillingEvidence() *reservation.Evidence {
 		return copyMeasurement(j.Measurement)
 	}
 	d := j.adminDecision
-	return &reservation.Evidence{ID: "admin:" + d.Binding, NoCharge: d.Disposition == "no_charge", Quantities: maps.Clone(d.Quantities), Tokens: d.Tokens}
+	return &reservation.Evidence{ID: "admin:" + d.Binding, NoCharge: d.Disposition == reconciliationNoCharge, Quantities: maps.Clone(d.Quantities), Tokens: d.Tokens}
 }
 
 // BillingConflict reports late evidence that cannot confirm the accepted decision.
@@ -141,7 +146,7 @@ func (j Job) BillingConflict() bool {
 	if j.correctionApplied != nil {
 		decision = &j.correctionApplied.Decision
 	}
-	if decision.Disposition == "no_charge" {
+	if decision.Disposition == reconciliationNoCharge {
 		if measured.Tokens != 0 || j.Valuation == nil {
 			return true
 		}
@@ -233,7 +238,7 @@ func (s *Service) InspectReconciliation(ctx context.Context, account, id string)
 // ReconcileAdministrator persists evidence before settlement or slot release.
 // Its caller must authenticate the actor and enforce administrator authorization.
 func (s *Service) ReconcileAdministrator(ctx context.Context, account, id, actor string, request ReconciliationRequest) (ReconciliationView, error) {
-	if !reconciliationText(actor, 256) || actor == "anonymous" {
+	if !reconciliationText(actor, 256) || actor == anonymousReconciliationActor {
 		return ReconciliationView{}, ErrReconciliationInvalid
 	}
 	if s.assets == nil {
@@ -313,7 +318,7 @@ func (j Job) validateAdministrator() error {
 		return nil
 	}
 	d := j.adminDecision
-	if !j.Native || j.SubmissionPending || j.State != JobStateFailed || j.Reason != "native_response_unavailable" || j.Measurement != nil || j.AssetKey != "" || d.Binding != j.reconciliationBinding() || !d.valid(j.Valuation) || !reconciliationText(d.Actor, 256) || d.Actor == "anonymous" || d.DecidedAt.Before(j.CreatedAt) || !d.DecidedAt.Equal(j.TerminalAt) {
+	if !j.Native || j.SubmissionPending || j.State != JobStateFailed || j.Reason != "native_response_unavailable" || j.Measurement != nil || j.AssetKey != "" || d.Binding != j.reconciliationBinding() || !d.valid(j.Valuation) || !reconciliationText(d.Actor, 256) || d.Actor == anonymousReconciliationActor || d.DecidedAt.Before(j.CreatedAt) || !d.DecidedAt.Equal(j.TerminalAt) {
 		return ErrInvalidJob
 	}
 	if e := j.lateProviderEvidence; e != nil {

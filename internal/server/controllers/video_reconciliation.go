@@ -36,6 +36,10 @@ func (h *VideosController) InspectReconciliation(w http.ResponseWriter, r *http.
 // ReconcileAdministrator accepts evidence without another provider dispatch.
 // Route middleware enforces administrator access before this method runs.
 func (h *VideosController) ReconcileAdministrator(w http.ResponseWriter, r *http.Request) {
+	h.reconcileAdministrator(w, r, h.jobs.ReconcileAdministrator)
+}
+
+func (h *VideosController) reconcileAdministrator(w http.ResponseWriter, r *http.Request, apply func(context.Context, string, string, string, jobs.ReconciliationRequest) (jobs.ReconciliationView, error)) {
 	if !h.ready(w) {
 		return
 	}
@@ -52,7 +56,7 @@ func (h *VideosController) ReconcileAdministrator(w http.ResponseWriter, r *http
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	view, err := h.jobs.ReconcileAdministrator(ctx, chi.URLParam(r, fieldAccountID), chi.URLParam(r, videoIDParam), actor, input)
+	view, err := apply(ctx, chi.URLParam(r, fieldAccountID), chi.URLParam(r, videoIDParam), actor, input)
 	if err != nil {
 		h.writeReconciliationError(w, err)
 		return
@@ -105,28 +109,7 @@ func (h *VideosController) writeReconciliationError(w http.ResponseWriter, err e
 // CorrectAdministrator accepts a new audited decision for an existing reconciliation.
 // Route middleware enforces administrator access before this method runs.
 func (h *VideosController) CorrectAdministrator(w http.ResponseWriter, r *http.Request) {
-	if !h.ready(w) {
-		return
-	}
-	actor, ok := reconciliationActor(r)
-	if !ok {
-		writeReconciliationAuthentication(w)
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
-	var input jobs.ReconciliationRequest
-	if err := json.UnmarshalRead(r.Body, &input, json.RejectUnknownMembers(true), jsontext.AllowDuplicateNames(false)); err != nil {
-		h.writeReconciliationError(w, jobs.ErrReconciliationInvalid)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	defer cancel()
-	view, err := h.jobs.CorrectAdministrator(ctx, chi.URLParam(r, fieldAccountID), chi.URLParam(r, videoIDParam), actor, input)
-	if err != nil {
-		h.writeReconciliationError(w, err)
-		return
-	}
-	h.writeReconciliationView(w, view)
+	h.reconcileAdministrator(w, r, h.jobs.CorrectAdministrator)
 }
 
 // InspectCorrection serves one immutable administrator decision and its outcome.

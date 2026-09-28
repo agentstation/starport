@@ -46,7 +46,7 @@ func (a *JobAccountant) RecordJobCorrection(ctx context.Context, correction jobs
 	adjustment := usage.Adjustment{
 		ID: correction.ID, PreviousID: correction.PreviousID,
 		Original: jobUsageRecord(correction.Original), RecordedAt: correction.RecordedAt,
-		Cost: usage.Cost{NanoUSD: amount, Currency: "USD"}, Tokens: evidence.Tokens, BillingDisposition: disposition,
+		Cost: usage.Cost{NanoUSD: amount, Currency: usageCurrency}, Tokens: evidence.Tokens, BillingDisposition: disposition,
 	}
 	if err := adjustment.Validate(); err != nil {
 		return err

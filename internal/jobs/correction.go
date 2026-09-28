@@ -15,6 +15,12 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
+const (
+	correctionReportDelivered = "delivered"
+	correctionReportExpired   = "expired"
+	correctionReportDisabled  = "disabled"
+)
+
 // ErrCorrectionNotFound reports an absent correction within the requested job.
 var ErrCorrectionNotFound = errors.New("jobs: correction not found")
 
@@ -119,7 +125,7 @@ func (c CorrectionIntent) validFor(job Job) bool {
 	if job.checkCorrectionHorizon(d.DecidedAt) != nil {
 		return false
 	}
-	if job.adminDecision == nil || c.Account != job.Account || c.JobID != job.ID || !d.valid(job.Valuation) || !reconciliationText(d.Actor, 256) || d.Actor == "anonymous" || d.DecidedAt.Before(job.TerminalAt) || !digestValid(d.Binding) || !digestValid(c.EvidenceBinding) {
+	if job.adminDecision == nil || c.Account != job.Account || c.JobID != job.ID || !d.valid(job.Valuation) || !reconciliationText(d.Actor, 256) || d.Actor == anonymousReconciliationActor || d.DecidedAt.Before(job.TerminalAt) || !digestValid(d.Binding) || !digestValid(c.EvidenceBinding) {
 		return false
 	}
 	if (job.ReservationID == "" && c.BudgetBinding != "") || (job.ReservationID != "" && !digestValid(c.BudgetBinding)) {
@@ -150,7 +156,7 @@ func (j Job) checkCorrectionHorizon(at time.Time) error {
 
 // Evidence returns copied charge evidence without private administrator details.
 func (c CorrectionIntent) Evidence() reservation.Evidence {
-	return reservation.Evidence{ID: "job-correction:" + correctionDigest([3]string{c.Account, c.JobID, c.Decision.DecisionID}), NoCharge: c.Decision.Disposition == "no_charge", Quantities: maps.Clone(c.Decision.Quantities), Tokens: c.Decision.Tokens}
+	return reservation.Evidence{ID: "job-correction:" + correctionDigest([3]string{c.Account, c.JobID, c.Decision.DecisionID}), NoCharge: c.Decision.Disposition == reconciliationNoCharge, Quantities: maps.Clone(c.Decision.Quantities), Tokens: c.Decision.Tokens}
 }
 
 func (j Job) validateCorrections() error {

@@ -10,6 +10,8 @@ import (
 
 // ErrPublicationUnavailable refuses work before it can create provider charges.
 var ErrPublicationUnavailable = errors.New("blob: conditional publication is unavailable")
+
+// ErrConditionalPublicationUnsupported reports a failed conditional-write probe.
 var ErrConditionalPublicationUnsupported = errors.New("blob: storage did not enforce conditional publication")
 
 // publicationReadiness retains capability evidence for one configured client.

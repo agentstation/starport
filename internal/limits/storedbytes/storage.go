@@ -1,3 +1,4 @@
+// Package storedbytes owns durable byte claims and account capacity.
 package storedbytes
 
 import (
@@ -24,10 +25,14 @@ const (
 )
 
 var (
-	ErrStorageFull           = errors.New("stored bytes limit exceeded")
+	// ErrStorageFull refuses a claim beyond the account byte bound.
+	ErrStorageFull = errors.New("stored bytes limit exceeded")
+	// ErrStorageHistoryUnknown requires recovery before more byte claims.
 	ErrStorageHistoryUnknown = errors.New("stored byte history requires recovery")
-	ErrStorageClaimConflict  = errors.New("stored byte claim conflicts with retained identity")
-	ErrStorageClaimReleased  = errors.New("stored byte claim is closed")
+	// ErrStorageClaimConflict preserves a retained claim identity.
+	ErrStorageClaimConflict = errors.New("stored byte claim conflicts with retained identity")
+	// ErrStorageClaimReleased refuses reuse of a closed claim.
+	ErrStorageClaimReleased = errors.New("stored byte claim is closed")
 )
 
 type byteTotal struct {
@@ -57,6 +62,7 @@ type StorageMeter struct {
 	recoveryLoaded  bool
 }
 
+// NewStorageMeter binds durable byte accounting to the selected store.
 func NewStorageMeter(store storage.KVStore) (*StorageMeter, error) {
 	if store == nil {
 		return nil, limits.ErrCounterRequired

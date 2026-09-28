@@ -16,9 +16,12 @@ import (
 )
 
 var (
+	// ErrOutputIncomplete reports output without complete retained bytes.
 	ErrOutputIncomplete = errors.New("files: output is incomplete")
-	ErrOutputExpired    = errors.New("files: output retention expired")
-	ErrOutputConflict   = errors.New("files: output differs from retained evidence")
+	// ErrOutputExpired refuses publication beyond the original retention deadline.
+	ErrOutputExpired = errors.New("files: output retention expired")
+	// ErrOutputConflict preserves the retained output identity and digest.
+	ErrOutputConflict = errors.New("files: output differs from retained evidence")
 )
 
 const outputWriteTimeout = 10 * time.Minute

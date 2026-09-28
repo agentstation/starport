@@ -241,11 +241,11 @@ type Record struct {
 // Validate reports whether the record can be persisted.
 func (r Record) Validate() error {
 	switch r.BillingDisposition {
-	case "", "administrator_usage", "administrator_no_charge":
+	case "", "administrator_usage", billingAdministratorNoCharge:
 	default:
 		return fmt.Errorf("%w: unknown billing disposition", ErrInvalidRecord)
 	}
-	if r.BillingDisposition == "administrator_no_charge" && (r.Cost == nil || r.Cost.NanoUSD != 0) {
+	if r.BillingDisposition == billingAdministratorNoCharge && (r.Cost == nil || r.Cost.NanoUSD != 0) {
 		return fmt.Errorf("%w: no-charge decision requires zero cost", ErrInvalidRecord)
 	}
 	if strings.TrimSpace(r.RequestID) == "" {

@@ -107,7 +107,7 @@ func AdoptFleet(ctx context.Context, backend storage.IncarnationProvider, witnes
 		if err != nil {
 			return recovery.Record{}, err
 		}
-		defer source.Close()
+		defer func() { _ = source.Close() }()
 		options = append(options, runtime.WithSource(source))
 	}
 	return adoptFleet(ctx, backend, witness, request, options)
@@ -151,7 +151,10 @@ func adoptFleet(ctx context.Context, backend storage.IncarnationProvider, witnes
 		if !current.Open {
 			gate := &closedFleetWitness{witness: witness, expected: request.Closed, approval: request.approval()}
 			guarded := &closedFleetStore{IncarnationStore: bound, gate: gate}
-			identity := runtime.FleetIdentity{DeploymentID: request.Closed.DeploymentID, RecoveryEpoch: uint64(request.Closed.Epoch), BackendID: request.BackendID}
+			identity, err := adoptionFleetIdentity(request.approval())
+			if err != nil {
+				return recovery.Record{}, err
+			}
 			fleet := &FleetStore{store: guarded, witness: gate, approval: gate.approval, identity: identity, prefix: prefix, session: rand.Text()}
 			if err := verifyAdoptedFleet(ctx, fleet, request, options); err != nil {
 				return recovery.Record{}, err
@@ -165,6 +168,10 @@ func adoptFleet(ctx context.Context, backend storage.IncarnationProvider, witnes
 	if current != request.Closed {
 		return recovery.Record{}, recovery.ErrConflict
 	}
+	return commitFleetAdoption(ctx, backend, witness, request, options, bound, prefix, operationKey)
+}
+
+func commitFleetAdoption(ctx context.Context, backend storage.IncarnationProvider, witness *recovery.Witness, request FleetAdoptionRequest, options []runtime.Option, bound storage.IncarnationStore, prefix, operationKey string) (recovery.Record, error) {
 	gate := &closedFleetWitness{witness: witness, expected: request.Closed, approval: request.SourceApproval}
 	guarded := &closedFleetStore{IncarnationStore: bound, gate: gate}
 	source := &FleetStore{store: guarded, witness: gate, approval: gate.approval, identity: request.Head.Identity, prefix: prefix, session: rand.Text()}
@@ -183,7 +190,7 @@ func adoptFleet(ctx context.Context, backend storage.IncarnationProvider, witnes
 	workCtx, abort := context.WithCancel(ctx)
 	defer abort()
 	stopRenewal := renewFleetAdoption(workCtx, maintenance, abort)
-	defer stopRenewal()
+	defer func() { _ = stopRenewal() }()
 	ctx = workCtx
 	selected, headBytes, err := maintenance.readHead(ctx)
 	if err != nil {
@@ -209,30 +216,19 @@ func adoptFleet(ctx context.Context, backend storage.IncarnationProvider, witnes
 	}
 	digest := payloadDigest(encoded)
 	target := request.approval()
-	identity := runtime.FleetIdentity{DeploymentID: target.DeploymentID, RecoveryEpoch: uint64(target.Epoch), BackendID: target.BackendID}
+	identity, err := adoptionFleetIdentity(target)
+	if err != nil {
+		return recovery.Record{}, err
+	}
 	mutations := []storage.CompareAndSwapMutation{
 		{Key: operationKey, NewValue: encoded},
 		{Key: prefix + "adoption-receipt:" + digest, NewValue: encoded},
 	}
-	inventory := fleetInventory{Version: 1, Readers: map[string]string{}}
-	for _, blob := range maintenance.inventory.Entries {
-		original, err := json.Marshal(blob)
-		if err != nil {
-			return recovery.Record{}, err
-		}
-		replacement := blob
-		replacement.Head.Identity = identity
-		replacement.Adoption = &runtime.FleetAdoption{Previous: blob.Head, Receipt: digest}
-		updated, err := json.Marshal(replacement)
-		if err != nil {
-			return recovery.Record{}, err
-		}
-		mutations = append(mutations, storage.CompareAndSwapMutation{Key: source.publicationKey(blob.Head), ExpectedValue: original}, storage.CompareAndSwapMutation{Key: source.publicationKey(replacement.Head), NewValue: updated})
-		inventory.Entries = append(inventory.Entries, replacement)
-	}
-	if err := inventory.validate(identity); err != nil {
+	inventory, remapped, err := adoptionPublications(source, maintenance.inventory.Entries, identity, digest)
+	if err != nil {
 		return recovery.Record{}, err
 	}
+	mutations = append(mutations, remapped...)
 	selected.Identity, accepted.Head.Identity = identity, identity
 	nextHead, _ := json.Marshal(selected)
 	nextAccepted, _ := json.Marshal(accepted)
@@ -323,7 +319,7 @@ func verifyAdoptedFleet(ctx context.Context, fleet *FleetStore, request FleetAdo
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stop := renewFleetAdoption(ctx, maintenance, cancel)
-	defer stop()
+	defer func() { _ = stop() }()
 	selected, _, err := maintenance.readHead(ctx)
 	if err != nil {
 		return err
@@ -399,4 +395,35 @@ func (s *closedFleetStore) CompareAndSwap(ctx context.Context, mutations []stora
 		return err
 	}
 	return s.gate.check(ctx)
+}
+
+func adoptionFleetIdentity(record recovery.Record) (runtime.FleetIdentity, error) {
+	if record.Epoch <= 0 {
+		return runtime.FleetIdentity{}, recovery.ErrConflict
+	}
+	return runtime.FleetIdentity{DeploymentID: record.DeploymentID, RecoveryEpoch: uint64(record.Epoch), BackendID: record.BackendID}, nil
+}
+
+func adoptionPublications(source *FleetStore, entries []fleetBlob, identity runtime.FleetIdentity, digest string) (fleetInventory, []storage.CompareAndSwapMutation, error) {
+	inventory := fleetInventory{Version: 1, Readers: map[string]string{}}
+	mutations := make([]storage.CompareAndSwapMutation, 0, len(entries)*2)
+	for _, blob := range entries {
+		original, err := json.Marshal(blob)
+		if err != nil {
+			return fleetInventory{}, nil, err
+		}
+		replacement := blob
+		replacement.Head.Identity = identity
+		replacement.Adoption = &runtime.FleetAdoption{Previous: blob.Head, Receipt: digest}
+		updated, err := json.Marshal(replacement)
+		if err != nil {
+			return fleetInventory{}, nil, err
+		}
+		mutations = append(mutations, storage.CompareAndSwapMutation{Key: source.publicationKey(blob.Head), ExpectedValue: original}, storage.CompareAndSwapMutation{Key: source.publicationKey(replacement.Head), NewValue: updated})
+		inventory.Entries = append(inventory.Entries, replacement)
+	}
+	if err := inventory.validate(identity); err != nil {
+		return fleetInventory{}, nil, err
+	}
+	return inventory, mutations, nil
 }

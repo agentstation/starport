@@ -86,7 +86,7 @@ func (o *ObjectStore) probeMultipart(ctx context.Context, key string, state stri
 	object := aws.String(o.objectKey(retainedDir + "/" + key))
 	bucket := aws.String(o.bucket)
 	created, err := o.client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
-		Bucket: bucket, Key: object, Metadata: map[string]string{"starport-retained": "live-v1"},
+		Bucket: bucket, Key: object, Metadata: map[string]string{retainedObjectMetadataKey: liveObjectMetadata},
 	})
 	if err != nil {
 		return fmt.Errorf("blob: create readiness upload: %w", err)

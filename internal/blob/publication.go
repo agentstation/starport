@@ -7,14 +7,18 @@ import (
 )
 
 var (
-	ErrPublicationExists  = errors.New("blob: publication identity already exists")
+	// ErrPublicationExists prevents changes to a retained identity.
+	ErrPublicationExists = errors.New("blob: publication identity already exists")
+	// ErrCorruptPublication reports an invalid retained envelope.
 	ErrCorruptPublication = errors.New("blob: corrupt publication envelope")
 )
 
 const (
-	retainedDir     = "retained-v1"
-	liveEnvelope    = "SPBLOB1L"
-	retiredEnvelope = "SPBLOB1R"
+	retainedObjectMetadataKey = "starport-retained"
+	liveObjectMetadata        = "live-v1"
+	retainedDir               = "retained-v1"
+	liveEnvelope              = "SPBLOB1L"
+	retiredEnvelope           = "SPBLOB1R"
 )
 
 // PublicationStore owns immutable bytes and permanent retirement at each key.

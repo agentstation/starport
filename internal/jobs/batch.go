@@ -71,17 +71,10 @@ type Batch struct {
 
 // Validate reports whether the record can be stored.
 func (b Batch) Validate() error {
+	if err := b.validateProgress(); err != nil {
+		return err
+	}
 	switch {
-	case len(b.Authorization) > 8192:
-		return ErrInvalidBatch
-	case b.StoredBytesBound < 0 || b.ResultsReleased && !b.RunFinished:
-		return ErrInvalidBatch
-	case b.ClaimedLines < 0 || b.ClaimedLines > b.TotalLines:
-		return ErrInvalidBatch
-	case b.RunFinished && !b.State.Terminal():
-		return ErrInvalidBatch
-	case b.SlotReleased && (b.SlotID == "" || !b.RunFinished):
-		return ErrInvalidBatch
 	case strings.TrimSpace(b.ID) == "":
 		return fmt.Errorf("%w: it has no identifier", ErrInvalidBatch)
 	case strings.TrimSpace(b.Account) == "":
@@ -165,6 +158,22 @@ func (b *Batch) transition(to JobState, now time.Time) error {
 	b.State = to
 	if to.Terminal() {
 		b.TerminalAt = now
+	}
+	return nil
+}
+
+func (b Batch) validateProgress() error {
+	switch {
+	case len(b.Authorization) > 8192:
+		return ErrInvalidBatch
+	case b.StoredBytesBound < 0 || b.ResultsReleased && !b.RunFinished:
+		return ErrInvalidBatch
+	case b.ClaimedLines < 0 || b.ClaimedLines > b.TotalLines:
+		return ErrInvalidBatch
+	case b.RunFinished && !b.State.Terminal():
+		return ErrInvalidBatch
+	case b.SlotReleased && (b.SlotID == "" || !b.RunFinished):
+		return ErrInvalidBatch
 	}
 	return nil
 }

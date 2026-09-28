@@ -57,7 +57,7 @@ func (s *Service) InspectCorrection(ctx context.Context, account, id, decisionID
 // CorrectAdministrator retains intent before applying its required budget decision.
 // Exact retries read that intent before comparing the current inspection binding.
 func (s *Service) CorrectAdministrator(ctx context.Context, account, id, actor string, request ReconciliationRequest) (ReconciliationView, error) {
-	if !reconciliationText(actor, 256) || actor == "anonymous" {
+	if !reconciliationText(actor, 256) || actor == anonymousReconciliationActor {
 		return ReconciliationView{}, ErrReconciliationInvalid
 	}
 	if s.assets == nil {
@@ -166,16 +166,16 @@ func (s *Service) reportCorrections(ctx context.Context, job Job) (Job, error) {
 		if next == nil {
 			return job, nil
 		}
-		status := "disabled"
+		status := correctionReportDisabled
 		if s.accountant != nil {
 			reporter, ok := s.accountant.(CorrectionAccountant)
 			if !ok {
 				return job, ErrCorrectionReportingPending
 			}
 			err := reporter.RecordJobCorrection(ctx, AccountingCorrection{Original: entryFor(job), ID: next.Decision.DecisionID, PreviousID: next.PreviousAppliedID, RecordedAt: next.Decision.DecidedAt, Evidence: next.Evidence()})
-			status = "delivered"
+			status = correctionReportDelivered
 			if errors.Is(err, ErrAccountingExpired) {
-				status = "expired"
+				status = correctionReportExpired
 			} else if err != nil {
 				return job, err
 			}

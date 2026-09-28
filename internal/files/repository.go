@@ -196,7 +196,7 @@ func (r *repository) Replace(ctx context.Context, file File) error {
 	if err != nil {
 		return err
 	}
-	if previous.ID != file.ID || previous.Account != file.Account || previous.Filename != file.Filename || previous.Purpose != file.Purpose || previous.blobKey != file.blobKey || previous.metered != file.metered || previous.outputIdentity != file.outputIdentity || previous.outputBound != file.outputBound || !previous.CreatedAt.Equal(file.CreatedAt) || !previous.ExpiresAt.Equal(file.ExpiresAt) {
+	if !sameFileIdentity(previous, file) {
 		return storage.ErrConflict
 	}
 	if previous.outputPublished && !file.outputPublished {
@@ -211,7 +211,9 @@ func (r *repository) Replace(ctx context.Context, file File) error {
 	if previous.outputDigest == "" && file.outputDigest != "" && (previous.outputIdentity == "" || previous.State != FileStatePending || file.State != FileStatePending) {
 		return storage.ErrConflict
 	}
-	if previous.Bytes != file.Bytes && !(previous.State == FileStatePending && file.State == FileStateReady) && !(previous.outputIdentity != "" && previous.outputDigest == "" && file.outputDigest != "" && file.State == FileStatePending) {
+	publishesFile := previous.State == FileStatePending && file.State == FileStateReady
+	bindsOutput := previous.outputIdentity != "" && previous.outputDigest == "" && file.outputDigest != "" && file.State == FileStatePending
+	if previous.Bytes != file.Bytes && !publishesFile && !bindsOutput {
 		return storage.ErrConflict
 	}
 	if err := r.store.CompareAndSwap(ctx, key, current, data); err != nil {
@@ -292,4 +294,8 @@ func decodeFile(data []byte) (File, error) {
 		return File{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)
 	}
 	return file, nil
+}
+
+func sameFileIdentity(previous, file File) bool {
+	return previous.ID == file.ID && previous.Account == file.Account && previous.Filename == file.Filename && previous.Purpose == file.Purpose && previous.blobKey == file.blobKey && previous.metered == file.metered && previous.outputIdentity == file.outputIdentity && previous.outputBound == file.outputBound && previous.CreatedAt.Equal(file.CreatedAt) && previous.ExpiresAt.Equal(file.ExpiresAt)
 }

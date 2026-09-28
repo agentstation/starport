@@ -186,17 +186,8 @@ func (r *repository) Replacement(ctx context.Context, expected, job Job) (storag
 }
 
 func (r *repository) replacement(ctx context.Context, expected, job Job) (storage.CompareAndSwapMutation, error) {
-	if !expected.ReportingExpiredAt.IsZero() && !expected.ReportingExpiredAt.Equal(job.ReportingExpiredAt) {
-		return storage.CompareAndSwapMutation{}, ErrInvalidJob
-	}
-	if expected.assetDigest != "" && (expected.assetDigest != job.assetDigest || expected.AssetKey != job.AssetKey || expected.AssetContentType != job.AssetContentType || expected.AssetBytes != job.AssetBytes || !expected.AssetExpiresAt.Equal(job.AssetExpiresAt) || (!expected.assetPending && job.assetPending)) {
-		return storage.CompareAndSwapMutation{}, ErrInvalidJob
-	}
-	if !expected.AssetExpiredAt.IsZero() && !expected.AssetExpiredAt.Equal(job.AssetExpiredAt) {
-		return storage.CompareAndSwapMutation{}, ErrInvalidJob
-	}
-	if !immutableAdministrator(expected, job) {
-		return storage.CompareAndSwapMutation{}, ErrInvalidJob
+	if err := validateRetainedJobEvidence(expected, job); err != nil {
+		return storage.CompareAndSwapMutation{}, err
 	}
 	if expected.nativeAssetBound != job.nativeAssetBound || expected.nativeRetention != job.nativeRetention || expected.Native != job.Native || expected.nativeReceiptKey != job.nativeReceiptKey || expected.nativeAssetKey != job.nativeAssetKey || !reflect.DeepEqual(expected.Valuation, job.Valuation) || (expected.Measurement != nil && !reflect.DeepEqual(expected.Measurement, job.Measurement)) {
 		return storage.CompareAndSwapMutation{}, ErrInvalidJob
@@ -207,7 +198,7 @@ func (r *repository) replacement(ctx context.Context, expected, job Job) (storag
 	if expected.SlotReleased && !job.SlotReleased {
 		return storage.CompareAndSwapMutation{}, ErrInvalidJob
 	}
-	if expected.Account != job.Account || expected.ID != job.ID || expected.KeyID != job.KeyID || expected.Provider != job.Provider || expected.Model != job.Model || expected.Operation != job.Operation || !expected.CreatedAt.Equal(job.CreatedAt) {
+	if !sameJobIdentity(expected, job) {
 		return storage.CompareAndSwapMutation{}, ErrInvalidJob
 	}
 	if expected.SlotID != job.SlotID || expected.CatalogGeneration != job.CatalogGeneration || expected.ReservationID != job.ReservationID {
@@ -362,4 +353,24 @@ func decodeJob(data []byte) (Job, error) {
 		return Job{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)
 	}
 	return job, nil
+}
+
+func validateRetainedJobEvidence(expected, job Job) error {
+	if !expected.ReportingExpiredAt.IsZero() && !expected.ReportingExpiredAt.Equal(job.ReportingExpiredAt) {
+		return ErrInvalidJob
+	}
+	if expected.assetDigest != "" && (expected.assetDigest != job.assetDigest || expected.AssetKey != job.AssetKey || expected.AssetContentType != job.AssetContentType || expected.AssetBytes != job.AssetBytes || !expected.AssetExpiresAt.Equal(job.AssetExpiresAt) || (!expected.assetPending && job.assetPending)) {
+		return ErrInvalidJob
+	}
+	if !expected.AssetExpiredAt.IsZero() && !expected.AssetExpiredAt.Equal(job.AssetExpiredAt) {
+		return ErrInvalidJob
+	}
+	if !immutableAdministrator(expected, job) {
+		return ErrInvalidJob
+	}
+	return nil
+}
+
+func sameJobIdentity(expected, job Job) bool {
+	return expected.Account == job.Account && expected.ID == job.ID && expected.KeyID == job.KeyID && expected.Provider == job.Provider && expected.Model == job.Model && expected.Operation == job.Operation && expected.CreatedAt.Equal(job.CreatedAt)
 }

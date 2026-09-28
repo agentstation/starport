@@ -26,7 +26,7 @@ func (o *ObjectStore) Publish(ctx context.Context, key string, r io.Reader) (Inf
 	_, err := o.uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(retainedDir + "/" + key)),
 		Body:        &contextReader{ctx: ctx, r: io.MultiReader(strings.NewReader(liveEnvelope), r)},
-		IfNoneMatch: aws.String("*"), Metadata: map[string]string{"starport-retained": "live-v1"},
+		IfNoneMatch: aws.String("*"), Metadata: map[string]string{retainedObjectMetadataKey: liveObjectMetadata},
 	})
 	if err != nil {
 		if isPublicationConflict(err) {
@@ -48,7 +48,7 @@ func (o *ObjectStore) Retire(ctx context.Context, key string) error {
 	}
 	_, err := o.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(retainedDir + "/" + key)),
-		Body: strings.NewReader(retiredEnvelope), Metadata: map[string]string{"starport-retained": "retired-v1"},
+		Body: strings.NewReader(retiredEnvelope), Metadata: map[string]string{retainedObjectMetadataKey: "retired-v1"},
 	})
 	if err != nil {
 		return fmt.Errorf("blob: retire publication: %w", err)
@@ -91,10 +91,10 @@ func (o *ObjectStore) StatPublished(ctx context.Context, key string) (Info, erro
 	if err != nil {
 		return Info{}, err
 	}
-	switch output.Metadata["starport-retained"] {
+	switch output.Metadata[retainedObjectMetadataKey] {
 	case "retired-v1":
 		return Info{}, ErrNotFound
-	case "live-v1":
+	case liveObjectMetadata:
 		if aws.ToInt64(output.ContentLength) >= int64(len(liveEnvelope)) {
 			return Info{Key: key, Size: aws.ToInt64(output.ContentLength) - int64(len(liveEnvelope))}, nil
 		}

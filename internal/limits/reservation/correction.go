@@ -105,29 +105,9 @@ func (r *Repository) correct(ctx context.Context, id string, correction Correcti
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		prior, err := r.InspectCorrection(ctx, id, correction.ID)
-		if err == nil {
-			if !sameCorrection(prior.Correction, correction) || prior.PublicationDigest != digest {
-				return nil, ErrIdentityConflict
-			}
-			return prior, nil
-		}
-		if !errors.Is(err, storage.ErrNotFound) {
-			return nil, err
-		}
-		if err := r.checkCorrectionPublication(ctx, publication); err != nil {
-			// An exact retry can observe publication after the first receipt read.
-			receipt, readErr := r.InspectCorrection(ctx, id, correction.ID)
-			if readErr == nil {
-				if sameCorrection(receipt.Correction, correction) && receipt.PublicationDigest == digest {
-					return receipt, nil
-				}
-				return nil, ErrIdentityConflict
-			}
-			if !errors.Is(readErr, storage.ErrNotFound) {
-				return nil, readErr
-			}
-			return nil, err
+		prior, err := r.prepareCorrectionRetry(ctx, id, correction, publication, digest)
+		if err != nil || prior != nil {
+			return prior, err
 		}
 		record, old, err := r.readRecord(ctx, id)
 		if err != nil {
@@ -323,4 +303,32 @@ func (r *Repository) CheckCorrection(ctx context.Context, record Record) error {
 	}
 	_, err = correctionWindow(record, at)
 	return err
+}
+
+func (r *Repository) prepareCorrectionRetry(ctx context.Context, id string, correction Correction, publication []storage.CompareAndSwapMutation, digest string) (*CorrectionReceipt, error) {
+	prior, err := r.InspectCorrection(ctx, id, correction.ID)
+	if err == nil {
+		if !sameCorrection(prior.Correction, correction) || prior.PublicationDigest != digest {
+			return nil, ErrIdentityConflict
+		}
+		return prior, nil
+	}
+	if !errors.Is(err, storage.ErrNotFound) {
+		return nil, err
+	}
+	if err := r.checkCorrectionPublication(ctx, publication); err != nil {
+		// An exact retry can observe publication after the first receipt read.
+		receipt, readErr := r.InspectCorrection(ctx, id, correction.ID)
+		if readErr == nil {
+			if sameCorrection(receipt.Correction, correction) && receipt.PublicationDigest == digest {
+				return receipt, nil
+			}
+			return nil, ErrIdentityConflict
+		}
+		if !errors.Is(readErr, storage.ErrNotFound) {
+			return nil, readErr
+		}
+		return nil, err
+	}
+	return nil, nil
 }

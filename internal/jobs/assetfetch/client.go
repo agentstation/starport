@@ -81,7 +81,7 @@ func (c *Client) Fetch(ctx context.Context, reference string, maxBytes int64) (j
 	if err != nil {
 		return jobs.Asset{}, jobs.ErrAssetDownloadUnavailable
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		return jobs.Asset{}, jobs.ErrAssetDownloadUnavailable
 	}

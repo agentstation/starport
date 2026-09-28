@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// ErrBatchResultsPending reports line results that still need recovery.
 var ErrBatchResultsPending = errors.New("jobs: batch results require recovery")
 
 // RecoverResults publishes retained results without invoking a provider runner.

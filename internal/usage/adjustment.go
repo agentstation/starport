@@ -16,6 +16,8 @@ import (
 )
 
 const adjustmentSchemaVersion = 1
+const adjustmentCurrency = "USD"
+const billingAdministratorNoCharge = "administrator_no_charge"
 const maxAdjustmentBytes = 64 << 10
 
 // Adjustment preserves the original usage and one corrected billing decision.
@@ -73,14 +75,14 @@ func (a Adjustment) Validate() error {
 	if err := a.Original.Validate(); err != nil {
 		return err
 	}
-	if a.Original.BillingAdjustment != nil || a.Original.Operation != OperationVideos || a.Original.ExtractionCost != nil || len(a.Original.Extractions) != 0 || a.Original.Tokens.Total < 0 || a.Cost.NanoUSD < 0 || a.Cost.Currency != "USD" || a.Tokens < 0 {
+	if a.Original.BillingAdjustment != nil || a.Original.Operation != OperationVideos || a.Original.ExtractionCost != nil || len(a.Original.Extractions) != 0 || a.Original.Tokens.Total < 0 || a.Cost.NanoUSD < 0 || a.Cost.Currency != adjustmentCurrency || a.Tokens < 0 {
 		return ErrInvalidRecord
 	}
-	if a.Original.Cost != nil && (a.Original.Cost.NanoUSD < 0 || a.Original.Cost.Currency != "USD") {
+	if a.Original.Cost != nil && (a.Original.Cost.NanoUSD < 0 || a.Original.Cost.Currency != adjustmentCurrency) {
 		return ErrInvalidRecord
 	}
 	switch a.BillingDisposition {
-	case "administrator_no_charge":
+	case billingAdministratorNoCharge:
 		if a.Cost.NanoUSD != 0 || a.Tokens != 0 {
 			return ErrInvalidRecord
 		}
@@ -164,7 +166,7 @@ func (r *repository) Adjust(ctx context.Context, a Adjustment) error {
 	headKey, receiptKey := adjustmentHeadKey(key), adjustmentReceiptKey(key, a.ID)
 	// Include zero counters so a no-charge record can later receive measured usage.
 	all := a.Original
-	all.Tokens.Total, all.Cost = 1, &Cost{NanoUSD: 1, Currency: "USD"}
+	all.Tokens.Total, all.Cost = 1, &Cost{NanoUSD: 1, Currency: adjustmentCurrency}
 	changes := r.counterChanges(all)
 	keys := []string{key, headKey, receiptKey}
 	for _, change := range changes {
