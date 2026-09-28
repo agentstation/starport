@@ -21,6 +21,7 @@ type BackupReader interface {
 // BackupRecord describes one validated record without issuing a dispatch permit.
 type BackupRecord struct {
 	Kind          string
+	Attempt       *Record
 	Held          bool
 	TeamOrigin    *BackupTeamOrigin
 	Window        *WindowState
@@ -54,6 +55,7 @@ func VerifyBackupRecord(ctx context.Context, source BackupReader, record storage
 		var value *Record
 		value, err = decodeAttemptRecord(record.Key, record.Value)
 		if err == nil {
+			result.Attempt = value
 			result.Held = value.State != Settled && value.State != Canceled
 			err = verifyBackupAttemptReferences(ctx, source, value)
 			if err == nil {
@@ -233,4 +235,37 @@ func CheckBackupLimits(ctx context.Context, source BackupReader, scope limits.Sc
 		}
 	}
 	return unknown, nil
+}
+
+// ReadBackupAttempt validates one retained attempt without issuing dispatch permission.
+func ReadBackupAttempt(ctx context.Context, source BackupReader, id string) (*Record, error) {
+	if !validID(id) || source == nil {
+		return nil, ErrInvalid
+	}
+	key := storageKey("attempt", id)
+	data, err := readBackupValue(ctx, source, key)
+	if err != nil {
+		return nil, err
+	}
+	return decodeAttemptRecord(key, data)
+}
+
+// VerifyBackupCorrectionBinding checks the decision shared with an external audit owner.
+// The original digest identifies the exact transaction contents.
+func VerifyBackupCorrectionBinding(ctx context.Context, source BackupReader, id string, expected Correction) error {
+	if !validID(id) || !expected.valid() || source == nil {
+		return ErrInvalid
+	}
+	data, err := readBackupValue(ctx, source, correctionKey(id, expected.ID))
+	if err != nil {
+		return err
+	}
+	receipt, err := decodeCorrectionReceipt(id, expected.ID, data)
+	if err != nil {
+		return err
+	}
+	if receipt.PublicationDigest == "" || !sameCorrection(receipt.Correction, expected) {
+		return ErrIdentityConflict
+	}
+	return nil
 }

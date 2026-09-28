@@ -58,6 +58,16 @@ Immutable state bindings establish ancestry even if authority time moves backwar
 Cycles and receipts outside the retained chains cause refusal.
 Verification never changes balances to repair a mismatch.
 
+Job checks bind each reservation to the original account, key, offering, operation, catalog generation, and pinned valuation.
+Completed reporting requires settled accounting. Pending evidence retains its original state.
+A missing job can follow interrupted creation or permitted deletion. The report names this condition without releasing the reservation.
+
+Correction checks verify immutable intent, applied decisions, ordered report receipts, and paired budget decisions.
+Superseded and pending intents remain distinct from applied corrections.
+Original publication digests remain retained evidence. Inspection does not reconstruct historical transaction bytes.
+Unknown correction kinds, missing chain records, conflicting decisions, and orphan records cause refusal.
+Inspection never applies corrections or advances reporting.
+
 These checks prove internal consistency, not completeness against later acknowledged work.
 Independent later history and restore commands remain required before deployment recovery is complete.
 

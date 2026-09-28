@@ -20,26 +20,29 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// ReferenceReport counts the domain checks actually performed on captured records.
-// It does not establish later authorization, spending, or restoration permission.
+// ReferenceReport counts verified records and retained recovery diagnostics.
+// It does not authorize later spending or restore.
 type ReferenceReport struct {
-	UnknownAccountBudgetHistories int64                   `json:"unknown_account_budget_histories"`
-	BudgetWindows                 int64                   `json:"budget_windows"`
-	BudgetRecords                 int64                   `json:"budget_records"`
-	HeldReservations              int64                   `json:"held_reservations"`
-	GatewayKeys                   apikey.RecoveryReport   `json:"gateway_keys"`
-	AccountRecords                int64                   `json:"account_records"`
-	AccountTemplates              int64                   `json:"account_templates"`
-	Identity                      identity.RecoveryReport `json:"identity"`
-	CredentialRecords             int64                   `json:"credential_records"`
-	CredentialValues              int64                   `json:"credential_values"`
-	FileRecords                   int64                   `json:"file_records"`
-	JobRecords                    int64                   `json:"job_records"`
-	UncertainJobs                 int64                   `json:"uncertain_jobs"`
-	BatchRecords                  int64                   `json:"batch_records"`
-	BatchLines                    int64                   `json:"batch_lines"`
-	UnfinishedBatchLines          int64                   `json:"unfinished_batch_lines"`
-	MissingBatchFiles             int64                   `json:"missing_batch_files"`
+	JobExecution                  jobs.RecoveryExecution   `json:"job_execution"`
+	JobCorrections                jobs.RecoveryCorrections `json:"job_corrections"`
+	MissingReservationJobs        int64                    `json:"missing_reservation_jobs"`
+	UnknownAccountBudgetHistories int64                    `json:"unknown_account_budget_histories"`
+	BudgetWindows                 int64                    `json:"budget_windows"`
+	BudgetRecords                 int64                    `json:"budget_records"`
+	HeldReservations              int64                    `json:"held_reservations"`
+	GatewayKeys                   apikey.RecoveryReport    `json:"gateway_keys"`
+	AccountRecords                int64                    `json:"account_records"`
+	AccountTemplates              int64                    `json:"account_templates"`
+	Identity                      identity.RecoveryReport  `json:"identity"`
+	CredentialRecords             int64                    `json:"credential_records"`
+	CredentialValues              int64                    `json:"credential_values"`
+	FileRecords                   int64                    `json:"file_records"`
+	JobRecords                    int64                    `json:"job_records"`
+	UncertainJobs                 int64                    `json:"uncertain_jobs"`
+	BatchRecords                  int64                    `json:"batch_records"`
+	BatchLines                    int64                    `json:"batch_lines"`
+	UnfinishedBatchLines          int64                    `json:"unfinished_batch_lines"`
+	MissingBatchFiles             int64                    `json:"missing_batch_files"`
 }
 
 // InspectBundleReferences verifies a bundle, then checks private copies through domain owners.
@@ -72,21 +75,12 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 		return report, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, accounting.Close()) }()
+	correctionKinds := make(map[string]int64)
 	err = records.Enumerate(ctx, func(record storage.TransferRecord) error {
 		var checkErr error
 		switch {
 		case strings.HasPrefix(record.Key, reservation.StoragePrefix):
-			var budget reservation.BackupRecord
-			budget, checkErr = reservation.VerifyBackupRecord(ctx, records, record)
-			if checkErr == nil {
-				checkErr = accounting.Add(ctx, record.Key, budget)
-			}
-			if checkErr == nil {
-				report.BudgetRecords++
-				if budget.Held {
-					report.HeldReservations++
-				}
-			}
+			checkErr = inspectBudgetExecution(ctx, records, accounting, record, &report)
 
 		case strings.HasPrefix(record.Key, account.StoragePrefix):
 			var owner account.Record
@@ -131,21 +125,23 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 					report.MissingBatchFiles++
 				}
 			}
-		case strings.HasPrefix(record.Key, jobs.StoragePrefix):
-			var job jobs.Job
-			job, checkErr = jobs.VerifyRecoveryRecord(ctx, record.Key, record.Value, blobs, manifest.StartedAt)
+		case strings.HasPrefix(record.Key, jobs.CorrectionStoragePrefix):
+			var kind string
+			kind, checkErr = jobs.VerifyRecoveryCorrectionRecord(ctx, records, record)
 			if checkErr == nil {
-				report.JobRecords++
-				if job.SubmissionPending {
-					report.UncertainJobs++
-				}
+				correctionKinds[kind]++
 			}
+		case strings.HasPrefix(record.Key, jobs.StoragePrefix):
+			checkErr = inspectJobExecution(ctx, records, blobs, manifest, record, &report)
 		}
 		if checkErr != nil {
 			return fmt.Errorf("recovery reference check failed for record %x: %w", sha256.Sum256([]byte(record.Key)), checkErr)
 		}
 		return nil
 	})
+	if err == nil && (correctionKinds["intent"] != report.JobCorrections.Intents || correctionKinds["history-next"] != report.JobCorrections.Intents || correctionKinds["applied"] != report.JobCorrections.Applied || correctionKinds["applied-next"] != report.JobCorrections.Applied || correctionKinds["reported"] != report.JobCorrections.Reported) {
+		err = jobs.ErrCorruptRecord
+	}
 	if err == nil {
 		report.BudgetWindows, err = accounting.Verify(ctx)
 	}

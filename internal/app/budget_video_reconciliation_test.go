@@ -154,6 +154,7 @@ func TestProductionAdministratorVideoReconciliation(t *testing.T) {
 			code, body = call(http.MethodPost, path, string(encoded))
 			require.Equal(t, http.StatusConflict, code, string(body))
 			require.EqualValues(t, 1, fixture.calls.Load(), "manual recovery cannot submit inference")
+			verifyCapturedVideoCorrection(t, fixture.application, attempt.Attempt.AccountID, submitted.ID)
 		})
 	}
 }
