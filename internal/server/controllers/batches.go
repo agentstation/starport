@@ -127,6 +127,11 @@ func (h *BatchesController) Create(w http.ResponseWriter, r *http.Request) {
 	// the line runner has to stamp it on every usage record it draws and the
 	// runner is built before the record exists.
 	batchID := jobs.NewBatchID()
+	authorization, err := requestctx.RetainBatchAuthorization(ctx, account, batchID)
+	if err != nil {
+		h.writeBatchStatus(w, http.StatusServiceUnavailable, errorTypeServer, "Batch authorization is unavailable.")
+		return
+	}
 	runner := &batchLineRunner{
 		service:   h.service,
 		governor:  h.governor,
@@ -138,6 +143,7 @@ func (h *BatchesController) Create(w http.ResponseWriter, r *http.Request) {
 		teamID:    h.getTeamID(ctx),
 	}
 	batch, err := h.batches.Submit(ctx, jobs.BatchSubmission{
+		Authorization:    authorization,
 		ID:               batchID,
 		Account:          account,
 		KeyID:            h.getAPIKeyID(ctx),
@@ -481,4 +487,9 @@ func bestEffortCustomID(line []byte) string {
 	}
 	_ = json.Unmarshal(line, &probe)
 	return probe.CustomID
+}
+
+// NewBatchRecoveryRunner applies the live governor to retained batch identity.
+func NewBatchRecoveryRunner(service proxy.Proxy, governor BatchGovernor, batch jobs.Batch, admission BatchAdmission) jobs.LineRunner {
+	return &batchLineRunner{service: service, governor: governor, admission: admission, endpoint: batch.Endpoint, batchID: batch.ID, accountID: batch.Account, keyID: batch.KeyID}
 }

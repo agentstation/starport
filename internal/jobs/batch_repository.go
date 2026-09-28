@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	// BatchStorageSchemaVersion identifies the batch record schema with durable line ownership.
-	BatchStorageSchemaVersion = 4
+	// BatchStorageSchemaVersion identifies the schema with batch-scoped authorization evidence.
+	BatchStorageSchemaVersion = 5
 	// BatchStoragePrefix is the batch record v1 namespace.
 	BatchStoragePrefix = "batches:v1:account:"
 )
@@ -55,6 +55,7 @@ type batchRepository struct{ store storage.KVStore }
 
 // batchRecord is the durable form.
 type batchRecord struct {
+	Authorization    []byte    `json:"authorization,omitempty"`
 	StoredBytesBound int64     `json:"stored_bytes_bound,omitzero"`
 	ResultsReleased  bool      `json:"results_released,omitzero"`
 	ClaimedLines     int       `json:"claimed_lines,omitzero"`
@@ -146,6 +147,9 @@ func sortBatchesNewestFirst(records []Batch) {
 // Replace writes a record that already exists, and it is the point at which a
 // batch state change meets the one transition table.
 func (r *batchRepository) Replace(ctx context.Context, expected, batch Batch) error {
+	if !bytes.Equal(expected.Authorization, batch.Authorization) {
+		return ErrInvalidBatch
+	}
 	if expected.TotalLines > 0 && expected.TotalLines != batch.TotalLines {
 		return ErrInvalidBatch
 	}
@@ -201,6 +205,7 @@ func encodeBatch(batch Batch) ([]byte, error) {
 		return nil, err
 	}
 	data, err := json.Marshal(batchRecord{
+		Authorization:    batch.Authorization,
 		StoredBytesBound: batch.StoredBytesBound, ResultsReleased: batch.ResultsReleased,
 		ClaimedLines:   batch.ClaimedLines,
 		SlotID:         batch.SlotID,
@@ -237,6 +242,7 @@ func decodeBatch(data []byte) (Batch, error) {
 		return Batch{}, fmt.Errorf("%w: unsupported schema %d", ErrCorruptBatchRecord, stored.SchemaVersion)
 	}
 	batch := Batch{
+		Authorization:    stored.Authorization,
 		StoredBytesBound: stored.StoredBytesBound, ResultsReleased: stored.ResultsReleased,
 		ClaimedLines:   stored.ClaimedLines,
 		SlotID:         stored.SlotID,

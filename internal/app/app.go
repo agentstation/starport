@@ -611,7 +611,16 @@ func (b *runtimeBuilder) openJobService() error {
 	if err != nil {
 		return fmt.Errorf("open batch repository: %w", err)
 	}
-	b.batches, err = jobs.NewBatchService(batchRecords, jobs.WithBatchJobMeter(meter), jobs.WithBatchFiles(func(batch jobs.Batch) jobs.BatchIO {
+	application := b.application
+	b.batches, err = jobs.NewBatchService(batchRecords, jobs.WithBatchRecoveryRunner(func(ctx context.Context, batch jobs.Batch) (jobs.LineRunner, error) {
+		runtime, ok := application.httpServer.(interface {
+			BatchRecoveryRunner(context.Context, jobs.Batch) (jobs.LineRunner, error)
+		})
+		if !ok {
+			return nil, jobs.ErrBatchSubmissionIncomplete
+		}
+		return runtime.BatchRecoveryRunner(ctx, batch)
+	}), jobs.WithBatchJobMeter(meter), jobs.WithBatchFiles(func(batch jobs.Batch) jobs.BatchIO {
 		return fileio.Store{Files: b.application.files, Account: batch.Account, InputFileID: batch.InputFileID, StoredBytesBound: batch.StoredBytesBound}
 	}))
 	if err != nil {

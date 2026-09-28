@@ -123,10 +123,26 @@ func recoverPages[T any](ctx context.Context, state *recoveryState[T], read func
 	}
 }
 
-// Sweep releases finished batch claims without a client read.
+// Sweep resumes unstarted lines and releases finished batch claims without a client read.
 // A cancelled batch whose lines have not drained retains its claim.
 func (s *BatchService) Sweep(ctx context.Context) (SweepResult, error) {
 	return recoverPages(ctx, &s.recovery, s.repository.RecoveryPage, func(ctx context.Context, batch Batch, result *SweepResult) error {
+		if s.recoverRunner != nil && s.openFiles != nil && !batch.State.Terminal() && !batch.RunFinished &&
+			(batch.State == JobStateQueued || batch.TotalLines == 0 || batch.ClaimedLines < batch.TotalLines) {
+			runner, err := s.recoverRunner(ctx, batch)
+			if err != nil {
+				return err
+			}
+			files := s.openFiles(batch)
+			if runner == nil || files == nil {
+				return ErrBatchSubmissionIncomplete
+			}
+			if err := s.workerLife.start(); err != nil {
+				return err
+			}
+			s.runBatch(ctx, batch, files, runner)
+			s.workerLife.finish()
+		}
 		if s.openFiles != nil && !batch.ResultsReleased {
 			recovered, err := s.RecoverResults(ctx, batch.Account, batch.ID, s.openFiles(batch))
 			if err != nil {

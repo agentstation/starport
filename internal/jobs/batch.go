@@ -24,6 +24,8 @@ var (
 
 // Batch is one offline run over a stored input file.
 type Batch struct {
+	// Authorization retains private, batch-scoped caller evidence for restart.
+	Authorization    []byte
 	StoredBytesBound int64
 	ResultsReleased  bool
 	// ClaimedLines counts durable, sequential execution claims. It is not a completion count.
@@ -70,6 +72,8 @@ type Batch struct {
 // Validate reports whether the record can be stored.
 func (b Batch) Validate() error {
 	switch {
+	case len(b.Authorization) > 8192:
+		return ErrInvalidBatch
 	case b.StoredBytesBound < 0 || b.ResultsReleased && !b.RunFinished:
 		return ErrInvalidBatch
 	case b.ClaimedLines < 0 || b.ClaimedLines > b.TotalLines:

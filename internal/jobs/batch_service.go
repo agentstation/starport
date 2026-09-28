@@ -70,6 +70,7 @@ type LineRunner interface {
 
 // BatchSubmission is everything a batch needs to start.
 type BatchSubmission struct {
+	Authorization    []byte
 	StoredBytesBound int64
 	// ID is the batch identifier, or empty to mint one here. A caller whose
 	// line runner has to name the batch it runs inside mints the identifier
@@ -88,15 +89,16 @@ type BatchSubmission struct {
 
 // BatchService owns the batch lifecycle: the record, the run, and the cancel.
 type BatchService struct {
-	workerLife  batchWorkerLifecycle
-	openFiles   func(Batch) BatchIO
-	recovery    recoveryState[Batch]
-	repository  BatchRepository
-	meter       Meter
-	now         func() time.Time
-	mint        func() string
-	concurrency int
-	lineBytes   int
+	workerLife    batchWorkerLifecycle
+	openFiles     func(Batch) BatchIO
+	recoverRunner func(context.Context, Batch) (LineRunner, error)
+	recovery      recoveryState[Batch]
+	repository    BatchRepository
+	meter         Meter
+	now           func() time.Time
+	mint          func() string
+	concurrency   int
+	lineBytes     int
 
 	mu      sync.Mutex
 	cancels map[string]context.CancelFunc
@@ -197,6 +199,7 @@ func (s *BatchService) Submit(ctx context.Context, submission BatchSubmission) (
 		return Batch{}, err
 	}
 	batch.KeyID = strings.TrimSpace(submission.KeyID)
+	batch.Authorization = bytes.Clone(submission.Authorization)
 	batch.StoredBytesBound = submission.StoredBytesBound
 
 	if s.meter != nil {
@@ -261,7 +264,7 @@ func (s *BatchService) Cancel(ctx context.Context, account, id string) (Batch, e
 		return batch, err
 	}
 	s.mu.Lock()
-	cancel := s.cancels[id]
+	cancel := s.cancels[batchStorageKey(account, id)]
 	s.mu.Unlock()
 	if cancel != nil {
 		cancel()
@@ -273,33 +276,46 @@ func (s *BatchService) Cancel(ctx context.Context, account, id string) (Batch, e
 // goroutine with its own context, because the batch outlives the request
 // that submitted it.
 func (s *BatchService) run(batch Batch, batchIO BatchIO, runner LineRunner) {
+	s.runBatch(context.Background(), batch, batchIO, runner)
+}
+
+func (s *BatchService) runBatch(ctx context.Context, batch Batch, batchIO BatchIO, runner LineRunner) {
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, _ = s.Get(cleanup, batch.Account, batch.ID)
 	}()
-	ctx := context.Background()
 
 	// The dispatch context gates new lines and nothing else. A cancel ends
 	// it, lines already running keep the background context and drain, and
 	// the result files still store what those lines produced.
 	dispatchCtx, stopDispatch := context.WithCancel(s.workerLife.dispatch)
 	defer stopDispatch()
+	stopParent := context.AfterFunc(ctx, stopDispatch)
+	defer stopParent()
+	key := batchStorageKey(batch.Account, batch.ID)
 	s.mu.Lock()
-	s.cancels[batch.ID] = stopDispatch
+	if s.cancels[key] != nil {
+		s.mu.Unlock()
+		return
+	}
+	s.cancels[key] = stopDispatch
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
-		delete(s.cancels, batch.ID)
+		delete(s.cancels, key)
 		s.mu.Unlock()
 	}()
 
 	if _, err := s.mutate(ctx, batch.Account, batch.ID, func(b *Batch) error {
+		if b.State == JobStateRunning {
+			return nil
+		}
 		return b.Transition(JobStateRunning, s.now())
 	}); err != nil {
 		// No line dispatched. Only a confirmed terminal record can finish here.
 		_, _ = s.mutate(ctx, batch.Account, batch.ID, func(b *Batch) error {
-			if !b.State.Terminal() {
+			if !b.State.Terminal() || b.ClaimedLines != 0 {
 				return err
 			}
 			b.RunFinished = true
@@ -328,7 +344,7 @@ func (s *BatchService) run(batch Batch, batchIO BatchIO, runner LineRunner) {
 	}
 	outcome := s.runLines(ctx, dispatchCtx, batch, batchIO, runner)
 	outcome.total = total
-	if s.workerLife.dispatch.Err() != nil && outcome.recoveryRequired {
+	if outcome.pending || dispatchCtx.Err() != nil && outcome.recoveryRequired {
 		// Shutdown leaves incomplete work for restart recovery. Existing claims
 		// and result evidence remain durable and do not authorize another call.
 		return
@@ -347,6 +363,7 @@ type runOutcome struct {
 	// failure names why the whole batch failed, or is empty when it did not.
 	failure          string
 	recoveryRequired bool
+	pending          bool
 }
 
 // countLines reads the input once and counts its request lines. The count
@@ -435,6 +452,15 @@ func (s *BatchService) runLines(
 			}
 			hash := sha256.Sum256(line)
 			claim, err := s.repository.ClaimLine(ctx, batch.Account, batch.ID, number, hex.EncodeToString(hash[:]))
+			if errors.Is(err, ErrBatchLineClaimed) {
+				<-slots
+				retained, readErr := s.repository.ReadLine(ctx, batch.Account, batch.ID, number)
+				if readErr != nil || retained.InputDigest != hex.EncodeToString(hash[:]) {
+					claimErr = errors.Join(ErrCorruptBatchRecord, readErr)
+					break scan
+				}
+				continue
+			}
 			if err != nil {
 				<-slots
 				if !errors.Is(err, ErrBatchAlreadyEnded) {
@@ -456,8 +482,9 @@ func (s *BatchService) runLines(
 			go func(claim BatchLine, line []byte) {
 				defer workers.Done()
 				defer func() { <-slots }()
-				body, failed := runner.RunLine(ctx, claim, line)
-				err := s.retainLineResult(ctx, batchIO, claim, body, failed)
+				admitted := context.WithoutCancel(ctx)
+				body, failed := runner.RunLine(admitted, claim, line)
+				err := s.retainLineResult(admitted, batchIO, claim, body, failed)
 				if err != nil {
 					stopDispatch()
 				}
@@ -496,6 +523,8 @@ func (s *BatchService) runLines(
 	}
 
 	switch {
+	case errors.Is(writeErr, ErrBatchResultsPending) && claimErr == nil && scanErr == nil:
+		outcome.pending = true
 	case claimErr != nil:
 		outcome.failure = "batch_line_claim_unavailable"
 		outcome.recoveryRequired = true
@@ -587,4 +616,10 @@ func (s *BatchService) createBatch(ctx context.Context, batch Batch) error {
 // WithBatchFiles supplies retained files for recovery after process restart.
 func WithBatchFiles(open func(Batch) BatchIO) BatchServiceOption {
 	return func(s *BatchService) { s.openFiles = open }
+}
+
+// WithBatchRecoveryRunner supplies current authorization for each resumed line.
+// Recovery invokes the runner only after an exclusive new durable claim.
+func WithBatchRecoveryRunner(open func(context.Context, Batch) (LineRunner, error)) BatchServiceOption {
+	return func(s *BatchService) { s.recoverRunner = open }
 }
