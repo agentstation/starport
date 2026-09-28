@@ -676,10 +676,10 @@ func testBadgerBackupRestore(t *testing.T) {
 	}
 
 	// Create backup
-	backupPath := filepath.Join(os.TempDir(), fmt.Sprintf("badger_backup_%d.bak", time.Now().UnixNano()))
+	backupPath := filepath.Join(privateBadgerBackupDirectory(t), "backup.bak")
 	defer os.Remove(backupPath)
 
-	err := store.Backup(ctx, backupPath)
+	receipt, err := store.Backup(ctx, backupPath)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
@@ -706,10 +706,18 @@ func testBadgerBackupRestore(t *testing.T) {
 	}
 
 	// Restore from backup
-	err = store.Restore(ctx, backupPath)
-	if err != nil {
-		t.Fatalf("Restore failed: %v", err)
+	config := store.config
+	config.Path = filepath.Join(privateBadgerBackupDirectory(t), "restored")
+	result, err := RestoreBadger(ctx, config, backupPath, receipt)
+	if err != nil || !result.Published {
+		t.Fatalf("Restore failed: %v, published=%v", err, result.Published)
 	}
+	restored, err := OpenBadger(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restored.Close()
+	store = restored
 
 	// Verify data is restored
 	for key, expectedValue := range testData {

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -797,100 +796,6 @@ func (s *BadgerStore) Close() error {
 
 	// Close the database
 	return s.db.Close()
-}
-
-// Backup and restore utilities
-
-// Backup creates a backup of the database
-func (s *BadgerStore) Backup(_ context.Context, path string) error {
-	s.mu.RLock()
-	if s.closed {
-		s.mu.RUnlock()
-		return ErrStorageClosed
-	}
-	s.mu.RUnlock()
-
-	// Create the backup directory if necessary.
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0750); err != nil {
-		return fmt.Errorf("failed to create backup directory: %w", err)
-	}
-
-	// Create backup file
-	f, err := os.Create(path) // #nosec G304 - path is user-provided for backup
-	if err != nil {
-		return fmt.Errorf("failed to create backup file: %w", err)
-	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			log.Error().Err(err).Msg("failed to close backup file")
-		}
-	}()
-
-	// Write the backup.
-	_, err = s.db.Backup(f, 0)
-	if err != nil {
-		return fmt.Errorf("backup failed: %w", err)
-	}
-
-	return nil
-}
-
-// Restore restores the database from a backup
-func (s *BadgerStore) Restore(_ context.Context, path string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.closed {
-		return ErrStorageClosed
-	}
-
-	// Open backup file
-	f, err := os.Open(path) // #nosec G304 - path is user-provided for restore
-	if err != nil {
-		return fmt.Errorf("failed to open backup file: %w", err)
-	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			log.Error().Err(err).Msg("failed to close restore file")
-		}
-	}()
-
-	// Close current database
-	if err := s.db.Close(); err != nil {
-		return fmt.Errorf("failed to close current database: %w", err)
-	}
-
-	// Remove current database files
-	if err := os.RemoveAll(s.config.Path); err != nil {
-		return fmt.Errorf("failed to remove current database: %w", err)
-	}
-
-	// Create new database directory
-	if err := os.MkdirAll(s.config.Path, 0750); err != nil {
-		return fmt.Errorf("failed to create database directory: %w", err)
-	}
-
-	// Open new database
-	opts, err := badgerEngineOptions(s.config, false)
-	if err != nil {
-		return err
-	}
-	db, err := badger.Open(opts)
-	if err != nil {
-		return fmt.Errorf("failed to open new database: %w", err)
-	}
-
-	// Load backup
-	if err := db.Load(f, 256); err != nil {
-		if closeErr := db.Close(); closeErr != nil {
-			log.Error().Err(closeErr).Msg("failed to close database after restore failure")
-		}
-		return fmt.Errorf("restore failed: %w", err)
-	}
-
-	s.db = db
-	return nil
 }
 
 // Background tasks
