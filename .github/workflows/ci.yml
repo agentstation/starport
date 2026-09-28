@@ -180,7 +180,7 @@ jobs:
   catalog-fleet:
     name: Catalog Fleet Recovery
     runs-on: ubuntu-latest
-    # Includes cold compilation, four bounded test steps, and evidence upload.
+    # Includes cold compilation, five bounded test steps, and evidence upload.
     timeout-minutes: 30
     services:
       valkey:
@@ -245,6 +245,30 @@ jobs:
           TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
           TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
         run: go test -json -race -count=1 -timeout 7m ./internal/app -run '^(TestProductionBudgetAcrossProcesses|TestSettledJobRequiresOriginalSharedApproval|TestProductionBudgetBackendOperations)$' > fleet-budget.jsonl
+      - name: Start the recovery object store
+        id: recovery-objectstore
+        shell: bash
+        run: |
+          docker run --detach --name starport-recovery-objectstore \
+            --publish 127.0.0.1::9000 \
+            --env MINIO_ROOT_USER=starport-test \
+            --env MINIO_ROOT_PASSWORD=starport-local-test-only \
+            quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+            server /data
+          port=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "9000/tcp") 0).HostPort}}' starport-recovery-objectstore)
+          endpoint="http://127.0.0.1:$port"
+          curl --fail --silent --show-error --retry 15 --retry-connrefused \
+            --retry-delay 1 --max-time 3 "$endpoint/minio/health/live"
+          printf 'endpoint=%s\n' "$endpoint" >> "$GITHUB_OUTPUT"
+      - name: Verify durable reservations and batch recovery
+        env:
+          TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+          TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
+          TEST_BLOB_S3_ENDPOINT: ${{ steps.recovery-objectstore.outputs.endpoint }}
+        run: go test -json -race -count=1 -timeout 5m ./internal/limits/reservation ./internal/jobs > fleet-reservation-jobs.jsonl
+      - name: Stop the recovery object store
+        if: always()
+        run: docker rm --force starport-recovery-objectstore || true
       - name: Retain catalog fleet evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -255,6 +279,7 @@ jobs:
             fleet-adoption.jsonl
             fleet-initialization.jsonl
             fleet-budget.jsonl
+            fleet-reservation-jobs.jsonl
           retention-days: 7
           if-no-files-found: error
 
