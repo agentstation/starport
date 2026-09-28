@@ -75,22 +75,28 @@ func OpenKVSnapshot(ctx context.Context, source, scratch string, expected KVSnap
 
 // GetBounded reads one retained value without filtering its recorded expiration.
 func (v *KVSnapshotView) GetBounded(ctx context.Context, key string, limit int) ([]byte, error) {
+	record, err := v.ReadCaptured(ctx, key, limit)
+	return record.Value, err
+}
+
+// ReadCaptured returns bounded bytes and their original expiration without applying current time.
+func (v *KVSnapshotView) ReadCaptured(ctx context.Context, key string, limit int) (storage.TransferRecord, error) {
 	if limit <= 0 {
-		return nil, storage.ErrInvalidReadLimit
+		return storage.TransferRecord{}, storage.ErrInvalidReadLimit
 	}
-	var value []byte
+	record := storage.TransferRecord{Key: key}
 	var size int64
-	err := v.db.QueryRowContext(ctx, "SELECT CASE WHEN length(value)<=? THEN value ELSE NULL END,length(value) FROM records WHERE key=?", limit, []byte(key)).Scan(&value, &size)
+	err := v.db.QueryRowContext(ctx, "SELECT CASE WHEN length(value)<=? THEN value ELSE NULL END,length(value),expires FROM records WHERE key=?", limit, []byte(key)).Scan(&record.Value, &size, &record.ExpiresAtMillis)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, storage.ErrNotFound
+		return storage.TransferRecord{}, storage.ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		return storage.TransferRecord{}, err
 	}
 	if size > int64(limit) {
-		return nil, storage.ErrValueTooLarge
+		return storage.TransferRecord{}, storage.ErrValueTooLarge
 	}
-	return value, nil
+	return record, nil
 }
 
 // Enumerate visits each captured record in canonical key order.

@@ -170,7 +170,7 @@ func TestBundleIdentityReferencesPreserveGrantsAndRefuseCorruption(t *testing.T)
 			}
 			require.NoError(t, err)
 			require.EqualValues(t, 1, report.AccountTemplates)
-			require.Equal(t, identity.RecoveryReport{Users: 1, Teams: 1, Memberships: 1, Grants: 1, MissingGrantAccounts: map[bool]int64{true: 1}[mode == "deleted-account"]}, report.Identity)
+			require.Equal(t, identity.RecoveryReport{BudgetOrigins: 1, Users: 1, Teams: 1, Memberships: 1, Grants: 1, MissingGrantAccounts: map[bool]int64{true: 1}[mode == "deleted-account"]}, report.Identity)
 			if mode == "deleted-account" {
 				require.Zero(t, report.AccountRecords)
 			} else {

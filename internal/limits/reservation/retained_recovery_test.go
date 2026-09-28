@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/limits"
-	"github.com/agentstation/starport/internal/recovery"
-	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
@@ -271,83 +269,6 @@ func TestRecoveryRetainsOversizedPageAndEmptyContinuation(t *testing.T) {
 		}
 	}
 	require.Equal(t, 2, pages)
-	checkRecovered(t, f, attempt)
-}
-
-func TestRecoveryRequiresOriginalIndependentApproval(t *testing.T) {
-	f := openFixture(t, "valkey")
-	db, err := sqlstore.Open(sqlstore.Config{Type: sqlstore.TypeSQLite})
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	require.NoError(t, db.Migrate(t.Context()))
-	witness, err := recovery.New(db)
-	require.NoError(t, err)
-	closed, err := witness.Initialize(t.Context(), f.deployment)
-	require.NoError(t, err)
-	backend := f.raw.(storage.IncarnationProvider)
-	identity, err := backend.ObserveIncarnation(t.Context())
-	require.NoError(t, err)
-	approved, err := witness.ApproveAuthority(t.Context(), backend, closed, identity, "test/reconciled", "first")
-	require.NoError(t, err)
-	authority, err := witness.OpenAuthority(t.Context(), backend, f.deployment)
-	require.NoError(t, err)
-	f.repository, err = Open(authority)
-	require.NoError(t, err)
-	attempt := retainFixture(t, f)
-	worker, err := NewRecovery(f.repository, f.raw)
-	require.NoError(t, err)
-	closed, err = witness.Close(t.Context(), approved)
-	require.NoError(t, err)
-	checkRefused := func() {
-		t.Helper()
-		failures := 0
-		complete := false
-		for range 100 {
-			result, err := worker.Pass(t.Context(), 32)
-			if result.Failed > 0 {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-			failures += result.Failed
-			if result.Complete {
-				complete = true
-				break
-			}
-		}
-		require.True(t, complete)
-		require.Equal(t, 1, failures)
-		record, err := f.repository.Inspect(t.Context(), attempt.ID)
-		require.NoError(t, err)
-		require.Equal(t, Uncertain, record.State)
-		require.NotNil(t, record.Pending)
-		for _, rule := range attempt.Rules {
-			state, err := f.repository.Window(t.Context(), rule.Meter, f.now)
-			require.NoError(t, err)
-			require.EqualValues(t, 600, state.Reserved)
-			require.Zero(t, state.Consumed)
-		}
-	}
-	checkRefused()
-	_, err = witness.ApproveAuthority(t.Context(), backend, closed, identity, "test/reconciled-again", "second")
-	require.NoError(t, err)
-	checkRefused() // An old worker must not adopt the new approval silently.
-	authority, err = witness.OpenAuthority(t.Context(), backend, f.deployment)
-	require.NoError(t, err)
-	f.repository, err = Open(authority)
-	require.NoError(t, err)
-	worker, err = NewRecovery(f.repository, f.raw)
-	require.NoError(t, err)
-	complete := false
-	for range 100 {
-		result, err := worker.Pass(t.Context(), 32)
-		require.NoError(t, err)
-		if result.Complete {
-			complete = true
-			break
-		}
-	}
-	require.True(t, complete)
 	checkRecovered(t, f, attempt)
 }
 

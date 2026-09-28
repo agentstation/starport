@@ -124,5 +124,10 @@ func writeBackupResult(cmd *urfavecli.Command, result recovery.CaptureResult) er
 		return err
 	}
 	_, err = fmt.Fprintf(cmd.Writer, "Identity checks: %d accounts, %d templates, %d users, %d teams, %d memberships, %d grants.\nGrants referencing missing accounts: %d.\n", result.References.AccountRecords, result.References.AccountTemplates, result.References.Identity.Users, result.References.Identity.Teams, result.References.Identity.Memberships, result.References.Identity.Grants, result.References.Identity.MissingGrantAccounts)
+	if err != nil {
+		return err
+	}
+	keys := result.References.GatewayKeys
+	_, err = fmt.Fprintf(cmd.Writer, "Gateway keys: %d; hash indexes: %d; missing accounts: %d; missing teams: %d; deleted initial keys: %d.\nBudget records: %d; held reservations: %d; retained team origins: %d.\nUnknown budget histories: %d account, %d key, %d team.\nUnknown history does not establish zero consumption or permission.\n", keys.Keys, keys.HashIndexes, keys.MissingAccounts, keys.MissingTeams, keys.MissingInitialKeys, result.References.BudgetRecords, result.References.HeldReservations, result.References.Identity.BudgetOrigins, result.References.UnknownAccountBudgetHistories, keys.UnknownBudgetHistories, result.References.Identity.UnknownBudgetHistories)
 	return err
 }

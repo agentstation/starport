@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/agentstation/starport/internal/policyrecord"
@@ -16,23 +17,28 @@ var ErrRecoveryReference = errors.New("captured identity reference is invalid")
 // RecoveryReport counts verified identity records and unavailable account references.
 // Counts do not authorize account selection or restore permission.
 type RecoveryReport struct {
-	Users                int64 `json:"users"`
-	Teams                int64 `json:"teams"`
-	Memberships          int64 `json:"memberships"`
-	Grants               int64 `json:"grants"`
-	MissingGrantAccounts int64 `json:"missing_grant_accounts"`
+	BudgetOrigins          int64 `json:"budget_origins"`
+	UnknownBudgetHistories int64 `json:"unknown_budget_histories"`
+	Users                  int64 `json:"users"`
+	Teams                  int64 `json:"teams"`
+	Memberships            int64 `json:"memberships"`
+	Grants                 int64 `json:"grants"`
+	MissingGrantAccounts   int64 `json:"missing_grant_accounts"`
 }
 
 // VerifyRecoverySnapshot checks identities and their links in a verified SQL copy.
 // Deleted accounts remain diagnostic references. Missing users and teams cause refusal.
-func VerifyRecoverySnapshot(ctx context.Context, source *sqlstore.RelationalSnapshotView, accountExists func(context.Context, string) (bool, error)) (report RecoveryReport, err error) {
-	if source == nil || accountExists == nil {
+func VerifyRecoverySnapshot(ctx context.Context, source *sqlstore.RelationalSnapshotView, accountExists func(context.Context, string) (bool, error), checkTeamBudget func(context.Context, Team) (bool, error)) (report RecoveryReport, err error) {
+	if source == nil || accountExists == nil || checkTeamBudget == nil {
 		return report, ErrRecoveryReference
 	}
 	if report.Users, err = verifyRecoveryUsers(ctx, source); err != nil {
 		return report, err
 	}
-	if report.Teams, err = verifyRecoveryTeams(ctx, source); err != nil {
+	if report.Teams, report.UnknownBudgetHistories, err = verifyRecoveryTeams(ctx, source, checkTeamBudget); err != nil {
+		return report, err
+	}
+	if report.BudgetOrigins, err = verifyRecoveryBudgetOrigins(ctx, source); err != nil {
 		return report, err
 	}
 	if report.Memberships, err = verifyRecoveryMemberships(ctx, source); err != nil {
@@ -67,29 +73,36 @@ func verifyRecoveryUsers(ctx context.Context, source *sqlstore.RelationalSnapsho
 	return count, rows.Err()
 }
 
-func verifyRecoveryTeams(ctx context.Context, source *sqlstore.RelationalSnapshotView) (count int64, resultErr error) {
-	rows, err := source.QueryContext(ctx, `SELECT id,revision,CASE WHEN length(CAST(record AS BLOB))<=? THEN record END FROM teams ORDER BY id`, policyrecord.MaxBytes)
+func verifyRecoveryTeams(ctx context.Context, source *sqlstore.RelationalSnapshotView, checkBudget func(context.Context, Team) (bool, error)) (count, unknown int64, resultErr error) {
+	rows, err := source.QueryContext(ctx, `SELECT t.id,t.revision,CASE WHEN length(CAST(t.record AS BLOB))<=? THEN t.record END,o.team_id FROM teams t LEFT JOIN team_budget_origins o ON o.team_id=t.id ORDER BY t.id`, policyrecord.MaxBytes)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, rows.Close()) }()
 	for rows.Next() {
 		var id string
 		var revision uint64
-		var data sql.NullString
-		if err := rows.Scan(&id, &revision, &data); err != nil {
-			return count, err
+		var data, origin sql.NullString
+		if err := rows.Scan(&id, &revision, &data, &origin); err != nil {
+			return count, unknown, err
 		}
 		if !data.Valid {
-			return count, policyrecord.ErrTooLarge
+			return count, unknown, policyrecord.ErrTooLarge
 		}
 		stored, err := decodeTeam(data.String)
-		if err != nil || stored.Team.ID != id || stored.Revision != revision {
-			return count, ErrRecoveryReference
+		if err != nil || stored.Team.ID != id || stored.Revision != revision || !origin.Valid {
+			return count, unknown, ErrRecoveryReference
+		}
+		known, err := checkBudget(ctx, stored.Team)
+		if err != nil {
+			return count, unknown, err
+		}
+		if !known {
+			unknown++
 		}
 		count++
 	}
-	return count, rows.Err()
+	return count, unknown, rows.Err()
 }
 
 func verifyRecoveryMemberships(ctx context.Context, source *sqlstore.RelationalSnapshotView) (count int64, resultErr error) {
@@ -145,4 +158,25 @@ func verifyRecoveryGrants(ctx context.Context, source *sqlstore.RelationalSnapsh
 		count++
 	}
 	return count, missing, rows.Err()
+}
+
+// Retained origins can outlive their team. A consumed grant does not prove a completed KV initialization.
+func verifyRecoveryBudgetOrigins(ctx context.Context, source *sqlstore.RelationalSnapshotView) (count int64, resultErr error) {
+	rows, err := source.QueryContext(ctx, `SELECT team_id,history_id,initialize_allowed FROM team_budget_origins`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, rows.Close()) }()
+	for rows.Next() {
+		var id, history string
+		var allowed int
+		if err := rows.Scan(&id, &history, &allowed); err != nil {
+			return count, err
+		}
+		if !validID(id) || (len(history) > 256 || strings.IndexFunc(history, func(r rune) bool { return r < 32 || r == 127 }) >= 0) || (allowed != 0 && allowed != 1) || (allowed == 1 && history == "") {
+			return count, ErrRecoveryReference
+		}
+		count++
+	}
+	return count, rows.Err()
 }

@@ -188,17 +188,25 @@ func (r *Repository) readRecordKey(ctx context.Context, key string) (*Record, []
 	if err != nil {
 		return nil, nil, err
 	}
-	var record Record
-	if json.Unmarshal(data, &record) != nil || record.Version != attemptRecordVersion || storageKey("attempt", record.Attempt.ID) != key || validateAttempt(record.Attempt) != nil || record.AdmittedAt.IsZero() || len(record.Bindings) != len(record.Attempt.Rules) {
-		return nil, nil, ErrUnavailable
-	}
-	if record.JobID != "" && (!validID(record.JobID) || record.State == Reserved || record.State == Canceled) {
-		return nil, nil, ErrUnavailable
-	}
-	if err := validateBindings(&record); err != nil {
+	record, err := decodeAttemptRecord(key, data)
+	if err != nil {
 		return nil, nil, err
 	}
-	return &record, data, nil
+	return record, data, nil
+}
+
+func decodeAttemptRecord(key string, data []byte) (*Record, error) {
+	var record Record
+	if json.Unmarshal(data, &record) != nil || record.Version != attemptRecordVersion || storageKey("attempt", record.Attempt.ID) != key || validateAttempt(record.Attempt) != nil || record.AdmittedAt.IsZero() || len(record.Bindings) != len(record.Attempt.Rules) {
+		return nil, ErrUnavailable
+	}
+	if record.JobID != "" && (!validID(record.JobID) || record.State == Reserved || record.State == Canceled) {
+		return nil, ErrUnavailable
+	}
+	if err := validateBindings(&record); err != nil {
+		return nil, err
+	}
+	return &record, nil
 }
 
 func (r *Repository) readWindow(ctx context.Context, meter Meter, window storage.TimeWindow) (*WindowState, []byte, error) {
@@ -209,11 +217,19 @@ func (r *Repository) readWindow(ctx context.Context, meter Meter, window storage
 	if err != nil {
 		return nil, nil, err
 	}
+	state, err := decodeWindowRecord(meter, window, data)
+	if err != nil {
+		return nil, nil, err
+	}
+	return state, data, nil
+}
+
+func decodeWindowRecord(meter Meter, window storage.TimeWindow, data []byte) (*WindowState, error) {
 	var state WindowState
 	if json.Unmarshal(data, &state) != nil || state.Version != windowRecordVersion || state.ActiveDisputes < 0 || state.ReconciliationRequired != (state.ActiveDisputes > 0) || state.Meter != meter || state.Window != window || !validID(state.HistoryProof) || !validID(state.HistoryID) || state.SeedConsumed < 0 || state.Consumed < state.SeedConsumed || state.Reserved < 0 {
-		return nil, nil, ErrUnavailable
+		return nil, ErrUnavailable
 	}
-	return &state, data, nil
+	return &state, nil
 }
 
 func (r *Repository) read(ctx context.Context, key string) ([]byte, error) {

@@ -42,7 +42,16 @@ Grants can retain deleted-account references, which verification reports without
 User, team, and account checks use the 64 KiB authorization-record bound.
 Template checks use the 64 MiB portable-record bound.
 
-Budget references, independent later history, and restore commands remain required before deployment recovery is complete.
+Gateway-key checks validate both hash-index directions, the collection count, and original storage expiry metadata.
+Missing accounts and teams remain diagnostics. A deleted initial key retains its marker and cannot reopen setup.
+Expired or inactive keys retain their original policy fields.
+
+Budget checks validate retained windows, attempts, correction references, and team initialization grants.
+Completed KV team initialization requires the matching consumed SQL grant, including after team deletion.
+Missing current account, key, or team history remains unknown. Verification never creates zero consumption.
+Uncertain attempts retain their reservations. Verification cannot settle, refund, or repeat them.
+
+Aggregate accounting reconciliation, independent later history, and restore commands remain required before deployment recovery is complete.
 
 A verified bundle grants no permission to resume inference.
 Recovery must reconcile permission withdrawals, acknowledged spending, and uncertain work after the backup against independent evidence.
@@ -98,7 +107,7 @@ Verification checks captured bytes, retained credentials, files, jobs, batches, 
 It uses private snapshot copies and streams large payloads.
 The `--scratch` option selects an existing private directory for these copies.
 The default is the backup directory's parent.
-The command reports unfinished batch lines, unconfirmed submissions, and missing batch file references.
+The command reports unfinished work, missing owner references, held reservations, and unknown budget histories.
 
 A recorded result digest with pending output remains a valid interrupted state.
 A missing execution claim causes refusal because it cannot prove that the line never started.

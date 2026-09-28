@@ -5,9 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"strings"
 
 	"github.com/agentstation/starport/internal/account"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -31,8 +35,30 @@ func inspectIdentityReferences(ctx context.Context, directory, scratch string, m
 		}
 		return err == nil, err
 	}
-	report.Identity, err = identity.VerifyRecoverySnapshot(ctx, image, exists)
+	report.Identity, err = identity.VerifyRecoverySnapshot(ctx, image, exists, func(ctx context.Context, team identity.Team) (bool, error) {
+		if team.Budget == nil {
+			return true, nil
+		}
+		return reservation.CheckBackupHistory(ctx, records, reservation.Meter{Scope: limits.ScopeTeam, Holder: team.ID, Dimension: limits.DimensionSpend, Interval: team.Budget.Interval}, team.Budget.HistoryID)
+	})
 	if err != nil {
+		return err
+	}
+	report.GatewayKeys, err = apikey.VerifyRecoverySnapshot(ctx, records, func(ctx context.Context, key apikey.APIKey) (bool, bool, error) {
+		found, err := exists(ctx, key.EffectiveAccountID())
+		if err != nil {
+			return false, false, err
+		}
+		var team int
+		if key.TeamID != "" {
+			err = image.QueryRowContext(ctx, "SELECT count(*) FROM teams WHERE id=?", key.TeamID).Scan(&team)
+		}
+		return !found, key.TeamID != "" && team == 0, err
+	})
+	if err != nil {
+		return err
+	}
+	if err := inspectTeamBudgetReceipts(ctx, image, records); err != nil {
 		return err
 	}
 	report.AccountTemplates, err = inspectAccountTemplates(ctx, image)
@@ -61,4 +87,26 @@ func inspectAccountTemplates(ctx context.Context, image *sqlstore.RelationalSnap
 		count++
 	}
 	return count, rows.Err()
+}
+
+func inspectTeamBudgetReceipts(ctx context.Context, image *sqlstore.RelationalSnapshotView, records *KVSnapshotView) error {
+	return records.Enumerate(ctx, func(record storage.TransferRecord) error {
+		if !strings.HasPrefix(record.Key, reservation.StoragePrefix+"team-origin:") {
+			return nil
+		}
+		checked, err := reservation.VerifyBackupRecord(ctx, records, record)
+		if err != nil {
+			return err
+		}
+		if checked.TeamOrigin == nil {
+			return reservation.ErrUnavailable
+		}
+		var history string
+		var allowed int
+		err = image.QueryRowContext(ctx, `SELECT history_id,initialize_allowed FROM team_budget_origins WHERE team_id=?`, checked.TeamOrigin.TeamID).Scan(&history, &allowed)
+		if err != nil || allowed != 0 || history != checked.TeamOrigin.HistoryID {
+			return errors.Join(identity.ErrRecoveryReference, err)
+		}
+		return nil
+	})
 }

@@ -9,29 +9,36 @@ import (
 	"strings"
 
 	"github.com/agentstation/starport/internal/account"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/storage"
 )
 
 // ReferenceReport counts the domain checks actually performed on captured records.
 // It does not establish later authorization, spending, or restoration permission.
 type ReferenceReport struct {
-	AccountRecords       int64                   `json:"account_records"`
-	AccountTemplates     int64                   `json:"account_templates"`
-	Identity             identity.RecoveryReport `json:"identity"`
-	CredentialRecords    int64                   `json:"credential_records"`
-	CredentialValues     int64                   `json:"credential_values"`
-	FileRecords          int64                   `json:"file_records"`
-	JobRecords           int64                   `json:"job_records"`
-	UncertainJobs        int64                   `json:"uncertain_jobs"`
-	BatchRecords         int64                   `json:"batch_records"`
-	BatchLines           int64                   `json:"batch_lines"`
-	UnfinishedBatchLines int64                   `json:"unfinished_batch_lines"`
-	MissingBatchFiles    int64                   `json:"missing_batch_files"`
+	UnknownAccountBudgetHistories int64                   `json:"unknown_account_budget_histories"`
+	BudgetRecords                 int64                   `json:"budget_records"`
+	HeldReservations              int64                   `json:"held_reservations"`
+	GatewayKeys                   apikey.RecoveryReport   `json:"gateway_keys"`
+	AccountRecords                int64                   `json:"account_records"`
+	AccountTemplates              int64                   `json:"account_templates"`
+	Identity                      identity.RecoveryReport `json:"identity"`
+	CredentialRecords             int64                   `json:"credential_records"`
+	CredentialValues              int64                   `json:"credential_values"`
+	FileRecords                   int64                   `json:"file_records"`
+	JobRecords                    int64                   `json:"job_records"`
+	UncertainJobs                 int64                   `json:"uncertain_jobs"`
+	BatchRecords                  int64                   `json:"batch_records"`
+	BatchLines                    int64                   `json:"batch_lines"`
+	UnfinishedBatchLines          int64                   `json:"unfinished_batch_lines"`
+	MissingBatchFiles             int64                   `json:"missing_batch_files"`
 }
 
 // InspectBundleReferences verifies a bundle, then checks private copies through domain owners.
@@ -62,8 +69,24 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 	err = records.Enumerate(ctx, func(record storage.TransferRecord) error {
 		var checkErr error
 		switch {
+		case strings.HasPrefix(record.Key, reservation.StoragePrefix):
+			var budget reservation.BackupRecord
+			budget, checkErr = reservation.VerifyBackupRecord(ctx, records, record)
+			if checkErr == nil {
+				report.BudgetRecords++
+				if budget.Held {
+					report.HeldReservations++
+				}
+			}
+
 		case strings.HasPrefix(record.Key, account.StoragePrefix):
-			_, checkErr = account.VerifyRecoveryRecord(record.Key, record.Value)
+			var owner account.Record
+			owner, checkErr = account.VerifyRecoveryRecord(record.Key, record.Value)
+			if checkErr == nil {
+				var unknown int64
+				unknown, checkErr = reservation.CheckBackupLimits(ctx, records, limits.ScopeAccount, owner.Account.ID, owner.Account.Limits)
+				report.UnknownAccountBudgetHistories += unknown
+			}
 			if checkErr == nil {
 				report.AccountRecords++
 			}

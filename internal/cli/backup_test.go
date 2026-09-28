@@ -66,3 +66,16 @@ func TestBackupCommandsExposeRecoveryLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestBackupVerificationReportsRestrictedHistory(t *testing.T) {
+	deps, output, _ := testDependencies()
+	deps.VerifyBackup = func(context.Context, *config.Config, recovery.VerifyRequest) (recovery.CaptureResult, error) {
+		return recovery.CaptureResult{References: recovery.ReferenceReport{HeldReservations: 2, UnknownAccountBudgetHistories: 1}}, nil
+	}
+	err := Run(t.Context(), []string{"starport", "backup", "verify", "--directory", t.TempDir(), "--manifest-sha256", strings.Repeat("a", 64)}, deps)
+	require.NoError(t, err)
+	require.Contains(t, output.String(), "held reservations: 2")
+	require.Contains(t, output.String(), "Unknown budget histories: 1 account")
+	require.Contains(t, output.String(), "does not establish zero consumption or permission")
+	require.Contains(t, output.String(), "Verification does not authorize retries")
+}
