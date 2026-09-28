@@ -35,7 +35,7 @@ func (db *DB) PrepareImportSchema(ctx context.Context) error {
 		}
 		query := "SELECT COUNT(*) FROM " + name // #nosec G202 -- the compiled table contract supplies every allowed identifier.
 		if name == metadataTable {
-			query += " WHERE name <> 'schema' OR value <> 'starport'"
+			query += " WHERE name IS NULL OR value IS NULL OR name <> 'schema' OR value <> 'starport'"
 		}
 		var count int64
 		if err := db.QueryRowContext(ctx, query).Scan(&count); err != nil {

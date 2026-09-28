@@ -1,16 +1,17 @@
 package sqlstore
 
 import (
-	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"testing"
 	"testing/fstest"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestPrepareImportSchemaNativeBackends(t *testing.T) {
 	for name, config := range contractConfigs(t) {
 		t.Run(name, func(t *testing.T) {
-			for _, mode := range []string{"empty", "partial-empty", "partial-populated", "unknown-table", "current"} {
+			for _, mode := range []string{"empty", "partial-empty", "partial-populated", "null-metadata", "unknown-table", "current"} {
 				t.Run(mode, func(t *testing.T) {
 					selected := config
 					if config.Type == TypeSQLite {
@@ -33,6 +34,11 @@ func TestPrepareImportSchemaNativeBackends(t *testing.T) {
 						require.NoError(t, err)
 						_, err = db.ExecContext(t.Context(), "INSERT INTO users(id) VALUES('keep')")
 						require.NoError(t, err)
+					case "null-metadata":
+						_, err := db.ExecContext(t.Context(), "CREATE TABLE sqlstore_meta (name VARCHAR(191), value VARCHAR(191))")
+						require.NoError(t, err)
+						_, err = db.ExecContext(t.Context(), "INSERT INTO sqlstore_meta(name,value) VALUES(NULL,NULL)")
+						require.NoError(t, err)
 					case "unknown-table":
 						_, err := db.ExecContext(t.Context(), "CREATE TABLE operator_data (id INTEGER)")
 						require.NoError(t, err)
@@ -40,8 +46,13 @@ func TestPrepareImportSchemaNativeBackends(t *testing.T) {
 						require.NoError(t, db.Migrate(t.Context()))
 					}
 					err = db.PrepareImportSchema(t.Context())
-					if mode == "partial-populated" || mode == "unknown-table" {
+					if mode == "partial-populated" || mode == "unknown-table" || mode == "null-metadata" {
 						require.Error(t, err)
+						if mode == "null-metadata" {
+							objects, err := relationalObjects(t.Context(), db, db.dialect)
+							require.NoError(t, err)
+							require.Equal(t, map[string]bool{"sqlstore_meta": true}, objects)
+						}
 						if mode == "partial-populated" {
 							var value string
 							require.NoError(t, db.QueryRowContext(t.Context(), "SELECT id FROM users").Scan(&value))
