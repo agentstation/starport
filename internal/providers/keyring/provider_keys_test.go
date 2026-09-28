@@ -301,46 +301,49 @@ func addSharedProviderCredential(t *testing.T, ctx context.Context, manager Prov
 // choice: a granted credential serves only its grantees, an open credential
 // serves everyone, and resolution walks the list in stored order.
 func TestGrantedSharedCredentialResolution(t *testing.T) {
-	ctx := t.Context()
-	provider := syntheticCredentialProvider()
-	manager := newSyntheticProviderKeys(t, provider)
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		provider := syntheticCredentialProvider()
+		manager := newSyntheticProviderKeys(t, provider).(*keyManager)
+		defer manager.materials.close()
 
-	granted, err := manager.AddSharedCredential(ctx, string(provider.ID),
-		map[string]string{"api-key": "secret-granted"}, nil,
-		SharedCredentialParams{Access: credentials.AccessGranted, Grants: []string{"account-a"}})
-	require.NoError(t, err)
-	open, err := manager.AddSharedCredential(ctx, string(provider.ID),
-		map[string]string{"api-key": "secret-open"}, nil, SharedCredentialParams{})
-	require.NoError(t, err)
+		granted, err := manager.AddSharedCredential(ctx, string(provider.ID),
+			map[string]string{"api-key": "secret-granted"}, nil,
+			SharedCredentialParams{Access: credentials.AccessGranted, Grants: []string{"account-a"}})
+		require.NoError(t, err)
+		open, err := manager.AddSharedCredential(ctx, string(provider.ID),
+			map[string]string{"api-key": "secret-open"}, nil, SharedCredentialParams{})
+		require.NoError(t, err)
 
-	resolveSecret := func(accountID string) string {
-		material, resolveErr := manager.ResolveSharedMaterial(ctx, accountID, provider)
-		require.NoError(t, resolveErr)
-		value, exists := material.Value("api-key")
-		require.True(t, exists)
-		return value
-	}
+		resolveSecret := func(accountID string) string {
+			material, resolveErr := manager.ResolveSharedMaterial(ctx, accountID, provider)
+			require.NoError(t, resolveErr)
+			value, exists := material.Value("api-key")
+			require.True(t, exists)
+			return value
+		}
 
-	assert.Equal(t, "secret-granted", resolveSecret("account-a"),
-		"a granted account spends the first credential granted to it")
-	assert.Equal(t, "secret-open", resolveSecret("account-b"),
-		"an ungranted account falls through to the open credential")
-	assert.Equal(t, "secret-open", resolveSecret(""),
-		"an anonymous caller may spend only an open credential")
+		assert.Equal(t, "secret-granted", resolveSecret("account-a"),
+			"a granted account spends the first credential granted to it")
+		assert.Equal(t, "secret-open", resolveSecret("account-b"),
+			"an ungranted account falls through to the open credential")
+		assert.Equal(t, "secret-open", resolveSecret(""),
+			"an anonymous caller may spend only an open credential")
 
-	require.NoError(t, manager.DeleteSharedCredential(ctx, string(provider.ID), open.ID))
-	_, err = manager.ResolveSharedMaterial(ctx, "account-b", provider)
-	assert.ErrorIs(t, err, ErrKeyNotFound,
-		"with only a granted credential left, an ungranted account gets nothing")
-	assert.Equal(t, "secret-granted", resolveSecret("account-a"))
+		require.NoError(t, manager.DeleteSharedCredential(ctx, string(provider.ID), open.ID))
+		_, err = manager.ResolveSharedMaterial(ctx, "account-b", provider)
+		assert.ErrorIs(t, err, ErrKeyNotFound,
+			"with only a granted credential left, an ungranted account gets nothing")
+		assert.Equal(t, "secret-granted", resolveSecret("account-a"))
 
-	// Revoking the grant closes the last door.
-	noGrants := []string{}
-	_, err = manager.UpdateSharedCredential(ctx, string(provider.ID), granted.ID,
-		SharedCredentialUpdate{Grants: &noGrants})
-	require.NoError(t, err)
-	_, err = manager.ResolveSharedMaterial(ctx, "account-a", provider)
-	assert.ErrorIs(t, err, ErrKeyNotFound)
+		// Revoking the grant closes the last door.
+		noGrants := []string{}
+		_, err = manager.UpdateSharedCredential(ctx, string(provider.ID), granted.ID,
+			SharedCredentialUpdate{Grants: &noGrants})
+		require.NoError(t, err)
+		_, err = manager.ResolveSharedMaterial(ctx, "account-a", provider)
+		assert.ErrorIs(t, err, ErrKeyNotFound)
+	})
 }
 
 // TestRecordUsageErrors tests error cases in RecordUsage
