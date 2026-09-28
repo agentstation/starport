@@ -2,7 +2,9 @@ package sqlstore
 
 import (
 	"context"
+	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"sort"
@@ -10,52 +12,58 @@ import (
 	"strings"
 )
 
-// The schema lives here and nowhere else. A migration is one .sql file named
-// NNNN_description.sql under the dialect's directory; Migrate applies the
-// dialect's files in name order, each in its own transaction, and records
-// each applied name so a file runs exactly once for the life of a database.
-//
-// Each dialect keeps its own directory because the engines disagree on the
-// margins — MySQL cannot index an unbounded TEXT column or parse ON
-// CONFLICT — and a shared file that papers over that with the lowest common
-// subset hides the disagreement instead of owning it. The three files with
-// one name are the same logical migration; the contract tests hold every
-// backend to the same resulting behavior.
+// Each migration is an embedded NNNN_description.sql file for one dialect.
+// Migrate applies files in name order and records each completed migration.
+// Dialect directories express each engine's SQL requirements explicitly.
+// Contract tests require the same resulting behavior from every backend.
 //
 //go:embed migrations/*/*.sql
 var migrations embed.FS
 
-// Migrate brings the store's schema to the current set of embedded
-// migrations. It is safe to call on every startup: an already-applied file
-// is skipped, a new one is applied, and a failure leaves the recorded state
-// equal to what actually ran.
+// Migrate applies pending schema files under database migration ownership.
+// SQLite and PostgreSQL commit each file with its completion record.
+// MySQL retains an intent before DDL and refuses automatic retries after partial failure.
 func (db *DB) Migrate(ctx context.Context) error {
 	return db.migrate(ctx, migrations)
 }
 
 // migrate is Migrate over an explicit filesystem, so a test can prove the
 // runner's contract without shipping a test schema in the binary.
-func (db *DB) migrate(ctx context.Context, fsys fs.FS) error {
+func (db *DB) migrate(ctx context.Context, fsys fs.FS) (err error) {
 	if db == nil || db.DB == nil {
 		return ErrClosed
 	}
-	if _, err := db.ExecContext(ctx, db.schemaMigrationsDDL()); err != nil {
-		return fmt.Errorf("create schema_migrations: %w", err)
-	}
-
 	names, err := migrationNames(fsys, db.dialect)
 	if err != nil {
 		return err
 	}
-	for _, name := range names {
-		applied, err := db.migrationApplied(ctx, name)
-		if err != nil {
+	owner, err := db.acquireMigrationOwner(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, owner.close()) }()
+	if err := owner.transaction(ctx, func() error {
+		if _, err := owner.conn.ExecContext(ctx, db.schemaMigrationsDDL()); err != nil {
 			return err
 		}
-		if applied {
-			continue
-		}
-		if err := db.applyMigration(ctx, fsys, name); err != nil {
+		return db.validateMigrationHistory(ctx, owner.conn, names)
+	}); err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+	if db.dialect == TypeMySQL {
+		return db.migrateMySQL(ctx, owner.conn, fsys, names)
+	}
+	for _, name := range names {
+		if err := owner.transaction(ctx, func() error {
+			if err := db.validateMigrationHistory(ctx, owner.conn, names); err != nil {
+				return err
+			}
+			applied, err := db.migrationApplied(ctx, owner.conn, name)
+			if err != nil || applied {
+				return err
+			}
+			return db.applyMigration(ctx, owner.conn, fsys, name)
+		}); err != nil {
 			return fmt.Errorf("apply migration %s: %w", name, err)
 		}
 	}
@@ -94,9 +102,9 @@ func migrationNames(fsys fs.FS, dialect string) ([]string, error) {
 	return names, nil
 }
 
-func (db *DB) migrationApplied(ctx context.Context, name string) (bool, error) {
+func (db *DB) migrationApplied(ctx context.Context, conn *sql.Conn, name string) (bool, error) {
 	var count int
-	err := db.QueryRowContext(ctx,
+	err := conn.QueryRowContext(ctx,
 		db.Bind(`SELECT COUNT(*) FROM schema_migrations WHERE name = ?`), name,
 	).Scan(&count)
 	if err != nil {
@@ -105,32 +113,25 @@ func (db *DB) migrationApplied(ctx context.Context, name string) (bool, error) {
 	return count > 0, nil
 }
 
-// applyMigration runs one file and records it inside the same transaction,
-// so the record and the schema cannot disagree. (MySQL auto-commits DDL, so
-// its migration files use IF NOT EXISTS guards to stay safe under a retry.)
-func (db *DB) applyMigration(ctx context.Context, fsys fs.FS, name string) error {
+// applyMigration uses the transaction and connection that own this migration.
+// MySQL DDL requires explicit recovery after partial application.
+func (db *DB) applyMigration(ctx context.Context, conn *sql.Conn, fsys fs.FS, name string) error {
 	body, err := fs.ReadFile(fsys, "migrations/"+db.dialect+"/"+name)
 	if err != nil {
 		return err
 	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
+	if _, err := conn.ExecContext(ctx, string(body)); err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
-
-	if _, err := tx.ExecContext(ctx, string(body)); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := conn.ExecContext(ctx,
 		db.Bind(`INSERT INTO schema_migrations (name) VALUES (?)`), name); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 // Bind rewrites ? placeholders into the dialect's form. PostgreSQL numbers
-// its placeholders; the other engines take ? as written. A repository on
+// its placeholders. The other engines take ? as written. A repository on
 // this contract writes its statements once with ? and binds per dialect.
 func (db *DB) Bind(query string) string {
 	if db.dialect != TypePostgres {
@@ -148,4 +149,27 @@ func (db *DB) Bind(query string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+// validateMigrationHistory refuses a binary that cannot interpret existing schema history.
+func (db *DB) validateMigrationHistory(ctx context.Context, conn *sql.Conn, names []string) (err error) {
+	known := make(map[string]bool, len(names))
+	for _, name := range names {
+		known[name] = true
+	}
+	rows, err := conn.QueryContext(ctx, "SELECT name FROM schema_migrations")
+	if err != nil {
+		return fmt.Errorf("read schema history: %w", err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		if !known[name] {
+			return fmt.Errorf("unsupported schema migration %q", name)
+		}
+	}
+	return rows.Err()
 }
