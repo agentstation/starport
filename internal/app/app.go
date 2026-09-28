@@ -32,8 +32,9 @@ import (
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/jobs/assetfetch"
-	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/jobs/fileio"
 	"github.com/agentstation/starport/internal/limits/jobslots"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
@@ -549,7 +550,7 @@ func (b *runtimeBuilder) openFileService() error {
 	// The meter counts every account's stored bytes whether or not a bound is
 	// set. A deployment that sets one later reads a true total rather than a
 	// zero over storage that is already full.
-	meter, err := limits.NewStorageMeter(b.application.store)
+	meter, err := storedbytes.NewStorageMeter(b.application.store)
 	if err != nil {
 		return fmt.Errorf("open stored byte meter: %w", err)
 	}
@@ -610,7 +611,9 @@ func (b *runtimeBuilder) openJobService() error {
 	if err != nil {
 		return fmt.Errorf("open batch repository: %w", err)
 	}
-	b.batches, err = jobs.NewBatchService(batchRecords, jobs.WithBatchJobMeter(meter))
+	b.batches, err = jobs.NewBatchService(batchRecords, jobs.WithBatchJobMeter(meter), jobs.WithBatchFiles(func(batch jobs.Batch) jobs.BatchIO {
+		return fileio.Store{Files: b.application.files, Account: batch.Account, InputFileID: batch.InputFileID, StoredBytesBound: batch.StoredBytesBound}
+	}))
 	if err != nil {
 		return fmt.Errorf("open batch service: %w", err)
 	}

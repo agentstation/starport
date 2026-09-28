@@ -9,7 +9,7 @@ import (
 
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/files"
-	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/repotest"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
@@ -39,7 +39,7 @@ func TestConcurrentFileRetirementPreservesOtherStoredBytes(t *testing.T) {
 		blobs, err := blob.NewFilesystem(t.TempDir())
 		require.NoError(t, err)
 		barrier := &synchronizedDeletes{Store: blobs, ready: make(chan struct{})}
-		meter, err := limits.NewStorageMeter(store)
+		meter, err := storedbytes.NewStorageMeter(store)
 		require.NoError(t, err)
 		service, err := files.NewService(records, barrier, files.WithMeter(meter))
 		require.NoError(t, err)

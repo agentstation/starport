@@ -49,10 +49,10 @@ type BatchIO interface {
 	OpenResult(context.Context, string) (io.ReadCloser, error)
 	// OpenInput opens the stored input file for one full read.
 	OpenInput(ctx context.Context) (io.ReadCloser, error)
-	// StoreOutput stores one result file and answers its file identifier. It
-	// reads the content to its end, so the caller streams rather than
-	// buffering a whole result file.
-	StoreOutput(ctx context.Context, name string, content io.Reader) (string, error)
+	StoreAggregate(context.Context, Batch, bool, int64, string, io.Reader) (string, error)
+	RecoverResult(context.Context, string) error
+	ConfirmAggregate(context.Context, string) error
+	DeleteResult(context.Context, string) error
 }
 
 // ResultFile binds a retained file to its original retention deadline.
@@ -70,6 +70,7 @@ type LineRunner interface {
 
 // BatchSubmission is everything a batch needs to start.
 type BatchSubmission struct {
+	StoredBytesBound int64
 	// ID is the batch identifier, or empty to mint one here. A caller whose
 	// line runner has to name the batch it runs inside mints the identifier
 	// first and submits it, because the runner is built before the record.
@@ -87,6 +88,7 @@ type BatchSubmission struct {
 
 // BatchService owns the batch lifecycle: the record, the run, and the cancel.
 type BatchService struct {
+	openFiles   func(Batch) BatchIO
 	recovery    recoveryState[Batch]
 	repository  BatchRepository
 	meter       Meter
@@ -184,6 +186,7 @@ func (s *BatchService) Submit(ctx context.Context, submission BatchSubmission) (
 		return Batch{}, err
 	}
 	batch.KeyID = strings.TrimSpace(submission.KeyID)
+	batch.StoredBytesBound = submission.StoredBytesBound
 
 	if s.meter != nil {
 		batch.SlotID = newJobID()
@@ -303,9 +306,15 @@ func (s *BatchService) run(batch Batch, batchIO BatchIO, runner LineRunner) {
 		return
 	}
 
+	if total == 0 {
+		s.finish(ctx, batch, runOutcome{})
+		_, _ = s.RecoverResults(ctx, batch.Account, batch.ID, batchIO)
+		return
+	}
 	outcome := s.runLines(ctx, dispatchCtx, batch, batchIO, runner)
 	outcome.total = total
 	s.finish(ctx, batch, outcome)
+	_, _ = s.RecoverResults(ctx, batch.Account, batch.ID, batchIO)
 }
 
 // runOutcome is what one run pass hands the finish step.
@@ -372,11 +381,7 @@ func (s *BatchService) runLines(
 	}
 	defer func() { _ = input.Close() }()
 
-	output := newBatchResultFile(ctx, batchIO, batch.ID+"_output.jsonl")
-	errorFile := newBatchResultFile(ctx, batchIO, batch.ID+"_errors.jsonl")
-
 	type lineResult struct {
-		body   []byte
 		failed bool
 		err    error
 	}
@@ -436,7 +441,7 @@ func (s *BatchService) runLines(
 				if err != nil {
 					stopDispatch()
 				}
-				results <- lineResult{body: body, failed: failed, err: err}
+				results <- lineResult{failed: failed, err: err}
 			}(claim, line)
 		}
 		scanErr = scanner.Err()
@@ -452,25 +457,22 @@ func (s *BatchService) runLines(
 			}
 			continue
 		}
-		destination := output
 		if result.failed {
-			destination = errorFile
 			outcome.failed++
 		} else {
 			outcome.completed++
 		}
-		if err := destination.writeLine(result.body); err != nil && writeErr == nil {
-			writeErr = err
+	}
+	if claimErr == nil && scanErr == nil && writeErr == nil {
+		current, readErr := s.repository.Get(ctx, batch.Account, batch.ID)
+		if readErr == nil {
+			var aggregate runOutcome
+			aggregate, readErr = s.buildAggregates(ctx, current, batchIO)
+			if readErr == nil {
+				outcome = aggregate
+			}
 		}
-	}
-
-	outcome.outputFileID, err = output.finish()
-	if err != nil && writeErr == nil {
-		writeErr = err
-	}
-	outcome.errorFileID, err = errorFile.finish()
-	if err != nil && writeErr == nil {
-		writeErr = err
+		writeErr = readErr
 	}
 
 	switch {
@@ -479,6 +481,7 @@ func (s *BatchService) runLines(
 		outcome.recoveryRequired = true
 	case scanErr != nil:
 		outcome.failure = s.scanFailure(scanErr).Error()
+		outcome.recoveryRequired = true
 	case writeErr != nil:
 		outcome.failure = "batch_result_storage_unavailable"
 		outcome.recoveryRequired = true
@@ -550,60 +553,6 @@ func (s *BatchService) releaseBatchSlot(batch Batch) error {
 	return s.meter.Release(ctx, batch.Account, batch.SlotID)
 }
 
-// batchResultFile streams result lines into one stored file. The pipe means
-// the file store reads bytes as lines land, so a large batch never holds its
-// whole result in memory. The file itself is created lazily on the first
-// line, so a clean run stores no empty error file.
-type batchResultFile struct {
-	ctx     context.Context
-	batchIO BatchIO
-	name    string
-
-	writer *io.PipeWriter
-	done   chan storedResult
-}
-
-type storedResult struct {
-	fileID string
-	err    error
-}
-
-func newBatchResultFile(ctx context.Context, batchIO BatchIO, name string) *batchResultFile {
-	return &batchResultFile{ctx: ctx, batchIO: batchIO, name: name}
-}
-
-func (f *batchResultFile) writeLine(line []byte) error {
-	if f.writer == nil {
-		reader, writer := io.Pipe()
-		f.writer = writer
-		f.done = make(chan storedResult, 1)
-		go func() {
-			fileID, err := f.batchIO.StoreOutput(f.ctx, f.name, reader)
-			if err != nil {
-				// The store stopped reading, so the pipe has to stop
-				// accepting, or every later write blocks forever.
-				_ = reader.CloseWithError(err)
-			}
-			f.done <- storedResult{fileID: fileID, err: err}
-		}()
-	}
-	if _, err := f.writer.Write(append(line, '\n')); err != nil {
-		return err
-	}
-	return nil
-}
-
-// finish closes the stream and answers the stored file identifier, or an
-// empty one for a file no line ever reached.
-func (f *batchResultFile) finish() (string, error) {
-	if f.writer == nil {
-		return "", nil
-	}
-	_ = f.writer.Close()
-	result := <-f.done
-	return result.fileID, result.err
-}
-
 func (s *BatchService) createBatch(ctx context.Context, batch Batch) error {
 	if s.meter == nil {
 		return s.repository.Create(ctx, batch)
@@ -613,4 +562,9 @@ func (s *BatchService) createBatch(ctx context.Context, batch Batch) error {
 		return errors.Join(ErrClaimUnavailable, err)
 	}
 	return s.repository.CreateClaimed(ctx, batch, attachment)
+}
+
+// WithBatchFiles supplies retained files for recovery after process restart.
+func WithBatchFiles(open func(Batch) BatchIO) BatchServiceOption {
+	return func(s *BatchService) { s.openFiles = open }
 }

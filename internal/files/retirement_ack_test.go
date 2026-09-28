@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/agentstation/starport/internal/blob"
-	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/repotest"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
@@ -33,7 +33,7 @@ func TestLostRetirementAcknowledgmentRetainsCharge(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		records, err := OpenRepository(store)
 		require.NoError(t, err)
-		meter, err := limits.NewStorageMeter(store)
+		meter, err := storedbytes.NewStorageMeter(store)
 		require.NoError(t, err)
 		medium, err := blob.NewFilesystem(t.TempDir())
 		require.NoError(t, err)

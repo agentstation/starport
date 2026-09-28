@@ -15,8 +15,8 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/jobs"
-	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/limits/jobslots"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -219,7 +219,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	}
 	// The meter is part of production composition, so a route test that skipped
 	// it would exercise an upload path no deployment runs.
-	storedBytes, err := limits.NewStorageMeter(testConfig.store)
+	storedBytes, err := storedbytes.NewStorageMeter(testConfig.store)
 	if err != nil {
 		tb.Fatal(err)
 	}

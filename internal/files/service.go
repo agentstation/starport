@@ -360,7 +360,7 @@ func (s *Service) List(ctx context.Context, account string, limit int) ([]File, 
 			return nil, err
 		}
 		for _, file := range page.Records {
-			if file.State == FileStateReady && file.outputIdentity == "" && !file.Expired(now) {
+			if file.State == FileStateReady && (file.outputIdentity == "" || file.outputPublished) && !file.Expired(now) {
 				readable = append(readable, file)
 				if len(readable) == limit {
 					return readable, nil

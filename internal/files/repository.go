@@ -15,7 +15,7 @@ import (
 
 const (
 	// StorageSchemaVersion identifies the only file record schema.
-	StorageSchemaVersion = 4
+	StorageSchemaVersion = 5
 	// StoragePrefix is the file record v1 namespace.
 	StoragePrefix = "files:v1:account:"
 
@@ -55,20 +55,21 @@ type repository struct{ store storage.KVStore }
 // fileRecord is the durable form. It carries the blob key that File keeps
 // unexported, because the record store is the one place the key belongs.
 type fileRecord struct {
-	SchemaVersion  int       `json:"schema_version"`
-	ID             string    `json:"id"`
-	Account        string    `json:"account"`
-	Filename       string    `json:"filename"`
-	Purpose        Purpose   `json:"purpose"`
-	Bytes          int64     `json:"bytes"`
-	State          FileState `json:"state"`
-	CreatedAt      time.Time `json:"created_at"`
-	ExpiresAt      time.Time `json:"expires_at,omitempty"`
-	BlobKey        string    `json:"blob_key"`
-	Metered        bool      `json:"metered"`
-	OutputIdentity string    `json:"output_identity,omitempty"`
-	OutputDigest   string    `json:"output_digest,omitempty"`
-	OutputBound    int64     `json:"output_bound,omitempty"`
+	SchemaVersion   int       `json:"schema_version"`
+	ID              string    `json:"id"`
+	Account         string    `json:"account"`
+	Filename        string    `json:"filename"`
+	Purpose         Purpose   `json:"purpose"`
+	Bytes           int64     `json:"bytes"`
+	State           FileState `json:"state"`
+	CreatedAt       time.Time `json:"created_at"`
+	ExpiresAt       time.Time `json:"expires_at,omitempty"`
+	BlobKey         string    `json:"blob_key"`
+	Metered         bool      `json:"metered"`
+	OutputPublished bool      `json:"output_published,omitzero"`
+	OutputIdentity  string    `json:"output_identity,omitempty"`
+	OutputDigest    string    `json:"output_digest,omitempty"`
+	OutputBound     int64     `json:"output_bound,omitempty"`
 }
 
 // OpenRepository returns a storage-backed file record repository.
@@ -198,6 +199,9 @@ func (r *repository) Replace(ctx context.Context, file File) error {
 	if previous.ID != file.ID || previous.Account != file.Account || previous.Filename != file.Filename || previous.Purpose != file.Purpose || previous.blobKey != file.blobKey || previous.metered != file.metered || previous.outputIdentity != file.outputIdentity || previous.outputBound != file.outputBound || !previous.CreatedAt.Equal(file.CreatedAt) || !previous.ExpiresAt.Equal(file.ExpiresAt) {
 		return storage.ErrConflict
 	}
+	if previous.outputPublished && !file.outputPublished {
+		return storage.ErrConflict
+	}
 	if previous.State == FileStateDeleting && file.State != FileStateDeleting || previous.State == FileStateReady && file.State == FileStatePending {
 		return storage.ErrConflict
 	}
@@ -244,18 +248,18 @@ func encodeFile(file File) ([]byte, error) {
 		return nil, err
 	}
 	data, err := json.Marshal(fileRecord{
-		SchemaVersion:  StorageSchemaVersion,
-		ID:             file.ID,
-		Account:        file.Account,
-		Filename:       file.Filename,
-		Purpose:        file.Purpose,
-		Bytes:          file.Bytes,
-		State:          file.State,
-		CreatedAt:      file.CreatedAt,
-		ExpiresAt:      file.ExpiresAt,
-		BlobKey:        file.blobKey,
-		Metered:        file.metered,
-		OutputIdentity: file.outputIdentity, OutputDigest: file.outputDigest, OutputBound: file.outputBound,
+		SchemaVersion:   StorageSchemaVersion,
+		ID:              file.ID,
+		Account:         file.Account,
+		Filename:        file.Filename,
+		Purpose:         file.Purpose,
+		Bytes:           file.Bytes,
+		State:           file.State,
+		CreatedAt:       file.CreatedAt,
+		ExpiresAt:       file.ExpiresAt,
+		BlobKey:         file.blobKey,
+		Metered:         file.metered,
+		OutputPublished: file.outputPublished, OutputIdentity: file.outputIdentity, OutputDigest: file.outputDigest, OutputBound: file.outputBound,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("files: encode record: %w", err)
@@ -272,17 +276,17 @@ func decodeFile(data []byte) (File, error) {
 		return File{}, fmt.Errorf("%w: unsupported schema %d", ErrCorruptRecord, stored.SchemaVersion)
 	}
 	file := File{
-		ID:             stored.ID,
-		Account:        stored.Account,
-		Filename:       stored.Filename,
-		Purpose:        stored.Purpose,
-		Bytes:          stored.Bytes,
-		State:          stored.State,
-		CreatedAt:      stored.CreatedAt,
-		ExpiresAt:      stored.ExpiresAt,
-		blobKey:        stored.BlobKey,
-		metered:        stored.Metered,
-		outputIdentity: stored.OutputIdentity, outputDigest: stored.OutputDigest, outputBound: stored.OutputBound,
+		ID:              stored.ID,
+		Account:         stored.Account,
+		Filename:        stored.Filename,
+		Purpose:         stored.Purpose,
+		Bytes:           stored.Bytes,
+		State:           stored.State,
+		CreatedAt:       stored.CreatedAt,
+		ExpiresAt:       stored.ExpiresAt,
+		blobKey:         stored.BlobKey,
+		metered:         stored.Metered,
+		outputPublished: stored.OutputPublished, outputIdentity: stored.OutputIdentity, outputDigest: stored.OutputDigest, outputBound: stored.OutputBound,
 	}
 	if err := file.Validate(); err != nil {
 		return File{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/blob"
-	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/repotest"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
@@ -28,7 +28,7 @@ func (s *lostByteAck) CompareAndSwapBatch(ctx context.Context, writes []storage.
 		return err
 	}
 	for _, write := range writes {
-		if len(s.field) > 0 && strings.HasPrefix(write.Key, limits.StoredBytesPrefix) && bytes.Contains(write.NewValue, s.field) {
+		if len(s.field) > 0 && strings.HasPrefix(write.Key, storedbytes.StoredBytesPrefix) && bytes.Contains(write.NewValue, s.field) {
 			s.field = nil
 			return errLostByteAck
 		}
@@ -43,7 +43,7 @@ func TestFileClaimsRecoverLostSuccessfulAcknowledgments(t *testing.T) {
 				store := &lostByteAck{KVStore: backend}
 				records, err := OpenRepository(store)
 				require.NoError(t, err)
-				meter, err := limits.NewStorageMeter(store)
+				meter, err := storedbytes.NewStorageMeter(store)
 				require.NoError(t, err)
 				blobs, err := blob.NewFilesystem(t.TempDir())
 				require.NoError(t, err)

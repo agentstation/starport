@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/blob"
-	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/repotest"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
@@ -43,7 +43,7 @@ func TestPreparedOutputRetainsIdentityBytesAndQuota(t *testing.T) {
 		fault := &outputPublicationLostAck{KVStore: store}
 		records, err := OpenRepository(fault)
 		require.NoError(t, err)
-		meter, err := limits.NewStorageMeter(store)
+		meter, err := storedbytes.NewStorageMeter(store)
 		require.NoError(t, err)
 		disk, err := blob.NewFilesystem(t.TempDir())
 		require.NoError(t, err)
@@ -101,7 +101,7 @@ func TestPreparedOutputRetainsIdentityBytesAndQuota(t *testing.T) {
 		second, err := service.PrepareOutput(ctx, "a", "two", "two.jsonl", 8)
 		require.NoError(t, err)
 		_, err = service.CommitOutput(ctx, "a", second.ID, 1, outputHash("x"), strings.NewReader("x"))
-		require.ErrorIs(t, err, limits.ErrStorageFull)
+		require.ErrorIs(t, err, storedbytes.ErrStorageFull)
 		require.NoError(t, service.Delete(ctx, "a", first.ID))
 		_, err = service.CommitOutput(ctx, "a", second.ID, 1, outputHash("x"), strings.NewReader("x"))
 		require.NoError(t, err)
@@ -135,7 +135,7 @@ func TestPreparedOutputAcceptsOneConcurrentResult(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		records, err := OpenRepository(store)
 		require.NoError(t, err)
-		meter, err := limits.NewStorageMeter(store)
+		meter, err := storedbytes.NewStorageMeter(store)
 		require.NoError(t, err)
 		blobs, err := blob.NewFilesystem(t.TempDir())
 		require.NoError(t, err)
@@ -179,4 +179,40 @@ func (s *outputPublicationLostAck) CompareAndSwap(ctx context.Context, key strin
 		return context.DeadlineExceeded
 	}
 	return err
+}
+
+func TestOutputExposureRequiresVerifiedLiveBytes(t *testing.T) {
+	now := time.Now().UTC()
+	r, kv := newRepository(t)
+	blobs, err := blob.NewFilesystem(t.TempDir())
+	require.NoError(t, err)
+	s, err := NewService(r, blobs, WithClock(func() time.Time { return now }))
+	require.NoError(t, err)
+	file, err := s.PrepareOutput(t.Context(), "a", "aggregate", "output.jsonl", 0)
+	require.NoError(t, err)
+	require.ErrorIs(t, s.ExposeOutput(t.Context(), "a", file.ID), ErrOutputIncomplete)
+	require.ErrorIs(t, s.ExposeOutput(t.Context(), "b", file.ID), ErrFileNotFound)
+	_, err = s.CommitOutput(t.Context(), "a", file.ID, 2, outputHash("{}"), strings.NewReader("{}"))
+	require.NoError(t, err)
+	visible, err := s.List(t.Context(), "a", 100)
+	require.NoError(t, err)
+	require.Empty(t, visible)
+	require.NoError(t, s.ExposeOutput(t.Context(), "a", file.ID))
+	visible, err = s.List(t.Context(), "a", 100)
+	require.NoError(t, err)
+	require.Len(t, visible, 1)
+	stored, err := r.Get(t.Context(), "a", file.ID)
+	require.NoError(t, err)
+	stored.outputPublished = false
+	require.ErrorIs(t, r.Replace(t.Context(), stored), storage.ErrConflict)
+	data, err := kv.Get(t.Context(), storageKey("a", file.ID))
+	require.NoError(t, err)
+	legacy := strings.Replace(string(data), `"schema_version":5`, `"schema_version":4`, 1)
+	require.NotEqual(t, string(data), legacy)
+	require.NoError(t, kv.Set(t.Context(), storageKey("a", file.ID), []byte(legacy)))
+	_, err = r.Get(t.Context(), "a", file.ID)
+	require.ErrorIs(t, err, ErrCorruptRecord)
+	require.NoError(t, kv.Set(t.Context(), storageKey("a", file.ID), data))
+	now = file.ExpiresAt
+	require.ErrorIs(t, s.ExposeOutput(t.Context(), "a", file.ID), ErrOutputExpired)
 }

@@ -5,15 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/jobs/fileio"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/proxy"
@@ -145,11 +144,12 @@ func (h *BatchesController) Create(w http.ResponseWriter, r *http.Request) {
 		Endpoint:         request.Endpoint,
 		InputFileID:      request.InputFileID,
 		OutstandingBound: outstandingJobBound(r),
-		IO: &batchFileIO{
-			files:            h.files,
-			account:          account,
-			inputFileID:      request.InputFileID,
-			storedBytesBound: storedBytesBound(r),
+		StoredBytesBound: storedBytesBound(r),
+		IO: &fileio.Store{
+			Files:            h.files,
+			Account:          account,
+			InputFileID:      request.InputFileID,
+			StoredBytesBound: storedBytesBound(r),
 		},
 		Runner: runner,
 	})
@@ -288,37 +288,6 @@ func (h *BatchesController) writeBatchStatus(
 	errorType, message string,
 ) {
 	openai.WriteError(w, status, errorType, message, nil)
-}
-
-// batchFileIO adapts the file service to the batch's two file needs. It is
-// built per submission, because it closes over one account and one input file.
-type batchFileIO struct {
-	files            *files.Service
-	account          string
-	inputFileID      string
-	storedBytesBound int64
-}
-
-// OpenInput opens the stored input file for one full read.
-func (b *batchFileIO) OpenInput(ctx context.Context) (io.ReadCloser, error) {
-	_, reader, err := b.files.Open(ctx, b.account, b.inputFileID)
-	return reader, err
-}
-
-// StoreOutput stores one result file under the purpose no upload may claim.
-// The size is unknown while the lines stream, so it lands as zero and the
-// service reconciles it against what the write actually stored.
-func (b *batchFileIO) StoreOutput(ctx context.Context, name string, content io.Reader) (string, error) {
-	record, err := b.files.Upload(ctx, files.UploadRequest{
-		Account:          b.account,
-		Filename:         name,
-		Purpose:          files.PurposeBatchOutput,
-		StoredBytesBound: b.storedBytesBound,
-	}, content)
-	if err != nil {
-		return "", err
-	}
-	return record.ID, nil
 }
 
 // batchLineRunner executes one input line on the same pipeline the online
@@ -510,17 +479,4 @@ func bestEffortCustomID(line []byte) string {
 	}
 	_ = json.Unmarshal(line, &probe)
 	return probe.CustomID
-}
-
-func (b *batchFileIO) PrepareResult(ctx context.Context, claim jobs.BatchLine) (jobs.ResultFile, error) {
-	file, err := b.files.PrepareOutput(ctx, b.account, "batch-line:"+claim.RequestID, claim.BatchID+"_line_"+strconv.Itoa(claim.Number)+".jsonl", b.storedBytesBound)
-	return jobs.ResultFile{ID: file.ID, ExpiresAt: file.ExpiresAt}, err
-}
-func (b *batchFileIO) StoreResult(ctx context.Context, id string, size int64, digest string, body io.Reader) error {
-	_, err := b.files.CommitOutput(ctx, b.account, id, size, digest, body)
-	return err
-}
-func (b *batchFileIO) OpenResult(ctx context.Context, id string) (io.ReadCloser, error) {
-	_, reader, err := b.files.Open(ctx, b.account, id)
-	return reader, err
 }

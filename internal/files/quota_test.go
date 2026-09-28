@@ -13,20 +13,20 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/blob"
-	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/storage"
 )
 
-var errStorageFull = limits.ErrStorageFull
+var errStorageFull = storedbytes.ErrStorageFull
 
-func storedTotal(t *testing.T, m *limits.StorageMeter, account string) int64 {
+func storedTotal(t *testing.T, m *storedbytes.StorageMeter, account string) int64 {
 	t.Helper()
 	total, err := m.Total(t.Context(), account)
 	require.NoError(t, err)
 	return total
 }
 
-func newMeteredService(t *testing.T) (*Service, *limits.StorageMeter, string) {
+func newMeteredService(t *testing.T) (*Service, *storedbytes.StorageMeter, string) {
 	t.Helper()
 	store := storage.NewMockStore()
 	records, err := OpenRepository(store)
@@ -34,7 +34,7 @@ func newMeteredService(t *testing.T) (*Service, *limits.StorageMeter, string) {
 	root := t.TempDir()
 	bytes, err := blob.NewFilesystem(root)
 	require.NoError(t, err)
-	meter, err := limits.NewStorageMeter(store)
+	meter, err := storedbytes.NewStorageMeter(store)
 	require.NoError(t, err)
 	service, err := NewService(records, bytes, WithMeter(meter))
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func TestAFailedWriteGivesBackItsClaim(t *testing.T) {
 	root := t.TempDir()
 	bytes, err := blob.NewFilesystem(root)
 	require.NoError(t, err)
-	meter, err := limits.NewStorageMeter(store)
+	meter, err := storedbytes.NewStorageMeter(store)
 	require.NoError(t, err)
 
 	// The write fails, which is the same shape as a process that stops: the
@@ -206,7 +206,7 @@ func TestTheSweepGivesBackAnAbandonedClaim(t *testing.T) {
 	require.NoError(t, err)
 	bytes, err := blob.NewFilesystem(t.TempDir())
 	require.NoError(t, err)
-	meter, err := limits.NewStorageMeter(store)
+	meter, err := storedbytes.NewStorageMeter(store)
 	require.NoError(t, err)
 	service, err := NewService(records, bytes,
 		WithMeter(meter), WithClock(func() time.Time { return clock }))

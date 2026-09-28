@@ -1,4 +1,4 @@
-package limits
+package storedbytes
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -58,7 +59,7 @@ type StorageMeter struct {
 
 func NewStorageMeter(store storage.KVStore) (*StorageMeter, error) {
 	if store == nil {
-		return nil, ErrCounterRequired
+		return nil, limits.ErrCounterRequired
 	}
 	return &StorageMeter{store: store}, nil
 }
@@ -67,7 +68,7 @@ func NewStorageMeter(store storage.KVStore) (*StorageMeter, error) {
 // Existing legacy or claim evidence prevents an implicit reset to zero.
 func (m *StorageMeter) InitializeEmpty(ctx context.Context, holder string) error {
 	if strings.TrimSpace(holder) == "" {
-		return ErrInvalidHolder
+		return limits.ErrInvalidHolder
 	}
 	if _, _, err := m.readTotal(ctx, holder); err == nil {
 		return nil
@@ -97,7 +98,7 @@ func (m *StorageMeter) InitializeEmpty(ctx context.Context, holder string) error
 // Reserve records one file claim before bytes or file metadata can publish.
 func (m *StorageMeter) Reserve(ctx context.Context, holder, id string, size, bound int64) error {
 	if strings.TrimSpace(holder) == "" {
-		return ErrInvalidHolder
+		return limits.ErrInvalidHolder
 	}
 	if id == "" || size < 0 || bound < 0 {
 		return ErrStorageClaimConflict
@@ -272,7 +273,7 @@ func (m *StorageMeter) Total(ctx context.Context, holder string) (int64, error) 
 }
 func (m *StorageMeter) readTotal(ctx context.Context, holder string) (byteTotal, []byte, error) {
 	if strings.TrimSpace(holder) == "" {
-		return byteTotal{}, nil, ErrInvalidHolder
+		return byteTotal{}, nil, limits.ErrInvalidHolder
 	}
 	data, err := m.store.GetBounded(ctx, byteTotalKey(holder), 1024)
 	if err != nil {
@@ -286,7 +287,7 @@ func (m *StorageMeter) readTotal(ctx context.Context, holder string) (byteTotal,
 }
 func (m *StorageMeter) readClaim(ctx context.Context, holder, id string) (byteClaim, []byte, error) {
 	if strings.TrimSpace(holder) == "" {
-		return byteClaim{}, nil, ErrInvalidHolder
+		return byteClaim{}, nil, limits.ErrInvalidHolder
 	}
 	data, err := m.store.GetBounded(ctx, byteClaimKey(holder, id), 8192)
 	if err != nil {

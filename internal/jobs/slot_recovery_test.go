@@ -242,7 +242,13 @@ func TestLegacyJobSchemasRequireMigration(t *testing.T) {
 			require.Len(t, keys, 1)
 			data, err := backing.Get(t.Context(), keys[0])
 			require.NoError(t, err)
-			current := []byte(`"schema_version":3`)
+			current := []byte(`"schema_version":4`)
+			if prefix == jobs.BatchStoragePrefix {
+				legacyAggregate := bytes.Replace(data, current, []byte(`"schema_version":3`), 1)
+				require.NoError(t, backing.Set(t.Context(), keys[0], legacyAggregate))
+				_, readErr := batchRecords.Get(t.Context(), accountA, batch.ID)
+				require.ErrorIs(t, readErr, jobs.ErrCorruptBatchRecord)
+			}
 			if prefix == jobs.StoragePrefix {
 				current = []byte(`"schema_version":5`)
 				legacyPublication := bytes.Replace(data, current, []byte(`"schema_version":4`), 1)

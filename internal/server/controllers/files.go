@@ -18,6 +18,7 @@ import (
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/agentstation/starport/internal/server/requestctx"
@@ -263,7 +264,7 @@ func (h *FilesController) writeError(w http.ResponseWriter, action string, err e
 		errors.Is(err, files.ErrRetentionTooLong),
 		errors.Is(err, files.ErrRetentionTooShort):
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
-	case errors.Is(err, limits.ErrStorageFull):
+	case errors.Is(err, storedbytes.ErrStorageFull):
 		// The upload itself is a legal size. What it would not fit inside is
 		// the room this holder has left, which a delete frees and a retry of
 		// the same request does not. The message says which of the two bounds

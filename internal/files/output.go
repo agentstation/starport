@@ -226,3 +226,23 @@ func (r *outputReader) Read(p []byte) (int, error) {
 	}
 	return n, err
 }
+
+// ExposeOutput verifies a completed aggregate before public file listing.
+func (s *Service) ExposeOutput(ctx context.Context, account, id string) error {
+	file, err := s.RecoverOutput(ctx, account, id)
+	if err != nil {
+		return err
+	}
+	if file.outputPublished {
+		return nil
+	}
+	file.outputPublished = true
+	if err := s.records.Replace(ctx, file); err != nil {
+		retained, readErr := s.records.Get(ctx, account, id)
+		if readErr == nil && retained == file {
+			return nil
+		}
+		return err
+	}
+	return nil
+}

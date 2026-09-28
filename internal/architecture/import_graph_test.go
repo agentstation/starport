@@ -30,6 +30,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../files",
 		"../jobs",
 		"../jobs/assetfetch",
+		"../jobs/fileio",
 		"../inference",
 		"../failure",
 		"../apikey",
@@ -59,6 +60,8 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/document",
 		"github.com/agentstation/starport/internal/files",
 		"github.com/agentstation/starport/internal/jobs",
+		"github.com/agentstation/starport/internal/jobs/fileio",
+		"github.com/agentstation/starport/internal/limits/storedbytes",
 		"github.com/agentstation/starport/internal/inference",
 		"github.com/agentstation/starport/internal/failure",
 		"github.com/agentstation/starport/internal/apikey",
@@ -171,6 +174,10 @@ func TestImportGraphArchitecture(t *testing.T) {
 	// Limits is the vocabulary both a gateway API key and an account hold. It
 	// stays a leaf so neither owner can reach the other through it.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/limits"])
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/limits/storedbytes"],
+		"github.com/agentstation/starport/internal/limits",
+		"github.com/agentstation/starport/internal/storage",
+	)
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/recovery"],
 		"github.com/agentstation/starport/internal/sqlstore",
 		"github.com/agentstation/starport/internal/storage",
@@ -219,6 +226,10 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/blob",
 		"github.com/agentstation/starport/internal/routing",
 		"github.com/agentstation/starport/internal/storage",
+	)
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/jobs/fileio"],
+		"github.com/agentstation/starport/internal/jobs",
+		"github.com/agentstation/starport/internal/files",
 	)
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/jobs/assetfetch"],
 		"github.com/agentstation/starport/internal/jobs",

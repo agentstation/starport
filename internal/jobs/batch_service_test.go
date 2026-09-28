@@ -28,7 +28,6 @@ type memoryBatchIO struct {
 	stored      map[string]string
 	checkpoints map[string]string
 	prepared    map[string]jobs.ResultFile
-	nextID      int
 }
 
 func newMemoryBatchIO(input string) *memoryBatchIO {
@@ -39,18 +38,45 @@ func (m *memoryBatchIO) OpenInput(context.Context) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(m.input)), nil
 }
 
-func (m *memoryBatchIO) StoreOutput(_ context.Context, name string, content io.Reader) (string, error) {
+func (m *memoryBatchIO) StoreAggregate(_ context.Context, batch jobs.Batch, failed bool, size int64, digest string, content io.Reader) (string, error) {
 	data, err := io.ReadAll(content)
 	if err != nil {
 		return "", err
 	}
+	sum := sha256.Sum256(data)
+	if int64(len(data)) != size || hex.EncodeToString(sum[:]) != digest {
+		return "", fmt.Errorf("invalid aggregate")
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.nextID++
-	id := fmt.Sprintf("file-%d", m.nextID)
+	id := fmt.Sprintf("aggregate-%s-%t", batch.ID, failed)
+	if old, ok := m.stored[id]; ok && old != string(data) {
+		return "", fmt.Errorf("aggregate changed")
+	}
 	m.stored[id] = string(data)
-	_ = name
 	return id, nil
+}
+func (m *memoryBatchIO) RecoverResult(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.checkpoints[id]; !ok {
+		return fmt.Errorf("missing checkpoint")
+	}
+	return nil
+}
+func (m *memoryBatchIO) ConfirmAggregate(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.stored[id]; !ok {
+		return fmt.Errorf("missing aggregate")
+	}
+	return nil
+}
+func (m *memoryBatchIO) DeleteResult(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.checkpoints, id)
+	return nil
 }
 
 func (m *memoryBatchIO) file(id string) string {

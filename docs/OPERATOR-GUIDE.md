@@ -265,7 +265,14 @@ The record reports `batch_result_storage_unavailable`. It does not repeat the pr
 
 Prepared line files retain their original expiry. Internal checkpoints do not appear in ordinary file listings.
 The storage bound counts checkpoints and aggregate files while both exist. File scans continue beyond the first page.
-Automatic interrupted-run recovery, aggregate reconstruction, and early checkpoint cleanup remain incomplete in this candidate.
+The worker and background sweep reconstruct complete aggregates from retained line results without another provider request.
+Each aggregate keeps one stable identity, content digest, and original expiry across retries.
+Starport confirms the aggregate bytes and batch references before it retires line checkpoints.
+A batch status request reads the record without reconstructing its files.
+
+Peak storage includes line checkpoints and aggregates until cleanup completes. A quota refusal preserves retained results.
+Free legitimate capacity before retrying recovery. Do not widen the original batch bound through replacement configuration.
+Incomplete failed runs retain their claims. Automatic continuation of untouched lines remains unimplemented pending the restart-policy decision.
 
 File cleanup now confirms permanent retirement before it releases metadata or quota.
 A delayed writer cannot replace a retired identity. Full batch recovery qualification remains open.
@@ -1354,7 +1361,7 @@ closes its unattached claim. Attached files follow normal file retention.
 Missing or invalid accounting state refuses new uploads. Do not delete quota
 keys to restore capacity.
 
-File schema 4 and byte-accounting schema 2 require
+File schema 5, batch schema 4, and byte-accounting schema 2 require
 coordinated migration. CSP13 owns that qualification.
 
 File bytes use immutable publication in the `retained-v1` blob namespace.

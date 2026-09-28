@@ -1,4 +1,4 @@
-package limits
+package storedbytes
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/repotest"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
@@ -100,33 +101,12 @@ func TestTheMeterNamesItsHolder(t *testing.T) {
 	meter, err := NewStorageMeter(storage.NewMockStore())
 	require.NoError(t, err)
 	ctx := context.Background()
-	require.ErrorIs(t, meter.Reserve(ctx, "", "one", 100, 1000), ErrInvalidHolder)
-	require.ErrorIs(t, meter.Release(ctx, "", "one"), ErrInvalidHolder)
+	require.ErrorIs(t, meter.Reserve(ctx, "", "one", 100, 1000), limits.ErrInvalidHolder)
+	require.ErrorIs(t, meter.Release(ctx, "", "one"), limits.ErrInvalidHolder)
 	_, err = meter.Total(ctx, "")
-	require.ErrorIs(t, err, ErrInvalidHolder)
+	require.ErrorIs(t, err, limits.ErrInvalidHolder)
 	_, err = NewStorageMeter(nil)
-	require.ErrorIs(t, err, ErrCounterRequired)
-}
-
-// TestStoredBytesJoinsTheLimitVocabulary states that the new bound behaves
-// like every other one: it validates, it clones deeply, and it counts toward
-// whether a holder carries limits at all.
-func TestStoredBytesJoinsTheLimitVocabulary(t *testing.T) {
-	t.Parallel()
-	bound := int64(1 << 20)
-	limits := &Limits{StoredBytes: &bound}
-
-	require.NoError(t, limits.Validate())
-	require.False(t, limits.IsZero())
-
-	clone := limits.Clone()
-	require.NotSame(t, limits.StoredBytes, clone.StoredBytes)
-	require.Equal(t, bound, *clone.StoredBytes)
-
-	zero := int64(0)
-	require.ErrorIs(t, (&Limits{StoredBytes: &zero}).Validate(), ErrInvalidStoredBytes)
-	negative := int64(-1)
-	require.ErrorIs(t, (&Limits{StoredBytes: &negative}).Validate(), ErrInvalidStoredBytes)
+	require.ErrorIs(t, err, limits.ErrCounterRequired)
 }
 
 func TestUnattachedByteRecoveryFencesDelayedPublication(t *testing.T) {

@@ -127,6 +127,16 @@ func recoverPages[T any](ctx context.Context, state *recoveryState[T], read func
 // A cancelled batch whose lines have not drained retains its claim.
 func (s *BatchService) Sweep(ctx context.Context) (SweepResult, error) {
 	return recoverPages(ctx, &s.recovery, s.repository.RecoveryPage, func(ctx context.Context, batch Batch, result *SweepResult) error {
+		if s.openFiles != nil && !batch.ResultsReleased {
+			recovered, err := s.RecoverResults(ctx, batch.Account, batch.ID, s.openFiles(batch))
+			if err != nil {
+				if errors.Is(err, ErrBatchResultsPending) && !recovered.State.Terminal() {
+					return nil
+				}
+				return err
+			}
+			batch = recovered
+		}
 		if !batch.RunFinished || batch.SlotReleased || batch.SlotID == "" || s.meter == nil {
 			return nil
 		}

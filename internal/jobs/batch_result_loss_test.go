@@ -14,6 +14,7 @@ import (
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/jobs/fileio"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
@@ -23,9 +24,17 @@ type resultLossIO struct{ service *files.Service }
 func (b resultLossIO) OpenInput(context.Context) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("{}\n{}\n")), nil
 }
-func (b resultLossIO) StoreOutput(ctx context.Context, name string, r io.Reader) (string, error) {
-	f, err := b.service.Upload(ctx, files.UploadRequest{Account: "account", Filename: name, Purpose: files.PurposeBatchOutput}, r)
-	return f.ID, err
+func (b resultLossIO) StoreAggregate(ctx context.Context, batch jobs.Batch, failed bool, size int64, digest string, r io.Reader) (string, error) {
+	return (fileio.Store{Files: b.service, Account: "account"}).StoreAggregate(ctx, batch, failed, size, digest, r)
+}
+func (b resultLossIO) RecoverResult(ctx context.Context, id string) error {
+	return (fileio.Store{Files: b.service, Account: "account"}).RecoverResult(ctx, id)
+}
+func (b resultLossIO) ConfirmAggregate(ctx context.Context, id string) error {
+	return (fileio.Store{Files: b.service, Account: "account"}).ConfirmAggregate(ctx, id)
+}
+func (b resultLossIO) DeleteResult(ctx context.Context, id string) error {
+	return (fileio.Store{Files: b.service, Account: "account"}).DeleteResult(ctx, id)
 }
 
 type resultLossRunner struct{ marker string }
