@@ -43,6 +43,8 @@ var (
 )
 
 const (
+	flagBackupOperation   = "operation"
+	flagStructuredJSON    = "json"
 	flagNoAuth            = "no-auth"
 	flagAllowRemoteNoAuth = "allow-remote-no-auth"
 )
@@ -84,18 +86,21 @@ type usageErrorHandler = urfavecli.OnUsageErrorFunc
 
 // Dependencies contains all runtime boundaries used by commands.
 type Dependencies struct {
-	Stdin            io.Reader
-	Stdout           io.Writer
-	Stderr           io.Writer
-	Build            BuildInfo
-	RunServer        ServerRunner
-	StartDevelopment DevelopmentStarter
-	Initialize       Initializer
-	LoadConfig       ConfigLoader
-	ResolvePaths     PathResolver
-	Diagnose         Diagnoser
-	MigrateRuntime   RuntimeMigrator
-	InitializeFleet  FleetInitializer
+	Stdin               io.Reader
+	Stdout              io.Writer
+	Stderr              io.Writer
+	Build               BuildInfo
+	RunServer           ServerRunner
+	StartDevelopment    DevelopmentStarter
+	Initialize          Initializer
+	LoadConfig          ConfigLoader
+	ResolvePaths        PathResolver
+	Diagnose            Diagnoser
+	MigrateRuntime      RuntimeMigrator
+	InitializeFleet     FleetInitializer
+	CloseBackupBoundary BackupCloser
+	CaptureBackup       BackupCapturer
+	VerifyBackup        BackupVerifier
 	// Desktop reaches the operator's machine. It is not validated: a machine
 	// with no browser and no clipboard still runs every command, because each
 	// one prints the link it would otherwise have handed over.
@@ -320,7 +325,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 	auth := newAuthCommand(deps, usageError)
 	ui := newUICommand(deps, usageError)
 
-	commands := []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand, newMigrationCommand(deps, usageError), newFleetCommand(deps, usageError)}
+	commands := []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand, newMigrationCommand(deps, usageError), newFleetCommand(deps, usageError), newBackupCommand(deps, usageError)}
 	commands = append(commands, deps.ExtraCommands...)
 	commands = append(commands, version, man, help)
 	root := &urfavecli.Command{

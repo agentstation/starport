@@ -43,6 +43,10 @@ func OpenBadgerReadOnly(config BadgerConfig) (*BadgerStore, error) {
 }
 
 func openBadger(config BadgerConfig, readOnly bool) (*BadgerStore, error) {
+	return openBadgerConnection(config, readOnly, !readOnly)
+}
+
+func openBadgerConnection(config BadgerConfig, readOnly, maintenance bool) (*BadgerStore, error) {
 	if config.GCInterval == 0 {
 		config.GCInterval = 5 * time.Minute
 	}
@@ -80,7 +84,7 @@ func openBadger(config BadgerConfig, readOnly bool) (*BadgerStore, error) {
 		compactStop: make(chan struct{}),
 	}
 
-	if !readOnly && !config.InMemory {
+	if maintenance && !config.InMemory {
 		if !config.SyncWrites {
 			log.Warn().Msg("Badger sync_writes=false permits acknowledged-write loss after a host failure")
 		}

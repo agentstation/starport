@@ -128,7 +128,7 @@ func TestBackupBundleDetectsChangedArtifacts(t *testing.T) {
 }
 
 type boundaryChangingTransfer struct {
-	storage.RecordTransfer
+	storage.RecordSource
 	before func() error
 }
 
@@ -136,14 +136,14 @@ func (s boundaryChangingTransfer) Enumerate(ctx context.Context, yield func(stor
 	if err := s.before(); err != nil {
 		return err
 	}
-	return s.RecordTransfer.Enumerate(ctx, yield)
+	return s.RecordSource.Enumerate(ctx, yield)
 }
 
 func TestBackupBundleLeavesNoManifestAfterBoundaryChange(t *testing.T) {
 	source, request, destination := backupBundleFixture(t)
 	witness, err := New(source.SQL)
 	require.NoError(t, err)
-	source.KV = boundaryChangingTransfer{RecordTransfer: source.KV, before: func() error {
+	source.KV = boundaryChangingTransfer{RecordSource: source.KV, before: func() error {
 		_, err := witness.Close(t.Context(), request.Boundary)
 		return err
 	}}
@@ -209,4 +209,13 @@ func TestBackupBundleSharedRecipe(t *testing.T) {
 	require.Equal(t, int64(1), verified.KV.Records)
 	require.Equal(t, int64(2), verified.Blobs.Objects)
 	require.Equal(t, int64(1), verified.Blobs.Retired)
+}
+
+func TestBackupBundleRejectsChangedSelectedConfiguration(t *testing.T) {
+	source, request, destination := backupBundleFixture(t)
+	source.Files[0].ExpectedSHA256 = strings.Repeat("0", 64)
+	_, err := BackupBundle(t.Context(), destination, source, request)
+	require.ErrorContains(t, err, "configuration changed after selection")
+	_, err = os.Stat(filepath.Join(destination, bundleManifestFile))
+	require.ErrorIs(t, err, os.ErrNotExist)
 }

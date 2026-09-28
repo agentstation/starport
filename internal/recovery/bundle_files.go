@@ -72,7 +72,8 @@ func copyBundleFile(ctx context.Context, root *os.Root, selected BundleFile) (re
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, output.Close()) }()
-	if _, err := io.CopyN(output, &kvSnapshotReader{ctx: ctx, reader: input}, opened.Size()); err != nil {
+	digest := sha256.New()
+	if _, err := io.CopyN(io.MultiWriter(output, digest), &kvSnapshotReader{ctx: ctx, reader: input}, opened.Size()); err != nil {
 		return err
 	}
 	var extra [1]byte
@@ -85,6 +86,9 @@ func copyBundleFile(ctx context.Context, root *os.Root, selected BundleFile) (re
 	}
 	if after.Size() != opened.Size() || !after.ModTime().Equal(opened.ModTime()) {
 		return errors.New("backup input changed during capture")
+	}
+	if selected.ExpectedSHA256 != "" && hex.EncodeToString(digest.Sum(nil)) != selected.ExpectedSHA256 {
+		return errors.New("backup configuration changed after selection")
 	}
 	return output.Sync()
 }

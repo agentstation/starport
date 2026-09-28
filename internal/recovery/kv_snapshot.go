@@ -36,7 +36,7 @@ type KVSnapshot struct {
 // SnapshotKV writes kv.db and its receipt into a new private directory.
 // Writers must remain stopped. Partial directories are not valid backups.
 // SnapshotKV publishes the receipt only after the complete image reaches durable storage.
-func SnapshotKV(ctx context.Context, source storage.RecordTransfer, destination string) (receipt KVSnapshot, resultErr error) {
+func SnapshotKV(ctx context.Context, source storage.RecordSource, destination string) (receipt KVSnapshot, resultErr error) {
 	if err := ctx.Err(); err != nil {
 		return receipt, err
 	}
@@ -118,7 +118,7 @@ func openKVSnapshot(path string, readonly bool) (*sql.DB, error) {
 	return db, err
 }
 
-func collectKVSnapshot(ctx context.Context, source storage.RecordTransfer, path string) (count int64, resultErr error) {
+func collectKVSnapshot(ctx context.Context, source storage.RecordSource, path string) (count int64, resultErr error) {
 	db, err := openKVSnapshot(path, false)
 	if err != nil {
 		return 0, err

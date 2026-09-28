@@ -12,6 +12,16 @@ import (
 )
 
 const (
+	fileKindRegular         = "file"
+	fileRoleSourceCheckout  = "source-checkout"
+	fileRoleSourceHTTP      = "source-http"
+	fileRoleSourceFile      = "source-file"
+	fileRoleLocalToken      = "local-token"
+	fileRoleWelcome         = "welcome-stamp"
+	fileRoleRuntimeEvidence = "runtime-evidence"
+	fileRoleTLSCertificate  = "tls-certificate"
+	fileRoleTLSKey          = "tls-key"
+
 	fileKindTree             = "tree"
 	fileRoleBaselineRecovery = "baseline-recovery"
 	fileAvailable            = "available"
@@ -59,7 +69,7 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 		}
 		report.Files = append(report.Files, entry)
 	}
-	add(pathRoleConfiguration, p.ConfigFile, "file", fileDisabled, policy.OwnerOnly,
+	add(pathRoleConfiguration, p.ConfigFile, fileKindRegular, fileDisabled, policy.OwnerOnly,
 		"The loader reads the selected primary file.", "Preserve configuration and required secret access.", "STARPORT_CONFIG_FILE", "STARPORT_CONFIG_DIR", "STARPORT_CONFIG_ACCESS")
 	for index, input := range c.fileInputs {
 		if input.primary {
@@ -68,7 +78,7 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 			report.Files[0].Policy.Access = input.access
 			continue
 		}
-		add("dotenv-"+strconv.Itoa(index), input.location.Path, "file", fileAvailable, input.access,
+		add("dotenv-"+strconv.Itoa(index), input.location.Path, fileKindRegular, fileAvailable, input.access,
 			"The caller explicitly selects this environment file.", "Preserve required values privately.", "explicit environment file")
 		report.Files[len(report.Files)-1].Location = input.location
 	}
@@ -90,33 +100,33 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 		}
 	}
 	sqlite := selectedAvailability(c.Storage.SQL.Mode == sqlModeSQLite && !c.Storage.Badger.inMemory)
-	add(pathRoleSQLite, p.SQLiteFile, "file", sqlite, policy.OwnerOnly,
+	add(pathRoleSQLite, p.SQLiteFile, fileKindRegular, sqlite, policy.OwnerOnly,
 		"The local SQL backend opens this database.", "Use a consistent SQLite backup with the matching KV records and encryption key access.", sqlitePathEnvironment)
 	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
 		path := ""
 		if p.SQLiteFile != "" {
 			path = p.SQLiteFile + suffix
 		}
-		add(pathRoleSQLite+suffix, path, "file", sqlite, policy.OwnerOnly,
+		add(pathRoleSQLite+suffix, path, fileKindRegular, sqlite, policy.OwnerOnly,
 			"SQLite creates sidecars when its journal mode requires them.", "Keep database sidecars with the live database. Do not delete them during operation.", sqlitePathEnvironment)
 	}
 	add(pathRoleFiles, p.FilesDir, fileKindTree, selectedAvailability(c.Files.SelectedBackend() == BlobBackendFilesystem && p.FilesDir != ""), policy.OwnerOnly,
 		"The filesystem blob backend stores uploaded bytes.", "Restore file records and bytes together. File retention controls normal removal.", filesPathEnvironment)
-	add("local-token", p.LocalTokenFile, "file", selectedAvailability(p.LocalTokenFile != ""), policy.OwnerOnly,
+	add(fileRoleLocalToken, p.LocalTokenFile, fileKindRegular, selectedAvailability(p.LocalTokenFile != ""), policy.OwnerOnly,
 		"Persistent startup creates the local administrator token. Development only reads an existing token.", "Treat this file as an administrator credential.")
 	localLock := ""
 	if p.LocalTokenFile != "" {
 		localLock = p.LocalTokenFile + ".lock"
 	}
-	add("local-token-lock", localLock, "file", selectedAvailability(localLock != "" && !c.Storage.Badger.inMemory), policy.OwnerOnly,
+	add("local-token-lock", localLock, fileKindRegular, selectedAvailability(localLock != "" && !c.Storage.Badger.inMemory), policy.OwnerOnly,
 		"Persistent token reads and writes acquire this stable lock.", "Preserve the lock while token operations can run.")
-	report.Files[len(report.Files)-1].Location = manifestPath(p, "local-token", localLock)
-	add("welcome-stamp", p.WelcomeStampFile, "file", selectedAvailability(!c.Catalog.StateDirectoryIsScratch()), policy.OwnerOnly,
+	report.Files[len(report.Files)-1].Location = manifestPath(p, fileRoleLocalToken, localLock)
+	add(fileRoleWelcome, p.WelcomeStampFile, fileKindRegular, selectedAvailability(!c.Catalog.StateDirectoryIsScratch()), policy.OwnerOnly,
 		"Persistent onboarding records completion.", "Removal repeats the first-use notice.")
 	for _, item := range []struct{ id, path, kind, creation, recovery string }{
 		{pathRoleBaseline, p.BaselineDir, fileKindTree, "Persistent catalog startup exports the embedded catalog.", "Reproduce from the same binary or preserve the verified export."},
 		{fileRoleBaselineRecovery, childPath(p.BaselineDir, ".starmap-baseline"), fileKindTree, "Embedded export records publication and recovery state.", "Keep locks and journals until verified recovery completes."},
-		{"runtime-evidence", p.RuntimeDir, fileKindTree, "The connected catalog runtime saves private identity and acquisition evidence.", "Preserve runtime identity, layer evidence, replay floors, migration records, and locks. Accepted generations live in the selected KV backend."},
+		{fileRoleRuntimeEvidence, p.RuntimeDir, fileKindTree, "The connected catalog runtime saves private identity and acquisition evidence.", "Preserve runtime identity, layer evidence, replay floors, migration records, and locks. Accepted generations live in the selected KV backend."},
 	} {
 		access, err := policy.ForRole(item.id)
 		if err != nil {
@@ -141,20 +151,20 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 	}
 	report.Files = append(report.Files, workspaceFiles...)
 	if c.Catalog.Source == CatalogSourceFile {
-		add("source-file", c.Catalog.SourceURL, "file", fileAvailable, policy.DeploymentControlled,
+		add(fileRoleSourceFile, c.Catalog.SourceURL, fileKindRegular, fileAvailable, policy.DeploymentControlled,
 			"The operator selects a file catalog source.", "Preserve the source catalog and its access policy.", "STARPORT_CATALOG_SOURCE_URL")
 	}
 	for _, item := range []struct{ id, path, access string }{
-		{"tls-certificate", c.Security.TLSCertPath, policy.DeploymentControlled}, {"tls-key", c.Security.TLSKeyPath, policy.OwnerOnly},
+		{fileRoleTLSCertificate, c.Security.TLSCertPath, policy.DeploymentControlled}, {fileRoleTLSKey, c.Security.TLSKeyPath, policy.OwnerOnly},
 	} {
-		add(item.id, item.path, "file", selectedAvailability(c.Security.EnableTLS && item.path != ""), item.access,
+		add(item.id, item.path, fileKindRegular, selectedAvailability(c.Security.EnableTLS && item.path != ""), item.access,
 			"The operator supplies TLS material.", "Renew through the deployment certificate procedure.")
 	}
-	add(cacheCAFileRole, c.Cache.CAFile, "file", selectedAvailability(c.Cache.Enabled, c.Cache.Backend == "valkey", c.Cache.CAFile != ""), policy.DeploymentControlled,
+	add(cacheCAFileRole, c.Cache.CAFile, fileKindRegular, selectedAvailability(c.Cache.Enabled, c.Cache.Backend == "valkey", c.Cache.CAFile != ""), policy.DeploymentControlled,
 		"The operator supplies cache trust roots.", "Replace the trust bundle and restart the gateway to apply it.", cacheCAFileEnvironment)
-	add(valkeyCAFileRole, c.Storage.Valkey.CAFile, "file", selectedAvailability(c.Storage.Distributed(), c.Storage.Valkey.CAFile != ""), policy.DeploymentControlled,
+	add(valkeyCAFileRole, c.Storage.Valkey.CAFile, fileKindRegular, selectedAvailability(c.Storage.Distributed(), c.Storage.Valkey.CAFile != ""), policy.DeploymentControlled,
 		"The operator supplies durable KV trust roots.", "Replace the trust bundle and restart the gateway to apply it.", valkeyCAFileEnvironment)
-	add("logs", c.Logging.FilePath, "file", filePlanned, policy.OwnerOnly,
+	add("logs", c.Logging.FilePath, fileKindRegular, filePlanned, policy.OwnerOnly,
 		"File logging has no implemented application writer.", "Current application logging uses streams.", "STARPORT_LOGGING_FILE_PATH")
 	selection := make(map[string]string)
 	if value, present := c.Catalog.canonicalValues[catalogconfig.AcquisitionSources]; present {
@@ -172,8 +182,8 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 		role, path string
 		id         sources.ID
 	}{
-		{"source-http", childPath(p.CacheDir, "models.dev"), sources.ModelsDevHTTPID},
-		{"source-checkout", childPath(p.CacheDir, "sources", "models.dev-git"), sources.ModelsDevGitID},
+		{fileRoleSourceHTTP, childPath(p.CacheDir, "models.dev"), sources.ModelsDevHTTPID},
+		{fileRoleSourceCheckout, childPath(p.CacheDir, "sources", "models.dev-git"), sources.ModelsDevGitID},
 	} {
 		access, err := policy.ForRole(source.role)
 		if err != nil {
@@ -235,7 +245,7 @@ func manifestPath(paths Paths, role, path string) productpaths.Path {
 		originRole = "state"
 	case fileRoleBaselineRecovery:
 		originRole = pathRoleBaseline
-	case "runtime-evidence":
+	case fileRoleRuntimeEvidence:
 		originRole = pathRoleRuntime
 	case "sqlite-wal", "sqlite-shm", "sqlite-journal":
 		originRole = pathRoleSQLite
@@ -243,9 +253,9 @@ func manifestPath(paths Paths, role, path string) productpaths.Path {
 	selected, ok := paths.Origins[originRole]
 	if !ok {
 		switch role {
-		case pathRoleBaseline, fileRoleBaselineRecovery, "welcome-stamp":
+		case pathRoleBaseline, fileRoleBaselineRecovery, fileRoleWelcome:
 			selected.Origin = "derived:data"
-		case "source-http", "source-checkout":
+		case fileRoleSourceHTTP, fileRoleSourceCheckout:
 			selected.Origin = "derived:cache"
 		default:
 			selected.Origin = pathOriginDefault

@@ -64,10 +64,13 @@ func runContext(
 		LoadConfig: func(loadCtx context.Context) (*config.Config, error) {
 			return config.LoadWithDefaults(loadCtx)
 		},
-		ResolvePaths:    config.PlatformPaths,
-		Diagnose:        diagnosis.Run,
-		MigrateRuntime:  app.MigrateRuntime,
-		InitializeFleet: app.InitializeFleet,
+		ResolvePaths:        config.PlatformPaths,
+		Diagnose:            diagnosis.Run,
+		MigrateRuntime:      app.MigrateRuntime,
+		InitializeFleet:     app.InitializeFleet,
+		CloseBackupBoundary: app.CloseBackupBoundary,
+		CaptureBackup:       app.CaptureBackup,
+		VerifyBackup:        app.VerifyBackup,
 	})
 	if err == nil {
 		return 0

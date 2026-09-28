@@ -24,12 +24,61 @@ The encrypted challenge proves access to the key selected during capture.
 It does not prove that every historical credential uses that key.
 Credential owners must validate their encrypted records before recovery approval.
 
-The application still owns the complete selected-file inventory and external dependency list.
+The application derives its selected-file inventory from the canonical configuration manifest.
 This includes configuration, catalog runtime and baseline files, identity state, credential-selection policy, source inputs, and transport trust.
 File and job owners must verify record references against captured bytes.
-These checks and the operator commands remain required before deployment recovery is complete.
+Reference checks, historical credential validation, and recovery commands remain required before deployment recovery is complete.
 
 A verified bundle grants no permission to resume inference.
 Recovery must reconcile permission withdrawals, acknowledged spending, and uncertain work after the backup against independent evidence.
 Unknown history keeps affected access restricted.
 Restoring the SQL witness cannot restore permission to approve itself.
+
+## Capture commands
+
+The configured deployment must already contain initialized persistent stores.
+Capture does not create a missing store or migrate its schema.
+The configured master key must remain available through its normal configuration source.
+
+`starport backup close` closes the SQL recovery record.
+It does not stop processes or independently fence every admission path.
+The operator must stop and fence all writers before capture.
+Existing requests, background tasks, former primaries, and every replica belong to that procedure.
+
+Create an unused destination below an existing private directory:
+
+```sh
+starport backup create \
+  --destination /private/recovery/capture-001 \
+  --operation capture-001 \
+  --fencing-evidence incident-123/writer-fence \
+  --key-reference vault-reference/master-key \
+  --json
+```
+
+`--key-reference` records a recovery reference, never the key value.
+Retain the returned manifest digest outside the backup.
+The inventory records each selected path, its capture method, and its file mapping.
+Loaded configuration must match the bytes read during configuration load.
+Missing optional default configuration is valid.
+
+Incomplete scans, unsupported file types, and missing loaded configuration cause refusal.
+Native adapters capture database and blob contents instead of copying engine files as ordinary configuration files.
+
+Badger opens read-only on Linux and macOS.
+Windows requires a native exclusive open, which can recover engine state.
+The Windows capture connection does not run application maintenance tasks.
+All platforms require stopped writers.
+Valkey capture binds the observed backend incarnation and refuses a pending import barrier.
+
+Verify the bundle without opening live stores:
+
+```sh
+starport backup verify \
+  --directory /private/recovery/capture-001 \
+  --manifest-sha256 "$RETAINED_MANIFEST_SHA256"
+```
+
+Verification checks captured bytes and access to the selected key.
+It does not reopen admission or establish independent recovery history.
+External environment settings, credential sources, cloud permissions, and upstream authority trust remain explicit recovery requirements.

@@ -41,13 +41,18 @@ func (r TransferRecord) Validate() error {
 	return nil
 }
 
+// RecordSource enumerates durable records without exposing writes.
+type RecordSource interface {
+	Enumerate(context.Context, func(TransferRecord) error) error
+}
+
 // RecordTransfer serves a stopped deployment's backup and import coordinator.
 // The caller must fence source and target writers throughout the operation.
 // Enumerate can repeat identical records. Import leaves a persistent barrier.
 // These operations do not grant permission to start a recovered deployment.
 type RecordTransfer interface {
+	RecordSource
 	ExpiryResolution() time.Duration
-	Enumerate(context.Context, func(TransferRecord) error) error
 	Claim(context.Context, []byte) error
 	Import(context.Context, []byte, TransferRecord) error
 }

@@ -19,15 +19,15 @@ func pathSelections(cfg *Config) []pathSelection {
 	selections := []pathSelection{
 		{"workspace", "", catalogconfig.WorkspacePath, "", &cfg.Catalog.WorkspacePath, false},
 		{pathRoleRuntime, "", catalogconfig.StateDirectory, productpaths.State, &cfg.Catalog.StateDirectory, !cfg.Catalog.StateDirectoryIsScratch()},
-		{"local-token", "", "", productpaths.Data, &cfg.Security.LocalTokenPath, true},
-		{"tls-certificate", "STARPORT_SECURITY_TLS_CERT_PATH", "", "", &cfg.Security.TLSCertPath, false},
+		{fileRoleLocalToken, "", "", productpaths.Data, &cfg.Security.LocalTokenPath, true},
+		{fileRoleTLSCertificate, "STARPORT_SECURITY_TLS_CERT_PATH", "", "", &cfg.Security.TLSCertPath, false},
 		{cacheCAFileRole, cacheCAFileEnvironment, "", "", &cfg.Cache.CAFile, false},
 		{valkeyCAFileRole, valkeyCAFileEnvironment, "", "", &cfg.Storage.Valkey.CAFile, false},
-		{"tls-key", "STARPORT_SECURITY_TLS_KEY_PATH", "", "", &cfg.Security.TLSKeyPath, false},
+		{fileRoleTLSKey, "STARPORT_SECURITY_TLS_KEY_PATH", "", "", &cfg.Security.TLSKeyPath, false},
 		{"logs", "STARPORT_LOGGING_FILE_PATH", "", "", &cfg.Logging.FilePath, false},
 	}
 	if cfg.Catalog.Source == CatalogSourceFile {
-		selections = append(selections, pathSelection{"source-file", "", catalogconfig.SourceURL, "", &cfg.Catalog.SourceURL, true})
+		selections = append(selections, pathSelection{fileRoleSourceFile, "", catalogconfig.SourceURL, "", &cfg.Catalog.SourceURL, true})
 	}
 	if cfg.Storage.Mode == storageModeBadger && !cfg.Storage.Badger.inMemory {
 		selections = append(selections, pathSelection{pathRoleBadger, badgerPathEnvironment, "", productpaths.Data, &cfg.Storage.Badger.Path, true})

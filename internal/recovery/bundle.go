@@ -28,14 +28,15 @@ const bundleKeyChallenge = "starport-backup-key-access-v1:"
 // BundleFile selects one configuration or state file for the private backup.
 // ID is a portable relative name. Path never enters diagnostics or the manifest.
 type BundleFile struct {
-	ID   string
-	Path string
+	ID             string
+	Path           string
+	ExpectedSHA256 string
 }
 
 // BundleSources names open adapters for a stopped and externally fenced deployment.
 // The SQL witness must remain closed at the supplied boundary throughout capture.
 type BundleSources struct {
-	KV         storage.RecordTransfer
+	KV         storage.RecordSource
 	SQL        *sqlstore.DB
 	Blobs      blob.Store
 	Files      []BundleFile
@@ -192,6 +193,12 @@ func validateBundleFiles(files []BundleFile) error {
 	for _, file := range files {
 		if !validBundlePath(file.ID) || seen[file.ID] || !filepath.IsAbs(file.Path) || filepath.Clean(file.Path) != file.Path {
 			return errors.New("backup contains an invalid or duplicate file selection")
+		}
+		if file.ExpectedSHA256 != "" {
+			digest, err := hex.DecodeString(file.ExpectedSHA256)
+			if err != nil || len(digest) != sha256.Size {
+				return errors.New("backup file has an invalid expected digest")
+			}
 		}
 		seen[file.ID] = true
 	}
