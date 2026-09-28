@@ -122,7 +122,7 @@ func TestBackupApplicationRefusesConfigurationChangedAfterLoad(t *testing.T) {
 	require.NoError(t, os.WriteFile(name, []byte("STARPORT_LOG_LEVEL=debug\n"), 0o600))
 	_, err = CaptureBackup(t.Context(), loaded, request)
 	require.ErrorContains(t, err, "configuration changed after selection")
-	require.NoFileExists(t, filepath.Join(request.Destination, "manifest.json"))
+	require.NoFileExists(t, filepath.Join(request.Destination, "backup-manifest.json"))
 }
 
 func TestBackupCommandsUseNativeApplicationCapture(t *testing.T) {

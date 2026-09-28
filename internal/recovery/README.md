@@ -22,12 +22,21 @@ Unexpected lock content and pending publication files cause refusal.
 
 The encrypted challenge proves access to the key selected during capture.
 It does not prove that every historical credential uses that key.
-Credential owners must validate their encrypted records before recovery approval.
+`InspectBundleReferences` also decrypts every retained provider credential through its owner.
+A credential encrypted with another key causes refusal.
+Shared credentials remain subject to this check even when no account has a grant.
 
 The application derives its selected-file inventory from the canonical configuration manifest.
 This includes configuration, catalog runtime and baseline files, identity state, credential-selection policy, source inputs, and transport trust.
-File and job owners must verify record references against captured bytes.
-Reference checks, historical credential validation, and recovery commands remain required before deployment recovery is complete.
+
+File and job owners verify record references against captured bytes.
+Ready, unexpired files require their published bytes.
+Pending, deleting, and expired records retain their states.
+Native response receipts retain unconfirmed submissions without repeating provider requests.
+Batch validation requires every recorded execution claim and its parent batch.
+Missing batch files remain visible for reconciliation.
+
+SQL identity and budget references, independent later history, and restore commands remain required before deployment recovery is complete.
 
 A verified bundle grants no permission to resume inference.
 Recovery must reconcile permission withdrawals, acknowledged spending, and uncertain work after the backup against independent evidence.
@@ -79,6 +88,13 @@ starport backup verify \
   --manifest-sha256 "$RETAINED_MANIFEST_SHA256"
 ```
 
-Verification checks captured bytes and access to the selected key.
+Verification checks captured bytes, retained credentials, files, jobs, batches, and execution claims.
+It uses private snapshot copies and streams large payloads.
+The `--scratch` option selects an existing private directory for these copies.
+The default is the backup directory's parent.
+The command reports unfinished batch lines, unconfirmed submissions, and missing batch file references.
+
+A recorded result digest with pending output remains a valid interrupted state.
+A missing execution claim causes refusal because it cannot prove that the line never started.
 It does not reopen admission or establish independent recovery history.
 External environment settings, credential sources, cloud permissions, and upstream authority trust remain explicit recovery requirements.

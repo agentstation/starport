@@ -35,14 +35,18 @@ func (r CaptureRequest) Validate() error {
 
 // VerifyRequest binds a backup to the digest retained outside that backup.
 type VerifyRequest struct {
-	Directory      string
-	ManifestSHA256 string
+	Directory        string
+	ManifestSHA256   string
+	ScratchDirectory string
 }
 
 // Validate checks the path and digest before opening a backup.
 func (r VerifyRequest) Validate() error {
 	if !filepath.IsAbs(r.Directory) || filepath.Clean(r.Directory) != r.Directory {
 		return errors.New("backup verification requires a clean absolute directory")
+	}
+	if r.ScratchDirectory != "" && (!filepath.IsAbs(r.ScratchDirectory) || filepath.Clean(r.ScratchDirectory) != r.ScratchDirectory) {
+		return errors.New("backup verification requires a clean absolute scratch directory")
 	}
 	digest, err := hex.DecodeString(r.ManifestSHA256)
 	if err != nil || len(digest) != 32 {
@@ -54,9 +58,10 @@ func (r VerifyRequest) Validate() error {
 // CaptureResult contains the receipt an operator retains outside the bundle.
 // It contains no secret values or credential references.
 type CaptureResult struct {
-	Directory      string `json:"directory"`
-	ManifestSHA256 string `json:"manifest_sha256"`
-	DeploymentID   string `json:"deployment_id"`
-	RecoveryEpoch  int64  `json:"recovery_epoch"`
-	Artifacts      int    `json:"artifacts"`
+	Directory      string          `json:"directory"`
+	ManifestSHA256 string          `json:"manifest_sha256"`
+	DeploymentID   string          `json:"deployment_id"`
+	RecoveryEpoch  int64           `json:"recovery_epoch"`
+	Artifacts      int             `json:"artifacts"`
+	References     ReferenceReport `json:"references"`
 }

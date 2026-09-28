@@ -111,10 +111,11 @@ func CaptureBackup(ctx context.Context, cfg *config.Config, request recovery.Cap
 	if err != nil {
 		return result, err
 	}
-	if _, err := recovery.VerifyBundle(ctx, request.Destination, digest, encryption); err != nil {
+	_, references, err := recovery.InspectBundleReferences(ctx, request.Destination, digest, filepath.Dir(request.Destination), encryption)
+	if err != nil {
 		return result, err
 	}
-	return recovery.CaptureResult{Directory: request.Destination, ManifestSHA256: digest, DeploymentID: inventory.DeploymentID, RecoveryEpoch: boundary.Epoch, Artifacts: len(manifest.Artifacts)}, nil
+	return recovery.CaptureResult{Directory: request.Destination, ManifestSHA256: digest, DeploymentID: inventory.DeploymentID, RecoveryEpoch: boundary.Epoch, Artifacts: len(manifest.Artifacts), References: references}, nil
 }
 
 // VerifyBackup checks captured bytes and selected-key access without opening live stores.
@@ -126,11 +127,15 @@ func VerifyBackup(ctx context.Context, cfg *config.Config, request recovery.Veri
 	if err != nil {
 		return recovery.CaptureResult{}, err
 	}
-	manifest, err := recovery.VerifyBundle(ctx, request.Directory, request.ManifestSHA256, encryption)
+	scratch := request.ScratchDirectory
+	if scratch == "" {
+		scratch = filepath.Dir(request.Directory)
+	}
+	manifest, references, err := recovery.InspectBundleReferences(ctx, request.Directory, request.ManifestSHA256, scratch, encryption)
 	if err != nil {
 		return recovery.CaptureResult{}, err
 	}
-	return recovery.CaptureResult{Directory: request.Directory, ManifestSHA256: request.ManifestSHA256, DeploymentID: manifest.Request.Boundary.DeploymentID, RecoveryEpoch: manifest.Request.Boundary.Epoch, Artifacts: len(manifest.Artifacts)}, nil
+	return recovery.CaptureResult{Directory: request.Directory, ManifestSHA256: request.ManifestSHA256, DeploymentID: manifest.Request.Boundary.DeploymentID, RecoveryEpoch: manifest.Request.Boundary.Epoch, Artifacts: len(manifest.Artifacts), References: references}, nil
 }
 
 func backupEncryption(cfg *config.Config) (*credentials.EncryptionService, error) {

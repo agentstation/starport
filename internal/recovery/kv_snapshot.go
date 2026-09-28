@@ -283,6 +283,10 @@ func visitKVSnapshot(ctx context.Context, path string, visit func(storage.Transf
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
+	return visitKVRows(ctx, db, visit)
+}
+
+func visitKVRows(ctx context.Context, db *sql.DB, visit func(storage.TransferRecord) error) (resultErr error) {
 	rows, err := db.QueryContext(ctx, "SELECT key,value,expires FROM records ORDER BY key")
 	if err != nil {
 		return err

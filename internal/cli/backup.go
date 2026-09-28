@@ -79,9 +79,10 @@ func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 			},
 		},
 		{
-			Name: "verify", Usage: "Verify bundle bytes and key access; does not approve recovery", OnUsageError: usageError,
+			Name: "verify", Usage: "Check backup bytes, credentials, and references; does not approve recovery", OnUsageError: usageError,
 			Flags: []urfavecli.Flag{
 				&urfavecli.StringFlag{Name: "directory", Required: true, Usage: "Absolute backup directory"},
+				&urfavecli.StringFlag{Name: "scratch", Usage: "Existing private directory for verification copies; defaults to the backup parent"},
 				&urfavecli.StringFlag{Name: "manifest-sha256", Required: true, Usage: "Manifest digest retained independently of the backup"},
 				&urfavecli.BoolFlag{Name: flagStructuredJSON, Usage: jsonOutputUsage},
 			},
@@ -89,7 +90,7 @@ func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 				if err := rejectArguments(cmd); err != nil {
 					return err
 				}
-				request := recovery.VerifyRequest{Directory: cmd.String("directory"), ManifestSHA256: cmd.String("manifest-sha256")}
+				request := recovery.VerifyRequest{Directory: cmd.String("directory"), ManifestSHA256: cmd.String("manifest-sha256"), ScratchDirectory: cmd.String("scratch")}
 				if err := request.Validate(); err != nil {
 					return urfavecli.Exit(err.Error(), ExitCodeUsage)
 				}
@@ -115,5 +116,9 @@ func writeBackupResult(cmd *urfavecli.Command, result recovery.CaptureResult) er
 		return writeIndentedJSON(cmd.Writer, result)
 	}
 	_, err := fmt.Fprintf(cmd.Writer, "Verified %d artifacts for %s at recovery epoch %d.\nDirectory: %s\nManifest SHA-256: %s\nRetain this digest outside the backup. Verification does not approve recovery.\n", result.Artifacts, result.DeploymentID, result.RecoveryEpoch, result.Directory, result.ManifestSHA256)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(cmd.Writer, "Reference checks: %d credential values, %d file records, %d jobs, %d batches.\nUnconfirmed provider submissions: %d; unfinished batch lines: %d; missing batch file references: %d.\nRetain unresolved work for reconciliation. Verification does not authorize retries.\n", result.References.CredentialValues, result.References.FileRecords, result.References.JobRecords, result.References.BatchRecords, result.References.UncertainJobs, result.References.UnfinishedBatchLines, result.References.MissingBatchFiles)
 	return err
 }

@@ -129,24 +129,9 @@ func (s *Service) readNativeReceipt(ctx context.Context, job Job) (nativeReceipt
 		return nativeReceipt{}, nil, err
 	}
 	defer func() { _ = reader.Close() }()
-	var prefix [8]byte
-	if _, err := io.ReadFull(reader, prefix[:]); err != nil {
-		return nativeReceipt{}, nil, ErrCorruptRecord
-	}
-	size := binary.BigEndian.Uint64(prefix[:])
-	if size == 0 || size > nativeHeaderBound {
-		return nativeReceipt{}, nil, ErrCorruptRecord
-	}
-	header := make([]byte, size)
-	if _, err := io.ReadFull(reader, header); err != nil {
-		return nativeReceipt{}, nil, ErrCorruptRecord
-	}
-	var result nativeReceipt
-	if err := json.Unmarshal(header, &result); err != nil {
-		return nativeReceipt{}, nil, ErrCorruptRecord
-	}
-	if result.Version != 1 || result.JobID != job.ID || result.Account != job.Account || result.Provider != job.Provider || result.Model != job.Model || result.Generation != job.CatalogGeneration || result.RequestID == "" || !result.State.Terminal() || result.RecordedAt.Before(job.CreatedAt) || result.AssetBytes < 0 || result.AssetBytes > job.nativeAssetBound {
-		return nativeReceipt{}, nil, ErrCorruptRecord
+	result, err := readNativeReceiptHeader(reader, job)
+	if err != nil {
+		return nativeReceipt{}, nil, err
 	}
 	asset, err := io.ReadAll(io.LimitReader(reader, result.AssetBytes+1))
 	digest := sha256.Sum256(asset)
@@ -154,6 +139,29 @@ func (s *Service) readNativeReceipt(ctx context.Context, job Job) (nativeReceipt
 		return nativeReceipt{}, nil, ErrCorruptRecord
 	}
 	return result, asset, nil
+}
+
+func readNativeReceiptHeader(reader io.Reader, job Job) (nativeReceipt, error) {
+	var prefix [8]byte
+	if _, err := io.ReadFull(reader, prefix[:]); err != nil {
+		return nativeReceipt{}, ErrCorruptRecord
+	}
+	size := binary.BigEndian.Uint64(prefix[:])
+	if size == 0 || size > nativeHeaderBound {
+		return nativeReceipt{}, ErrCorruptRecord
+	}
+	header := make([]byte, size)
+	if _, err := io.ReadFull(reader, header); err != nil {
+		return nativeReceipt{}, ErrCorruptRecord
+	}
+	var result nativeReceipt
+	if err := json.Unmarshal(header, &result); err != nil {
+		return nativeReceipt{}, ErrCorruptRecord
+	}
+	if result.Version != 1 || result.JobID != job.ID || result.Account != job.Account || result.Provider != job.Provider || result.Model != job.Model || result.Generation != job.CatalogGeneration || result.RequestID == "" || !result.State.Terminal() || result.RecordedAt.Before(job.CreatedAt) || result.AssetBytes < 0 || result.AssetBytes > job.nativeAssetBound {
+		return nativeReceipt{}, ErrCorruptRecord
+	}
+	return result, nil
 }
 
 // recoverNative consumes stored evidence and approved assets without repeating inference.
