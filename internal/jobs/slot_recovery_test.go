@@ -250,7 +250,11 @@ func TestLegacyJobSchemasRequireMigration(t *testing.T) {
 				require.ErrorIs(t, readErr, jobs.ErrCorruptBatchRecord)
 			}
 			if prefix == jobs.StoragePrefix {
-				current = []byte(`"schema_version":5`)
+				current = []byte(`"schema_version":6`)
+				legacyCorrection := bytes.Replace(data, current, []byte(`"schema_version":5`), 1)
+				require.NoError(t, backing.Set(t.Context(), keys[0], legacyCorrection))
+				_, correctionReadErr := records.Get(t.Context(), accountA, job.ID)
+				require.ErrorIs(t, correctionReadErr, jobs.ErrCorruptRecord)
 				legacyPublication := bytes.Replace(data, current, []byte(`"schema_version":4`), 1)
 				require.NoError(t, backing.Set(t.Context(), keys[0], legacyPublication))
 				_, readErr := records.Get(t.Context(), accountA, job.ID)

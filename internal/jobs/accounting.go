@@ -91,25 +91,32 @@ func (s *Service) settleAccounting(ctx context.Context, job Job) (Job, error) {
 	}
 	job = s.settleSlot(ctx, job)
 	job, notificationErr := s.notifyTerminal(ctx, job)
-	if err := s.confirmSettlement(ctx, job); err != nil {
-		return job, errors.Join(notificationErr, err)
-	}
-	if job.Accounted() {
-		return job, notificationErr
-	}
-	if s.accountant != nil {
-		if err := s.accountant.RecordJob(ctx, entryFor(job)); err != nil {
-			return job, errors.Join(notificationErr, err)
+	job, correctionErr := s.recoverCorrection(ctx, job)
+	settlementErr := s.confirmSettlement(ctx, job)
+	var reportErr error
+	if correctionErr == nil && settlementErr == nil && !job.reportingComplete() {
+		if s.accountant != nil {
+			reportErr = s.accountant.RecordJob(ctx, entryFor(job))
+		}
+		if reportErr == nil || errors.Is(reportErr, ErrAccountingExpired) {
+			next := job
+			if errors.Is(reportErr, ErrAccountingExpired) {
+				next.ReportingExpiredAt = s.now()
+				reportErr = nil
+			} else {
+				reportErr = next.MarkAccounted(s.now())
+			}
+			if reportErr == nil {
+				reportErr = s.records.Replace(ctx, job, next)
+			}
+			if reportErr == nil {
+				job = next
+			}
 		}
 	}
-	settled := job
-	if err := settled.MarkAccounted(s.now()); err != nil {
-		return job, errors.Join(notificationErr, err)
-	}
-	if err := s.records.Replace(ctx, job, settled); err != nil {
-		return job, errors.Join(notificationErr, err)
-	}
-	return settled, notificationErr
+	// Applied adjustments can report even when later evidence needs review.
+	job, adjustmentErr := s.reportCorrections(ctx, job)
+	return job, errors.Join(notificationErr, correctionErr, settlementErr, reportErr, adjustmentErr)
 }
 
 // notifyTerminal claims one optional notification across concurrent replicas.
@@ -134,7 +141,7 @@ func entryFor(job Job) AccountingEntry {
 	}
 	return AccountingEntry{
 		BillingDisposition: disposition,
-		BillingEvidence:    job.BillingEvidence(), Valuation: copyValuation(job.Valuation), Measurement: copyMeasurement(job.Measurement),
+		BillingEvidence:    job.originalBillingEvidence(), Valuation: copyValuation(job.Valuation), Measurement: copyMeasurement(job.Measurement),
 		JobID:       job.ID,
 		Account:     job.Account,
 		KeyID:       job.KeyID,

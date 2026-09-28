@@ -56,9 +56,9 @@ func (a *JobAccountant) RecordJobCorrection(ctx context.Context, correction jobs
 		adjustment.PreviousID = reportingCorrectionID(correction.Original, correction.PreviousID)
 	}
 	if err := a.put(ctx, adjustment.Original); err != nil {
-		return err
+		return jobReportError(err)
 	}
-	return writer.Adjust(ctx, adjustment)
+	return jobReportError(writer.Adjust(ctx, adjustment))
 }
 
 // reportingCorrectionID keeps private decision identifiers out of activity results.

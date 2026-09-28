@@ -137,6 +137,8 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		r.With(s.requireAPIKey, s.requireAdmin).Get("/admin/catalog/status", s.controllers.Catalog.Status)
 		r.With(s.requireAPIKey, s.requireAdmin).Get("/admin/accounts/{account_id}/videos/{video_id}/reconciliation", s.controllers.Videos.InspectReconciliation)
 		r.With(s.requireAPIKey, s.requireAdmin).Post("/admin/accounts/{account_id}/videos/{video_id}/reconciliation", s.controllers.Videos.ReconcileAdministrator)
+		r.With(s.requireAPIKey, s.requireAdmin).Post("/admin/accounts/{account_id}/videos/{video_id}/reconciliation/corrections", s.controllers.Videos.CorrectAdministrator)
+		r.With(s.requireAPIKey, s.requireAdmin).Get("/admin/accounts/{account_id}/videos/{video_id}/reconciliation/corrections/{decision_id}", s.controllers.Videos.InspectCorrection)
 
 		// Every other route requires an API key.
 		r.Group(func(r chi.Router) {

@@ -1677,7 +1677,7 @@ An authenticated administrator can inspect and resolve the job through these Sta
 | `GET /api/v1/admin/accounts/{account_id}/videos/{video_id}/reconciliation` | Read the original identity, pinned valuation, and audit evidence. |
 | `POST /api/v1/admin/accounts/{account_id}/videos/{video_id}/reconciliation` | Record an administrator decision and retry required settlement. |
 
-Both routes require the `admin` scope and an authenticated key or console session.
+These routes require the `admin` scope and an authenticated key or console session.
 An anonymous administrator scope cannot supply an audit identity. The submitting account's `videos:write` scope cannot authorize either route.
 
 1. Read the inspection response.
@@ -1713,7 +1713,7 @@ Usage records distinguish `administrator_usage` and `administrator_no_charge` th
 Private evidence, reasons, and provider request identifiers remain on the administrator route.
 
 A later provider response cannot replace the administrator decision or silently change its charge.
-If that evidence cannot confirm the decision, Starport blocks new admission in the original budget windows before publishing the conflict.
+If that evidence cannot confirm the decision, Starport blocks new admission in the original budget windows in the same transaction that publishes the conflict.
 Matching evidence preserves the accepted charge and permits normal operation. Conflicts require explicit reconciliation.
 Unrelated accounts remain available. Existing evidence and charges remain unchanged.
 
@@ -2312,3 +2312,56 @@ bash scripts/smoke-openrouter-sdks.sh
 The verifier must report `Summary: 12 passed, 0 failed`. Required raw HTTP
 smoke checks must pass. Optional SDK checks can be green or `UNVERIFIED`. Do
 not report an unverified SDK as compatible.
+
+### Correct an administrator billing decision
+
+Use a correction when new evidence changes an accepted decision. The first decision and independent provider evidence remain immutable.
+Corrections never submit another generation. They use the original reservation, budget windows, and pinned prices.
+
+| Route | Purpose |
+| --- | --- |
+| `POST /api/v1/admin/accounts/{account_id}/videos/{video_id}/reconciliation/corrections` | Retain a new decision and apply it to the inspected job. |
+| `GET /api/v1/admin/accounts/{account_id}/videos/{video_id}/reconciliation/corrections/{decision_id}` | Inspect one retained intent, application result, and optional report result. |
+
+Both routes require authenticated administrator access. Account inference scopes cannot authorize them.
+
+1. Read the original reconciliation inspection route.
+2. Review the first decision, late provider evidence, latest correction, and pinned valuation.
+3. Copy `correction_binding` into the new request's `binding`.
+4. Supply a new stable `decision_id`, actual quantities or explicit no-charge evidence, an evidence reference, and a reason.
+5. Submit the request to the corrections route.
+6. Inspect the result before retrying after an unavailable response.
+
+The request uses the same fields as the first reconciliation.
+
+The service supplies the authenticated actor and decision time.
+An empty `correction_binding` with `correction_unavailable_reason` means required settlement cannot currently support inspection.
+
+Starport retains intent before changing a charge. It then commits the job, audit outcome, required charge, and dispute resolution in one transaction.
+A pending intent does not change effective billing. New evidence invalidates its inspected state and requires a new decision.
+A new intent can supersede a pending intent while preserving both. It cannot erase an applied decision.
+
+An exact retry from the same actor returns retained state.
+
+Changed content under the same identifier returns HTTP 409.
+An older exact retry never reverses a newer correction. HTTP 503 can follow a committed transaction, so inspect before retrying.
+
+The inspection includes `applied_correction_id`, `reported_correction_id`, and the latest correction audit.
+Each intent links to its previous intent and previous applied decision. Use the correction inspection route to follow that history.
+
+| Status | Meaning |
+| --- | --- |
+| `correction_pending` | Durable intent awaits required settlement. |
+| `correction_review_required` | Evidence changed after the operator inspected it. |
+| `correction_reporting_pending` | Required settlement completed, but optional usage reporting has not acknowledged the correction. |
+
+Optional reports retry in applied-decision order. A report failure does not prevent a new required budget decision.
+Activity and exports preserve original billing fields alongside corrected values. Corrections do not add another request count.
+Report outcomes are `delivered`, `expired`, or `disabled`. Expired reports cannot recreate usage outside its original retention deadline.
+
+Required audit history remains in the selected KV store after optional usage expires. Missing audit records prevent further correction.
+If original reporting expires before delivery, inspection records `reporting_expired_at` and leaves `accounted` false.
+Recovery stops retrying that original report. Required settlement and later corrections remain independent.
+
+Job payload schema 6 and correction history schema 1 require the matching migration contract.
+The production qualification plan still owns populated migration and full fleet recovery evidence.

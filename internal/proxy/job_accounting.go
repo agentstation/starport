@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
@@ -25,7 +26,7 @@ func (a *JobAccountant) RecordJob(ctx context.Context, entry jobs.AccountingEntr
 	if a == nil || a.recorder == nil {
 		return nil
 	}
-	return a.put(ctx, jobUsageRecord(entry))
+	return jobReportError(a.put(ctx, jobUsageRecord(entry)))
 }
 
 func jobUsageRecord(entry jobs.AccountingEntry) usage.Record {
@@ -101,4 +102,11 @@ func orAnonymous(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func jobReportError(err error) error {
+	if errors.Is(err, usage.ErrRecordExpired) {
+		return errors.Join(jobs.ErrAccountingExpired, err)
+	}
+	return err
 }

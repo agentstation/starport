@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	// StorageSchemaVersion binds receipts and assets to immutable blob publication.
-	StorageSchemaVersion = 5
+	// StorageSchemaVersion includes durable correction heads and report progress.
+	StorageSchemaVersion = 6
 	// StoragePrefix is the job record v1 namespace.
 	StoragePrefix = "jobs:v1:account:"
 
@@ -31,6 +31,9 @@ type repository struct{ store storage.KVStore }
 // jobRecord is the durable form. It carries the provider job identifier that
 // Job keeps unexported, because the record store is the one place it belongs.
 type jobRecord struct {
+	CorrectionHead         *CorrectionIntent       `json:"correction_head,omitempty"`
+	CorrectionApplied      *CorrectionIntent       `json:"correction_applied,omitempty"`
+	CorrectionReported     string                  `json:"correction_reported,omitempty"`
 	AssetPending           bool                    `json:"asset_pending,omitempty"`
 	AssetDigest            string                  `json:"asset_digest,omitempty"`
 	AdminDecision          *ReconciliationDecision `json:"admin_decision,omitempty"`
@@ -70,6 +73,7 @@ type jobRecord struct {
 	AssetExpiredAt   time.Time `json:"asset_expired_at,omitempty"`
 
 	AccountedAt             time.Time `json:"accounted_at,omitempty"`
+	ReportingExpiredAt      time.Time `json:"reporting_expired_at,omitempty"`
 	NotificationAttemptedAt time.Time `json:"notification_attempted_at,omitempty"`
 }
 
@@ -82,6 +86,9 @@ func OpenRepository(store storage.KVStore) (Repository, error) {
 }
 
 func (r *repository) Create(ctx context.Context, job Job) error {
+	if job.correctionHead != nil {
+		return ErrInvalidJob
+	}
 	if job.SlotID != "" {
 		return ErrClaimAttachmentRequired
 	}
@@ -172,6 +179,16 @@ func (r *repository) Replace(ctx context.Context, expected, job Job) error {
 // Replacement validates a job change for an atomic write with required settlement.
 // The caller must commit it against the same storage authority as this repository.
 func (r *repository) Replacement(ctx context.Context, expected, job Job) (storage.CompareAndSwapMutation, error) {
+	if !unchangedCorrections(expected, job) {
+		return storage.CompareAndSwapMutation{}, ErrInvalidJob
+	}
+	return r.replacement(ctx, expected, job)
+}
+
+func (r *repository) replacement(ctx context.Context, expected, job Job) (storage.CompareAndSwapMutation, error) {
+	if !expected.ReportingExpiredAt.IsZero() && !expected.ReportingExpiredAt.Equal(job.ReportingExpiredAt) {
+		return storage.CompareAndSwapMutation{}, ErrInvalidJob
+	}
 	if expected.assetDigest != "" && (expected.assetDigest != job.assetDigest || expected.AssetKey != job.AssetKey || expected.AssetContentType != job.AssetContentType || expected.AssetBytes != job.AssetBytes || !expected.AssetExpiresAt.Equal(job.AssetExpiresAt) || (!expected.assetPending && job.assetPending)) {
 		return storage.CompareAndSwapMutation{}, ErrInvalidJob
 	}
@@ -259,6 +276,7 @@ func encodeJob(job Job) ([]byte, error) {
 		return nil, err
 	}
 	data, err := json.Marshal(jobRecord{
+		CorrectionHead: job.correctionHead, CorrectionApplied: job.correctionApplied, CorrectionReported: job.correctionReported,
 		AssetPending: job.assetPending, AssetDigest: job.assetDigest,
 		AdminDecision: job.adminDecision, LateProviderEvidence: job.lateProviderEvidence,
 		NativeAssetDigest: job.nativeAssetDigest, NativeAssetContentType: job.nativeAssetContentType, AssetRecoveryStatus: job.assetRecoveryStatus,
@@ -289,6 +307,7 @@ func encodeJob(job Job) ([]byte, error) {
 		AssetExpiredAt:   job.AssetExpiredAt,
 
 		AccountedAt:             job.AccountedAt,
+		ReportingExpiredAt:      job.ReportingExpiredAt,
 		NotificationAttemptedAt: job.NotificationAttemptedAt,
 	})
 	if err != nil {
@@ -306,6 +325,7 @@ func decodeJob(data []byte) (Job, error) {
 		return Job{}, fmt.Errorf("%w: unsupported schema %d", ErrCorruptRecord, stored.SchemaVersion)
 	}
 	job := Job{
+		correctionHead: stored.CorrectionHead, correctionApplied: stored.CorrectionApplied, correctionReported: stored.CorrectionReported,
 		assetPending: stored.AssetPending, assetDigest: stored.AssetDigest,
 		adminDecision: stored.AdminDecision, lateProviderEvidence: stored.LateProviderEvidence,
 		nativeAssetDigest: stored.NativeAssetDigest, nativeAssetContentType: stored.NativeAssetContentType, assetRecoveryStatus: stored.AssetRecoveryStatus,
@@ -335,6 +355,7 @@ func decodeJob(data []byte) (Job, error) {
 		AssetExpiredAt:   stored.AssetExpiredAt,
 
 		AccountedAt:             stored.AccountedAt,
+		ReportingExpiredAt:      stored.ReportingExpiredAt,
 		NotificationAttemptedAt: stored.NotificationAttemptedAt,
 	}
 	if err := job.Validate(); err != nil {

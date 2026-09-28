@@ -126,6 +126,9 @@ func CanTransition(from, to JobState) bool {
 // learned it could poll the provider directly, outside every limit and every
 // usage record Starport keeps.
 type Job struct {
+	correctionHead       *CorrectionIntent
+	correctionApplied    *CorrectionIntent
+	correctionReported   string
 	adminDecision        *ReconciliationDecision
 	lateProviderEvidence *LateProviderEvidence
 	// Native identifies inference that returns its result in one response.
@@ -196,6 +199,8 @@ type Job struct {
 	// AccountedAt records acknowledged optional reporting after required settlement.
 	// It does not own slot release or terminal notification.
 	AccountedAt time.Time
+	// ReportingExpiredAt records a reporter-confirmed retention expiry without delivery.
+	ReportingExpiredAt time.Time
 	// NotificationAttemptedAt claims one best-effort terminal notification.
 	// It does not prove delivery to a webhook recipient.
 	NotificationAttemptedAt time.Time
@@ -217,6 +222,9 @@ func (j Job) String() string {
 
 // Validate reports whether the record can be stored.
 func (j Job) Validate() error {
+	if err := j.validateCorrections(); err != nil {
+		return err
+	}
 	if err := j.validateAssetPublication(); err != nil {
 		return err
 	}
@@ -262,6 +270,8 @@ func (j Job) Validate() error {
 		return fmt.Errorf("%w: an expiry marker names no stored asset", ErrInvalidJob)
 	case !j.NotificationAttemptedAt.IsZero() && !j.State.Terminal():
 		return fmt.Errorf("%w: state %q has a terminal notification claim", ErrInvalidJob, j.State)
+	case !j.ReportingExpiredAt.IsZero() && (!j.State.Terminal() || !j.AccountedAt.IsZero()):
+		return fmt.Errorf("%w: inconsistent reporting expiry", ErrInvalidJob)
 	case !j.AccountedAt.IsZero() && !j.State.Terminal():
 		return fmt.Errorf("%w: state %q was already accounted", ErrInvalidJob, j.State)
 	}
@@ -395,7 +405,7 @@ func (j *Job) MarkAccounted(now time.Time) error {
 		return fmt.Errorf("%w: state %q has not ended", ErrInvalidJob, j.State)
 	case now.IsZero():
 		return fmt.Errorf("%w: an accounting states no time", ErrInvalidJob)
-	case !j.AccountedAt.IsZero():
+	case j.reportingComplete():
 		return fmt.Errorf("%w: %s was already accounted", ErrInvalidJob, j.ID)
 	}
 	j.AccountedAt = now
@@ -404,6 +414,8 @@ func (j *Job) MarkAccounted(now time.Time) error {
 
 // Accounted reports whether this job already drew its usage record.
 func (j Job) Accounted() bool { return !j.AccountedAt.IsZero() }
+
+func (j Job) reportingComplete() bool { return j.Accounted() || !j.ReportingExpiredAt.IsZero() }
 
 // Outstanding reports whether this job still holds a slot against its owner's
 // outstanding job limit. A job holds one from its submission until the moment

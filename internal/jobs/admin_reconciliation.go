@@ -45,18 +45,24 @@ type ReconciliationDecision struct {
 
 // ReconciliationView exposes pinned identity and audit evidence only to administrators.
 type ReconciliationView struct {
-	Binding              string                  `json:"binding"`
-	Account              string                  `json:"account"`
-	JobID                string                  `json:"job_id"`
-	ReservationID        string                  `json:"reservation_id"`
-	Provider             string                  `json:"provider"`
-	Model                string                  `json:"model"`
-	CatalogGeneration    string                  `json:"catalog_generation"`
-	Valuation            *reservation.Valuation  `json:"valuation"`
-	Status               string                  `json:"status"`
-	Accounted            bool                    `json:"accounted"`
-	Decision             *ReconciliationDecision `json:"decision,omitempty"`
-	LateProviderEvidence *LateProviderEvidence   `json:"late_provider_evidence,omitempty"`
+	CorrectionBinding           string                  `json:"correction_binding,omitempty"`
+	CorrectionUnavailableReason string                  `json:"correction_unavailable_reason,omitempty"`
+	Correction                  *CorrectionAudit        `json:"correction,omitempty"`
+	AppliedCorrectionID         string                  `json:"applied_correction_id,omitempty"`
+	ReportedCorrectionID        string                  `json:"reported_correction_id,omitempty"`
+	Binding                     string                  `json:"binding"`
+	Account                     string                  `json:"account"`
+	JobID                       string                  `json:"job_id"`
+	ReservationID               string                  `json:"reservation_id"`
+	Provider                    string                  `json:"provider"`
+	Model                       string                  `json:"model"`
+	CatalogGeneration           string                  `json:"catalog_generation"`
+	Valuation                   *reservation.Valuation  `json:"valuation"`
+	Status                      string                  `json:"status"`
+	Accounted                   bool                    `json:"accounted"`
+	ReportingExpiredAt          time.Time               `json:"reporting_expired_at,omitzero"`
+	Decision                    *ReconciliationDecision `json:"decision,omitempty"`
+	LateProviderEvidence        *LateProviderEvidence   `json:"late_provider_evidence,omitempty"`
 }
 
 // LateProviderEvidence preserves a response after an administrator decision.
@@ -103,6 +109,14 @@ func (j Job) reconciliationBinding() string {
 // BillingEvidence returns copied billing input without private audit details.
 // Provider measurements and administrator dispositions remain distinct records.
 func (j Job) BillingEvidence() *reservation.Evidence {
+	if j.correctionApplied != nil {
+		evidence := j.correctionApplied.Evidence()
+		return &evidence
+	}
+	return j.originalBillingEvidence()
+}
+
+func (j Job) originalBillingEvidence() *reservation.Evidence {
 	if j.adminDecision == nil {
 		return copyMeasurement(j.Measurement)
 	}
@@ -115,11 +129,17 @@ func (j Job) BillingConflict() bool {
 	if j.adminDecision == nil || j.lateProviderEvidence == nil {
 		return false
 	}
+	if j.correctionApplied != nil && j.correctionApplied.EvidenceBinding == j.correctionEvidenceBinding() {
+		return false
+	}
 	measured := j.lateProviderEvidence.Measurement
 	if measured == nil {
 		return true
 	}
 	decision := j.adminDecision
+	if j.correctionApplied != nil {
+		decision = &j.correctionApplied.Decision
+	}
 	if decision.Disposition == "no_charge" {
 		if measured.Tokens != 0 || j.Valuation == nil {
 			return true
@@ -138,17 +158,26 @@ func (j Job) ReconciliationStatus() string {
 		}
 		return ""
 	}
+	if j.PendingCorrection() != nil {
+		if j.correctionHead.EvidenceBinding != j.correctionEvidenceBinding() {
+			return "correction_review_required"
+		}
+		return "correction_pending"
+	}
 	if j.BillingConflict() {
 		return "provider_evidence_review_required"
 	}
-	if !j.Accounted() {
+	if j.correctionApplied != nil && j.correctionReported != correctionID(j.correctionApplied) {
+		return "correction_reporting_pending"
+	}
+	if !j.reportingComplete() {
 		return "administrator_recorded"
 	}
 	return "administrator_resolved"
 }
 
 func (j Job) reconciliationView() ReconciliationView {
-	view := ReconciliationView{Binding: j.reconciliationBinding(), Account: j.Account, JobID: j.ID, ReservationID: j.ReservationID, Provider: j.Provider, Model: j.Model, CatalogGeneration: j.CatalogGeneration, Valuation: copyValuation(j.Valuation), Status: j.ReconciliationStatus(), Accounted: j.Accounted()}
+	view := ReconciliationView{Binding: j.reconciliationBinding(), Account: j.Account, JobID: j.ID, ReservationID: j.ReservationID, Provider: j.Provider, Model: j.Model, CatalogGeneration: j.CatalogGeneration, Valuation: copyValuation(j.Valuation), Status: j.ReconciliationStatus(), Accounted: j.Accounted(), ReportingExpiredAt: j.ReportingExpiredAt}
 	if j.adminDecision != nil {
 		decision := *j.adminDecision
 		decision.Quantities = maps.Clone(decision.Quantities)
@@ -169,7 +198,25 @@ func (s *Service) InspectReconciliation(ctx context.Context, account, id string)
 	if err != nil {
 		return ReconciliationView{}, err
 	}
-	return job.reconciliationView(), nil
+	view := job.reconciliationView()
+	if job.adminDecision != nil {
+		binding, err := s.correctionBudgetBinding(ctx, job)
+		if err == nil {
+			view.CorrectionBinding = job.CorrectionBinding(binding)
+		} else {
+			view.CorrectionUnavailableReason = "required_settlement_unavailable"
+		}
+	}
+	if job.correctionHead != nil {
+		audit, err := s.records.InspectCorrection(ctx, account, id, correctionID(job.correctionHead))
+		if err != nil {
+			return view, err
+		}
+		view.Correction = &audit
+		view.AppliedCorrectionID = correctionID(job.correctionApplied)
+		view.ReportedCorrectionID = job.correctionReported
+	}
+	return view, nil
 }
 
 // ReconcileAdministrator persists evidence before settlement or slot release.

@@ -15,6 +15,9 @@ var (
 )
 
 func (r *repository) CreateClaimed(ctx context.Context, job Job, claim storage.CompareAndSwapMutation) error {
+	if job.correctionHead != nil {
+		return ErrInvalidJob
+	}
 	if job.SlotID == "" {
 		return ErrClaimAttachmentRequired
 	}

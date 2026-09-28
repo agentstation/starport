@@ -31,6 +31,7 @@ var (
 // Scan is the one method that names no account. The sweep that reclaims expired
 // asset storage is a deployment-wide pass, and no request path calls it.
 type Repository interface {
+	CorrectionRepository
 	Create(context.Context, Job) error
 	// CreateClaimed atomically stores the job and its prepared claim attachment.
 	CreateClaimed(context.Context, Job, storage.CompareAndSwapMutation) error

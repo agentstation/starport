@@ -33,7 +33,7 @@ func (o *budgetOwner) BindJob(ctx context.Context, job jobs.Job) error {
 func (o *budgetOwner) ConfirmJob(ctx context.Context, job jobs.Job) error {
 	ctx, cancel := context.WithTimeout(ctx, budgetSettlementTimeout)
 	defer cancel()
-	if job.ReconciliationStatus() == "provider_evidence_review_required" {
+	if job.PendingCorrection() != nil || job.BillingConflict() {
 		return reservation.ErrIdentityConflict
 	}
 	record, err := o.jobReservation(ctx, job)
@@ -95,7 +95,7 @@ func (o *budgetOwner) RecordJobConflict(ctx context.Context, job jobs.Job, mutat
 	if err != nil {
 		return err
 	}
-	if job.ReconciliationStatus() != "provider_evidence_review_required" || record.JobID != job.ID || job.Valuation == nil || !reflect.DeepEqual(record.Attempt.Valuation, *job.Valuation) {
+	if !job.BillingConflict() || record.JobID != job.ID || job.Valuation == nil || !reflect.DeepEqual(record.Attempt.Valuation, *job.Valuation) {
 		return reservation.ErrIdentityConflict
 	}
 	return o.ledger.FlagDisputeWith(ctx, job.ReservationID, "job:"+job.ID, mutation)

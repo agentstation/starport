@@ -68,3 +68,24 @@ func TestJobCorrectionRefusesUnsupportedOrInvalidReporting(t *testing.T) {
 		require.Empty(t, page.Records)
 	})
 }
+
+func TestJobCorrectionExpiredHistoryDoesNotRecreateUsage(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		records, err := usage.Open(store, usage.Options{Retention: time.Hour})
+		require.NoError(t, err)
+		accountant := NewJobAccountant(records)
+		entry := videoEntry(jobs.JobStateFailed)
+		entry.SubmittedAt = time.Now().UTC().Add(-3 * time.Hour)
+		entry.TerminalAt = entry.SubmittedAt.Add(time.Minute)
+		entry.BillingEvidence = &reservation.Evidence{ID: "original-no-charge", NoCharge: true}
+		require.ErrorIs(t, accountant.RecordJob(t.Context(), entry), jobs.ErrAccountingExpired)
+		correction := jobs.AccountingCorrection{Original: entry, ID: "expired-correction", RecordedAt: time.Now().UTC(), Evidence: reservation.Evidence{ID: "confirmed-no-charge", NoCharge: true}}
+		require.ErrorIs(t, accountant.RecordJobCorrection(t.Context(), correction), jobs.ErrAccountingExpired)
+		page, err := records.List(t.Context(), usage.Query{AccountID: entry.Account})
+		require.NoError(t, err)
+		require.Empty(t, page.Records)
+		totals, err := records.Totals(t.Context(), usage.AccountScope(entry.Account), usage.IntervalDay, entry.TerminalAt)
+		require.NoError(t, err)
+		require.Zero(t, totals)
+	})
+}

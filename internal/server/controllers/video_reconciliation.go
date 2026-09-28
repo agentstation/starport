@@ -86,7 +86,7 @@ func (h *VideosController) writeReconciliationError(w http.ResponseWriter, err e
 	w.Header().Set("Cache-Control", "no-store")
 	status, message := http.StatusServiceUnavailable, "Reconciliation is pending. Inspect the decision before retrying."
 	switch {
-	case errors.Is(err, jobs.ErrJobNotFound):
+	case errors.Is(err, jobs.ErrJobNotFound), errors.Is(err, jobs.ErrCorrectionNotFound):
 		status, message = http.StatusNotFound, "Video job not found"
 	case errors.Is(err, jobs.ErrReconciliationInvalid):
 		status, message = http.StatusBadRequest, "Provide the current binding and complete usage or no-charge evidence."
@@ -98,4 +98,50 @@ func (h *VideosController) writeReconciliationError(w http.ResponseWriter, err e
 		kind = dto.ErrorTypeServerError
 	}
 	dto.WriteError(w, status, kind, message)
+}
+
+// CorrectAdministrator accepts a new audited decision for an existing reconciliation.
+// Route middleware enforces administrator access before this method runs.
+func (h *VideosController) CorrectAdministrator(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	actor, ok := reconciliationActor(r)
+	if !ok {
+		writeReconciliationAuthentication(w)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	var input jobs.ReconciliationRequest
+	if err := json.UnmarshalRead(r.Body, &input, json.RejectUnknownMembers(true), jsontext.AllowDuplicateNames(false)); err != nil {
+		h.writeReconciliationError(w, jobs.ErrReconciliationInvalid)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	view, err := h.jobs.CorrectAdministrator(ctx, chi.URLParam(r, fieldAccountID), chi.URLParam(r, videoIDParam), actor, input)
+	if err != nil {
+		h.writeReconciliationError(w, err)
+		return
+	}
+	h.writeReconciliationView(w, view)
+}
+
+// InspectCorrection serves one immutable administrator decision and its outcome.
+func (h *VideosController) InspectCorrection(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	if _, ok := reconciliationActor(r); !ok {
+		writeReconciliationAuthentication(w)
+		return
+	}
+	audit, err := h.jobs.InspectCorrection(r.Context(), chi.URLParam(r, fieldAccountID), chi.URLParam(r, videoIDParam), chi.URLParam(r, "decision_id"))
+	if err != nil {
+		h.writeReconciliationError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.MarshalWrite(w, audit)
 }
