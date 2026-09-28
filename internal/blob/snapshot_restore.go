@@ -32,13 +32,18 @@ func makeBlobClaim(operation string, snapshot Snapshot) ([]byte, error) {
 	return json.Marshal(blobImportClaim{Version: 1, OperationID: operation, Snapshot: snapshot})
 }
 
-// RestoreResult reports directory publication separately from final durability.
+// RestoreResult reports a published directory separately from final durability.
+// Published also identifies a verified directory retained from an exact retry.
 // The import barrier remains until the complete deployment recovery procedure.
 type RestoreResult struct{ Published bool }
 
 // RestoreFilesystem verifies a complete image before publishing a new directory.
 // Existing paths remain intact. Imported bytes retain a startup barrier.
 func RestoreFilesystem(ctx context.Context, destination, source, operation string, expected Snapshot) (result RestoreResult, resultErr error) {
+	return restoreFilesystem(ctx, destination, source, operation, expected, false)
+}
+
+func restoreFilesystem(ctx context.Context, destination, source, operation string, expected Snapshot, resume bool) (result RestoreResult, resultErr error) {
 	claim, err := makeBlobClaim(operation, expected)
 	if err != nil {
 		return result, err
@@ -52,7 +57,14 @@ func RestoreFilesystem(ctx context.Context, destination, source, operation strin
 	}
 	defer func() { resultErr = errors.Join(resultErr, image.close()) }()
 	if _, err := image.parent.Lstat(filepath.Base(destination)); !errors.Is(err, os.ErrNotExist) {
-		return result, errors.Join(os.ErrExist, err)
+		if err != nil || !resume {
+			return result, errors.Join(os.ErrExist, err)
+		}
+		if err := verifyFilesystemImport(ctx, destination, image, claim, expected.Objects); err != nil {
+			return result, err
+		}
+		result.Published = true
+		return result, productfiles.SyncDirectory(image.parent)
 	}
 	control, err := image.directory.CreateChild(".starport")
 	if err != nil {

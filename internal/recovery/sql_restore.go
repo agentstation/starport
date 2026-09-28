@@ -37,6 +37,10 @@ func PrepareSQLRestore(ctx context.Context, target *sqlstore.DB, request VerifyR
 	if err != nil {
 		return result, err
 	}
+	return prepareVerifiedSQLRestore(ctx, target, request, operation, scratch, manifest, references)
+}
+
+func prepareVerifiedSQLRestore(ctx context.Context, target *sqlstore.DB, request VerifyRequest, operation, scratch string, manifest BundleManifest, references ReferenceReport) (result SQLRestoreResult, err error) {
 	original := manifest.Request.Boundary
 	if original.Epoch == math.MaxInt64 {
 		return result, ErrConflict
@@ -60,21 +64,28 @@ func PrepareSQLRestore(ctx context.Context, target *sqlstore.DB, request VerifyR
 	if err := target.ImportRelationalOnce(ctx, filepath.Join(request.Directory, bundleSQLFile), manifest.SQL, scratch, identity, restrict); err != nil {
 		return result, err
 	}
+	if err := verifyPreparedSQL(ctx, target, expected); err != nil {
+		return result, err
+	}
+	return SQLRestoreResult{Boundary: expected, References: references}, nil
+}
+
+func verifyPreparedSQL(ctx context.Context, target *sqlstore.DB, expected Record) error {
 	witness, err := New(target)
 	if err != nil {
-		return result, err
+		return err
 	}
 	actual, err := witness.Current(ctx, expected.DeploymentID)
 	if err != nil || actual != expected {
-		return result, errors.Join(ErrConflict, err)
+		return errors.Join(ErrConflict, err)
 	}
 	if err := verifySQLRestoreRestrictions(ctx, target); err != nil {
-		return result, err
+		return err
 	}
 	if err := target.CheckImportBarrier(ctx); !errors.Is(err, sqlstore.ErrImportRestricted) {
-		return result, errors.Join(ErrConflict, err)
+		return errors.Join(ErrConflict, err)
 	}
-	return SQLRestoreResult{Boundary: actual, References: references}, nil
+	return nil
 }
 
 func restrictRestoredSQL(ctx context.Context, target *sqlstore.DB, conn *sql.Conn, original, expected Record) error {

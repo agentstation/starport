@@ -75,8 +75,24 @@ An exact retry verifies the original source and receipt without repeating the re
 A changed operation or recovery policy causes refusal.
 
 Ordinary application startup refuses a retained SQL import barrier before opening concept repositories.
-SQL preparation does not restore KV, blobs, selected files, or independent later history.
-The coordinator must complete those steps before a separate activation procedure can remove barriers.
+
+`PrepareBundle` imports SQL, KV, blobs, and selected files under one identity bound to the complete manifest.
+All target writers must remain fenced. Targets must remain separate from the backup and active deployment.
+An interrupted import can resume with the same operation and manifest.
+Exact retries preserve SQL restrictions, KV expirations, and blob retirement markers.
+Every store retains its startup barrier.
+
+Selected files retain their portable artifact names in an inactive staging directory.
+Preparation never copies the source's absolute paths into active configuration locations.
+The directory and `prepared-restore.json` receipt publish together after all component imports succeed.
+An existing staging directory requires the exact receipt, file inventory, and contents.
+Unexpected files, directories, and symlinks cause refusal.
+Filesystem blob retries also verify every retained object and the import receipt.
+
+A preparation receipt records completed imports. It does not prove independent history or authorize admission.
+The coordinator checks SQL restrictions again before file publication.
+Target writers must remain fenced through independent reconciliation, canonical file placement, and activation.
+These later operations and the operator restore commands remain open.
 
 These checks prove internal consistency, not completeness against later acknowledged work.
 Independent later history and restore commands remain required before deployment recovery is complete.
