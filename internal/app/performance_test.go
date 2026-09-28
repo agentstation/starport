@@ -119,6 +119,11 @@ type performanceProvider struct {
 
 func newPerformanceFixtureForProviders(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool, budgets *limits.Limits, upstream http.Handler, fixtureProviders []performanceProvider, configureKey func(*apikey.APIKey), configure ...func(*config.Config)) *performanceFixture {
 	tb.Helper()
+	return newPerformanceFixtureWithRuntime(tb, wait, catalog, approve, budgets, upstream, fixtureProviders, configureKey, nil, configure...)
+}
+
+func newPerformanceFixtureWithRuntime(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool, budgets *limits.Limits, upstream http.Handler, fixtureProviders []performanceProvider, configureKey func(*apikey.APIKey), runtimeOptions []Option, configure ...func(*config.Config)) *performanceFixture {
+	tb.Helper()
 	f := &performanceFixture{samples: make(chan performanceUpstreamSample, 1), handlers: make(chan time.Duration, 1), wait: wait}
 	if upstream != nil {
 		f.handlers = make(chan time.Duration, 8)
@@ -198,7 +203,7 @@ func newPerformanceFixtureForProviders(tb testing.TB, wait time.Duration, catalo
 	_, err = keys.Create(tb.Context(), key)
 	require.NoError(tb, err)
 	require.NoError(tb, store.Close())
-	application, err := New(cfg)
+	application, err := New(cfg, runtimeOptions...)
 	require.NoError(tb, err)
 	f.application = application
 	tb.Cleanup(func() { require.NoError(tb, application.Close(context.Background())) })
