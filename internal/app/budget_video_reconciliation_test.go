@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"encoding/json/v2"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/limits/reservation"
+	"github.com/agentstation/starport/internal/server"
 	"github.com/stretchr/testify/require"
 )
 
@@ -59,7 +62,14 @@ func TestProductionAdministratorVideoReconciliation(t *testing.T) {
 				data, err := fixture.application.store.Get(t.Context(), keys[0])
 				return err == nil && json.Unmarshal(data, &attempt) == nil && attempt.State == reservation.Uncertain
 			}, 5*time.Second, 10*time.Millisecond)
-			require.NoError(t, fixture.application.jobs.Close(t.Context()))
+			reopenVideoBudgetFixture(t, fixture)
+			retained, err := fixture.application.budget.ledger.Inspect(t.Context(), attempt.Attempt.ID)
+			require.NoError(t, err)
+			require.Equal(t, reservation.Uncertain, retained.State)
+			require.Equal(t, attempt.Attempt, retained.Attempt)
+			code, body = call(http.MethodPost, "/v1/videos", `{"model":"deepinfra/Wan-AI/Wan2.2-T2V-A14B","prompt":"landscape"}`)
+			require.Equal(t, http.StatusPaymentRequired, code, string(body))
+			require.EqualValues(t, 1, fixture.calls.Load(), "restart cannot restore uncertain capacity")
 			path := "/api/v1/admin/accounts/" + attempt.Attempt.AccountID + "/videos/" + submitted.ID + "/reconciliation"
 			code, body = call(http.MethodGet, path, "")
 			require.Equal(t, http.StatusOK, code, string(body))
@@ -81,6 +91,7 @@ func TestProductionAdministratorVideoReconciliation(t *testing.T) {
 			require.Equal(t, "key:"+attempt.Attempt.KeyID, accepted.Decision.Actor)
 			require.Equal(t, request, accepted.Decision.ReconciliationRequest)
 			require.True(t, accepted.Accounted)
+			reopenVideoBudgetFixture(t, fixture)
 			code, body = call(http.MethodPost, path, string(encoded))
 			require.Equal(t, http.StatusOK, code, string(body))
 			var replay jobs.ReconciliationView
@@ -245,4 +256,20 @@ func TestLateNativeResponseBlocksDisputedBudget(t *testing.T) {
 	_, err = service.CorrectAdministrator(t.Context(), "default", object.ID, "key:admin", correction)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, fixture.calls.Load())
+}
+
+// reopenVideoBudgetFixture reuses the real stores and production HTTP composition.
+func reopenVideoBudgetFixture(t *testing.T, fixture *performanceFixture) {
+	t.Helper()
+	fixture.gateway.Close()
+	cfg := fixture.application.config
+	require.NoError(t, fixture.application.Close(t.Context()))
+	reopened, err := New(cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, reopened.Close(context.Background())) })
+	httpServer, ok := reopened.httpServer.(*server.Server)
+	require.True(t, ok)
+	fixture.application = reopened
+	fixture.gateway = httptest.NewServer(httpServer.Router())
+	t.Cleanup(fixture.gateway.Close)
 }

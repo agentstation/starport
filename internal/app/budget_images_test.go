@@ -72,7 +72,7 @@ func TestProductionImagesBudget(t *testing.T) {
 					response = `{"data":[{"b64_json":"aW1hZ2U="},{"b64_json":"aW1hZ2U="}]}`
 				}
 				_, _ = io.WriteString(w, response)
-			}), []performanceProvider{{catalogs.ProviderID("deepinfra"), "DEEPINFRA_TOKEN", "Authorization", "Bearer sk-test-key", []string{"/images/generations"}}}, nil)
+			}), []performanceProvider{{catalogs.ProviderID("deepinfra"), "DEEPINFRA_TOKEN", "Authorization", "Bearer sk-test-key", []string{"/openai/images/generations"}}}, nil)
 			raw, err := json.Marshal(map[string]any{"model": "deepinfra/" + model, "prompt": "landscape", "n": tc.n, "size": tc.size})
 			require.NoError(t, err)
 			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, fixture.gateway.URL+"/v1/images/generations", strings.NewReader(string(raw)))
