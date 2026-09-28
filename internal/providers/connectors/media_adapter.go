@@ -32,8 +32,14 @@ func ImagesResponseToInference(response *ImagesResponse) (inference.ImagesRespon
 	if response == nil {
 		return inference.ImagesResponse{}, fmt.Errorf("image response is required")
 	}
+	if len(response.Data) == 0 {
+		return inference.ImagesResponse{}, fmt.Errorf("image response carries no images")
+	}
 	images := make([]inference.GeneratedImage, len(response.Data))
 	for index, datum := range response.Data {
+		if datum.B64JSON == "" && datum.URL == "" {
+			return inference.ImagesResponse{}, fmt.Errorf("image response carries an empty image")
+		}
 		images[index] = inference.GeneratedImage{
 			B64JSON:       datum.B64JSON,
 			URL:           datum.URL,
@@ -67,12 +73,17 @@ func SpeechResponseToInference(response *SpeechResponse) (inference.SpeechRespon
 		return inference.SpeechResponse{}, fmt.Errorf("speech response is required")
 	}
 	if len(response.Audio) == 0 {
-		// A speech call that answered 200 with no bytes produced no audio.
-		// Reporting it as a result would hand the caller an empty file and
-		// charge for it.
+		// Empty audio is not a usable result. Admission retains its charge
+		// independently of this response conversion.
 		return inference.SpeechResponse{}, fmt.Errorf("speech response carries no audio")
 	}
+	measured := inference.Usage{TokensUnknown: true}
+	if response.InputCharacters != nil && *response.InputCharacters >= 0 {
+		measured.InputCharacters = *response.InputCharacters
+		measured.InputCharactersKnown = true
+	}
 	return inference.SpeechResponse{
+		Usage:       measured,
 		Audio:       append([]byte(nil), response.Audio...),
 		ContentType: response.ContentType,
 	}, nil
@@ -128,7 +139,20 @@ func RecognitionResponseToInference(response *RecognitionResponse) (inference.Re
 	var measured *inference.Usage
 	if response.Usage != nil {
 		converted := mediaUsageToInference(response.Usage, 0)
+		converted.TokensUnknown = response.TokenEvidence == nil || !response.TokenEvidence.HasReportedTotals()
+		converted.CacheReadTokensUnknown = true
+		if response.TokenEvidence != nil {
+			_, known := response.TokenEvidence.PromptTokensDetails.ReportedCachedTokens()
+			converted.CacheReadTokensUnknown = !known
+		}
 		measured = &converted
+	}
+	if response.ProcessedPages != nil && *response.ProcessedPages >= 0 {
+		if measured == nil {
+			measured = &inference.Usage{TokensUnknown: true, CacheReadTokensUnknown: true}
+		}
+		measured.ProcessedPages = *response.ProcessedPages
+		measured.ProcessedPagesKnown = true
 	}
 	return inference.RecognitionResponse{Pages: pages, Usage: measured}, nil
 }
@@ -147,7 +171,7 @@ func uploadFromInference(upload inference.UploadedFile) UploadedFile {
 // separate: the gateway counted the pictures itself, so it is a measurement
 // even when the provider reported no tokens.
 func mediaUsageToInference(usage *MediaUsage, generatedImages int) inference.Usage {
-	converted := inference.Usage{GeneratedImages: generatedImages}
+	converted := inference.Usage{GeneratedImages: generatedImages, TokensUnknown: usage == nil}
 	if usage == nil {
 		return converted
 	}

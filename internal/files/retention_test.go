@@ -25,11 +25,11 @@ type refusingDeletes struct {
 	err       error
 }
 
-func (s *refusingDeletes) Delete(ctx context.Context, key string) error {
+func (s *refusingDeletes) Retire(ctx context.Context, key string) error {
 	if s.refuseKey != "" && key == s.refuseKey {
 		return s.err
 	}
-	return s.Store.Delete(ctx, key)
+	return s.Store.Retire(ctx, key)
 }
 
 func newServiceOver(t *testing.T, bytes blob.Store, options ...Option) (*Service, Repository) {
@@ -79,7 +79,7 @@ func TestDeleteMarksTheRecordBeforeItRemovesTheBytes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Resumed)
 
-	_, err = bytes.Stat(ctx, blobKey)
+	_, err = bytes.StatPublished(ctx, blobKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
 	_, err = records.Get(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
@@ -101,7 +101,7 @@ func TestDeleteRemovesBothWritesWhenNothingFails(t *testing.T) {
 	file := upload(t, service, "account-a", "notes.txt", "the payload")
 	require.NoError(t, service.Delete(ctx, "account-a", file.ID))
 
-	_, err := bytes.Stat(ctx, file.blobKey)
+	_, err := bytes.StatPublished(ctx, file.blobKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
 	_, err = records.Get(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
@@ -145,14 +145,14 @@ func TestExpiredFileReadsAsNotFoundBeforeTheSweep(t *testing.T) {
 	// reclaims storage.
 	_, err = records.Get(ctx, "account-a", file.ID)
 	require.NoError(t, err)
-	_, err = bytes.Stat(ctx, file.blobKey)
+	_, err = bytes.StatPublished(ctx, file.blobKey)
 	require.NoError(t, err)
 
 	// The sweep then reclaims both.
 	result, err := service.Sweep(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Expired)
-	_, err = bytes.Stat(ctx, file.blobKey)
+	_, err = bytes.StatPublished(ctx, file.blobKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
 	_, err = records.Get(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Play, Send, X } from "lucide-react";
+import { Play, RefreshCw, Send, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import {
@@ -7,6 +7,7 @@ import {
   GhostButton,
   PrimaryButton,
 } from "@/components/ui/Form";
+import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Select } from "@/components/ui/Select";
 import { Pill, type PillTone } from "@/components/ui/Pill";
@@ -15,6 +16,7 @@ import {
   accessMessage,
   ApiError,
   cancelJob,
+  reconcileJob,
   fetchJobAsset,
   submitJob,
   TERMINAL_JOB_STATES,
@@ -168,7 +170,7 @@ export function JobsPanel() {
     enabled: access,
     refetchInterval: (query) => {
       const listed = query.state.data?.jobs ?? [];
-      return listed.some((job) => !terminal(job)) ? POLL_MS : false;
+      return listed.some((job) => !terminal(job) && !job.polling_status && !job.submission_status) ? POLL_MS : false;
     },
   });
 
@@ -194,11 +196,20 @@ export function JobsPanel() {
   const [cancelling, setCancelling] = useState<VideoJob | null>(null);
   const stop = useMutation({
     mutationFn: (job: VideoJob) => cancelJob(job.id),
-    onSuccess: async (_result, job) => {
+    onSuccess: async (result, job) => {
       setCancelling(null);
-      announce(`Cancelled ${job.id}`);
+      announce(result.status === "cancelled" ? `Cancelled ${job.id}` : `Provider reports ${result.status.replaceAll("_", " ")} for ${job.id}`);
       await queryClient.invalidateQueries({ queryKey: queries.videoJobs().queryKey });
     },
+  });
+
+  const check = useMutation({
+    mutationFn: (job: VideoJob) => reconcileJob(job.id),
+    onSuccess: async (result, job) => {
+      announce(`Provider reports ${result.status.replaceAll("_", " ")} for ${job.id}`);
+      await queryClient.invalidateQueries({ queryKey: queries.videoJobs().queryKey });
+    },
+    onError: (error) => report(`Provider check failed: ${refusalText(error)}`),
   });
 
   const rows = jobs.data?.jobs ?? [];
@@ -255,6 +266,12 @@ export function JobsPanel() {
                   {formatMs(elapsed(job, now))}
                 </td>
                 <td className="px-4 py-2.5">
+                  {job.polling_status === "paused" && (
+                    <p data-testid="job-polling-paused" className="text-xs text-text-3">
+                      Automatic polling paused. Provider work remains unconfirmed and holds a job slot.
+                      Check the provider before submitting again.
+                    </p>
+                  )}
                   {job.status === "failed" && (
                     <p data-testid="job-failure" className="text-xs text-error">
                       {job.error?.message ??
@@ -283,6 +300,12 @@ export function JobsPanel() {
                         <Play className="size-3.5" />
                         Play
                       </GhostButton>
+                    )}
+                    {!terminal(job) && !job.submission_status && (
+                      <Button variant="ghost" disabled={check.isPending} onClick={() => check.mutate(job)}>
+                        <RefreshCw data-icon="inline-start" />
+                        {check.isPending && check.variables.id === job.id ? "Checking…" : "Check provider"}
+                      </Button>
                     )}
                     {!terminal(job) && (
                       <GhostButton onClick={() => setCancelling(job)}>
@@ -364,8 +387,8 @@ export function JobsPanel() {
         >
           <p>
             Cancel <strong className="text-text-1">{cancelling.id}</strong> on{" "}
-            {cancelling.model}? The job stays in the list as cancelled and never
-            produces an asset.
+            {cancelling.model}? The provider must confirm that work stopped.
+            The job can still complete, and cancellation does not establish a refund.
           </p>
         </ConfirmDialog>
       )}

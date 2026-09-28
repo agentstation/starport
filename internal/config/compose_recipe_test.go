@@ -14,20 +14,36 @@ import (
 )
 
 // TestComposeStorageRecipes loads the actual Compose environments through the
-// production loader. No operator dotenv file or service connection is used.
+// production loader. It uses no operator dotenv file or service connection.
 func TestComposeStorageRecipes(t *testing.T) {
+	required := os.Getenv("STARPORT_REQUIRE_COMPOSE") == "1" || os.Getenv("STARPORT_RECIPE_IMAGE") != ""
 	docker, err := exec.LookPath("docker")
 	if err != nil {
+		if required {
+			t.Fatalf("recipe qualification requires Docker: %v", err)
+		}
 		t.Skip("Docker Compose is required for recipe qualification")
 	}
-	probeContext, cancelProbe := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancelProbe()
-	if err := exec.CommandContext(probeContext, docker, "compose", "version").Run(); err != nil {
-		if os.Getenv("STARPORT_RECIPE_IMAGE") != "" {
-			t.Fatalf("container qualification requires Docker Compose: %v", err)
+	// Preserve host paths for Docker plugin discovery. Operator configuration
+	// stays outside the subprocess environment and comes from the fixture.
+	var environment []string
+	for _, key := range []string{"PATH", "HOME", "USERPROFILE", "SystemRoot", "SystemDrive", "ProgramFiles", "ProgramFiles(x86)", "ProgramData", "APPDATA", "LOCALAPPDATA", "DOCKER_CONFIG", "DOCKER_CLI_PLUGIN_EXTRA_DIRS", "TMP", "TEMP"} {
+		if value, exists := os.LookupEnv(key); exists {
+			environment = append(environment, key+"="+value)
 		}
-		t.Skipf("UNVERIFIED: Docker Compose is unavailable: %v", err)
 	}
+	probeContext, cancelProbe := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancelProbe()
+	probe := exec.CommandContext(probeContext, docker, "compose", "version")
+	probe.Env = environment
+	if output, err := probe.CombinedOutput(); err != nil {
+		if required || probeContext.Err() != nil {
+			t.Fatalf("recipe qualification requires Docker Compose: %v: %s", err, output)
+		}
+		t.Skipf("UNVERIFIED: Docker Compose is unavailable: %v: %s", err, output)
+	}
+	t.Setenv("STARPORT_DEPLOYMENT_ID", "ambient-deployment-must-not-override-fixture")
+	t.Setenv("STARPORT_SECURITY_MASTER_KEY", "ambient-key-must-not-override-fixture")
 	repository, err := filepath.Abs("../..")
 	require.NoError(t, err)
 	for _, tc := range []struct {
@@ -55,7 +71,7 @@ func TestComposeStorageRecipes(t *testing.T) {
 			defer cancel()
 			cmd := exec.CommandContext(ctx, docker, "compose", "--project-directory", directory,
 				"--env-file", file, "-f", filepath.Join(repository, tc.file), "config", "--format", "json")
-			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME")}
+			cmd.Env = environment
 			output, err := cmd.CombinedOutput()
 			require.NoError(t, err, "%s", output)
 			var rendered struct {

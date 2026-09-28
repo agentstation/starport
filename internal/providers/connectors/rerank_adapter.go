@@ -36,5 +36,7 @@ func RerankResponseToInference(response *RerankResponse) (inference.RerankRespon
 	}
 	usage := mediaUsageToInference(response.Usage, 0)
 	usage.SearchUnits = response.SearchUnits
+	usage.SearchUnitsKnown = response.SearchUnitsKnown
+	usage.TokensUnknown = !response.TokensKnown
 	return inference.RerankResponse{Results: results, Usage: usage}, nil
 }

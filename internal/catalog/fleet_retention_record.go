@@ -56,6 +56,14 @@ func (blob fleetBlob) validate(identity runtime.FleetIdentity) error {
 	if err := blob.Head.Validate(); err != nil {
 		return err
 	}
+	if blob.Adoption != nil {
+		if err := blob.Adoption.Previous.Validate(); err != nil {
+			return err
+		}
+		if blob.Adoption.Previous == (runtime.FleetHead{}) || !fleetChunkDigest(blob.Adoption.Receipt) {
+			return errors.New("invalid fleet adoption receipt")
+		}
+	}
 	r := blob.Record
 	if blob.GenerationBytes <= 0 || blob.GenerationBytes > int64(r.Size) || blob.RecoveryBytes < 0 || blob.RecoveryBytes > runtime.MaxFleetRecoveryBytes || blob.RecoveryBytes > int64(r.Size) {
 		return errors.New("invalid fleet retained byte counts")

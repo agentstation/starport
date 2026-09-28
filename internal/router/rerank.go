@@ -29,6 +29,7 @@ func (r *modelRouter) RouteRerank(ctx context.Context, req *RerankRequest) (*Rer
 	}
 	call := providerCall[*connectors.RerankRequest, *connectors.RerankResponse, inference.RerankResponse]{
 		transport: rerankTransport,
+		charge:    rerankCharge,
 		build: func() *connectors.RerankRequest {
 			return connectors.RerankRequestFromInference(req.Request)
 		},

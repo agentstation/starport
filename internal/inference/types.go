@@ -372,12 +372,24 @@ type ChatRequest struct {
 // and cache writes; CacheReadTokens and CacheWriteTokens break out the
 // cached portions for pricing.
 type Usage struct {
-	InputTokens      int
-	OutputTokens     int
-	TotalTokens      int
-	ReasoningTokens  int
-	CacheReadTokens  int
-	CacheWriteTokens int
+	// InputCharacters counts Unicode code points submitted for speech.
+	InputCharacters      int64
+	InputCharactersKnown bool
+
+	// ProcessedPages counts pages the recognition provider reports as billed.
+	ProcessedPages int
+	// ProcessedPagesKnown distinguishes a measured zero from absent page usage.
+	ProcessedPagesKnown bool
+	// TokensUnknown marks incomplete or invalid provider token evidence.
+	TokensUnknown bool
+	// CacheReadTokensUnknown distinguishes an omitted cache count from measured zero.
+	CacheReadTokensUnknown bool
+	InputTokens            int
+	OutputTokens           int
+	TotalTokens            int
+	ReasoningTokens        int
+	CacheReadTokens        int
+	CacheWriteTokens       int
 
 	// AudioInputTokens and AudioOutputTokens count the audio a provider
 	// metered at its own rate. Both are already inside InputTokens and
@@ -395,6 +407,8 @@ type Usage struct {
 	// it, and the offering's own basis says whether to read this field or the
 	// token counts beside it.
 	SearchUnits int
+	// SearchUnitsKnown marks a nonnegative measured count, including zero.
+	SearchUnitsKnown bool
 
 	// Estimated marks counts the gateway synthesized with a tokenizer
 	// because the provider reported no usage. Estimated counts never

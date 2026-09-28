@@ -24,8 +24,19 @@ var (
 
 // Batch is one offline run over a stored input file.
 type Batch struct {
-	ID      string
-	Account string
+	// Authorization retains private, batch-scoped caller evidence for restart.
+	Authorization    []byte
+	StoredBytesBound int64
+	ResultsReleased  bool
+	// ClaimedLines counts durable, sequential execution claims. It is not a completion count.
+	ClaimedLines int
+	// SlotID identifies the durable outstanding-work claim.
+	SlotID       string
+	SlotReleased bool
+	// RunFinished means all admitted lines drained and the final outcome persisted.
+	RunFinished bool
+	ID          string
+	Account     string
 	// KeyID names the gateway API key that submitted the work. It is optional
 	// for the reason Job.KeyID is: a deployment with authentication off
 	// submits batches no key signed.
@@ -60,6 +71,9 @@ type Batch struct {
 
 // Validate reports whether the record can be stored.
 func (b Batch) Validate() error {
+	if err := b.validateProgress(); err != nil {
+		return err
+	}
 	switch {
 	case strings.TrimSpace(b.ID) == "":
 		return fmt.Errorf("%w: it has no identifier", ErrInvalidBatch)
@@ -144,6 +158,22 @@ func (b *Batch) transition(to JobState, now time.Time) error {
 	b.State = to
 	if to.Terminal() {
 		b.TerminalAt = now
+	}
+	return nil
+}
+
+func (b Batch) validateProgress() error {
+	switch {
+	case len(b.Authorization) > 8192:
+		return ErrInvalidBatch
+	case b.StoredBytesBound < 0 || b.ResultsReleased && !b.RunFinished:
+		return ErrInvalidBatch
+	case b.ClaimedLines < 0 || b.ClaimedLines > b.TotalLines:
+		return ErrInvalidBatch
+	case b.RunFinished && !b.State.Terminal():
+		return ErrInvalidBatch
+	case b.SlotReleased && (b.SlotID == "" || !b.RunFinished):
+		return ErrInvalidBatch
 	}
 	return nil
 }

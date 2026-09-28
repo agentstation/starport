@@ -34,6 +34,12 @@ type ChatStream interface {
 	Close() error
 }
 
+// StreamCompletion reports an observed protocol completion marker after Recv.
+// A transport EOF alone does not establish complete provider usage.
+type StreamCompletion interface {
+	CompletionObserved() bool
+}
+
 // NewConnector composes catalog-selected endpoint protocols for one provider.
 func NewConnector(
 	provider string,

@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/storage"
 )
 
 // recordingAccountant is the priced side under test. It keeps every entry it is
@@ -45,22 +46,34 @@ type countingMeter struct {
 	releases int
 	holders  []string
 	refuse   error
+	claims   map[string]bool
 }
 
-func (m *countingMeter) Reserve(_ context.Context, holder string, _, _ int64) error {
+func (m *countingMeter) Reserve(_ context.Context, holder, claimID, _, _ string, _ int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.refuse != nil {
 		return m.refuse
 	}
+	if m.claims == nil {
+		m.claims = make(map[string]bool)
+	}
+	if _, exists := m.claims[holder+"/"+claimID]; exists {
+		return nil
+	}
+	m.claims[holder+"/"+claimID] = false
 	m.reserves++
 	m.holders = append(m.holders, holder)
 	return nil
 }
 
-func (m *countingMeter) Release(_ context.Context, holder string, _ int64) error {
+func (m *countingMeter) Release(_ context.Context, holder, claimID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if released, exists := m.claims[holder+"/"+claimID]; !exists || released {
+		return nil
+	}
+	m.claims[holder+"/"+claimID] = true
 	m.releases++
 	m.holders = append(m.holders, holder)
 	return nil
@@ -222,70 +235,31 @@ func TestASubmissionOverTheLimitReachesNoProvider(t *testing.T) {
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
 }
 
-// TestARefusedProviderGivesTheSlotBack covers the path between the two: the
-// claim succeeded and the work never started. A slot leaked here would be the
-// worst kind, because a provider outage would walk an account into its own
-// limit and keep it there.
-func TestARefusedProviderGivesTheSlotBack(t *testing.T) {
+// TestTheSweepRetainsUnconfirmedWork separates a local timeout from provider completion.
+func TestTheSweepRetainsUnconfirmedWork(t *testing.T) {
 	t.Parallel()
-
-	ctx := context.Background()
-	service, _, meter := newAccountedService(t)
-	runner := acceptedRunner()
-	runner.submitErr = errors.New("the provider refused the prompt")
-
-	_, err := service.Submit(ctx, open(runner), submissionFor(accountA))
-	require.Error(t, err)
-
-	reserves, releases := meter.counts()
-	require.Equal(t, 1, reserves)
-	require.Equal(t, 1, releases)
-}
-
-// TestTheSweepClosesAJobNobodyCameBackFor is the other half of the bound. Every
-// other path settles a job because a caller polled it, and a caller that
-// submits and walks away is exactly the caller the limit exists for. Without
-// this pass one abandoned job holds one slot for as long as the process runs.
-func TestTheSweepClosesAJobNobodyCameBackFor(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
+	ctx := t.Context()
 	accountant := &recordingAccountant{}
 	meter := &countingMeter{}
 	clock := &assetClock{now: submitted}
-	service, _ := newService(t,
-		jobs.WithAccountant(accountant),
-		jobs.WithJobMeter(meter),
-		jobs.WithClock(clock.read))
+	service, records := newService(t, jobs.WithAccountant(accountant), jobs.WithJobMeter(meter), jobs.WithClock(clock.read))
 	runner := acceptedRunner()
-
-	_, err := service.Submit(ctx, open(runner), submissionFor(accountA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
-
-	// Move past the polling budget. A provider that has not answered by then is
-	// not going to, and nothing is polling this job to notice.
 	clock.now = submitted.Add(jobs.DefaultLifetime + time.Minute)
-	result, err := service.Sweep(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 1, result.Abandoned)
-	require.Equal(t, 1, result.Accounted)
-
-	entries := accountant.all()
-	require.Len(t, entries, 1)
-	require.Equal(t, jobs.JobStateFailed, entries[0].State)
-	require.False(t, entries[0].Chargeable)
-
-	reserves, releases := meter.counts()
-	require.Equal(t, 1, reserves)
-	require.Equal(t, 1, releases)
-
-	// A second pass finds nothing. The stamp is what stops it, so a sweep on a
-	// ticker does not draw a record per tick for the rest of the day.
-	again, err := service.Sweep(ctx)
-	require.NoError(t, err)
-	require.Zero(t, again.Abandoned)
-	require.Zero(t, again.Accounted)
-	require.Len(t, accountant.all(), 1)
+	for range 2 {
+		result, err := service.Sweep(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 1, result.AwaitingReconciliation)
+		require.Zero(t, result.Accounted)
+		require.Empty(t, accountant.all())
+		reserves, releases := meter.counts()
+		require.Equal(t, 1, reserves)
+		require.Zero(t, releases)
+		stored, err := records.Get(ctx, accountA, job.ID)
+		require.NoError(t, err)
+		require.Equal(t, jobs.JobStateQueued, stored.State)
+	}
 }
 
 // recordingNotifier is the event side under test: it keeps every terminal
@@ -331,4 +305,13 @@ func TestATerminalJobNotifiesExactlyOnce(t *testing.T) {
 	require.Len(t, entries, 1)
 	require.Equal(t, job.ID, entries[0].JobID)
 	require.Equal(t, jobs.JobStateCompleted, entries[0].State)
+}
+
+func (m *countingMeter) Attachment(_ context.Context, holder, claimID, _, _ string) (storage.CompareAndSwapMutation, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if released, exists := m.claims[holder+"/"+claimID]; !exists || released {
+		return storage.CompareAndSwapMutation{}, jobs.ErrClaimUnavailable
+	}
+	return storage.CompareAndSwapMutation{Key: "test-attachment:" + claimID, NewValue: []byte("attached")}, nil
 }

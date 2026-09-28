@@ -347,16 +347,23 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 // already includes cachedContentTokenCount. Billed output includes both
 // candidate and thinking tokens.
 func convertGeminiUsage(m geminiUsageMetadata) Usage {
+	output, outputValid := sumUsageTokens(m.CandidatesTokenCount, m.ThoughtsTokenCount)
 	usage := Usage{
 		PromptTokens:     m.PromptTokenCount,
-		CompletionTokens: m.CandidatesTokenCount + m.ThoughtsTokenCount,
+		CompletionTokens: output,
 		TotalTokens:      m.TotalTokenCount,
+	}
+	if m.decoded {
+		usage.setReportedTotals(m.zeroReported, m.zeroReported, m.zeroReported)
+	}
+	if !outputValid || m.CachedContentTokenCount < 0 {
+		usage.setReportedTotals(false, false, false)
 	}
 	if m.ThoughtsTokenCount > 0 {
 		usage.CompletionTokensDetails = &CompletionTokensDetails{ReasoningTokens: m.ThoughtsTokenCount}
 	}
-	if m.CachedContentTokenCount > 0 {
-		usage.PromptTokensDetails = &PromptTokensDetails{CachedTokens: m.CachedContentTokenCount}
+	if m.cachedReported || m.CachedContentTokenCount > 0 {
+		usage.PromptTokensDetails = &PromptTokensDetails{CachedTokens: m.CachedContentTokenCount, decoded: m.decoded, cachedReported: m.cachedReported}
 	}
 	return usage
 }
@@ -603,7 +610,7 @@ func extractThoughtSummary(text string) (content, reasoning string) {
 			end += start
 			reasoning = strings.TrimSpace(text[start+10 : end])
 			content = strings.TrimSpace(text[:start] + text[end+11:])
-			return
+			return content, reasoning
 		}
 	}
 
@@ -615,7 +622,7 @@ func extractThoughtSummary(text string) (content, reasoning string) {
 				// Found empty line, split here
 				reasoning = strings.Join(lines[:i], "\n")
 				content = strings.Join(lines[i+1:], "\n")
-				return
+				return content, reasoning
 			}
 		}
 	}
@@ -633,7 +640,7 @@ func extractThoughtSummary(text string) (content, reasoning string) {
 			}
 			reasoning = strings.TrimSpace(text[idx:endIdx])
 			content = strings.TrimSpace(text[:idx] + text[endIdx:])
-			return
+			return content, reasoning
 		}
 	}
 

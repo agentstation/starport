@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/agentstation/starmap"
-	"github.com/agentstation/starport/internal/catalog/recovery"
+	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )

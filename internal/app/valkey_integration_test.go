@@ -13,8 +13,8 @@ import (
 
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authorization"
-	"github.com/agentstation/starport/internal/catalog/recovery"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -47,7 +47,7 @@ func TestAppWithValkey(t *testing.T) {
 	approveTestFleet(t, cfg, store)
 	require.NoError(t, store.Close())
 
-	factories := explicitTestFactories()
+	factories := explicitTestFactories(t)
 	factories.openStorage = openStorage
 
 	application, err := New(cfg, withRuntimeFactories(factories))
@@ -63,7 +63,7 @@ func TestAppWithValkey(t *testing.T) {
 func TestStorageModeValidation(t *testing.T) {
 	cfg := validProductionConfig(t)
 	cfg.Storage.Mode = "invalid"
-	application, err := New(cfg, withRuntimeFactories(explicitTestFactories()))
+	application, err := New(cfg, withRuntimeFactories(explicitTestFactories(t)))
 	require.Error(t, err)
 	require.Nil(t, application)
 }
@@ -166,7 +166,7 @@ func approveTestFleet(t *testing.T, cfg *config.Config, store storage.KVStore) {
 	require.NoError(t, err)
 	identity, err := store.(storage.IncarnationProvider).ObserveIncarnation(t.Context())
 	require.NoError(t, err)
-	_, err = witness.Approve(t.Context(), closed, identity, "isolated-app-test-backend")
+	_, err = witness.ApproveAuthority(t.Context(), store.(storage.IncarnationProvider), closed, identity, "isolated-app-test-backend", "fixture-approval")
 	require.NoError(t, err)
 	// This isolated fixture explicitly starts unused. Real initialization has its own native tests.
 	_, err = db.ExecContext(t.Context(), db.Bind("UPDATE catalog_recovery SET bootstrap_allowed = 1 WHERE deployment_id = ?"), cfg.EffectivePaths().DeploymentID)

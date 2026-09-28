@@ -2,10 +2,14 @@ package router
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
+	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/limits/admission"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/routing"
 )
@@ -62,10 +66,20 @@ func (r *modelRouter) RouteVideoSubmit(
 	if req == nil || req.Request.Model == "" {
 		return nil, ErrNoModelsAvailable
 	}
+	if req.JobSubmission == nil {
+		return nil, jobs.ErrSubmissionRecorderRequired
+	}
+	billing := &videoSubmissionBilling{}
 	call := providerCall[*connectors.JobSubmission, *connectors.ProviderJob, connectors.ProviderJob]{
+		prepare: billing.prepare, charge: billing.charge,
 		transport: jobSubmitTransport,
 		build: func() *connectors.JobSubmission {
+			var bound int64
+			if recorder, ok := req.JobSubmission.(jobs.NativeSubmissionRecorder); ok {
+				bound = recorder.AssetBound()
+			}
 			return &connectors.JobSubmission{
+				MaxBytes:       bound,
 				Prompt:         req.Request.Prompt,
 				NegativePrompt: req.Request.NegativePrompt,
 				Size:           req.Request.Size,
@@ -74,10 +88,49 @@ func (r *modelRouter) RouteVideoSubmit(
 			}
 		},
 		convert: providerJobAnswer,
+		beforeDispatch: func(ctx context.Context, route routing.Route, ticket admission.Ticket) error {
+			if billing.native {
+				if _, ok := req.JobSubmission.(jobs.NativeSubmissionRecorder); !ok {
+					return jobs.ErrSubmissionRecorderRequired
+				}
+			}
+			return req.JobSubmission.BeforeDispatch(ctx, jobs.Dispatch{
+				Native: billing.native, Valuation: billing.valuation,
+				Provider: route.ProviderID, Model: route.ID(), CatalogGeneration: route.CatalogGenerationID, ReservationID: ticket.ID(),
+			})
+		},
+		afterDispatch: func(ctx context.Context, route routing.Route, answer *connectors.ProviderJob, callErr error) error {
+			if billing.native && answer != nil && answer.NativeResult != nil {
+				native := answer.NativeResult
+				if !native.State.Terminal() {
+					return nil
+				}
+				return req.JobSubmission.Accepted(ctx, jobs.Acceptance{Provider: route.ProviderID, Model: route.ID(), NativeResult: &jobs.NativeResult{
+					State: native.State, Reason: native.Reason, RequestID: native.RequestID, Measurement: billing.evidence(answer), Asset: jobs.Asset{ContentType: native.Asset.ContentType, Bytes: native.Asset.Bytes}, AssetURL: native.AssetURL,
+				}})
+			}
+			if callErr != nil {
+				return nil
+			}
+			if answer == nil {
+				return jobs.ErrSubmissionUnconfirmed
+			}
+			return req.JobSubmission.Accepted(ctx, jobs.Acceptance{
+				Provider: route.ProviderID, Model: route.ID(), ProviderJobID: answer.ID, State: answer.State, Reason: answer.Reason,
+			})
+		},
 	}
 	operation := routing.OperationVideosGenerations
-	return routeOperation(ctx, r, req.policy(req.Request.Model), operation,
+	policy := req.policy(req.Request.Model)
+	if native, ok := req.JobSubmission.(jobs.NativeSubmissionRecorder); ok {
+		policy.ElapsedBudget = native.ExecutionTimeout()
+	}
+	return routeOperation(ctx, r, policy, operation,
 		connectors.ProviderJob.Clone, call.attempt(operation))
+}
+
+func submissionFailure(err error) *failure.Failure {
+	return failure.New(failure.GatewayUnavailable, "Durable job submission is unavailable.", false, failure.ProviderDetails{}, err)
 }
 
 // RouteVideoPoll asks the provider that holds the job where it got to.
@@ -85,7 +138,7 @@ func (r *modelRouter) RouteVideoPoll(
 	ctx context.Context,
 	req *VideoJobRequest,
 ) (*VideoJobResponse, error) {
-	return r.routeAcceptedJob(ctx, req, jobPollTransport)
+	return r.routeAcceptedJob(ctx, req, billingVideoPoll, jobPollTransport)
 }
 
 // RouteVideoCancel asks the provider that holds the job to stop it.
@@ -93,7 +146,7 @@ func (r *modelRouter) RouteVideoCancel(
 	ctx context.Context,
 	req *VideoJobRequest,
 ) (*VideoJobResponse, error) {
-	return r.routeAcceptedJob(ctx, req, jobCancelTransport)
+	return r.routeAcceptedJob(ctx, req, billingVideoCancel, jobCancelTransport)
 }
 
 // RouteVideoContent reads the finished asset from the provider that produced it.
@@ -113,6 +166,7 @@ func (r *modelRouter) RouteVideoContent(
 		return nil, err
 	}
 	reference := req.Request
+	policy.Purpose = billingVideoContent
 	call := providerCall[*connectors.JobAssetRef, *connectors.JobAsset, connectors.JobAsset]{
 		transport: jobAssetTransport,
 		build: func() *connectors.JobAssetRef {
@@ -149,6 +203,7 @@ func acceptedJobPolicy(policy operationPolicy, reference VideoJobReference) (ope
 func (r *modelRouter) routeAcceptedJob(
 	ctx context.Context,
 	req *VideoJobRequest,
+	purpose billingPurpose,
 	transport func(connectors.Connector, catalogs.EndpointType) (providerInvoke[*connectors.ProviderJobRef, *connectors.ProviderJob], bool),
 ) (*VideoJobResponse, error) {
 	if req == nil {
@@ -158,6 +213,7 @@ func (r *modelRouter) routeAcceptedJob(
 	if err != nil {
 		return nil, err
 	}
+	policy.Purpose = purpose
 	call := providerCall[*connectors.ProviderJobRef, *connectors.ProviderJob, connectors.ProviderJob]{
 		transport: transport,
 		build: func() *connectors.ProviderJobRef {
@@ -184,6 +240,20 @@ func jobSubmitTransport(
 	connector connectors.Connector,
 	endpointType catalogs.EndpointType,
 ) (providerInvoke[*connectors.JobSubmission, *connectors.ProviderJob], bool) {
+	generator, native := connectors.NativeVideoGeneratorFor(connector, endpointType)
+	if native {
+		return func(ctx context.Context, request *connectors.JobSubmission) (*connectors.ProviderJob, error) {
+			seconds, err := strconv.ParseInt(request.Seconds, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			result, err := generator.GenerateVideo(ctx, &connectors.NativeVideoRequest{MediaTarget: request.MediaTarget, Prompt: request.Prompt, NegativePrompt: request.NegativePrompt, Size: request.Size, Seconds: seconds, Seed: request.Seed, MaxBytes: request.MaxBytes})
+			if result == nil {
+				return nil, err
+			}
+			return &connectors.ProviderJob{ID: result.RequestID, State: result.State, Reason: result.Reason, NativeResult: result}, err
+		}, true
+	}
 	runner, implemented := connectors.JobRunnerFor(connector, endpointType)
 	if !implemented {
 		return nil, false

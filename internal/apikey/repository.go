@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/agentstation/starport/internal/authorization/revision"
+	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -125,6 +127,7 @@ func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (R
 		return Record{}, err
 	}
 	stored := apiKeyRecord{SchemaVersion: StorageSchemaVersion, Revision: 1, APIKey: cloneAPIKey(apiKey)}
+	stored.APIKey.Limits = apiKey.Limits.WithBudgetHistory(nil)
 	data, err := policyrecord.Marshal(stored)
 	if err != nil {
 		return Record{}, fmt.Errorf("encode API key record: %w", err)
@@ -155,6 +158,11 @@ func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (R
 		{Key: hashStorageKey(apiKey.Hash), NewValue: indexData},
 		{Key: collectionKey, ExpectedValue: collectionData, NewValue: updatedCollectionData},
 	}
+	history, err := reservation.HolderCreationMutations(ctx, r.store, limits.ScopeKey, apiKey.ID, stored.APIKey.Limits)
+	if err != nil {
+		return Record{}, err
+	}
+	mutations = append(mutations, history...)
 	var markerData []byte
 	if initial {
 		markerData, err = json.Marshal(initialAPIKeyRecord{
@@ -236,12 +244,17 @@ func (r *repository) replaceMissingInitial(
 	if err != nil {
 		return Record{}, fmt.Errorf("encode replacement API key collection record: %w", err)
 	}
-	if err := r.authority.Apply(ctx, []storage.CompareAndSwapMutation{
+	history, err := reservation.HolderCreationMutations(ctx, r.store, limits.ScopeKey, stored.APIKey.ID, stored.APIKey.Limits)
+	if err != nil {
+		return Record{}, err
+	}
+	mutations := append([]storage.CompareAndSwapMutation{
 		{Key: initialKey, ExpectedValue: currentMarkerData, NewValue: markerData},
 		{Key: apiKeyStorageKey(stored.APIKey.ID), NewValue: apiKeyData},
 		{Key: hashStorageKey(stored.APIKey.Hash), NewValue: hashData},
 		{Key: collectionKey, ExpectedValue: collectionData, NewValue: updatedCollectionData},
-	}); err != nil {
+	}, history...)
+	if err := r.authority.Apply(ctx, mutations); err != nil {
 		return Record{}, mapConflict("replace missing initial API key", err)
 	}
 	return recordFromStored(stored), nil
@@ -413,6 +426,7 @@ func (r *repository) Update(ctx context.Context, apiKey APIKey, expectedRevision
 		Revision:      current.Revision + 1,
 		APIKey:        cloneAPIKey(apiKey),
 	}
+	updated.APIKey.Limits = apiKey.Limits.WithBudgetHistory(current.APIKey.Limits)
 	updatedData, err := policyrecord.Marshal(updated)
 	if err != nil {
 		return Record{}, fmt.Errorf("encode API key update: %w", err)

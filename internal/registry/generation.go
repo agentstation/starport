@@ -15,6 +15,7 @@ import (
 
 type runtimeProvider struct {
 	registration Registration
+	inference    *starmapcatalogs.ProviderInference
 }
 
 type runtimeGeneration struct {
@@ -187,8 +188,7 @@ func (r *Registry) Publish(
 		return err
 	}
 	generation.catalog = r.catalog
-	generation.snapshot = snapshot
-	generation.catalogGenerationID = snapshot.GenerationID()
+	generation.bindSnapshot(snapshot)
 	generation.onClose = func(err error) { r.generationClosed(generation, err) }
 	r.capacityMu.Lock()
 	previous := r.current.Swap(generation)
@@ -246,6 +246,26 @@ func (g *runtimeGeneration) currentSnapshot() *runtimecatalog.RoutableSnapshot {
 		}
 	}
 	return g.snapshot
+}
+
+// bindSnapshot retains private inference contracts before generation publication.
+// Request binding reads these contracts without copying unrelated provider models.
+func (g *runtimeGeneration) bindSnapshot(snapshot *runtimecatalog.RoutableSnapshot) {
+	g.snapshot = snapshot
+	if snapshot == nil {
+		return
+	}
+	g.catalogGenerationID = snapshot.GenerationID()
+	if snapshot.Catalog() == nil {
+		return
+	}
+	for id, entry := range g.providers {
+		provider, err := snapshot.Catalog().Provider(starmapcatalogs.ProviderID(id))
+		if err == nil {
+			entry.inference = provider.Inference
+			g.providers[id] = entry
+		}
+	}
 }
 
 // Get returns a connector from the leased generation.
@@ -418,15 +438,14 @@ func (g *runtimeGeneration) bindEndpoint(
 	if !exists || g.snapshot == nil || g.snapshot.Catalog() == nil {
 		return starmapcatalogs.ProviderOfferingEndpoint{}, fmt.Errorf("%s: provider runtime is unavailable", provider)
 	}
-	providerRecord, err := g.snapshot.Catalog().Provider(starmapcatalogs.ProviderID(provider))
-	if err != nil || providerRecord.Inference == nil {
+	if entry.inference == nil {
 		return starmapcatalogs.ProviderOfferingEndpoint{}, fmt.Errorf("%s: provider inference service is unavailable", provider)
 	}
 	baseURL := ""
 	if useOperatorOverride {
 		baseURL = entry.registration.OperatorBaseURL
 	}
-	return providerRecord.Inference.BindOfferingEndpoint(endpoint, baseURL, material.EndpointBindings())
+	return entry.inference.BindOfferingEndpoint(endpoint, baseURL, material.EndpointBindings())
 }
 
 func (g *runtimeGeneration) registrations() []Registration {

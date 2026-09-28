@@ -364,7 +364,7 @@ type EmbeddingResponse struct {
 	Object string      `json:"object"`
 	Data   []Embedding `json:"data"`
 	Model  string      `json:"model"`
-	Usage  Usage       `json:"usage"`
+	Usage  *Usage      `json:"usage,omitempty"`
 }
 
 // Embedding is one OpenAI embedding vector.
@@ -380,7 +380,12 @@ func EncodeEmbedding(response inference.EmbeddingResponse) EmbeddingResponse {
 	for index, embedding := range response.Data {
 		data[index] = Embedding{Object: "embedding", Index: embedding.Index, Embedding: embedding.Vector}
 	}
-	return EmbeddingResponse{Object: ListObject, Data: data, Model: response.Model, Usage: encodeUsage(response.Usage)}
+	var usage *Usage
+	if !response.Usage.TokensUnknown && !response.Usage.Estimated {
+		measured := encodeUsage(response.Usage)
+		usage = &measured
+	}
+	return EmbeddingResponse{Object: ListObject, Data: data, Model: response.Model, Usage: usage}
 }
 
 // StreamChunk is one OpenAI SSE data value.

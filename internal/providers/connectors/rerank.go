@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -158,7 +160,7 @@ func (c *rerankConnector) Rerank(
 	// has to see it rather than read a confident answer built from it.
 	for _, result := range answer.Results {
 		if result.Index < 0 || result.Index >= len(request.Documents) {
-			return nil, fmt.Errorf(
+			return answer, fmt.Errorf(
 				"%s returned rerank result %d for %d documents",
 				c.providerID, result.Index, len(request.Documents),
 			)
@@ -237,29 +239,24 @@ func (cohereRerankCodec) decode(body io.Reader) (*RerankResponse, error) {
 		Results []RerankResult `json:"results"`
 		Meta    struct {
 			BilledUnits struct {
-				SearchUnits float64 `json:"search_units"`
+				SearchUnits json.RawMessage `json:"search_units"`
 			} `json:"billed_units"`
 			Tokens struct {
-				InputTokens  float64 `json:"input_tokens"`
-				OutputTokens float64 `json:"output_tokens"`
+				InputTokens  json.RawMessage `json:"input_tokens"`
+				OutputTokens json.RawMessage `json:"output_tokens"`
 			} `json:"tokens"`
 		} `json:"meta"`
 	}
 	if err := json.NewDecoder(body).Decode(&answer); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-	response := &RerankResponse{
-		Results:     answer.Results,
-		SearchUnits: roundedCount(answer.Meta.BilledUnits.SearchUnits),
-	}
-	input := roundedCount(answer.Meta.Tokens.InputTokens)
-	output := roundedCount(answer.Meta.Tokens.OutputTokens)
-	if input > 0 || output > 0 {
-		response.Usage = &MediaUsage{
-			InputTokens:  input,
-			OutputTokens: output,
-			TotalTokens:  input + output,
-		}
+	response := &RerankResponse{Results: answer.Results}
+	response.SearchUnits, response.SearchUnitsKnown = reportedRerankCount(answer.Meta.BilledUnits.SearchUnits)
+	input, inputKnown := reportedRerankCount(answer.Meta.Tokens.InputTokens)
+	output, outputKnown := reportedRerankCount(answer.Meta.Tokens.OutputTokens)
+	if inputKnown && outputKnown && input <= math.MaxInt-output {
+		response.TokensKnown = true
+		response.Usage = &MediaUsage{InputTokens: input, OutputTokens: output, TotalTokens: input + output}
 	}
 	return response, nil
 }
@@ -300,25 +297,36 @@ func (voyageRerankCodec) decode(body io.Reader) (*RerankResponse, error) {
 	var answer struct {
 		Data  []RerankResult `json:"data"`
 		Usage struct {
-			TotalTokens float64 `json:"total_tokens"`
+			TotalTokens json.RawMessage `json:"total_tokens"`
 		} `json:"usage"`
 	}
 	if err := json.NewDecoder(body).Decode(&answer); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 	response := &RerankResponse{Results: answer.Data}
-	if total := roundedCount(answer.Usage.TotalTokens); total > 0 {
-		response.Usage = &MediaUsage{TotalTokens: total}
+	if total, known := reportedRerankCount(answer.Usage.TotalTokens); known {
+		response.TokensKnown = true
+		response.Usage = &MediaUsage{InputTokens: total, TotalTokens: total}
 	}
 	return response, nil
 }
 
-// roundedCount reads a unit count a provider reports as a JSON number. Cohere
-// reports whole units as floats, so the count is rounded rather than truncated
-// and a negative report is treated as none.
-func roundedCount(value float64) int {
-	if value <= 0 || math.IsNaN(value) || math.IsInf(value, 0) {
-		return 0
+// rerankCountLiteral bounds decimal parsing before exact integer validation.
+var rerankCountLiteral = regexp.MustCompile(`^-?[0-9]{1,32}(\.[0-9]{1,32})?([eE][+-]?[0-9]{1,2})?$`)
+
+// reportedRerankCount preserves missing, invalid, and explicit zero measurements.
+// Exact parsing prevents a fractional count from rounding into an integer.
+func reportedRerankCount(value json.RawMessage) (int, bool) {
+	if !rerankCountLiteral.Match(value) {
+		return 0, false
 	}
-	return int(math.Round(value))
+	count, ok := new(big.Rat).SetString(string(value))
+	if !ok || !count.IsInt() || count.Sign() < 0 || !count.Num().IsInt64() {
+		return 0, false
+	}
+	n := count.Num().Int64()
+	if n >= 1<<53 || n > int64(math.MaxInt) {
+		return 0, false
+	}
+	return int(n), true
 }

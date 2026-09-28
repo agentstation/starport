@@ -2,7 +2,6 @@ package files
 
 import (
 	"context"
-	"errors"
 	"io"
 	"io/fs"
 	"os"
@@ -14,47 +13,29 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/blob"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// errStorageFull stands in for the limit vocabulary's own refusal. The files
-// package names the meter primitive rather than importing internal/limits, so
-// the test names the failure the same way a caller does.
-var errStorageFull = errors.New("stored bytes limit exceeded")
+var errStorageFull = storedbytes.ErrStorageFull
 
-// countingMeter is a serial stand-in for the durable meter. Concurrency is the
-// meter's own property and internal/limits proves it; what matters here is that
-// the service claims before it writes, settles against the real size, and gives
-// the claim back on every path that drops a file.
-type countingMeter struct {
-	totals map[string]int64
-}
-
-func newCountingMeter() *countingMeter {
-	return &countingMeter{totals: make(map[string]int64)}
-}
-
-func (m *countingMeter) Reserve(_ context.Context, holder string, size, bound int64) error {
-	if bound > 0 && m.totals[holder]+size > bound {
-		return errStorageFull
-	}
-	m.totals[holder] += size
-	return nil
-}
-
-func (m *countingMeter) Release(_ context.Context, holder string, size int64) error {
-	m.totals[holder] -= size
-	return nil
-}
-
-func newMeteredService(t *testing.T) (*Service, *countingMeter, string) {
+func storedTotal(t *testing.T, m *storedbytes.StorageMeter, account string) int64 {
 	t.Helper()
-	records, err := OpenRepository(storage.NewMockStore())
+	total, err := m.Total(t.Context(), account)
+	require.NoError(t, err)
+	return total
+}
+
+func newMeteredService(t *testing.T) (*Service, *storedbytes.StorageMeter, string) {
+	t.Helper()
+	store := storage.NewMockStore()
+	records, err := OpenRepository(store)
 	require.NoError(t, err)
 	root := t.TempDir()
 	bytes, err := blob.NewFilesystem(root)
 	require.NoError(t, err)
-	meter := newCountingMeter()
+	meter, err := storedbytes.NewStorageMeter(store)
+	require.NoError(t, err)
 	service, err := NewService(records, bytes, WithMeter(meter))
 	require.NoError(t, err)
 	return service, meter, root
@@ -91,7 +72,7 @@ func TestAnUploadPastTheBoundWritesNothing(t *testing.T) {
 		Size: int64(len(payload)), StoredBytesBound: 1000,
 	}, strings.NewReader(payload))
 	require.NoError(t, err)
-	require.Equal(t, int64(600), meter.totals["account-a"])
+	require.Equal(t, int64(600), storedTotal(t, meter, "account-a"))
 
 	before := countObjects(t, root)
 	_, err = service.Upload(ctx, UploadRequest{
@@ -101,7 +82,7 @@ func TestAnUploadPastTheBoundWritesNothing(t *testing.T) {
 	require.ErrorIs(t, err, errStorageFull)
 
 	require.Equal(t, before, countObjects(t, root), "the refused upload wrote bytes")
-	require.Equal(t, int64(600), meter.totals["account-a"], "the refusal moved the total")
+	require.Equal(t, int64(600), storedTotal(t, meter, "account-a"), "the refusal moved the total")
 
 	listed, err := service.List(ctx, "account-a", 0)
 	require.NoError(t, err)
@@ -125,7 +106,7 @@ func TestADeleteLowersTheTotalByTheFileSize(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, service.Delete(ctx, "account-a", file.ID))
-	require.Equal(t, int64(0), meter.totals["account-a"])
+	require.Equal(t, int64(0), storedTotal(t, meter, "account-a"))
 
 	// The room the delete gave back is usable room. An upload the bound refused
 	// a moment ago now lands.
@@ -153,8 +134,17 @@ func TestTheClaimSettlesAgainstTheRealSize(t *testing.T) {
 		Size: 1, StoredBytesBound: 500,
 	}, strings.NewReader(payload))
 	require.ErrorIs(t, err, errStorageFull)
-	require.Equal(t, int64(0), meter.totals["account-a"])
-	require.Equal(t, 0, countObjects(t, root), "the refused upload left its bytes behind")
+	require.Equal(t, int64(0), storedTotal(t, meter, "account-a"))
+	require.Equal(t, 1, countObjects(t, root), "retirement must retain exactly one marker")
+	require.NoError(t, filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		require.Equal(t, "SPBLOB1R", string(data), "the refused upload retained payload bytes")
+		return nil
+	}))
 
 	// Overstated: the claim falls to the real size, so the account does not hold
 	// room it never used.
@@ -164,19 +154,21 @@ func TestTheClaimSettlesAgainstTheRealSize(t *testing.T) {
 		Size: 400, StoredBytesBound: 500,
 	}, strings.NewReader(small))
 	require.NoError(t, err)
-	require.Equal(t, int64(100), meter.totals["account-b"])
+	require.Equal(t, int64(100), storedTotal(t, meter, "account-b"))
 }
 
 // TestAFailedWriteGivesBackItsClaim states the synchronous half. An upload
 // whose bytes never landed must not leave an account paying for it.
 func TestAFailedWriteGivesBackItsClaim(t *testing.T) {
 	t.Parallel()
-	records, err := OpenRepository(storage.NewMockStore())
+	store := storage.NewMockStore()
+	records, err := OpenRepository(store)
 	require.NoError(t, err)
 	root := t.TempDir()
 	bytes, err := blob.NewFilesystem(root)
 	require.NoError(t, err)
-	meter := newCountingMeter()
+	meter, err := storedbytes.NewStorageMeter(store)
+	require.NoError(t, err)
 
 	// The write fails, which is the same shape as a process that stops: the
 	// pending record and its claim are both already in place.
@@ -187,7 +179,7 @@ func TestAFailedWriteGivesBackItsClaim(t *testing.T) {
 		Size: 600, StoredBytesBound: 1000,
 	}, strings.NewReader("payload"))
 	require.Error(t, err)
-	require.Equal(t, int64(0), meter.totals["account-a"], "the failed write kept the claim")
+	require.Equal(t, int64(0), storedTotal(t, meter, "account-a"), "the failed write kept the claim")
 
 	// And the room is usable again.
 	service, err := NewService(records, bytes, WithMeter(meter))
@@ -209,11 +201,13 @@ func TestTheSweepGivesBackAnAbandonedClaim(t *testing.T) {
 	t.Parallel()
 	created := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 	clock := created
-	records, err := OpenRepository(storage.NewMockStore())
+	store := storage.NewMockStore()
+	records, err := OpenRepository(store)
 	require.NoError(t, err)
 	bytes, err := blob.NewFilesystem(t.TempDir())
 	require.NoError(t, err)
-	meter := newCountingMeter()
+	meter, err := storedbytes.NewStorageMeter(store)
+	require.NoError(t, err)
 	service, err := NewService(records, bytes,
 		WithMeter(meter), WithClock(func() time.Time { return clock }))
 	require.NoError(t, err)
@@ -221,7 +215,7 @@ func TestTheSweepGivesBackAnAbandonedClaim(t *testing.T) {
 
 	// This is what a crashed upload left behind: a claim, and a pending record
 	// that carries it.
-	require.NoError(t, meter.Reserve(ctx, "account-a", 600, 1000))
+	require.NoError(t, meter.InitializeEmpty(ctx, "account-a"))
 	abandoned := File{
 		ID:        newFileID(),
 		Account:   "account-a",
@@ -232,14 +226,18 @@ func TestTheSweepGivesBackAnAbandonedClaim(t *testing.T) {
 		CreatedAt: created,
 		ExpiresAt: created.Add(DefaultRetention),
 		blobKey:   newBlobKey(),
+		metered:   true,
 	}
-	require.NoError(t, records.Create(ctx, abandoned))
+	require.NoError(t, meter.Reserve(ctx, "account-a", abandoned.ID, 600, 1000))
+	claim, err := meter.Attachment(ctx, "account-a", abandoned.ID)
+	require.NoError(t, err)
+	require.NoError(t, records.CreateClaimed(ctx, abandoned, claim))
 
 	clock = created.Add(2 * DefaultPendingGrace)
 	result, err := service.Sweep(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Abandoned)
-	require.Equal(t, int64(0), meter.totals["account-a"])
+	require.Equal(t, int64(0), storedTotal(t, meter, "account-a"))
 }
 
 // failingPut refuses every write. It stands in for a byte store that went away
@@ -248,6 +246,6 @@ type failingPut struct {
 	blob.Store
 }
 
-func (s *failingPut) Put(context.Context, string, io.Reader) (blob.Info, error) {
+func (s *failingPut) Publish(context.Context, string, io.Reader) (blob.Info, error) {
 	return blob.Info{}, os.ErrPermission
 }

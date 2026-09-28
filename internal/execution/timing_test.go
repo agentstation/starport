@@ -116,3 +116,35 @@ func TestJSONRouteKeepsTheElapsedBudget(t *testing.T) {
 	require.ErrorAs(t, err, &executionError)
 	require.Equal(t, failure.Timeout, executionError.Failure.Kind())
 }
+
+func TestOperationElapsedBudgetDoesNotChangeOtherRequests(t *testing.T) {
+	clock := newFakeClock()
+	executor := newTestExecutor(t, clock, DefaultConfig())
+	native := executor.WithElapsedBudget(10 * time.Minute)
+	for _, tc := range []struct {
+		name     string
+		executor *Executor
+		bound    time.Duration
+		succeeds bool
+	}{
+		{"native", native, 10 * time.Minute, true},
+		{"ordinary", executor, 2 * time.Minute, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.executor.ExecuteChat(t.Context(), testPlan(t, "provider-a/model"), func(ctx context.Context, _ routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
+				deadline, ok := ctx.Deadline()
+				require.True(t, ok)
+				require.InDelta(t, tc.bound.Seconds(), time.Until(deadline).Seconds(), 1)
+				clock.Advance(3 * time.Minute)
+				return &inference.ChatResponse{ID: "long-result"}, nil, AttemptActionDefault
+			})
+			if tc.succeeds {
+				require.NoError(t, err)
+			} else {
+				var failure *Error
+				require.ErrorAs(t, err, &failure)
+				require.ErrorIs(t, failure, ErrElapsedBudget)
+			}
+		})
+	}
+}

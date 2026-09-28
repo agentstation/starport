@@ -2,6 +2,7 @@
 package setup
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -16,6 +17,8 @@ import (
 	"github.com/agentstation/starport/internal/authorization/revision"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -147,6 +150,11 @@ func (s *Service) validateRollbackRecords(ctx context.Context, directory, apiKey
 	keys, scanErr := store.ScanWithPrefix(ctx, "", 0)
 	records, listErr := repository.List(ctx, 2, 0)
 	stamp, revisionErr := revision.NewKV(store, nil).Read(ctx)
+	holder, holderErr := reservation.FreshHolderIdentity(limits.ScopeKey, apiKeyID)
+	var holderData []byte
+	if holderErr == nil {
+		holderData, holderErr = store.GetBounded(ctx, holder.Key, 1024)
+	}
 	closeErr := store.Close()
 	if scanErr != nil {
 		return errors.Join(fmt.Errorf("inspect isolated storage keys for rollback: %w", scanErr), closeErr)
@@ -163,11 +171,14 @@ func (s *Service) validateRollbackRecords(ctx context.Context, directory, apiKey
 	if revisionErr != nil || stamp.Sequence != 1 {
 		return errors.Join(ErrRollbackRefused, fmt.Errorf("authorization state changed after initialization"), revisionErr)
 	}
-	if len(keys) != 5 {
-		return fmt.Errorf("%w: storage contains %d records, want 5", ErrRollbackRefused, len(keys))
+	if holderErr != nil || !bytes.Equal(holderData, holder.NewValue) {
+		return errors.Join(ErrRollbackRefused, fmt.Errorf("budget holder state changed after initialization"), holderErr)
+	}
+	if len(keys) != 6 {
+		return fmt.Errorf("%w: storage contains %d records, want 6", ErrRollbackRefused, len(keys))
 	}
 	for _, key := range keys {
-		if key != revision.StorageKey && !strings.HasPrefix(key, apikey.StoragePrefix) {
+		if key != revision.StorageKey && key != holder.Key && !strings.HasPrefix(key, apikey.StoragePrefix) {
 			return fmt.Errorf("%w: storage contains application state", ErrRollbackRefused)
 		}
 	}

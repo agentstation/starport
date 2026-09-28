@@ -134,6 +134,7 @@ type meterReaders func(t *testing.T, count int) []usage.Record
 func TestACachedDocumentIsRecordedAsCachedAndNotChargedAgain(t *testing.T) {
 	t.Parallel()
 	service, router, read := meteredCachingProxy(t, "INVOICE 4471\nAmount due: $912.00")
+	router.usage = &inference.Usage{TokensUnknown: true, ProcessedPages: 1, ProcessedPagesKnown: true}
 
 	// The cache key names the catalog generation that read the document, so a
 	// turn with no catalog in force caches nothing.
@@ -176,6 +177,7 @@ func TestACachedDocumentIsRecordedAsCachedAndNotChargedAgain(t *testing.T) {
 func TestARecognizedDocumentRecordsItsPagesAndItsCost(t *testing.T) {
 	t.Parallel()
 	service, router, read := meteredProxy(t, "INVOICE 4471\nAmount due: $912.00")
+	router.usage = &inference.Usage{TokensUnknown: true, ProcessedPages: 1, ProcessedPagesKnown: true}
 
 	_, err := service.ProcessChatCompletion(context.Background(),
 		parsedRequest(t, "scanned.pdf", inference.ParserEngineRecognition))
@@ -200,7 +202,8 @@ func TestARecognizedDocumentRecordsItsPagesAndItsCost(t *testing.T) {
 // to the cap.
 func TestARecognizedDocumentIsAddedToTheTurnsOwnCost(t *testing.T) {
 	t.Parallel()
-	service, _, read := meteredProxy(t, "INVOICE 4471")
+	service, router, read := meteredProxy(t, "INVOICE 4471")
+	router.usage = &inference.Usage{TokensUnknown: true, ProcessedPages: 1, ProcessedPagesKnown: true}
 
 	_, err := service.ProcessChatCompletion(context.Background(),
 		parsedRequest(t, "scanned.pdf", inference.ParserEngineRecognition))

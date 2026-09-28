@@ -188,6 +188,7 @@ type openAICompatibleStream struct {
 	response *http.Response
 	reader   *bufio.Reader
 	closed   bool
+	complete bool
 	// event holds the SSE event name for the data lines that follow it.
 	// Providers such as Groq deliver rejections as an "event: error" frame
 	// inside an established 200 stream.
@@ -234,6 +235,7 @@ func (s *openAICompatibleStream) Recv() (*ChatStreamChunk, error) {
 
 		// Check for end of stream
 		if string(data) == SSEDone {
+			s.complete = true
 			s.closed = true
 			return nil, io.EOF
 		}
@@ -254,6 +256,10 @@ func (s *openAICompatibleStream) Recv() (*ChatStreamChunk, error) {
 		return &chunk, nil
 	}
 }
+
+// CompletionObserved distinguishes the provider's DONE marker from a truncated body.
+// Call it after Recv returns. Close does not establish completion.
+func (s *openAICompatibleStream) CompletionObserved() bool { return s.complete }
 
 // decodeStreamAPIError detects a provider rejection delivered inside an
 // established 200 stream: an "event: error" frame, or a data frame whose

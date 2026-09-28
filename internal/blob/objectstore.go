@@ -27,8 +27,11 @@ const objectStoreBackend = "objectstore"
 // ObjectStoreOptions addresses one S3-compatible bucket.
 //
 // One client reaches AWS S3, Cloudflare R2, MinIO, and Backblaze B2, because
-// each of them serves the same API. Endpoint selects the implementation, and
-// an absent Endpoint selects AWS itself.
+// Endpoint selects the implementation; an absent Endpoint selects AWS.
+// Immutable publication additionally requires verified conditional creation
+// on PutObject and CompleteMultipartUpload. API compatibility alone does not
+// qualify that concurrency contract. Retained objects require lifecycle rules
+// that preserve current retirement markers.
 type ObjectStoreOptions struct {
 	Bucket   string
 	Region   string
@@ -44,7 +47,8 @@ type ObjectStoreOptions struct {
 // ObjectStore stores objects in an S3-compatible bucket. It serves every node
 // of a deployment, which the filesystem backend cannot.
 type ObjectStore struct {
-	client *s3.Client
+	readiness publicationReadiness
+	client    *s3.Client
 	//nolint:staticcheck // See the import comment.
 	uploader *manager.Uploader
 	bucket   string
@@ -112,8 +116,8 @@ func (o *ObjectStore) objectKey(key string) string {
 //
 // The uploader sends the whole object in one request, or in parts when the
 // stream is large. Either way the object becomes reachable only after the last
-// part lands, so a failed put leaves no readable object at a key that held
-// none, and leaves the prior object intact at a key that did.
+// part lands. A lost acknowledgment or a failed size lookup can return an
+// error after publication. The owner must verify the retained object.
 func (o *ObjectStore) Put(ctx context.Context, key string, r io.Reader) (Info, error) {
 	if err := ValidateKey(key); err != nil {
 		return Info{}, err

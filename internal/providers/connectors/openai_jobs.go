@@ -63,15 +63,11 @@ func (c *OpenAICompatibleConnector) PollJob(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	return c.readJob(ctx, httpReq, ref.Credential, setHeaders, handleError)
+	return c.readReferencedJob(ctx, httpReq, ref, setHeaders, handleError)
 }
 
-// CancelJob stops one accepted job.
-//
-// Neither provider surface AMJ0 read publishes a cancel route. Both stop a job
-// by deleting it, so cancellation is a Starport idea mapped onto the delete.
-// The answer is stated here rather than decoded, because a deleted job is gone
-// and a provider has nothing left to report about it.
+// CancelJob requests cancellation through the selected transport's DELETE route.
+// A deletion acknowledgement alone cannot establish a terminal execution state.
 func (c *OpenAICompatibleConnector) CancelJob(
 	ctx context.Context,
 	ref *ProviderJobRef,
@@ -86,12 +82,25 @@ func (c *OpenAICompatibleConnector) CancelJob(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	resp, err := c.send(ctx, httpReq, ref.Credential, setHeaders, handleError)
+	return c.readReferencedJob(ctx, httpReq, ref, setHeaders, handleError)
+}
+
+// readReferencedJob binds each reported outcome to the requested provider job.
+func (c *OpenAICompatibleConnector) readReferencedJob(
+	ctx context.Context,
+	request *http.Request,
+	ref *ProviderJobRef,
+	setHeaders setHeadersFunc,
+	handleError handleErrorFunc,
+) (*ProviderJob, error) {
+	job, err := c.readJob(ctx, request, ref.Credential, setHeaders, handleError)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
-	return &ProviderJob{ID: ref.ProviderJobID, State: jobs.JobStateCancelled}, nil
+	if job.ID != ref.ProviderJobID {
+		return nil, fmt.Errorf("%w: provider outcome does not identify the requested job", ErrInvalidMediaRequest)
+	}
+	return job, nil
 }
 
 // FetchJobAsset reads the finished output of one accepted job.

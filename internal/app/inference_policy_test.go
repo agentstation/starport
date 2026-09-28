@@ -33,7 +33,7 @@ func TestInferencePolicyIsRecordedBeforeCatalogStartup(t *testing.T) {
 			if retained {
 				require.NoError(t, os.MkdirAll(cfg.EffectivePaths().BaselineDir, 0700))
 			}
-			factories := explicitTestFactories()
+			factories := explicitTestFactories(t)
 			openCatalog := factories.openCatalog
 			observed := false
 			factories.openCatalog = func(ctx context.Context, store storage.KVStore, db *sqlstore.DB, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {

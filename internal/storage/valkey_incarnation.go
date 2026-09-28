@@ -81,6 +81,9 @@ func validValkeyIncarnation(id string) bool {
 }
 
 func incarnationError(err error) error {
+	if err != nil && strings.Contains(err.Error(), "STARPORT_TIME_WINDOW_CHANGED") {
+		return ErrTimeWindowChanged
+	}
 	if err != nil && strings.Contains(err.Error(), "STARPORT_INCARNATION_CHANGED") {
 		return ErrIncarnationChanged
 	}
@@ -133,6 +136,13 @@ return {redis.call('GET', KEYS[1]), redis.call('PTTL', KEYS[1])}`
 }
 
 func (b *valkeyIncarnationStore) CompareAndSwap(ctx context.Context, mutations []CompareAndSwapMutation, liveKeys ...string) error {
+	return b.compareAndSwap(ctx, mutations, TimeWindow{}, liveKeys...)
+}
+
+func (b *valkeyIncarnationStore) compareAndSwap(ctx context.Context, mutations []CompareAndSwapMutation, window TimeWindow, liveKeys ...string) error {
+	if err := window.validate(); err != nil {
+		return err
+	}
 	if err := validateCompareAndSwapMutations(mutations); err != nil {
 		return err
 	}
@@ -141,7 +151,11 @@ func (b *valkeyIncarnationStore) CompareAndSwap(ctx context.Context, mutations [
 		live[key] = false
 	}
 	keys := make([]string, 0, len(mutations))
-	args := []string{b.identity}
+	start, end := "", ""
+	if window != (TimeWindow{}) {
+		start, end = strconv.FormatInt(window.Start.Unix(), 10), strconv.FormatInt(window.End.Unix(), 10)
+	}
+	args := []string{b.identity, start, end}
 	for _, m := range mutations {
 		requireLive := "0"
 		if _, ok := live[m.Key]; ok {
@@ -181,8 +195,14 @@ func (b *valkeyIncarnationStore) CompareAndSwap(ctx context.Context, mutations [
 }
 
 const valkeyIncarnationCAS = valkeyApprovedIncarnation + `
+if ARGV[2] ~= '' then
+  local now = tonumber(redis.call('TIME')[1])
+  if now < tonumber(ARGV[2]) or now >= tonumber(ARGV[3]) then
+    return redis.error_reply('STARPORT_TIME_WINDOW_CHANGED')
+  end
+end
 for i, key in ipairs(KEYS) do
-  local n = 1 + (i - 1) * 6
+  local n = 3 + (i - 1) * 6
   local current = redis.call('GET', key)
   if ARGV[n + 1] == '0' then
     if current then return 0 end
@@ -190,7 +210,7 @@ for i, key in ipairs(KEYS) do
   if ARGV[n + 6] == '1' and redis.call('PTTL', key) <= 0 then return 0 end
 end
 for i, key in ipairs(KEYS) do
-  local n = 1 + (i - 1) * 6
+  local n = 3 + (i - 1) * 6
   if ARGV[n + 3] == '0' then redis.call('DEL', key)
   elseif tonumber(ARGV[n + 5]) > 0 then
     redis.call('SET', key, ARGV[n + 4], 'PX', ARGV[n + 5])

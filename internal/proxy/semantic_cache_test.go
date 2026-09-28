@@ -238,7 +238,7 @@ func TestGatewayEmbedderRidesTheGatewayEmbeddingsPath(t *testing.T) {
 
 	vector, err := embedder.Embed(context.Background(), SemanticEmbedIdentity{
 		AccountID: "account-1", KeyID: "key-1", TeamID: "team-1",
-		RequestID: "req-1", Protocol: "openai",
+		RequestID: "req-1", Protocol: "openai", APIKeyConfig: &APIKeyRoutingConfig{AllowedModels: []string{"openai/text-embedding-3-small"}},
 	}, "prompt text")
 	require.NoError(t, err)
 	require.Equal(t, []float32{1, 0}, vector)
@@ -248,6 +248,8 @@ func TestGatewayEmbedderRidesTheGatewayEmbeddingsPath(t *testing.T) {
 	require.Equal(t, []string{"prompt text"}, gateway.request.Request.Input.Texts)
 	require.Equal(t, "account-1", gateway.request.AccountID)
 	require.Equal(t, "req-1-semantic-cache", gateway.request.RequestID)
+	require.NotNil(t, gateway.request.APIKeyConfig)
+	require.Equal(t, []string{"openai/text-embedding-3-small"}, gateway.request.APIKeyConfig.AllowedModels)
 	require.Equal(t, "openai", gateway.request.Protocol)
 }
 

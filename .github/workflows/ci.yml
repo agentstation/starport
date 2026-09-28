@@ -35,6 +35,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       CGO_ENABLED: ${{ matrix.cgo }}
+      STARPORT_REQUIRE_COMPOSE: ${{ matrix.runner == 'windows-2025' && '1' || '0' }}
     strategy:
       fail-fast: false
       matrix:
@@ -68,15 +69,20 @@ jobs:
           go version > native-catalog/toolchain.txt
           go env GOOS GOARCH GOHOSTOS GOHOSTARCH CGO_ENABLED >> native-catalog/toolchain.txt
 
+      - name: Qualify Windows Compose before the native suite
+        if: matrix.runner == 'windows-2025'
+        shell: bash
+        run: go test -json -race -count=1 -timeout 2m ./internal/config -run '^TestComposeStorageRecipes$' > native-catalog/compose.jsonl
+
       - name: Run native tests
         shell: bash
         run: |
-          # Catalog recovery starts cold child processes. Give that package
-          # the runner before the remaining packages share its CPU and memory.
+          # Catalog recovery and application contracts repeatedly start real
+          # runtimes. Run each alone before other packages share the runner.
           go list ./... > native-catalog/packages.txt
           remaining=()
           while IFS= read -r package; do
-            if [[ "$package" != "github.com/agentstation/starport/internal/catalog" ]]; then
+            if [[ "$package" != "github.com/agentstation/starport/internal/catalog" && "$package" != "github.com/agentstation/starport/internal/app" ]]; then
               remaining+=("$package")
             fi
           done < native-catalog/packages.txt
@@ -87,11 +93,19 @@ jobs:
           go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" ./internal/catalog | tee native-catalog/tests.jsonl
           coverage=()
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
+            coverage=(-coverprofile=native-catalog/app.coverage.txt -covermode=atomic)
+          fi
+          # The complete application suite exceeds Go's default ten-minute
+          # package allowance. Individual contract deadlines remain unchanged.
+          go test -json -count=1 -timeout 30m ${{ matrix.race }} "${coverage[@]}" ./internal/app | tee -a native-catalog/tests.jsonl
+          coverage=()
+          if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             coverage=(-coverprofile=native-catalog/remaining.coverage.txt -covermode=atomic)
           fi
           go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" "${remaining[@]}" | tee -a native-catalog/tests.jsonl
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             cat native-catalog/catalog.coverage.txt > coverage.txt
+            tail -n +2 native-catalog/app.coverage.txt >> coverage.txt
             tail -n +2 native-catalog/remaining.coverage.txt >> coverage.txt
           fi
 
@@ -180,8 +194,8 @@ jobs:
   catalog-fleet:
     name: Catalog Fleet Recovery
     runs-on: ubuntu-latest
-    # Includes cold compilation, both bounded test steps, and evidence upload.
-    timeout-minutes: 20
+    # Includes cold compilation, bounded recovery groups, and evidence upload.
+    timeout-minutes: 30
     services:
       valkey:
         image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
@@ -227,12 +241,32 @@ jobs:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
           TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
           TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
-        run: go test -json -race -count=1 -timeout 7m ./internal/catalog ./internal/catalog/recovery ./internal/storage -run '^(TestFleet|TestFreshFleet|TestRecoveryWitness|TestValkeyIncarnation)' > fleet-catalog.jsonl
+        run: go test -json -race -count=1 -timeout 7m ./internal/catalog ./internal/recovery ./internal/storage -run '^(TestFleet|TestFreshFleet|TestRecoveryWitness|TestBudgetAuthority|TestValkeyIncarnation)' -skip '^TestFleetAdoption' > fleet-catalog.jsonl
+      - name: Verify controlled catalog adoption
+        env:
+          TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+          TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
+          TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
+        run: go test -json -race -count=1 -timeout 7m ./internal/catalog -run '^TestFleetAdoption' > fleet-adoption.jsonl
       - name: Verify explicit fleet initialization and startup
         env:
           TEST_FRESH_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey-fresh.ports['6379'] }}
           TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
         run: go test -json -race -count=1 -timeout 3m ./internal/app -run '^TestInitializeFleet' > fleet-initialization.jsonl
+      - name: Verify budget admission across processes and backend replacement
+        env:
+          TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+          TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
+          TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
+        run: |
+          # Each scenario starts full gateway processes with the complete catalog.
+          # Isolate parent lifetimes and keep a separate bound for each scenario.
+          for scenario in concurrent-settlement dispatched-process-loss backend-replacement; do
+            go test -json -race -count=1 -timeout 7m ./internal/app \
+              -run "^TestProductionBudgetAcrossProcesses$/${scenario}$" >> fleet-budget.jsonl
+          done
+          go test -json -race -count=1 -timeout 7m ./internal/app \
+            -run '^(TestSettledJobRequiresOriginalSharedApproval|TestProductionBudgetBackendOperations)$' >> fleet-budget.jsonl
       - name: Retain catalog fleet evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -240,7 +274,76 @@ jobs:
           name: catalog-fleet-recovery
           path: |
             fleet-catalog.jsonl
+            fleet-adoption.jsonl
             fleet-initialization.jsonl
+            fleet-budget.jsonl
+          retention-days: 7
+          if-no-files-found: error
+
+  durable-work-recovery:
+    name: Durable Work Recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      valkey:
+        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        ports:
+          - 6379/tcp
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      postgres:
+        image: postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: starport_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres -d starport_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.1"
+          cache: true
+      - name: Build the pinned recovery object store
+        # Official RELEASE.2025-09-07T16-13-09Z source. Public images are unavailable.
+        env:
+          GOBIN: ${{ runner.temp }}/recovery-objectstore-bin
+          GOSUMDB: sum.golang.org
+        run: |
+          go install github.com/minio/minio@v0.0.0-20250907161309-07c3a429bfed
+          go version -m "$GOBIN/minio" > recovery-objectstore-build.txt
+      - name: Verify durable reservations and batch recovery
+        shell: bash
+        env:
+          TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+          TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
+          TEST_BLOB_S3_ENDPOINT: http://127.0.0.1:9000
+          MINIO_ROOT_USER: starport-test
+          MINIO_ROOT_PASSWORD: starport-local-test-only
+          MINIO_BROWSER: 'off'
+        run: |
+          "$RUNNER_TEMP/recovery-objectstore-bin/minio" server "$RUNNER_TEMP/recovery-objectstore-data" \
+            --address 127.0.0.1:9000 > recovery-objectstore.log 2>&1 &
+          objectstore_pid=$!
+          trap 'kill "$objectstore_pid" 2>/dev/null || true; wait "$objectstore_pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --show-error --retry 15 --retry-connrefused \
+            --retry-delay 1 --max-time 3 "$TEST_BLOB_S3_ENDPOINT/minio/health/live"
+          go test -json -race -count=1 -timeout 5m ./internal/limits/reservation ./internal/jobs > fleet-reservation-jobs.jsonl
+      - name: Retain durable work evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: durable-work-recovery
+          path: |
+            fleet-reservation-jobs.jsonl
+            recovery-objectstore-build.txt
+            recovery-objectstore.log
           retention-days: 7
           if-no-files-found: error
 
@@ -304,7 +407,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test, shared-storage, catalog-fleet, authorization-capacity, storage-recipes, release-contract, sdk-smoke]
+    needs: [lint, test, shared-storage, catalog-fleet, durable-work-recovery, authorization-capacity, storage-recipes, release-contract, sdk-smoke]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

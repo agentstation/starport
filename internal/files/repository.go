@@ -15,7 +15,7 @@ import (
 
 const (
 	// StorageSchemaVersion identifies the only file record schema.
-	StorageSchemaVersion = 1
+	StorageSchemaVersion = 5
 	// StoragePrefix is the file record v1 namespace.
 	StoragePrefix = "files:v1:account:"
 
@@ -41,11 +41,13 @@ var (
 // bytes, which is why every method here is cheap and none of them streams.
 type Repository interface {
 	Create(context.Context, File) error
+	CreateClaimed(context.Context, File, storage.CompareAndSwapMutation) error
 	Get(context.Context, string, string) (File, error)
 	List(context.Context, string, int) ([]File, error)
 	Replace(context.Context, File) error
 	Delete(context.Context, string, string) error
 	Scan(context.Context, int) ([]File, error)
+	Page(context.Context, string, string) (RecordPage, error)
 }
 
 type repository struct{ store storage.KVStore }
@@ -53,16 +55,21 @@ type repository struct{ store storage.KVStore }
 // fileRecord is the durable form. It carries the blob key that File keeps
 // unexported, because the record store is the one place the key belongs.
 type fileRecord struct {
-	SchemaVersion int       `json:"schema_version"`
-	ID            string    `json:"id"`
-	Account       string    `json:"account"`
-	Filename      string    `json:"filename"`
-	Purpose       Purpose   `json:"purpose"`
-	Bytes         int64     `json:"bytes"`
-	State         FileState `json:"state"`
-	CreatedAt     time.Time `json:"created_at"`
-	ExpiresAt     time.Time `json:"expires_at,omitempty"`
-	BlobKey       string    `json:"blob_key"`
+	SchemaVersion   int       `json:"schema_version"`
+	ID              string    `json:"id"`
+	Account         string    `json:"account"`
+	Filename        string    `json:"filename"`
+	Purpose         Purpose   `json:"purpose"`
+	Bytes           int64     `json:"bytes"`
+	State           FileState `json:"state"`
+	CreatedAt       time.Time `json:"created_at"`
+	ExpiresAt       time.Time `json:"expires_at,omitempty"`
+	BlobKey         string    `json:"blob_key"`
+	Metered         bool      `json:"metered"`
+	OutputPublished bool      `json:"output_published,omitzero"`
+	OutputIdentity  string    `json:"output_identity,omitempty"`
+	OutputDigest    string    `json:"output_digest,omitempty"`
+	OutputBound     int64     `json:"output_bound,omitempty"`
 }
 
 // OpenRepository returns a storage-backed file record repository.
@@ -74,11 +81,30 @@ func OpenRepository(store storage.KVStore) (Repository, error) {
 }
 
 func (r *repository) Create(ctx context.Context, file File) error {
+	if file.metered {
+		return ErrInvalidFile
+	}
+	return r.create(ctx, file, nil)
+}
+
+// CreateClaimed publishes metadata and its byte claim in one transaction.
+func (r *repository) CreateClaimed(ctx context.Context, file File, claim storage.CompareAndSwapMutation) error {
+	if !file.metered || file.State != FileStatePending || claim.Key == "" || len(claim.ExpectedValue) == 0 || len(claim.NewValue) == 0 {
+		return ErrInvalidFile
+	}
+	return r.create(ctx, file, &claim)
+}
+
+func (r *repository) create(ctx context.Context, file File, claim *storage.CompareAndSwapMutation) error {
 	data, err := encodeFile(file)
 	if err != nil {
 		return err
 	}
-	if err := r.store.CompareAndSwap(ctx, storageKey(file.Account, file.ID), nil, data); err != nil {
+	writes := []storage.CompareAndSwapMutation{{Key: storageKey(file.Account, file.ID), NewValue: data}}
+	if claim != nil {
+		writes = append(writes, *claim)
+	}
+	if err := r.store.CompareAndSwapBatch(ctx, writes); err != nil {
 		if errors.Is(err, storage.ErrConflict) {
 			return ErrFileExists
 		}
@@ -91,14 +117,21 @@ func (r *repository) Get(ctx context.Context, account, id string) (File, error) 
 	if strings.TrimSpace(account) == "" || strings.TrimSpace(id) == "" {
 		return File{}, ErrFileNotFound
 	}
-	data, err := r.store.Get(ctx, storageKey(account, id))
+	data, err := r.store.GetBounded(ctx, storageKey(account, id), 16384)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return File{}, ErrFileNotFound
 		}
 		return File{}, fmt.Errorf("files: read record: %w", err)
 	}
-	return decodeFile(data)
+	file, err := decodeFile(data)
+	if err != nil {
+		return File{}, err
+	}
+	if file.Account != account || file.ID != id {
+		return File{}, ErrCorruptRecord
+	}
+	return file, nil
 }
 
 func (r *repository) List(ctx context.Context, account string, limit int) ([]File, error) {
@@ -159,6 +192,30 @@ func (r *repository) Replace(ctx context.Context, file File) error {
 		}
 		return fmt.Errorf("files: read record for replace: %w", err)
 	}
+	previous, err := decodeFile(current)
+	if err != nil {
+		return err
+	}
+	if !sameFileIdentity(previous, file) {
+		return storage.ErrConflict
+	}
+	if previous.outputPublished && !file.outputPublished {
+		return storage.ErrConflict
+	}
+	if previous.State == FileStateDeleting && file.State != FileStateDeleting || previous.State == FileStateReady && file.State == FileStatePending {
+		return storage.ErrConflict
+	}
+	if previous.outputDigest != "" && (previous.outputDigest != file.outputDigest || previous.Bytes != file.Bytes) {
+		return storage.ErrConflict
+	}
+	if previous.outputDigest == "" && file.outputDigest != "" && (previous.outputIdentity == "" || previous.State != FileStatePending || file.State != FileStatePending) {
+		return storage.ErrConflict
+	}
+	publishesFile := previous.State == FileStatePending && file.State == FileStateReady
+	bindsOutput := previous.outputIdentity != "" && previous.outputDigest == "" && file.outputDigest != "" && file.State == FileStatePending
+	if previous.Bytes != file.Bytes && !publishesFile && !bindsOutput {
+		return storage.ErrConflict
+	}
 	if err := r.store.CompareAndSwap(ctx, key, current, data); err != nil {
 		return fmt.Errorf("files: replace record: %w", err)
 	}
@@ -193,16 +250,18 @@ func encodeFile(file File) ([]byte, error) {
 		return nil, err
 	}
 	data, err := json.Marshal(fileRecord{
-		SchemaVersion: StorageSchemaVersion,
-		ID:            file.ID,
-		Account:       file.Account,
-		Filename:      file.Filename,
-		Purpose:       file.Purpose,
-		Bytes:         file.Bytes,
-		State:         file.State,
-		CreatedAt:     file.CreatedAt,
-		ExpiresAt:     file.ExpiresAt,
-		BlobKey:       file.blobKey,
+		SchemaVersion:   StorageSchemaVersion,
+		ID:              file.ID,
+		Account:         file.Account,
+		Filename:        file.Filename,
+		Purpose:         file.Purpose,
+		Bytes:           file.Bytes,
+		State:           file.State,
+		CreatedAt:       file.CreatedAt,
+		ExpiresAt:       file.ExpiresAt,
+		BlobKey:         file.blobKey,
+		Metered:         file.metered,
+		OutputPublished: file.outputPublished, OutputIdentity: file.outputIdentity, OutputDigest: file.outputDigest, OutputBound: file.outputBound,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("files: encode record: %w", err)
@@ -219,18 +278,24 @@ func decodeFile(data []byte) (File, error) {
 		return File{}, fmt.Errorf("%w: unsupported schema %d", ErrCorruptRecord, stored.SchemaVersion)
 	}
 	file := File{
-		ID:        stored.ID,
-		Account:   stored.Account,
-		Filename:  stored.Filename,
-		Purpose:   stored.Purpose,
-		Bytes:     stored.Bytes,
-		State:     stored.State,
-		CreatedAt: stored.CreatedAt,
-		ExpiresAt: stored.ExpiresAt,
-		blobKey:   stored.BlobKey,
+		ID:              stored.ID,
+		Account:         stored.Account,
+		Filename:        stored.Filename,
+		Purpose:         stored.Purpose,
+		Bytes:           stored.Bytes,
+		State:           stored.State,
+		CreatedAt:       stored.CreatedAt,
+		ExpiresAt:       stored.ExpiresAt,
+		blobKey:         stored.BlobKey,
+		metered:         stored.Metered,
+		outputPublished: stored.OutputPublished, outputIdentity: stored.OutputIdentity, outputDigest: stored.OutputDigest, outputBound: stored.OutputBound,
 	}
 	if err := file.Validate(); err != nil {
 		return File{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)
 	}
 	return file, nil
+}
+
+func sameFileIdentity(previous, file File) bool {
+	return previous.ID == file.ID && previous.Account == file.Account && previous.Filename == file.Filename && previous.Purpose == file.Purpose && previous.blobKey == file.blobKey && previous.metered == file.metered && previous.outputIdentity == file.outputIdentity && previous.outputBound == file.outputBound && previous.CreatedAt.Equal(file.CreatedAt) && previous.ExpiresAt.Equal(file.ExpiresAt)
 }

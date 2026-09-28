@@ -44,6 +44,7 @@ func (m *AuthMiddleware) cachedBearer(ctx context.Context, secret, hash string) 
 		return nil, err
 	}
 	ctx = requestctx.WithAuthorization(ctx, bundle, m.permissionClock, policy)
+	ctx = captureBatchCaller(ctx, owner.ID, retainedBatchCaller{Kind: "bearer", Subject: hash})
 	return requestctx.WithAuthorizationRefresh(ctx, func(next context.Context) (context.Context, error) {
 		return m.cachedBearer(next, "", hash)
 	}), nil
@@ -88,6 +89,9 @@ func (m *AuthMiddleware) cachedPolicy(ctx context.Context, caller authorization.
 		}
 	}
 	ctx = requestctx.WithAuthorization(ctx, bundle, m.permissionClock, policy)
+	if caller.Subject == authorization.AnonymousSubject {
+		ctx = captureBatchCaller(ctx, owner.ID, retainedBatchCaller{Kind: "anonymous"})
+	}
 	grant, actor, console := requestctx.GetConsoleSession(ctx)
 	return requestctx.WithAuthorizationRefresh(ctx, func(next context.Context) (context.Context, error) {
 		if console {

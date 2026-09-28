@@ -16,6 +16,8 @@ const ScopeTeam Scope = "team"
 type TeamBudget struct {
 	Limit    int64  `json:"limit"`
 	Interval string `json:"interval"`
+	// HistoryID identifies continuous accounting independently of policy revisions.
+	HistoryID string `json:"history_id,omitempty"`
 }
 
 // Validate checks the team budget invariants.

@@ -19,6 +19,7 @@ import (
 type recordingRunner struct {
 	acceptance jobs.Acceptance
 	submitErr  error
+	onSubmit   func()
 
 	poll    jobs.Report
 	pollErr error
@@ -51,9 +52,21 @@ func submissionFor(account string) jobs.Submission {
 	return jobs.Submission{Account: account, Operation: routing.OperationVideosGenerations}
 }
 
-func (r *recordingRunner) Submit(context.Context) (jobs.Acceptance, error) {
+func (r *recordingRunner) Submit(ctx context.Context, recorder jobs.SubmissionRecorder) (jobs.Acceptance, error) {
+	if err := recorder.BeforeDispatch(ctx, jobs.Dispatch{Provider: r.acceptance.Provider, Model: r.acceptance.Model, CatalogGeneration: "test-generation"}); err != nil {
+		return jobs.Acceptance{}, err
+	}
 	r.submits++
-	return r.acceptance, r.submitErr
+	if r.onSubmit != nil {
+		r.onSubmit()
+	}
+	if r.submitErr != nil {
+		return jobs.Acceptance{}, r.submitErr
+	}
+	if err := recorder.Accepted(ctx, r.acceptance); err != nil {
+		return jobs.Acceptance{}, err
+	}
+	return r.acceptance, nil
 }
 
 func (r *recordingRunner) Poll(_ context.Context, handle jobs.Handle) (jobs.Report, error) {
@@ -80,7 +93,7 @@ func (r *recordingRunner) Fetch(
 }
 
 func acceptedRunner() *recordingRunner {
-	return &recordingRunner{acceptance: jobs.Acceptance{
+	return &recordingRunner{cancel: jobs.Report{State: jobs.JobStateCancelled}, acceptance: jobs.Acceptance{
 		Provider:      "deepinfra",
 		Model:         "deepinfra/wan-2.2",
 		ProviderJobID: "provider-side-identifier",
@@ -128,22 +141,18 @@ func TestSubmitRecordsWhatTheProviderAccepted(t *testing.T) {
 	require.True(t, stored.HasProviderJob())
 }
 
-// TestSubmitWritesNoRecordWhenTheProviderRefuses is why the provider call comes
-// first. A record written ahead of the provider would name a job no provider
-// ever accepted, and a caller would poll it for its whole lifetime.
-func TestSubmitWritesNoRecordWhenTheProviderRefuses(t *testing.T) {
+// A provider error does not prove that it refused the submitted work.
+func TestSubmitRetainsRecordWhenProviderReplyFails(t *testing.T) {
 	t.Parallel()
-
-	ctx := context.Background()
 	service, records := newService(t)
 	runner := acceptedRunner()
-	runner.submitErr = errors.New("the provider refused the prompt")
-
-	_, err := service.Submit(ctx, open(runner), submissionFor(accountA))
-	require.Error(t, err)
-
-	_, err = records.Get(ctx, accountA, "job_service_01")
-	require.ErrorIs(t, err, jobs.ErrJobNotFound)
+	runner.submitErr = errors.New("provider response unavailable")
+	_, err := service.Submit(t.Context(), open(runner), submissionFor(accountA))
+	require.ErrorIs(t, err, jobs.ErrSubmissionUnconfirmed)
+	job, err := records.Get(t.Context(), accountA, "job_service_01")
+	require.NoError(t, err)
+	require.True(t, job.SubmissionPending)
+	require.False(t, job.HasProviderJob())
 }
 
 // TestSubmitRefusesAJobThatNamesNoAccount keeps an unowned record out of the
@@ -246,10 +255,8 @@ func TestAFailedProviderAnswerAlwaysStatesAReason(t *testing.T) {
 	require.False(t, failed.TerminalAt.IsZero())
 }
 
-// TestASpentJobFailsWithoutAskingTheProvider covers the bound that makes this
-// surface terminate. A provider that never reaches a terminal state would
-// otherwise leave a caller polling for as long as the process runs.
-func TestASpentJobFailsWithoutAskingTheProvider(t *testing.T) {
+// TestASpentJobRetainsStateWithoutAskingTheProvider bounds automatic polling.
+func TestASpentJobRetainsStateWithoutAskingTheProvider(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -262,8 +269,9 @@ func TestASpentJobFailsWithoutAskingTheProvider(t *testing.T) {
 	clock = submitted.Add(jobs.DefaultLifetime + time.Minute)
 	spent, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
-	require.Equal(t, jobs.JobStateFailed, spent.State)
-	require.Contains(t, spent.Reason, "did not finish")
+	require.Equal(t, jobs.JobStateQueued, spent.State)
+	require.Empty(t, spent.Reason)
+	require.True(t, service.NeedsReconciliation(spent))
 	require.Zero(t, runner.polls)
 }
 
@@ -288,10 +296,7 @@ func TestRefreshOfAnotherAccountsJobIsNotFound(t *testing.T) {
 	require.Zero(t, runner.cancels)
 }
 
-// TestCancelStopsTheProviderAndTheRecord covers the stop path. The record moves
-// to cancelled on this gateway's own authority rather than on the provider's
-// next answer, so a provider still reporting the job as running one moment
-// after it accepted the stop cannot leave it polling.
+// TestCancelStopsTheProviderAndTheRecord persists a confirmed cancellation.
 func TestCancelStopsTheProviderAndTheRecord(t *testing.T) {
 	t.Parallel()
 
@@ -301,7 +306,7 @@ func TestCancelStopsTheProviderAndTheRecord(t *testing.T) {
 	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
-	runner.cancel = jobs.Report{State: jobs.JobStateRunning}
+	runner.cancel = jobs.Report{State: jobs.JobStateCancelled}
 	cancelled, err := service.Cancel(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, 1, runner.cancels)

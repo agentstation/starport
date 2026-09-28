@@ -198,8 +198,11 @@ func TestTeamRepositoryBudgetRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Team.Budget == nil || *stored.Team.Budget != *budget {
-		t.Fatalf("stored budget = %+v, want %+v", stored.Team.Budget, budget)
+	if stored.Team.Budget == nil || stored.Team.Budget.Limit != budget.Limit || stored.Team.Budget.Interval != budget.Interval || stored.Team.Budget.HistoryID == "" {
+		t.Fatalf("stored budget must retain limits and add server-owned history: %+v", stored.Team.Budget)
+	}
+	if budget.HistoryID != "" {
+		t.Fatal("repository changed caller-owned budget")
 	}
 
 	cleared := stored.Team

@@ -10,6 +10,7 @@ import (
 )
 
 // recognitionCost settles measured units against the retained offering.
+// The pages argument is a measured count, or -1 when unavailable.
 // It never uses a page estimate as a charge or mixes rates from separate tiers.
 func recognitionCost(offering catalogs.ProviderOffering, pages int, measured *inference.Usage, at time.Time) (*usage.Cost, string) {
 	if offering.Billing == nil || offering.Billing.Recognition == nil || offering.Billing.Validate() != nil || offering.Pricing == nil || offering.Pricing.Validate() != nil || !offering.Pricing.IsEffectiveAt(at) {
@@ -21,12 +22,12 @@ func recognitionCost(offering catalogs.ProviderOffering, pages int, measured *in
 	var total float64
 	switch offering.Billing.Recognition.Basis {
 	case catalogs.RecognitionBillingPages:
-		if pages <= 0 {
+		if pages < 0 {
 			return nil, usage.CostReasonNoUsage
 		}
 		input := int64(0)
 		if len(offering.Pricing.Tiers) > 0 {
-			if measured == nil || measured.Estimated {
+			if measured == nil || measured.Estimated || measured.TokensUnknown || measured.CacheReadTokensUnknown {
 				return nil, usage.CostReasonNoUsage
 			}
 			tokens := usageTokens(*measured)
@@ -95,7 +96,7 @@ func validRecognitionTokens(tokens usage.Tokens) bool {
 // recognitionTokenCost prices measured token dimensions within one context tier.
 func recognitionTokenCost(pricing *catalogs.ModelPricing, measured *inference.Usage) (float64, string) {
 	var total float64
-	if measured == nil || measured.Estimated {
+	if measured == nil || measured.Estimated || measured.TokensUnknown || measured.CacheReadTokensUnknown {
 		return 0, usage.CostReasonNoUsage
 	}
 	tokens := usageTokens(*measured)

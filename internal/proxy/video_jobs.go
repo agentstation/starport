@@ -144,15 +144,16 @@ func videoJobRunner(service Proxy, request *VideoSubmitRequest) jobs.Runner {
 }
 
 // Submit starts the work this runner was built for.
-func (r *VideoJobRunner) Submit(ctx context.Context) (jobs.Acceptance, error) {
+func (r *VideoJobRunner) Submit(ctx context.Context, recorder jobs.SubmissionRecorder) (jobs.Acceptance, error) {
 	request := r.caller
+	request.JobSubmission = recorder
 	answer, err := r.service.SubmitVideoJob(ctx, &request)
 	if err != nil {
 		return jobs.Acceptance{}, err
 	}
 	return jobs.Acceptance{
 		Provider:      answer.ProviderUsed,
-		Model:         r.caller.Request.Model,
+		Model:         answer.ModelUsed,
 		ProviderJobID: answer.ProviderJobID,
 		State:         answer.State,
 		Reason:        answer.Reason,

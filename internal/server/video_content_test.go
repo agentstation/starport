@@ -45,7 +45,7 @@ func storedVideoJob(
 	require.NoError(t, job.Transition(jobs.JobStateCompleted, now))
 
 	key := "storedvideoassetkey"
-	info, err := byteStore.Put(t.Context(), key, bytes.NewReader(videoAssetBytes))
+	info, err := byteStore.Publish(t.Context(), key, bytes.NewReader(videoAssetBytes))
 	require.NoError(t, err)
 	require.NoError(t, job.StoreAsset(key, "video/mp4", info.Size, expiresAt))
 	require.NoError(t, records.Create(t.Context(), job))
@@ -118,7 +118,7 @@ func TestAnExpiredVideoAssetAnswersGone(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, expired.AssetExpiredAt.IsZero())
 	require.Equal(t, jobs.JobStateCompleted, expired.State)
-	_, err = byteStore.Stat(t.Context(), job.AssetKey)
+	_, err = byteStore.StatPublished(t.Context(), job.AssetKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
 
 	// The job itself still reads. A caller that comes back late learns its work
@@ -162,8 +162,9 @@ func TestAListedJobStatesWhetherItsBytesAreStillThere(t *testing.T) {
 	// stops travelling with it.
 	stored, err := records.Get(t.Context(), "acme", job.ID)
 	require.NoError(t, err)
+	previous := stored
 	require.NoError(t, stored.ExpireAsset(time.Now()))
-	require.NoError(t, records.Replace(t.Context(), stored))
+	require.NoError(t, records.Replace(t.Context(), previous, stored))
 
 	gone := decodeVideoJob(t, videoRequest(server, http.MethodGet, "/v1/videos/"+job.ID, key))
 	require.Equal(t, "completed", gone["status"],

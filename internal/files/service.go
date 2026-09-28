@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/agentstation/starport/internal/blob"
+	"github.com/agentstation/starport/internal/storage"
 )
 
 // DefaultPendingGrace is how long a pending record may stay pending before a
@@ -55,8 +57,14 @@ var (
 // who set the bound or where the number came from. The storage meter in
 // internal/limits satisfies the contract.
 type Meter interface {
-	Reserve(ctx context.Context, holder string, size, bound int64) error
-	Release(ctx context.Context, holder string, size int64) error
+	InitializeEmpty(context.Context, string) error
+	Total(context.Context, string) (int64, error)
+	Reserve(ctx context.Context, holder, id string, size, bound int64) error
+	Resize(context.Context, string, string, int64) error
+	Attachment(context.Context, string, string) (storage.CompareAndSwapMutation, error)
+	Release(ctx context.Context, holder, id string) error
+	Abort(context.Context, string, string) error
+	RecoverPending(context.Context) error
 }
 
 // Service writes a file as two writes and keeps them consistent.
@@ -73,6 +81,11 @@ type Service struct {
 	pendingGrace time.Duration
 	retention    time.Duration
 	meter        Meter
+	sweepMu      sync.Mutex
+	sweepCursor  string
+	sweepNext    string
+	sweepPending []File
+	sweepLoaded  bool
 }
 
 // Option changes one service setting.
@@ -106,8 +119,8 @@ func WithRetention(window time.Duration) Option {
 	}
 }
 
-// WithMeter bounds the bytes each account keeps. Without one the service stores
-// without counting, which is what a deployment that set no bound wants.
+// WithMeter counts and bounds account storage. Production supplies a meter
+// even when an account has no configured bound.
 func WithMeter(meter Meter) Option {
 	return func(s *Service) {
 		if meter != nil {
@@ -197,9 +210,6 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest, r io.Reader
 	// The claim goes in before anything is written. A bound checked after the
 	// write has already spent the storage it exists to protect.
 	held := max(request.Size, 0)
-	if err := s.reserve(ctx, account, held, request.StoredBytesBound); err != nil {
-		return File{}, err
-	}
 
 	pending := File{
 		ID:        newFileID(),
@@ -211,16 +221,19 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest, r io.Reader
 		CreatedAt: created,
 		ExpiresAt: expiresAt,
 		blobKey:   newBlobKey(),
+		metered:   s.meter != nil,
 	}
-	// The pending record carries the claim, so every path that drops the
-	// record gives the same number back. A crash leaves the claim to the
-	// sweep, which reads it off the record it deletes.
-	if err := s.records.Create(ctx, pending); err != nil {
-		s.release(ctx, account, held)
+	if err := pending.Validate(); err != nil {
+		return File{}, err
+	}
+	if err := s.blobs.EnsurePublicationReady(ctx); err != nil {
+		return File{}, err
+	}
+	if err := s.prepare(ctx, pending, request.StoredBytesBound); err != nil {
 		return File{}, err
 	}
 
-	info, putErr := s.blobs.Put(ctx, pending.blobKey, r)
+	info, putErr := s.blobs.Publish(ctx, pending.blobKey, r)
 	if putErr != nil {
 		// The record is the only thing that names the bytes, so it goes last
 		// and comes back first. A failure here leaves the record for the
@@ -232,7 +245,7 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest, r io.Reader
 	// The write knows what the upload really weighed. A caller that understated
 	// it pays the difference here, and one that overstated it gets the room
 	// back rather than holding storage nothing occupies.
-	if err := s.settle(ctx, &pending, info.Size, request.StoredBytesBound); err != nil {
+	if err := s.settle(ctx, &pending, info.Size); err != nil {
 		s.discard(ctx, pending)
 		return File{}, err
 	}
@@ -246,41 +259,49 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest, r io.Reader
 	return committed, nil
 }
 
-// settle moves the claim from the declared size to the real one and records
-// the result on the pending file, so a later discard gives back what is held.
-func (s *Service) settle(ctx context.Context, pending *File, actual, bound int64) error {
-	switch delta := actual - pending.Bytes; {
-	case delta > 0:
-		if err := s.reserve(ctx, pending.Account, delta, bound); err != nil {
+// prepare attaches one durable byte claim to the pending file.
+func (s *Service) prepare(ctx context.Context, file File, bound int64) error {
+	if s.meter == nil {
+		return s.records.Create(ctx, file)
+	}
+	if _, err := s.meter.Total(ctx, file.Account); errors.Is(err, storage.ErrNotFound) {
+		existing, listErr := s.records.List(ctx, file.Account, 1)
+		if listErr != nil {
+			return listErr
+		}
+		if len(existing) > 0 {
+			return fmt.Errorf("files: storage accounting requires recovery")
+		}
+		if err := s.meter.InitializeEmpty(ctx, file.Account); err != nil {
 			return err
 		}
-	case delta < 0:
-		s.release(ctx, pending.Account, -delta)
+	} else if err != nil {
+		return err
+	}
+	if err := s.meter.Reserve(ctx, file.Account, file.ID, file.Bytes, bound); err != nil {
+		return err
+	}
+	claim, err := s.meter.Attachment(ctx, file.Account, file.ID)
+	if err == nil {
+		err = s.records.CreateClaimed(ctx, file, claim)
+	}
+	if err != nil {
+		// A lost successful acknowledgment can leave attached metadata. Abort
+		// fences only an unattached claim. Recovery retains the published file.
+		_ = s.meter.Abort(ctx, file.Account, file.ID)
+	}
+	return err
+}
+
+// settle records the measured size once before the file becomes readable.
+func (s *Service) settle(ctx context.Context, pending *File, actual int64) error {
+	if s.meter != nil {
+		if err := s.meter.Resize(ctx, pending.Account, pending.ID, actual); err != nil {
+			return err
+		}
 	}
 	pending.Bytes = actual
 	return nil
-}
-
-// reserve claims bytes against the account bound. A service with no meter
-// stores without counting.
-func (s *Service) reserve(ctx context.Context, account string, size, bound int64) error {
-	if s.meter == nil || size <= 0 {
-		return nil
-	}
-	return s.meter.Reserve(ctx, account, size, bound)
-}
-
-// release gives bytes back and reports nothing.
-//
-// Every caller is already unwinding, and a failure here leaves the total too
-// high rather than too low. Too high refuses an upload the account could have
-// made, which an operator sees and can correct. Too low would let an account
-// past the bound the meter exists to hold.
-func (s *Service) release(ctx context.Context, account string, size int64) {
-	if s.meter == nil || size <= 0 {
-		return
-	}
-	_ = s.meter.Release(ctx, account, size)
 }
 
 // Get returns one readable file. A pending record reads as not found, because
@@ -307,7 +328,7 @@ func (s *Service) Open(ctx context.Context, account, id string) (File, io.ReadCl
 	if err != nil {
 		return File{}, nil, err
 	}
-	reader, err := s.blobs.Get(ctx, file.blobKey)
+	reader, err := s.blobs.ReadPublished(ctx, file.blobKey)
 	if err != nil {
 		if errors.Is(err, blob.ErrNotFound) {
 			// The record outlived its bytes. A caller asked for a file that no
@@ -321,18 +342,37 @@ func (s *Service) Open(ctx context.Context, account, id string) (File, io.ReadCl
 
 // List returns the readable files one account owns.
 func (s *Service) List(ctx context.Context, account string, limit int) ([]File, error) {
-	records, err := s.records.List(ctx, account, limit)
-	if err != nil {
-		return nil, err
+	if limit <= 0 {
+		limit = defaultListLimit
 	}
+	if strings.TrimSpace(account) == "" {
+		return nil, nil
+	}
+	limit = min(limit, defaultListLimit)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	now := s.now().UTC()
-	readable := make([]File, 0, len(records))
-	for _, file := range records {
-		if file.State == FileStateReady && !file.Expired(now) {
-			readable = append(readable, file)
+	var readable []File
+	cursor := ""
+	for {
+		page, err := s.records.Page(ctx, account, cursor)
+		if err != nil {
+			return nil, err
+		}
+		for _, file := range page.Records {
+			if file.State == FileStateReady && (file.outputIdentity == "" || file.outputPublished) && !file.Expired(now) {
+				readable = append(readable, file)
+				if len(readable) == limit {
+					return readable, nil
+				}
+			}
+		}
+		cursor = page.Next
+		if cursor == "" {
+			return readable, nil
 		}
 	}
-	return readable, nil
+
 }
 
 // Delete removes a file this account owns.
@@ -388,27 +428,64 @@ func (r SweepResult) Total() int { return r.Abandoned + r.Expired + r.Resumed }
 // first error would let one unreachable object hold every later one hostage,
 // and the caller runs on a ticker that would repeat the same failure forever.
 func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
-	records, err := s.records.Scan(ctx, 0)
-	if err != nil {
-		return SweepResult{}, err
+	if !s.sweepMu.TryLock() {
+		return SweepResult{}, storage.ErrConflict
 	}
+	defer s.sweepMu.Unlock()
+	var failures error
+	if s.meter != nil {
+		failures = s.meter.RecoverPending(ctx)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	now := s.now().UTC()
 	abandonedBefore := now.Add(-s.pendingGrace)
-
 	var result SweepResult
-	var failures error
-	for _, file := range records {
-		counter := s.sweepReason(file, now, abandonedBefore, &result)
-		if counter == nil {
-			continue
+	processed := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return result, errors.Join(failures, err)
 		}
-		if err := s.retire(ctx, file); err != nil {
-			failures = errors.Join(failures, fmt.Errorf("files: sweep %s: %w", file.ID, err))
-			continue
+		if !s.sweepLoaded {
+			page, err := s.records.Page(ctx, "", s.sweepCursor)
+			if err != nil && failures == nil {
+				failures = err
+			}
+			if !page.Scanned {
+				return result, failures
+			}
+			s.sweepPending, s.sweepNext, s.sweepLoaded = page.Records, page.Next, true
 		}
-		*counter++
+		for len(s.sweepPending) > 0 {
+			if err := ctx.Err(); err != nil {
+				return result, errors.Join(failures, err)
+			}
+			file := s.sweepPending[0]
+			counter := s.sweepReason(file, now, abandonedBefore, &result)
+			if counter != nil {
+				if err := s.retire(ctx, file); err != nil {
+					if !errors.Is(err, ErrFileNotFound) && failures == nil {
+						failures = fmt.Errorf("files: sweep %s: %w", file.ID, err)
+					}
+				} else {
+					*counter++
+				}
+			}
+			s.sweepPending[0] = File{}
+			s.sweepPending = s.sweepPending[1:]
+			processed++
+			// Bound durable writes per pass as well as elapsed time. Preserve the
+			// current page so the next call continues before loading another page.
+			if processed == 256 {
+				return result, failures
+			}
+		}
+		s.sweepCursor, s.sweepLoaded, s.sweepPending = s.sweepNext, false, nil
+		if s.sweepCursor == "" {
+			return result, failures
+		}
 	}
-	return result, failures
+
 }
 
 // sweepReason reports which counter one record belongs to, or nil when the
@@ -420,9 +497,15 @@ func (s *Service) sweepReason(file File, now, abandonedBefore time.Time, result 
 		// finishes it.
 		return &result.Resumed
 	case FileStatePending:
+		if file.outputIdentity != "" {
+			if file.Expired(now) {
+				return &result.Expired
+			}
+			return nil
+		}
 		if file.CreatedAt.After(abandonedBefore) {
-			// A live upload looks exactly like an abandoned one. Only time
-			// separates them, and the grace window is that time.
+			// Grace bounds how long an upload can remain pending. Retirement
+			// fences a delayed writer before its byte claim is released.
 			return nil
 		}
 		return &result.Abandoned
@@ -436,33 +519,30 @@ func (s *Service) sweepReason(file File, now, abandonedBefore time.Time, result 
 	}
 }
 
-// remove deletes the bytes and then the record.
-//
-// A missing object is not a failure here. Both shipped backends already treat
-// a delete of an absent object as done, and the guard states the rule for any
-// backend that does not: the record is what makes a file reachable, so a
-// second pass over a half-finished delete has to get to the record.
+// remove durably fences delayed publication before releasing quota and metadata.
+// A retirement error retains both, even when the object appears absent.
 func (s *Service) remove(ctx context.Context, file File) error {
-	if err := s.blobs.Delete(ctx, file.blobKey); err != nil && !errors.Is(err, blob.ErrNotFound) {
+	if err := s.blobs.Retire(ctx, file.blobKey); err != nil {
 		return fmt.Errorf("files: delete the bytes: %w", err)
 	}
-	if err := s.records.Delete(ctx, file.Account, file.ID); err != nil {
-		return err
+	if file.metered {
+		if s.meter == nil {
+			return fmt.Errorf("files: storage meter required for cleanup")
+		}
+		if err := s.meter.Release(ctx, file.Account, file.ID); err != nil {
+			return err
+		}
 	}
-	// The claim goes back only once both writes are gone. Releasing earlier
-	// would let a failure between the two leave the account credited for bytes
-	// a later sweep still has to find.
-	s.release(ctx, file.Account, file.Bytes)
-	return nil
+	return s.records.Delete(ctx, file.Account, file.ID)
 }
 
-// discard removes a file and reports nothing. The caller is already returning
-// another error, or is deleting on purpose, and a failure here leaves work the
-// sweep repeats.
+// discard keeps failed cleanup discoverable by the recovery sweep.
 func (s *Service) discard(ctx context.Context, file File) {
-	_ = s.blobs.Delete(ctx, file.blobKey)
-	_ = s.records.Delete(ctx, file.Account, file.ID)
-	s.release(ctx, file.Account, file.Bytes)
+	// Settlement can change the byte count before metadata publication.
+	current, err := s.records.Get(ctx, file.Account, file.ID)
+	if err == nil {
+		_ = s.retire(ctx, current)
+	}
 }
 
 // newFileID names a file the way a caller sees it. The prefix makes an

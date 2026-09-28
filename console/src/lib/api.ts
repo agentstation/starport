@@ -2010,6 +2010,8 @@ export const RECOGNITION_OPERATION = "documents-recognition";
 export const RERANK_OPERATION = "rerank";
 
 export type VideoJob = {
+  polling_status?: "paused";
+  submission_status?: "unconfirmed";
   id: string;
   object?: string;
   model: string;
@@ -2046,6 +2048,12 @@ export async function listJobs({ signal }: ReadOptions = {}): Promise<VideoJobLi
 
 export function submitJob(model: string, prompt: string): Promise<VideoJob> {
   return request<VideoJob>("/v1/videos", { method: "POST", body: { model, prompt } });
+}
+
+export function reconcileJob(jobID: string): Promise<VideoJob> {
+  return request<VideoJob>(`/v1/videos/${encodeURIComponent(jobID)}/reconcile`, {
+    method: "POST",
+  });
 }
 
 export function cancelJob(jobID: string): Promise<VideoJob> {

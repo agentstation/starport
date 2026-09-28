@@ -425,6 +425,25 @@ func (m *AuthMiddleware) sessionContext(r *http.Request) (context.Context, error
 		if err != nil {
 			return nil, errAccountUnavailable
 		}
+		bundle, err := requestctx.Authorization(result)
+		if err != nil {
+			return nil, err
+		}
+		owner := bundle.Account().Account.ID
+		result = requestctx.WithBatchAuthorization(result, func(account, id string) ([]byte, error) {
+			if account != owner || id == "" {
+				return nil, authorization.ErrDenied
+			}
+			now, healthy := m.permissionClock()
+			if !healthy {
+				return nil, authorization.ErrUnavailable
+			}
+			receipt, err := m.sessions.RetainBatchSession(cookie.Value, account, id, now)
+			if err != nil {
+				return nil, err
+			}
+			return encodeBatchSession(account, id, receipt)
+		})
 		return result, nil
 	}
 	if session.Grant == localauth.GrantIdentity {

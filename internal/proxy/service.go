@@ -236,6 +236,8 @@ type EmbeddingsResponse struct {
 // states it once.
 type OperationRequest[Request any] struct {
 	Request Request
+	// JobSubmission persists asynchronous dispatch and acceptance evidence.
+	JobSubmission jobs.SubmissionRecorder `json:"-"`
 
 	APIKey string `json:"-"`
 	// AccountID is the account the request runs under. Credential selection

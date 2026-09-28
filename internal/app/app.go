@@ -31,7 +31,10 @@ import (
 	"github.com/agentstation/starport/internal/guardrails"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
-	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/jobs/assetfetch"
+	"github.com/agentstation/starport/internal/jobs/fileio"
+	"github.com/agentstation/starport/internal/limits/jobslots"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
@@ -101,6 +104,8 @@ type App struct {
 	blobStore           blob.Store
 	files               *files.Service
 	jobs                *jobs.Service
+	batches             *jobs.BatchService
+	jobClaims           *jobslots.Store
 	events              *events.Dispatcher
 	cacheManager        *cache.Manager
 	extractionCache     *cache.BufferedLocalCache
@@ -113,6 +118,7 @@ type App struct {
 	availability        *availability.Tracker
 	advisory            *advisoryWorkers
 	authorization       *authorizationOwner
+	budget              *budgetOwner
 	// build is the provenance the admin and health surfaces report, with
 	// the start time New recorded.
 	build controllers.BuildInfo
@@ -236,6 +242,8 @@ func (b *runtimeBuilder) compose() error {
 		b.openBlob,
 		b.openEvents,
 		b.openConcepts,
+		b.openBudgetAdmission,
+		b.openJobService,
 		b.openRegistry,
 		b.openCache,
 		b.buildGateway,
@@ -339,7 +347,7 @@ func (b *runtimeBuilder) openBlob() error {
 		event = event.Str("bucket", b.config.Files.ObjectStore.Bucket).
 			Str("prefix", b.config.Files.ObjectStore.Prefix)
 	}
-	event.Msg("file byte storage ready")
+	event.Msg("file byte storage configured")
 	return nil
 }
 
@@ -455,9 +463,6 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err := b.openFileService(); err != nil {
 		return err
 	}
-	if err := b.openJobService(); err != nil {
-		return err
-	}
 	masterKey := []byte(b.config.Security.MasterKey)
 	if len(masterKey) < 32 {
 		masterKey = credentials.DeriveKeyFromPassword(b.config.Security.MasterKey)
@@ -545,7 +550,7 @@ func (b *runtimeBuilder) openFileService() error {
 	// The meter counts every account's stored bytes whether or not a bound is
 	// set. A deployment that sets one later reads a true total rather than a
 	// zero over storage that is already full.
-	meter, err := limits.NewStorageMeter(b.application.store)
+	meter, err := storedbytes.NewStorageMeter(b.application.store)
 	if err != nil {
 		return fmt.Errorf("open stored byte meter: %w", err)
 	}
@@ -567,20 +572,27 @@ func (b *runtimeBuilder) openJobService() error {
 	if err != nil {
 		return fmt.Errorf("open job repository: %w", err)
 	}
-	meter, err := limits.NewJobMeter(b.application.store)
+	meter, err := jobslots.Open(b.application.store)
 	if err != nil {
 		return fmt.Errorf("open job meter: %w", err)
 	}
-	// The accountant reads the catalog through a closure rather than a captured
-	// snapshot. A job ends long after the request that started it, so the price
-	// it draws comes from whatever the catalog holds at that moment.
-	accountant := proxy.NewJobAccountant(b.application.currentRoutableSnapshot, b.usageRecords)
+	b.application.jobClaims = meter
+	// The reporter uses rates and measured usage retained by the job.
+	accountant := proxy.NewJobAccountant(b.usageRecords)
+	assetDownloads, err := assetfetch.New(b.config.Jobs.AssetDownloadOrigins)
+	if err != nil {
+		return fmt.Errorf("configure job asset downloads: %w", err)
+	}
+	b.application.own("video asset downloads", func(context.Context) error { return assetDownloads.Close() })
 	serviceOptions := []jobs.ServiceOption{
+		jobs.WithExternalAssets(assetDownloads),
 		jobs.WithAssetStore(b.application.blobStore),
+		jobs.WithWorkers(b.config.Jobs.WorkerBound(), b.config.Jobs.ExecutionWindow()),
 		jobs.WithRetention(b.config.Jobs.AssetRetentionWindow()),
 		jobs.WithAssetBound(b.config.Jobs.AssetBound()),
 		jobs.WithJobMeter(meter),
 		jobs.WithAccountant(accountant),
+		jobs.WithRequiredSettlement(b.application.budget),
 	}
 	if b.application.events != nil {
 		serviceOptions = append(serviceOptions,
@@ -599,10 +611,22 @@ func (b *runtimeBuilder) openJobService() error {
 	if err != nil {
 		return fmt.Errorf("open batch repository: %w", err)
 	}
-	b.batches, err = jobs.NewBatchService(batchRecords, jobs.WithBatchJobMeter(meter))
+	application := b.application
+	b.batches, err = jobs.NewBatchService(batchRecords, jobs.WithBatchRecoveryRunner(func(ctx context.Context, batch jobs.Batch) (jobs.LineRunner, error) {
+		runtime, ok := application.httpServer.(interface {
+			BatchRecoveryRunner(context.Context, jobs.Batch) (jobs.LineRunner, error)
+		})
+		if !ok {
+			return nil, jobs.ErrBatchSubmissionIncomplete
+		}
+		return runtime.BatchRecoveryRunner(ctx, batch)
+	}), jobs.WithBatchJobMeter(meter), jobs.WithBatchFiles(func(batch jobs.Batch) jobs.BatchIO {
+		return fileio.Store{Files: b.application.files, Account: batch.Account, InputFileID: batch.InputFileID, StoredBytesBound: batch.StoredBytesBound}
+	}))
 	if err != nil {
 		return fmt.Errorf("open batch service: %w", err)
 	}
+	b.application.batches = b.batches
 	return nil
 }
 
@@ -687,6 +711,7 @@ func (b *runtimeBuilder) buildGateway() error {
 		}
 	}
 	routerOptions := []router.Option{
+		router.WithBudgetAdmission(b.application.budget.admission),
 		router.WithCatalog(b.application.catalog),
 		router.WithAvailability(availabilityOwner),
 		router.WithOutcomePublisher(b.application.providerStates),
@@ -967,6 +992,8 @@ func (b *runtimeBuilder) deployment() controllers.Deployment {
 }
 
 func (b *runtimeBuilder) openHTTPServer() error {
+	// Workers stop before the registry and storage close. HTTP drains first.
+	b.application.own("video workers", b.jobs.Close)
 	serverCfg := serverConfig(b.config, b.auth)
 	serverCfg.Build = b.application.build
 	httpServer, err := b.factories.newServer(serverCfg, server.Dependencies{
@@ -1254,6 +1281,9 @@ func (a *App) Run(ctx context.Context) error {
 	if a.advisory != nil {
 		a.advisory.Start(runCtx)
 	}
+	if a.budget != nil && a.budget.recovery != nil {
+		a.runtimeWG.Go(func() { a.budgetRecoveryLoop(runCtx) })
+	}
 
 	serverResult := make(chan error, 1)
 	go func() { serverResult <- a.httpServer.Start() }()
@@ -1275,6 +1305,11 @@ func (a *App) Run(ctx context.Context) error {
 
 // Close stops owned dependencies in reverse construction order.
 func (a *App) Close(ctx context.Context) error {
+	if a.batches != nil {
+		if err := a.batches.Close(ctx); err != nil {
+			return fmt.Errorf("drain batch workers: %w", err)
+		}
+	}
 	a.closeOnce.Do(func() { a.closeErr = a.closeLifecycle(ctx) })
 	return a.closeErr
 }
@@ -1567,20 +1602,40 @@ func (a *App) jobSweepLoop(ctx context.Context) {
 // sweepJobAssets runs one pass and reports what it reclaimed. A quiet pass logs
 // nothing, for the reason the file sweep gives.
 func (a *App) sweepJobAssets(ctx context.Context) {
+	if a.jobClaims != nil {
+		result, err := a.jobClaims.RecoverPending(ctx)
+		if err != nil {
+			log.Warn().Err(err).Int("failed", result.Failed).Msg("pending job claims require recovery")
+		}
+		if result.Released > 0 {
+			log.Info().Int("released", result.Released).Msg("recovered unattached job claims")
+		}
+	}
+	if a.batches != nil {
+		result, err := a.batches.Sweep(ctx)
+		if err != nil {
+			log.Warn().Err(err).Int("scanned", result.Scanned).Int("failed", result.Failed).
+				Msg("batch recovery requires another pass")
+		}
+		if result.Released > 0 {
+			log.Info().Int("released", result.Released).Msg("batch recovery released finished work")
+		}
+	}
 	result, err := a.jobs.Sweep(ctx)
 	if err != nil {
 		log.Warn().Err(err).
 			Int("reclaimed", result.Expired).
 			Msg("job sweep did not finish; the next pass retries the rest")
 	}
-	if result.Expired == 0 && result.Abandoned == 0 && result.Accounted == 0 {
+	if result.Expired == 0 && result.AwaitingReconciliation == 0 && result.Accounted == 0 && result.Released == 0 {
 		return
 	}
 	log.Info().
 		Int("expired", result.Expired).
-		Int("abandoned", result.Abandoned).
+		Int("awaiting_reconciliation", result.AwaitingReconciliation).
 		Int("accounted", result.Accounted).
-		Msg("job sweep reclaimed storage and closed finished work")
+		Int("released", result.Released).
+		Msg("job sweep checked retained work and storage")
 }
 
 // catalogCandidateLoop validates and accepts every candidate the connected

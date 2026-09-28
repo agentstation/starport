@@ -11,7 +11,7 @@ import (
 )
 
 func TestStandaloneAuthorizationNeedsNoNativeClock(t *testing.T) {
-	factories := explicitTestFactories()
+	factories := explicitTestFactories(t)
 	var dependencies server.Dependencies
 	factories.newServer = func(_ *server.Config, value server.Dependencies) (httpRuntime, error) {
 		dependencies = value
@@ -43,7 +43,7 @@ func TestStandaloneAuthorizationCannotReplaceCatalogAuthority(t *testing.T) {
 	require.NoError(t, err)
 	cfg := validProductionConfig(t)
 	cfg.Catalog = loaded.Catalog
-	factories := explicitTestFactories()
+	factories := explicitTestFactories(t)
 	var dependencies server.Dependencies
 	factories.newServer = func(_ *server.Config, value server.Dependencies) (httpRuntime, error) {
 		dependencies = value

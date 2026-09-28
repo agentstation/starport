@@ -62,6 +62,8 @@ type RequestLimit struct {
 type Budget struct {
 	Limit    int64  `json:"limit"`
 	Interval string `json:"interval"`
+	// HistoryID is server-owned accounting continuity. Missing history remains unknown.
+	HistoryID string `json:"history_id,omitempty"`
 }
 
 // Validate checks the limits invariants.

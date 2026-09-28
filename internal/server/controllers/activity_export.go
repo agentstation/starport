@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -37,6 +38,9 @@ var activityExportCSVHeader = []string{
 	"cost_nano_usd", "cost_currency", "cost_unavailable_reason",
 	"cache_status", "cache_semantic", "cache_similarity",
 	"guardrail_verdict", "guardrail_check",
+	"billing_disposition", "billing_adjustment_id", "billing_adjusted_at",
+	"billing_original_cost_nano_usd", "billing_original_cost_unavailable_reason",
+	"billing_original_tokens_total", "billing_original_tokens_unknown",
 }
 
 // ActivityExport handles GET /api/v1/activity/export. It streams the
@@ -151,6 +155,15 @@ func (h *ActivityController) exportRecords(w http.ResponseWriter, r *http.Reques
 }
 
 func activityExportCSVRow(record usage.Record) []string {
+	adjustmentID, adjustedAt, originalCost, originalReason, originalTokens, originalUnknown := "", "", "", "", "", ""
+	if a := record.BillingAdjustment; a != nil {
+		adjustmentID, adjustedAt = a.ID, a.RecordedAt.UTC().Format(time.RFC3339Nano)
+		originalReason = a.OriginalCostUnavailableReason
+		originalTokens, originalUnknown = strconv.FormatInt(a.OriginalTokens.Total, 10), strconv.FormatBool(a.OriginalTokensUnknown)
+		if a.OriginalCost != nil {
+			originalCost = strconv.FormatInt(a.OriginalCost.NanoUSD, 10)
+		}
+	}
 	costNanoUSD, costCurrency := "", ""
 	if record.Cost != nil {
 		costNanoUSD = strconv.FormatInt(record.Cost.NanoUSD, 10)
@@ -182,6 +195,7 @@ func activityExportCSVRow(record usage.Record) []string {
 		cacheSimilarityColumn(record.CacheSimilarity),
 		record.GuardrailVerdict,
 		record.GuardrailCheck,
+		record.BillingDisposition, adjustmentID, adjustedAt, originalCost, originalReason, originalTokens, originalUnknown,
 	}
 }
 

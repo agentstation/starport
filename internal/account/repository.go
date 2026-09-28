@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/authorization/revision"
+	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -85,6 +87,7 @@ func (r *repository) Create(ctx context.Context, value Account) (Record, error) 
 		Revision:      1,
 		Account:       cloneAccount(value),
 	}
+	stored.Account.Limits = value.Limits.WithBudgetHistory(nil)
 	// Creation time is a property of the record, not of the caller's payload.
 	// The timestamps are stamped before validation so the check reads the
 	// record this call actually writes.
@@ -100,7 +103,12 @@ func (r *repository) Create(ctx context.Context, value Account) (Record, error) 
 	}
 	// A nil ExpectedValue on an absent key creates. On a present key it
 	// conflicts, so two concurrent creates cannot both win.
-	if err := r.authority.Apply(ctx, []storage.CompareAndSwapMutation{{Key: accountStorageKey(value.ID), ExpectedValue: nil, NewValue: data}}); err != nil {
+	history, err := reservation.HolderCreationMutations(ctx, r.store, limits.ScopeAccount, value.ID, stored.Account.Limits)
+	if err != nil {
+		return Record{}, err
+	}
+	mutations := append([]storage.CompareAndSwapMutation{{Key: accountStorageKey(value.ID), NewValue: data}}, history...)
+	if err := r.authority.Apply(ctx, mutations); err != nil {
 		return Record{}, mapConflict("create account", err)
 	}
 	return Record{Revision: stored.Revision, Account: stored.Account}, nil
@@ -216,6 +224,7 @@ func (r *repository) Update(ctx context.Context, value Account, expectedRevision
 		return Record{}, ErrConflict
 	}
 	updatedAccount := cloneAccount(value)
+	updatedAccount.Limits = value.Limits.WithBudgetHistory(current.Account.Limits)
 	// Creation time is a property of the record, not of the caller's payload.
 	// The timestamps are stamped before validation so the check reads the
 	// record this call actually writes.

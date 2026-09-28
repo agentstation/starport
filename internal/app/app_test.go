@@ -88,7 +88,7 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := *baseConfig
-			factories := explicitTestFactories()
+			factories := explicitTestFactories(t)
 			test.mutate(&cfg, &factories)
 			application, err := New(&cfg, withRuntimeFactories(factories))
 			if application != nil {
@@ -102,7 +102,7 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 func TestRuntimeStartsWithoutOperatorCredentials(t *testing.T) {
 	cfg := validProductionConfig(t)
 	cfg.Providers = config.ProvidersConfig{}
-	application, err := New(cfg, withRuntimeFactories(explicitTestFactories()))
+	application, err := New(cfg, withRuntimeFactories(explicitTestFactories(t)))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
 	require.NotEmpty(t, application.registry.ListProviders())
@@ -120,7 +120,7 @@ func TestCompositionPassesCatalogAcquisitionThrough(t *testing.T) {
 	// through unchanged, so no runtime mode turns automatic catalog work off.
 	cfg.Catalog.AcquisitionEnabled = true
 	opened := 0
-	factories := explicitTestFactories()
+	factories := explicitTestFactories(t)
 	inner := factories.openCatalog
 	factories.openCatalog = func(
 		ctx context.Context,
@@ -230,7 +230,7 @@ func TestServerConfigCredentialsFollowOriginScope(t *testing.T) {
 
 func TestNewBuildsReadyProductionDependencies(t *testing.T) {
 	cfg := validProductionConfig(t)
-	application, err := New(cfg, withRuntimeFactories(explicitTestFactories()))
+	application, err := New(cfg, withRuntimeFactories(explicitTestFactories(t)))
 	require.NoError(t, err)
 	require.NotNil(t, application.store)
 	require.NotNil(t, application.catalog)
@@ -246,7 +246,7 @@ func TestNewMapsExternalServerConfigurationOnce(t *testing.T) {
 	cfg.Server.RequestTimeout = 17 * time.Second
 	cfg.Server.MaxRequestSize = 23 << 20
 	cfg.Server.MaxHeaderBytes = 2 << 20
-	factories := explicitTestFactories()
+	factories := explicitTestFactories(t)
 	var captured *server.Config
 	factories.newServer = func(value *server.Config, _ server.Dependencies) (httpRuntime, error) {
 		captured = value
@@ -280,7 +280,7 @@ func TestLifecycleClosesInReverseOrderOnce(t *testing.T) {
 func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
 	cfg := validProductionConfig(t)
 	fakeHTTP := newBlockingHTTPRuntime()
-	factories := explicitTestFactories()
+	factories := explicitTestFactories(t)
 	var catalogDependency *lifecycleCatalogRuntime
 	// This test owns cancellation and dependency closure. The container recipe
 	// tests qualify real catalog persistence and startup separately.
@@ -422,11 +422,16 @@ func testCatalogSettings(t *testing.T) runtimecatalog.Settings {
 	return catalogSettings(deployment)
 }
 
-func explicitTestFactories() runtimeFactories {
+func explicitTestFactories(t testing.TB) runtimeFactories {
+	t.Helper()
 	factories := defaultRuntimeFactories()
-	store := storage.NewMockStore()
-	apiKeys, _ := apikey.Open(store)
-	_, _ = apiKeys.Create(context.Background(), testAPIKey())
+	store, err := storage.OpenBadger(storage.BadgerConfig{Path: t.TempDir(), SyncWrites: true, NumVersions: 1, NumLevelZero: 5, MemTableSize: 64 << 20})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	apiKeys, err := apikey.Open(store)
+	require.NoError(t, err)
+	_, err = apiKeys.Create(context.Background(), testAPIKey())
+	require.NoError(t, err)
 	factories.openStorage = func(storage.Config) (storage.KVStore, error) {
 		return store, nil
 	}

@@ -14,7 +14,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/runtime"
-	"github.com/agentstation/starport/internal/catalog/recovery"
+	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
@@ -26,7 +26,13 @@ func fleetTestStores(t *testing.T) (storage.KVStore, *recovery.Witness, *sqlstor
 	if address == "" || sqlURL == "" {
 		t.Skip("UNVERIFIED: real Valkey and PostgreSQL are required")
 	}
-	kv, err := storage.OpenValkey(storage.ValkeyConfig{DeploymentID: "contract-tests", URL: address})
+	// Child processes share this fixture namespace. Independent tests never do.
+	namespace := os.Getenv("CSP11_TEST_STORAGE_DEPLOYMENT")
+	if namespace == "" {
+		namespace = "fleet-contract-" + rand.Text()
+		t.Setenv("CSP11_TEST_STORAGE_DEPLOYMENT", namespace)
+	}
+	kv, err := storage.OpenValkey(storage.ValkeyConfig{DeploymentID: namespace, URL: address})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, kv.Close()) })
 	db, err := sqlstore.Open(sqlstore.Config{Type: sqlstore.TypePostgres, Postgres: sqlstore.PostgresConfig{URL: sqlURL}})

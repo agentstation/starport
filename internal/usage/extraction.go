@@ -7,14 +7,18 @@ import (
 
 // Extraction records one fresh provider recognition call. Cache hits add no call.
 type Extraction struct {
-	StartedAt             time.Time `json:"started_at,omitzero"`
-	Offering              string    `json:"offering"`
-	GenerationID          string    `json:"generation_id,omitempty"`
-	Pages                 int64     `json:"pages"`
-	BillingBasis          string    `json:"billing_basis,omitempty"`
-	Tokens                *Tokens   `json:"tokens,omitempty"`
-	Cost                  *Cost     `json:"cost,omitempty"`
-	CostUnavailableReason string    `json:"cost_unavailable_reason,omitempty"`
+	ProcessedPages         int64     `json:"processed_pages,omitzero"`
+	ProcessedPagesKnown    bool      `json:"processed_pages_known,omitzero"`
+	TokensUnknown          bool      `json:"tokens_unknown,omitempty"`
+	CacheReadTokensUnknown bool      `json:"cache_read_tokens_unknown,omitempty"`
+	StartedAt              time.Time `json:"started_at,omitzero"`
+	Offering               string    `json:"offering"`
+	GenerationID           string    `json:"generation_id,omitempty"`
+	Pages                  int64     `json:"pages"`
+	BillingBasis           string    `json:"billing_basis,omitempty"`
+	Tokens                 *Tokens   `json:"tokens,omitempty"`
+	Cost                   *Cost     `json:"cost,omitempty"`
+	CostUnavailableReason  string    `json:"cost_unavailable_reason,omitempty"`
 }
 
 // Clone copies measurements and cost so asynchronous persistence owns its data.

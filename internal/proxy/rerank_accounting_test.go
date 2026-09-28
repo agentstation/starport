@@ -42,7 +42,7 @@ func (r *rerankRouter) RouteRerank(
 		Response: inference.RerankResponse{
 			Model:   req.Request.Model,
 			Results: []inference.RerankResult{{Index: 0, RelevanceScore: 0.9}},
-			Usage:   inference.Usage{SearchUnits: r.units},
+			Usage:   inference.Usage{SearchUnits: r.units, SearchUnitsKnown: true},
 		},
 		ModelUsed:       r.routeID,
 		ProviderUsed:    "cohere",
@@ -179,9 +179,10 @@ func TestASearchUnitOnAnUnpricedOfferingIsNeverBilledAtZero(t *testing.T) {
 	// A route that bills the tokens it reads publishes no search unit price, so
 	// a turn reporting one on it is exactly the mismatch this reason names.
 	cost, reason := usageCost(routes.snapshot, usage.Record{
-		Operation:   usage.OperationRerank,
-		ModelUsed:   routes.tokenBased,
-		SearchUnits: 3,
+		Operation:        usage.OperationRerank,
+		ModelUsed:        routes.tokenBased,
+		SearchUnits:      3,
+		SearchUnitsKnown: true,
 	})
 	require.Nil(t, cost)
 	require.Equal(t, usage.CostReasonRerankUnpriced, reason)
@@ -189,9 +190,10 @@ func TestASearchUnitOnAnUnpricedOfferingIsNeverBilledAtZero(t *testing.T) {
 	// The same turn on the offering that does publish the price is billed, so
 	// the reason above names the offering rather than the operation.
 	cost, reason = usageCost(routes.snapshot, usage.Record{
-		Operation:   usage.OperationRerank,
-		ModelUsed:   routes.searchUnit,
-		SearchUnits: 3,
+		Operation:        usage.OperationRerank,
+		ModelUsed:        routes.searchUnit,
+		SearchUnits:      3,
+		SearchUnitsKnown: true,
 	})
 	require.Empty(t, reason)
 	require.NotNil(t, cost)

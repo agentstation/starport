@@ -32,6 +32,7 @@ func (r *modelRouter) RouteModerations(
 	}
 	call := providerCall[*connectors.ModerationRequest, *connectors.ModerationResponse, inference.ModerationResponse]{
 		transport: moderationTransport,
+		charge:    moderationCharge,
 		build: func() *connectors.ModerationRequest {
 			return connectors.ModerationRequestFromInference(req.Request)
 		},

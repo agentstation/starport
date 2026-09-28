@@ -15,8 +15,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/agentstation/starport/internal/server/requestctx"
@@ -249,6 +251,9 @@ func storedBytesBound(r *http.Request) int64 {
 // writeError maps a file service failure onto a status.
 func (h *FilesController) writeError(w http.ResponseWriter, action string, err error) {
 	switch {
+	case errors.Is(err, blob.ErrPublicationUnavailable):
+		log.Error().Err(err).Str("action", action).Msg("file publication readiness failed")
+		dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServerError, "File storage capability is unverified. Check conditional publication support and retry.")
 	case errors.Is(err, files.ErrFileNotFound):
 		// A file another account owns reads the same way as a file that never
 		// existed. Any other answer would report that the identifier is real.
@@ -259,7 +264,7 @@ func (h *FilesController) writeError(w http.ResponseWriter, action string, err e
 		errors.Is(err, files.ErrRetentionTooLong),
 		errors.Is(err, files.ErrRetentionTooShort):
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
-	case errors.Is(err, limits.ErrStorageFull):
+	case errors.Is(err, storedbytes.ErrStorageFull):
 		// The upload itself is a legal size. What it would not fit inside is
 		// the room this holder has left, which a delete frees and a retry of
 		// the same request does not. The message says which of the two bounds

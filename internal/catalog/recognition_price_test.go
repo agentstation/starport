@@ -162,15 +162,23 @@ func TestTheShippedCatalogPricesEveryRecognitionRoute(t *testing.T) {
 				billableOperation(offering, catalogs.ProviderOperationDocumentsRecognition),
 				"%s/%s", provider.ID, offering.ProviderModelID,
 			)
-			require.NotNil(t, offering.Limits)
-			require.Positivef(t, offering.Limits.DocumentPages,
-				"%s/%s states no page limit", provider.ID, offering.ProviderModelID)
+			if pages, state := offering.Limits.Value(catalogs.ModelLimitDocumentPages); state == catalogs.ValueKnown {
+				require.Positive(t, pages)
+			} else {
+				// This protocol enforces the counted pages through explicit request selection.
+				// Its published contract does not state a fixed page ceiling.
+				endpoint, found := offering.Endpoint(catalogs.ProviderOperationDocumentsRecognition)
+				require.True(t, found)
+				require.Equal(t, catalogs.EndpointTypeMistralOCR, endpoint.Type)
+				require.Equal(t, catalogs.RecognitionBillingPages, offering.Billing.Recognition.Basis)
+				require.NotNil(t, offering.Billing.Recognition.RequestCharge)
+			}
 		}
 	}
 
 	// The census PLG3 records. A drop to zero means the catalog stopped naming
 	// the operation, which is a silent regression rather than a failing route.
-	require.Equal(t, 11, priced)
+	require.Equal(t, 12, priced)
 }
 
 // TestTheRecognitionOperationKeepsItsWireValue holds the one string that

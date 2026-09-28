@@ -33,7 +33,7 @@ func openRouterRerankAnswer() inference.RerankResponse {
 			{Index: 1, RelevanceScore: 0.91},
 			{Index: 2, RelevanceScore: 0.42},
 		},
-		Usage: inference.Usage{SearchUnits: 1, TotalTokens: 38},
+		Usage: inference.Usage{SearchUnits: 1, SearchUnitsKnown: true, TotalTokens: 38},
 	}
 }
 
@@ -67,8 +67,8 @@ func TestTheOpenRouterRerankCodecEchoesEveryDocument(t *testing.T) {
 	// The unit split is the reason usage carries two counts. A provider that
 	// bills a search unit reports no token total, and the answer states
 	// whichever one arrived rather than converting between them.
-	require.Equal(t, 1, encoded.Usage.SearchUnits)
-	require.Equal(t, 38, encoded.Usage.TotalTokens)
+	require.Equal(t, 1, *encoded.Usage.SearchUnits)
+	require.Equal(t, 38, *encoded.Usage.TotalTokens)
 
 	// The cost is the gateway's own, because a rerank provider reports the
 	// units it billed and no money at all.
@@ -178,4 +178,28 @@ func TestTheOpenRouterRerankCodecReportsAMisspelledField(t *testing.T) {
 	))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown field")
+}
+
+func TestRerankUsagePreservesZeroAndMissing(t *testing.T) {
+	decoding, err := DecodeRerank(strings.NewReader(openRouterRerankBody))
+	require.NoError(t, err)
+	for _, known := range []bool{false, true} {
+		answer := openRouterRerankAnswer()
+		answer.Usage = inference.Usage{TokensUnknown: !known, SearchUnitsKnown: known}
+		encoded, err := EncodeRerank(answer, decoding.Request, "", nil)
+		require.NoError(t, err)
+		wire, err := json.Marshal(encoded)
+		require.NoError(t, err)
+		if known {
+			require.NotNil(t, encoded.Usage.TotalTokens)
+			require.NotNil(t, encoded.Usage.SearchUnits)
+			require.Contains(t, string(wire), `"total_tokens":0`)
+			require.Contains(t, string(wire), `"search_units":0`)
+		} else {
+			require.Nil(t, encoded.Usage.TotalTokens)
+			require.Nil(t, encoded.Usage.SearchUnits)
+			require.NotContains(t, string(wire), `"total_tokens"`)
+			require.NotContains(t, string(wire), `"search_units"`)
+		}
+	}
 }

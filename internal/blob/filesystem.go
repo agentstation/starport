@@ -46,9 +46,39 @@ func NewFilesystem(root string) (*Filesystem, error) {
 	if err != nil {
 		return nil, fmt.Errorf("blob: resolve the filesystem root: %w", err)
 	}
+	// Record the first existing ancestor before creating paths. Its directory
+	// entry is the durability boundary for a new nested root.
+	ancestor := absolute
+	for {
+		_, statErr := os.Stat(ancestor)
+		if statErr == nil {
+			break
+		}
+		if !errors.Is(statErr, fs.ErrNotExist) {
+			return nil, statErr
+		}
+		parent := filepath.Dir(ancestor)
+		if parent == ancestor {
+			return nil, statErr
+		}
+		ancestor = parent
+	}
 	for _, dir := range []string{objectsDir, stagingDir} {
 		if err := os.MkdirAll(filepath.Join(absolute, dir), dirPerm); err != nil {
 			return nil, fmt.Errorf("blob: create the filesystem root: %w", err)
+		}
+	}
+	for _, dir := range []string{objectsDir, stagingDir} {
+		if err := syncPublicationDirectory(filepath.Join(absolute, dir)); err != nil {
+			return nil, err
+		}
+	}
+	for dir := absolute; ; dir = filepath.Dir(dir) {
+		if err := syncPublicationDirectory(dir); err != nil {
+			return nil, err
+		}
+		if dir == ancestor {
+			break
 		}
 	}
 	return &Filesystem{root: absolute}, nil
@@ -65,9 +95,13 @@ func (f *Filesystem) Backend() string { return filesystemBackend }
 // next. The hash also shards the tree, so no directory grows one entry per
 // stored file.
 func (f *Filesystem) objectPath(key string) string {
+	return f.namespacedPath(objectsDir, key)
+}
+
+func (f *Filesystem) namespacedPath(namespace, key string) string {
 	sum := sha256.Sum256([]byte(key))
 	name := hex.EncodeToString(sum[:])
-	return filepath.Join(f.root, objectsDir, name[0:2], name[2:4], name)
+	return filepath.Join(f.root, namespace, name[0:2], name[2:4], name)
 }
 
 // Put implements Store.

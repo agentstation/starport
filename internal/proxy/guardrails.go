@@ -51,22 +51,24 @@ type guardrailIdentityKey struct{}
 // It is the calling request's own identity, so credential selection and
 // usage attribution treat the call as the account's.
 type guardrailIdentity struct {
-	AccountID string
-	KeyID     string
-	TeamID    string
-	RequestID string
-	Protocol  string
+	APIKeyConfig *APIKeyRoutingConfig
+	AccountID    string
+	KeyID        string
+	TeamID       string
+	RequestID    string
+	Protocol     string
 }
 
 // withGuardrailIdentity stamps the calling request's identity into the
 // context before the pipeline runs.
 func withGuardrailIdentity(ctx context.Context, req *ChatCompletionRequest) context.Context {
 	return context.WithValue(ctx, guardrailIdentityKey{}, guardrailIdentity{
-		AccountID: req.AccountID,
-		KeyID:     req.KeyID,
-		TeamID:    req.TeamID,
-		RequestID: req.RequestID,
-		Protocol:  req.Protocol,
+		APIKeyConfig: req.APIKeyConfig,
+		AccountID:    req.AccountID,
+		KeyID:        req.KeyID,
+		TeamID:       req.TeamID,
+		RequestID:    req.RequestID,
+		Protocol:     req.Protocol,
 	})
 }
 

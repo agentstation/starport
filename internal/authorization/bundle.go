@@ -10,6 +10,7 @@ import (
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
 )
 
 // Identity scopes one authenticated caller lookup. Tenant must come from trusted routing.
@@ -35,6 +36,7 @@ type Bundle struct {
 	account account.Record
 	team    *identity.TeamRecord
 	receipt Permit
+	budgets *limits.BudgetPolicy
 	bytes   int
 }
 
@@ -80,7 +82,11 @@ func freeze(candidate Candidate, identity Identity, receipt Permit, limit int) (
 	if err := json.Unmarshal(data, &owned); err != nil {
 		return nil, ErrEvidence
 	}
-	return &Bundle{key: owned.Key, account: owned.Account, team: owned.Team, receipt: receipt, bytes: len(data)}, nil
+	budgets, err := budgetPolicy(owned)
+	if err != nil {
+		return nil, errors.Join(ErrEvidence, err)
+	}
+	return &Bundle{key: owned.Key, account: owned.Account, team: owned.Team, receipt: receipt, budgets: budgets, bytes: len(data)}, nil
 }
 
 // Permit returns the immutable validity handle for retries and cache delivery.

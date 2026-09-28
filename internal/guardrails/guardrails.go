@@ -67,6 +67,8 @@ var ErrRefused = errors.New("guardrail refused")
 // RefusalError is the refusal shape: which check refused, on which side,
 // and why.
 type RefusalError struct {
+	// Cause preserves a failed check for retry and accounting classification.
+	Cause     error
 	Check     string
 	Direction Direction
 	Reason    string
@@ -79,8 +81,13 @@ func (e *RefusalError) Error() string {
 	return fmt.Sprintf("guardrail %s refused the %s: %s", e.Check, e.Direction, e.Reason)
 }
 
-// Unwrap ties every refusal to ErrRefused.
-func (e *RefusalError) Unwrap() error { return ErrRefused }
+// Unwrap preserves the refusal and its underlying failure.
+func (e *RefusalError) Unwrap() []error {
+	if e.Cause == nil {
+		return []error{ErrRefused}
+	}
+	return []error{ErrRefused, e.Cause}
+}
 
 // Pipeline runs checks in registration order. Redactions compose: each
 // check reads the text as the checks before it rewrote it.
@@ -124,6 +131,7 @@ func (p *Pipeline) Inspect(ctx context.Context, direction Direction, text string
 				Check:     check.Name(),
 				Direction: direction,
 				Reason:    fmt.Sprintf("check could not evaluate: %v", err),
+				Cause:     err,
 			}
 		}
 		switch result.Verdict {

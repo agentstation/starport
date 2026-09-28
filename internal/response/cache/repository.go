@@ -51,12 +51,13 @@ type repository struct {
 }
 
 type record struct {
-	SchemaVersion int                          `json:"schema_version"`
-	Kind          string                       `json:"kind"`
-	SemanticKey   string                       `json:"semantic_key"`
-	CachedAt      time.Time                    `json:"cached_at"`
-	Chat          *inference.ChatResponse      `json:"chat,omitempty"`
-	Embedding     *inference.EmbeddingResponse `json:"embedding,omitempty"`
+	SchemaVersion        int                          `json:"schema_version"`
+	Kind                 string                       `json:"kind"`
+	SemanticKey          string                       `json:"semantic_key"`
+	CachedAt             time.Time                    `json:"cached_at"`
+	Chat                 *inference.ChatResponse      `json:"chat,omitempty"`
+	Embedding            *inference.EmbeddingResponse `json:"embedding,omitempty"`
+	EmbeddingTokensKnown *bool                        `json:"embedding_tokens_known,omitempty"`
 }
 
 type systemClock struct{}
@@ -122,12 +123,16 @@ func (r *repository) GetEmbedding(ctx context.Context, key string) (inference.Em
 	if stored.Embedding == nil || stored.Chat != nil {
 		return inference.EmbeddingResponse{}, time.Time{}, false, ErrKindMismatch
 	}
-	return stored.Embedding.Clone(), stored.CachedAt, true, nil
+	response := stored.Embedding.Clone()
+	// Older records preserve reusable vectors but cannot prove usage provenance.
+	response.Usage.TokensUnknown = stored.EmbeddingTokensKnown == nil || !*stored.EmbeddingTokensKnown
+	return response, stored.CachedAt, true, nil
 }
 
 func (r *repository) PutEmbedding(ctx context.Context, key string, response inference.EmbeddingResponse) error {
 	response = response.Clone()
-	return r.put(ctx, key, record{Kind: "embedding", Embedding: &response})
+	tokensKnown := !response.Usage.TokensUnknown
+	return r.put(ctx, key, record{Kind: "embedding", Embedding: &response, EmbeddingTokensKnown: &tokensKnown})
 }
 
 func (r *repository) get(ctx context.Context, key, kind string) (record, bool, error) {

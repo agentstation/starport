@@ -54,6 +54,7 @@ func (c *GoogleAIStudioConnector) RecognizeDocument(
 
 	chat := &ChatRequest{
 		Model:      request.Model,
+		MaxTokens:  request.MaxTokens,
 		Endpoint:   request.Endpoint,
 		Credential: request.Credential,
 		Messages: []Message{{
@@ -82,6 +83,8 @@ func (c *GoogleAIStudioConnector) RecognizeDocument(
 	}
 	// The document seam rejects missing pages. Retain measured usage for that failure.
 	if answer.usageReported {
+		evidence := answer.Usage
+		response.TokenEvidence = &evidence
 		measured := usageToInference(answer.Usage)
 		response.Usage = &MediaUsage{
 			InputTokens: measured.InputTokens, OutputTokens: measured.OutputTokens, TotalTokens: measured.TotalTokens,

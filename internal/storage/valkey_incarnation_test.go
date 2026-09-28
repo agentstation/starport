@@ -142,6 +142,9 @@ func TestValkeyIncarnationRejectsReplacementBackend(t *testing.T) {
 	value, _, err := bound.ReadWithLifetime(ctx, key, 64)
 	require.ErrorIs(t, err, ErrIncarnationChanged)
 	require.Nil(t, value)
+	values, err := bound.ReadBatchWithLifetime(ctx, []string{key}, 64)
+	require.ErrorIs(t, err, ErrIncarnationChanged)
+	require.Nil(t, values)
 	require.ErrorIs(t, bound.CompareAndSwap(ctx, []CompareAndSwapMutation{
 		{Key: key, ExpectedValue: []byte("restored"), NewValue: []byte("unapproved")},
 	}), ErrIncarnationChanged)

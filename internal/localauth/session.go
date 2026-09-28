@@ -137,6 +137,10 @@ func VerifySession(raw string, token Token, now time.Time) (Session, error) {
 	if err != nil {
 		return Session{}, err
 	}
+	return decodeSession(payload, now)
+}
+
+func decodeSession(payload []byte, now time.Time) (Session, error) {
 	var record sessionPayload
 	if err := json.Unmarshal(payload, &record); err != nil {
 		return Session{}, fmt.Errorf("%w: %w", ErrSessionMalformed, err)

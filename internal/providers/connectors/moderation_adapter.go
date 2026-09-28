@@ -36,10 +36,12 @@ func ModerationResponseToInference(response *ModerationResponse) (inference.Mode
 			Categories: categories,
 		}
 	}
+	usage := mediaUsageToInference(response.Usage, 0)
+	usage.TokensUnknown = response.Usage == nil
 	return inference.ModerationResponse{
 		ID:      response.ID,
 		Model:   response.Model,
 		Results: results,
-		Usage:   mediaUsageToInference(response.Usage, 0),
+		Usage:   usage,
 	}, nil
 }

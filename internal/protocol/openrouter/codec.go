@@ -445,7 +445,7 @@ type EmbeddingResponse struct {
 	Data     []Embedding `json:"data"`
 	Model    string      `json:"model"`
 	Provider string      `json:"provider,omitempty"`
-	Usage    Usage       `json:"usage"`
+	Usage    *Usage      `json:"usage,omitempty"`
 }
 
 // Embedding is one OpenRouter embedding vector.
@@ -461,9 +461,14 @@ func EncodeEmbedding(response inference.EmbeddingResponse) EmbeddingResponse {
 	for index, embedding := range response.Data {
 		data[index] = Embedding{Object: "embedding", Index: embedding.Index, Embedding: embedding.Vector}
 	}
+	var usage *Usage
+	if !response.Usage.TokensUnknown && !response.Usage.Estimated {
+		measured := encodeUsage(response.Usage)
+		usage = &measured
+	}
 	return EmbeddingResponse{
 		Object: "list", Data: data, Model: response.Model,
-		Provider: providerFromModel(response.Model), Usage: encodeUsage(response.Usage),
+		Provider: providerFromModel(response.Model), Usage: usage,
 	}
 }
 

@@ -36,7 +36,7 @@ func applicationReceipt(t *testing.T, fence *authorization.Fence, reader authori
 func TestApplicationOwnsAuthorizationFencesAndCatchup(t *testing.T) {
 	cfg := validProductionConfig(t)
 	cfg.Identity.OAuth.GitHub = config.OAuthApplicationConfig{ClientID: "test-client", ClientSecret: "test-client-secret"}
-	factories := explicitTestFactories()
+	factories := explicitTestFactories(t)
 	// Revision polling owns this test. Real catalog startup has separate coverage.
 	factories.openCatalog = func(ctx context.Context, store storage.KVStore, _ *sqlstore.DB, _ runtimecatalog.Settings, _ runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
 		return newLifecycleCatalogRuntime(ctx, store)
@@ -151,7 +151,7 @@ func (r *sampledCatalogRuntime) PermissionClock() permission.ClockReading {
 }
 
 func TestSharedAuthorizationDoesNotRequireCatalogClock(t *testing.T) {
-	factories := explicitTestFactories()
+	factories := explicitTestFactories(t)
 	openCatalog := factories.openCatalog
 	sampled := &sampledCatalogRuntime{}
 	factories.openCatalog = func(ctx context.Context, store storage.KVStore, db *sqlstore.DB, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
