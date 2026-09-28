@@ -18,7 +18,10 @@ func (db *DB) migrateMySQL(ctx context.Context, conn *sql.Conn, fsys fs.FS, name
 	if _, err := conn.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migration_attempts (
 		name VARCHAR(191) PRIMARY KEY,
 		digest VARCHAR(64) NOT NULL
-	)`); err != nil {
+	) ENGINE=InnoDB`); err != nil {
+		return err
+	}
+	if err := validateMySQLMigrationEngines(ctx, conn, "schema_migrations", "schema_migration_attempts"); err != nil {
 		return err
 	}
 	var pending string
@@ -58,6 +61,20 @@ func (db *DB) migrateMySQL(ctx context.Context, conn *sql.Conn, fsys fs.FS, name
 			return err
 		}); err != nil {
 			return fmt.Errorf("%w: %s: %w", ErrMigrationRecoveryRequired, name, err)
+		}
+	}
+	return nil
+}
+
+// validateMySQLMigrationEngines requires transactional completion and audit records.
+func validateMySQLMigrationEngines(ctx context.Context, conn *sql.Conn, tables ...string) error {
+	for _, table := range tables {
+		var engine string
+		if err := conn.QueryRowContext(ctx, "SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?", table).Scan(&engine); err != nil {
+			return err
+		}
+		if engine != "InnoDB" {
+			return fmt.Errorf("migration table %s requires InnoDB", table)
 		}
 	}
 	return nil

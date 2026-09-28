@@ -74,13 +74,15 @@ func (db *DB) migrate(ctx context.Context, fsys fs.FS) (err error) {
 // cannot index an unbounded TEXT primary key, so it gets a bounded name.
 func (db *DB) schemaMigrationsDDL() string {
 	name := "name TEXT PRIMARY KEY"
+	engine := ""
 	if db.dialect == TypeMySQL {
 		name = "name VARCHAR(191) PRIMARY KEY"
+		engine = " ENGINE=InnoDB"
 	}
 	return `CREATE TABLE IF NOT EXISTS schema_migrations (
 		` + name + `,
 		applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-	)`
+	)` + engine
 }
 
 // migrationNames lists the dialect's .sql files in name order. The name

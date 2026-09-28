@@ -41,9 +41,41 @@ name order, once each, and records what it applied. A test holds the three
 dialect sets to the same file names, and the shared contract tests hold
 every backend to the same resulting behavior.
 
-Write MySQL migrations idempotent-safe (`IF NOT EXISTS`, `INSERT IGNORE`):
-MySQL auto-commits DDL. A failed multi-statement file can leave early
-statements applied with no record. The retry must tolerate them.
+SQLite owns each migration through `BEGIN IMMEDIATE`. PostgreSQL and MySQL
+hold a session lock on one connection. History checks, schema changes, and
+completion records share that ownership. Startup rejects unknown migration
+history.
+
+MySQL can commit DDL before the migration completion record. The runner stores
+an intent before each attempt and blocks automatic retry after interruption.
+`ReconcileMySQLMigration` records an administrator's independently verified
+`applied` or `reverted` outcome. It binds the decision to the migration digest,
+operator identity, operation ID, and evidence digest. It never repairs schema
+or repeats uncertain statements itself.
+
+After manual repair, the operation commits its audit record, completion state,
+and intent removal together. An exact operation retry returns the original
+result. Reusing an operation ID with different evidence fails. The caller
+authenticates the administrator and retains the evidence bytes.
+
+## SQLite snapshots
+
+`SnapshotSQLite` uses `VACUUM INTO` to capture committed data, including records
+that remain in the WAL. It validates the database and migration history before
+publishing a new private directory. The directory contains `starport.db`,
+`snapshot.json`, and private publication metadata. Existing destinations remain
+untouched.
+
+`RestoreSQLiteSnapshot` checks the manifest's size and SHA256 digest before
+importing the database. It rejects corrupt images, invalid foreign keys, and
+unknown or incomplete migration history. It preserves older, contiguous
+migration history without applying new schema files.
+
+These methods copy SQL state only. They do not select the database for a
+running gateway or approve restored permissions. The deployment coordinator
+must stop cross-store writes before backup. Before admission, it must fence old
+writers and reconcile independent revocation and spending evidence. The full
+KV, SQL, blob, configuration, and key-access procedure remains part of CSP13.
 
 ## Tests
 
