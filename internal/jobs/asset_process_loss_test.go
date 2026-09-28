@@ -29,7 +29,10 @@ func (b *stopAfterAssetPublication) Publish(ctx context.Context, key string, r i
 	}
 	b.count++
 	if b.count == b.stopAt {
-		if err := os.WriteFile(b.marker, []byte(key), 0600); err != nil {
+		if err := os.WriteFile(b.marker+".tmp", []byte(key), 0600); err != nil {
+			return blob.Info{}, err
+		}
+		if err := os.Rename(b.marker+".tmp", b.marker); err != nil {
 			return blob.Info{}, err
 		}
 		select {}

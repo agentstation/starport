@@ -177,6 +177,11 @@ func (j Job) ReconciliationStatus() string {
 	return "administrator_resolved"
 }
 
+// IsReconciliationConflict identifies competing durable reconciliation decisions.
+func IsReconciliationConflict(err error) bool {
+	return errors.Is(err, ErrReconciliationConflict) || errors.Is(err, storage.ErrConflict)
+}
+
 func (j Job) reconciliationView() ReconciliationView {
 	view := ReconciliationView{Binding: j.reconciliationBinding(), Account: j.Account, JobID: j.ID, ReservationID: j.ReservationID, Provider: j.Provider, Model: j.Model, CatalogGeneration: j.CatalogGeneration, Valuation: copyValuation(j.Valuation), Status: j.ReconciliationStatus(), Accounted: j.Accounted(), ReportingExpiredAt: j.ReportingExpiredAt}
 	if j.adminDecision != nil {

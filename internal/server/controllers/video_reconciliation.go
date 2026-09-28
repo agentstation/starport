@@ -13,7 +13,6 @@ import (
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/agentstation/starport/internal/server/requestctx"
-	"github.com/agentstation/starport/internal/storage"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -93,7 +92,7 @@ func (h *VideosController) writeReconciliationError(w http.ResponseWriter, err e
 		status, message = http.StatusNotFound, "Video job not found"
 	case errors.Is(err, jobs.ErrReconciliationInvalid):
 		status, message = http.StatusBadRequest, "Provide the current binding and complete usage or no-charge evidence."
-	case errors.Is(err, jobs.ErrReconciliationConflict), errors.Is(err, storage.ErrConflict):
+	case jobs.IsReconciliationConflict(err):
 		status, message = http.StatusConflict, "Retained evidence requires administrator review."
 	}
 	kind := dto.ErrorTypeInvalidRequest
