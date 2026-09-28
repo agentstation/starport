@@ -47,7 +47,8 @@ type ObjectStoreOptions struct {
 // ObjectStore stores objects in an S3-compatible bucket. It serves every node
 // of a deployment, which the filesystem backend cannot.
 type ObjectStore struct {
-	readiness publicationReadiness
+	readiness blobReadiness
+	layout    blobReadiness
 	client    *s3.Client
 	//nolint:staticcheck // See the import comment.
 	uploader *manager.Uploader
@@ -122,13 +123,16 @@ func (o *ObjectStore) Put(ctx context.Context, key string, r io.Reader) (Info, e
 	if err := ValidateKey(key); err != nil {
 		return Info{}, err
 	}
+	if err := o.ensureLayout(ctx); err != nil {
+		return Info{}, err
+	}
 	if err := ctx.Err(); err != nil {
 		return Info{}, err
 	}
 	//nolint:staticcheck // See the import comment.
 	if _, err := o.uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(o.bucket),
-		Key:    aws.String(o.objectKey(key)),
+		Key:    aws.String(o.objectKey(blobAddress(objectsDir, key))),
 		Body:   &contextReader{ctx: ctx, r: r},
 	}); err != nil {
 		return Info{}, uploadError(err)
@@ -145,12 +149,15 @@ func (o *ObjectStore) Get(ctx context.Context, key string) (io.ReadCloser, error
 	if err := ValidateKey(key); err != nil {
 		return nil, err
 	}
+	if err := o.ensureLayout(ctx); err != nil {
+		return nil, err
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	output, err := o.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(o.bucket),
-		Key:    aws.String(o.objectKey(key)),
+		Key:    aws.String(o.objectKey(blobAddress(objectsDir, key))),
 	})
 	if err != nil {
 		if isAbsent(err) {
@@ -166,12 +173,15 @@ func (o *ObjectStore) Stat(ctx context.Context, key string) (Info, error) {
 	if err := ValidateKey(key); err != nil {
 		return Info{}, err
 	}
+	if err := o.ensureLayout(ctx); err != nil {
+		return Info{}, err
+	}
 	if err := ctx.Err(); err != nil {
 		return Info{}, err
 	}
 	output, err := o.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(o.bucket),
-		Key:    aws.String(o.objectKey(key)),
+		Key:    aws.String(o.objectKey(blobAddress(objectsDir, key))),
 	})
 	if err != nil {
 		if isAbsent(err) {
@@ -187,12 +197,15 @@ func (o *ObjectStore) Delete(ctx context.Context, key string) error {
 	if err := ValidateKey(key); err != nil {
 		return err
 	}
+	if err := o.ensureLayout(ctx); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if _, err := o.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(o.bucket),
-		Key:    aws.String(o.objectKey(key)),
+		Key:    aws.String(o.objectKey(blobAddress(objectsDir, key))),
 	}); err != nil && !isAbsent(err) {
 		return fmt.Errorf("blob: delete the object: %w", err)
 	}

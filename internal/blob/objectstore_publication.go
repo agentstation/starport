@@ -19,12 +19,15 @@ func (o *ObjectStore) Publish(ctx context.Context, key string, r io.Reader) (Inf
 	if err := ValidateKey(key); err != nil {
 		return Info{}, err
 	}
+	if err := o.ensureLayout(ctx); err != nil {
+		return Info{}, err
+	}
 	if err := ctx.Err(); err != nil {
 		return Info{}, err
 	}
 	//nolint:staticcheck // The stable uploader copies the condition to multipart completion.
 	_, err := o.uploader.Upload(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(retainedDir + "/" + key)),
+		Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(blobAddress(retainedDir, key))),
 		Body:        &contextReader{ctx: ctx, r: io.MultiReader(strings.NewReader(liveEnvelope), r)},
 		IfNoneMatch: aws.String("*"), Metadata: map[string]string{retainedObjectMetadataKey: liveObjectMetadata},
 	})
@@ -43,12 +46,15 @@ func (o *ObjectStore) Retire(ctx context.Context, key string) error {
 	if err := ValidateKey(key); err != nil {
 		return err
 	}
+	if err := o.ensureLayout(ctx); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	_, err := o.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(retainedDir + "/" + key)),
-		Body: strings.NewReader(retiredEnvelope), Metadata: map[string]string{retainedObjectMetadataKey: "retired-v1"},
+		Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(blobAddress(retainedDir, key))),
+		Body: strings.NewReader(retiredEnvelope), Metadata: map[string]string{retainedObjectMetadataKey: retiredObjectMetadata},
 	})
 	if err != nil {
 		return fmt.Errorf("blob: retire publication: %w", err)
@@ -61,8 +67,11 @@ func (o *ObjectStore) ReadPublished(ctx context.Context, key string) (io.ReadClo
 	if err := ValidateKey(key); err != nil {
 		return nil, err
 	}
+	if err := o.ensureLayout(ctx); err != nil {
+		return nil, err
+	}
 	output, err := o.client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(retainedDir + "/" + key)),
+		Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(blobAddress(retainedDir, key))),
 	})
 	if isAbsent(err) {
 		return nil, ErrNotFound
@@ -82,8 +91,11 @@ func (o *ObjectStore) StatPublished(ctx context.Context, key string) (Info, erro
 	if err := ValidateKey(key); err != nil {
 		return Info{}, err
 	}
+	if err := o.ensureLayout(ctx); err != nil {
+		return Info{}, err
+	}
 	output, err := o.client.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(retainedDir + "/" + key)),
+		Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(blobAddress(retainedDir, key))),
 	})
 	if isAbsent(err) {
 		return Info{}, ErrNotFound
@@ -92,7 +104,7 @@ func (o *ObjectStore) StatPublished(ctx context.Context, key string) (Info, erro
 		return Info{}, err
 	}
 	switch output.Metadata[retainedObjectMetadataKey] {
-	case "retired-v1":
+	case retiredObjectMetadata:
 		return Info{}, ErrNotFound
 	case liveObjectMetadata:
 		if aws.ToInt64(output.ContentLength) >= int64(len(liveEnvelope)) {

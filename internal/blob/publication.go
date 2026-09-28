@@ -16,6 +16,7 @@ var (
 const (
 	retainedObjectMetadataKey = "starport-retained"
 	liveObjectMetadata        = "live-v1"
+	retiredObjectMetadata     = "retired-v1"
 	retainedDir               = "retained-v1"
 	liveEnvelope              = "SPBLOB1L"
 	retiredEnvelope           = "SPBLOB1R"

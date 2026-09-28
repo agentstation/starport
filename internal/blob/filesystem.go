@@ -2,8 +2,6 @@ package blob
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -45,6 +43,11 @@ func NewFilesystem(root string) (*Filesystem, error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, fmt.Errorf("blob: resolve the filesystem root: %w", err)
+	}
+	if _, err := os.Lstat(filepath.Join(absolute, filepath.FromSlash(blobImportKey))); err == nil {
+		return nil, ErrImportRestricted
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
 	}
 	// Record the first existing ancestor before creating paths. Its directory
 	// entry is the durability boundary for a new nested root.
@@ -99,9 +102,7 @@ func (f *Filesystem) objectPath(key string) string {
 }
 
 func (f *Filesystem) namespacedPath(namespace, key string) string {
-	sum := sha256.Sum256([]byte(key))
-	name := hex.EncodeToString(sum[:])
-	return filepath.Join(f.root, namespace, name[0:2], name[2:4], name)
+	return filepath.Join(f.root, filepath.FromSlash(blobAddress(namespace, key)))
 }
 
 // Put implements Store.

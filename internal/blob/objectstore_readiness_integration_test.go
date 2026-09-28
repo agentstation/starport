@@ -8,6 +8,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,7 +39,7 @@ func TestRealObjectStorePublicationReadiness(t *testing.T) {
 			var requests, puts, completions atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requests.Add(1)
-				if r.Method == http.MethodPut && r.URL.Query().Get("uploadId") == "" && r.Header.Get("If-None-Match") == "*" {
+				if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/retained-v1/") && r.URL.Query().Get("uploadId") == "" && r.Header.Get("If-None-Match") == "*" {
 					if puts.Add(1) == 2 && fault == "accept replacement put" {
 						w.WriteHeader(200)
 						return

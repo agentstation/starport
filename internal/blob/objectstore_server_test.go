@@ -1,10 +1,12 @@
 package blob_test
 
 import (
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,10 +52,24 @@ func (s *objectServer) stored(key string) ([]byte, bool) {
 func (s *objectServer) count() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return len(s.objects)
+	count := 0
+	for key := range s.objects {
+		if !strings.HasSuffix(key, ".starport/layout") && !strings.HasSuffix(key, ".starport/import") {
+			count++
+		}
+	}
+	return count
 }
 
 func (s *objectServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet && r.URL.Query().Get("list-type") == "2" {
+		if strings.Trim(r.URL.Path, "/") != s.bucket {
+			s.writeError(w, r, http.StatusNotFound, "NoSuchBucket")
+			return
+		}
+		s.list(w, r)
+		return
+	}
 	bucket, key, ok := s.route(r.URL.Path)
 	if !ok || bucket != s.bucket {
 		s.writeError(w, r, http.StatusNotFound, "NoSuchBucket")
@@ -71,6 +87,43 @@ func (s *objectServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.writeError(w, r, http.StatusMethodNotAllowed, "MethodNotAllowed")
 	}
+}
+
+func (s *objectServer) list(w http.ResponseWriter, r *http.Request) {
+	prefix := r.URL.Query().Get("prefix")
+	maximum, err := strconv.Atoi(r.URL.Query().Get("max-keys"))
+	if err != nil || maximum <= 0 {
+		maximum = 1000
+	}
+	cursor := r.URL.Query().Get("continuation-token")
+	type object struct {
+		Key  string
+		Size int64
+	}
+	result := struct {
+		XMLName               xml.Name `xml:"ListBucketResult"`
+		Contents              []object `xml:"Contents"`
+		IsTruncated           bool
+		NextContinuationToken string
+	}{}
+	s.mu.Lock()
+	var keys []string
+	for key := range s.objects {
+		if strings.HasPrefix(key, prefix) && key > cursor {
+			keys = append(keys, key)
+		}
+	}
+	slices.Sort(keys)
+	for _, key := range keys[:min(len(keys), maximum)] {
+		result.Contents = append(result.Contents, object{Key: key, Size: int64(len(s.objects[key]))})
+	}
+	if len(keys) > maximum {
+		result.IsTruncated = true
+		result.NextContinuationToken = keys[maximum-1]
+	}
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/xml")
+	_ = xml.NewEncoder(w).Encode(result)
 }
 
 // route splits a path-style URL into its bucket and its key.
