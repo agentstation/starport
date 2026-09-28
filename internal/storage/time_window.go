@@ -36,6 +36,10 @@ func (w TimeWindow) contains(now time.Time) bool {
 // also enforce their approved backend incarnation in each operation.
 type TimeBoundStore interface {
 	ReadWithLifetime(context.Context, string, int) ([]byte, time.Duration, error)
+	// ReadBatchWithLifetime returns one snapshot in key order, with no partial results on error.
+	// It accepts at most sixteen unique keys and one MiB of possible payload.
+	// The byte bound applies per value. The operation grants no write permission.
+	ReadBatchWithLifetime(context.Context, []string, int) ([]LifetimeValue, error)
 	AuthorityTime(context.Context) (time.Time, error)
 	CompareAndSwapInWindow(context.Context, []CompareAndSwapMutation, TimeWindow) error
 }

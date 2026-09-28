@@ -10,7 +10,7 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// Begin consumes dispatch permission once. Only a successful return permits a
+// `Begin` consumes dispatch permission once. Only a successful return permits a
 // provider call. An ambiguous storage response must not trigger dispatch.
 func (r *Repository) Begin(ctx context.Context, id string) error {
 	for range maxConflicts {
@@ -142,9 +142,17 @@ attempts:
 				record.Pending = nil
 			}
 		}
+		keys := make([]string, len(record.Bindings))
+		for i, binding := range record.Bindings {
+			keys[i] = meterKey(binding.Rule.Meter, binding.Window)
+		}
+		reads, err := r.snapshot(ctx, keys)
+		if err != nil {
+			return err
+		}
 		mutations := make([]storage.CompareAndSwapMutation, 0, len(record.Bindings)+1)
 		for _, binding := range record.Bindings {
-			state, previous, err := r.readSettlementWindow(ctx, binding, id, old)
+			state, previous, err := reads.readSettlementWindow(ctx, binding, id, old)
 			if errors.Is(err, storage.ErrConflict) {
 				continue attempts
 			}

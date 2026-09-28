@@ -64,6 +64,11 @@ func TestBudgetAuthorityNativeOperationCommands(t *testing.T) {
 		require.Zero(t, ttl)
 	})
 	check(func() {
+		values, err := authority.ReadBatchWithLifetime(t.Context(), []string{key, key + ":missing"}, 64)
+		require.NoError(t, err)
+		require.Equal(t, []LifetimeValue{{Value: []byte("reserved"), Found: true}, {}}, values)
+	})
+	check(func() {
 		require.NoError(t, authority.CompareAndSwapInWindow(t.Context(), []CompareAndSwapMutation{{Key: key, ExpectedValue: []byte("reserved"), NewValue: []byte("settled")}}, window))
 	})
 }

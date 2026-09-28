@@ -71,7 +71,7 @@ func (r *Repository) EstablishWindow(ctx context.Context, meter Meter, at time.T
 
 // Reserve deducts all required capacity and records one attempt atomically.
 // A matching retry returns the existing record without deducting capacity again.
-// Only Begin can grant permission to dispatch a reserved attempt.
+// Only `Begin` can grant permission to dispatch a reserved attempt.
 func (r *Repository) Reserve(ctx context.Context, attempt Attempt) (*Record, error) {
 	if err := validateAttempt(attempt); err != nil {
 		return nil, err
@@ -111,10 +111,18 @@ func (r *Repository) Reserve(ctx context.Context, attempt Attempt) (*Record, err
 			return nil, err
 		}
 		record := &Record{Version: attemptRecordVersion, Attempt: owned, State: Reserved, AdmittedAt: now, NanoUSD: owned.money(amount)}
+		keys := make([]string, 0, 2*len(owned.Rules))
+		for _, rule := range owned.Rules {
+			keys = append(keys, storageKey("history", rule.Meter), meterKey(rule.Meter, windowFor(rule.Meter.Interval, now)))
+		}
+		reads, err := r.snapshot(ctx, keys)
+		if err != nil {
+			return nil, err
+		}
 		mutations := make([]storage.CompareAndSwapMutation, 0, 2*len(owned.Rules)+1)
 		for _, rule := range owned.Rules {
 			window := windowFor(rule.Meter.Interval, now)
-			state, old, historyMutation, err := r.admissionWindow(ctx, rule, now)
+			state, old, historyMutation, err := reads.admissionWindow(ctx, rule, now)
 			if err != nil {
 				return nil, err
 			}

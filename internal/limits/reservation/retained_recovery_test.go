@@ -387,13 +387,29 @@ type recoveryDuringRead struct {
 }
 
 func (s *recoveryDuringRead) ReadWithLifetime(ctx context.Context, key string, bound int) ([]byte, time.Duration, error) {
+	if err := s.beforeRead(key); err != nil {
+		return nil, 0, err
+	}
+	return s.TimeBoundStore.ReadWithLifetime(ctx, key, bound)
+}
+
+func (s *recoveryDuringRead) ReadBatchWithLifetime(ctx context.Context, keys []string, bound int) ([]storage.LifetimeValue, error) {
+	for _, key := range keys {
+		if err := s.beforeRead(key); err != nil {
+			return nil, err
+		}
+	}
+	return s.TimeBoundStore.ReadBatchWithLifetime(ctx, keys, bound)
+}
+
+func (s *recoveryDuringRead) beforeRead(key string) error {
 	if key == s.key && !s.finished {
 		s.finished = true
 		if err := s.settle(); err != nil {
-			return nil, 0, err
+			return err
 		}
 	}
-	return s.TimeBoundStore.ReadWithLifetime(ctx, key, bound)
+	return nil
 }
 
 func TestRecoveryHandlesConcurrentSettlementBetweenReads(t *testing.T) {

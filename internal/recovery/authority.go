@@ -84,6 +84,11 @@ func (a *Authority) ReadWithLifetime(ctx context.Context, key string, maxBytes i
 	return a.store.ReadWithLifetime(ctx, key, maxBytes)
 }
 
+// ReadBatchWithLifetime reads one incarnation-bound snapshot without authorizing a write.
+func (a *Authority) ReadBatchWithLifetime(ctx context.Context, keys []string, maxBytes int) ([]storage.LifetimeValue, error) {
+	return a.store.ReadBatchWithLifetime(ctx, keys, maxBytes)
+}
+
 // AuthorityTime reads the approved backend's clock. It grants no dispatch permit.
 func (a *Authority) AuthorityTime(ctx context.Context) (time.Time, error) {
 	return a.store.AuthorityTime(ctx)
@@ -112,7 +117,7 @@ func (a *Authority) CompareAndSwapInWindow(ctx context.Context, mutations []stor
 
 // ApproveAuthority installs a reconciled native epoch before opening SQL approval.
 // The operator must first stop admission, fence old writers, and reconcile lost
-// history. This operation does not perform or prove those external steps.
+// history. This operation does not execute or verify those external steps.
 // Partial results stay closed. An exact retry can finish the same operation.
 func (w *Witness) ApproveAuthority(ctx context.Context, backend storage.IncarnationProvider, expected Record, identity, evidence, operation string) (Record, error) {
 	if backend == nil || expected.Open || expected.Epoch <= 0 || (FreshRequest{OperationID: operation, Evidence: evidence}).Validate() != nil {

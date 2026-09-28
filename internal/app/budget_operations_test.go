@@ -97,6 +97,16 @@ func (s *measuredBudgetAuthority) AuthorityTime(ctx context.Context) (time.Time,
 	return s.timed.AuthorityTime(ctx)
 }
 
+func (s *measuredBudgetAuthority) ReadBatchWithLifetime(ctx context.Context, keys []string, bound int) ([]storage.LifetimeValue, error) {
+	for _, key := range keys {
+		if strings.HasPrefix(key, "budget:v1:") {
+			s.counts.reads.Add(1)
+			break
+		}
+	}
+	return s.timed.ReadBatchWithLifetime(ctx, keys, bound)
+}
+
 func (s *measuredBudgetAuthority) CompareAndSwapInWindow(ctx context.Context, mutations []storage.CompareAndSwapMutation, window storage.TimeWindow) error {
 	for _, mutation := range mutations {
 		if strings.HasPrefix(mutation.Key, "budget:v1:") {
@@ -232,6 +242,7 @@ func TestProductionBudgetBackendOperations(t *testing.T) {
 	require.Equal(t, 2*settlement.KVWrites, settlement.SQLApprovals)
 	require.Equal(t, admission.SQLApprovals, admission.SQLQueries, "warm admission must not reload unrelated SQL state")
 	require.Equal(t, settlement.SQLApprovals, settlement.SQLQueries)
+	require.LessOrEqual(t, finished.since(before).KVReads, int64(5), "group meter and history reads within each atomic attempt")
 	require.EqualValues(t, 2, calls.Load())
 	attempts, err := application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 100)
 	require.NoError(t, err)
