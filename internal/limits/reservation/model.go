@@ -112,10 +112,12 @@ type Record struct {
 	Attempt           Attempt   `json:"attempt"`
 	State             State     `json:"state"`
 	AdmittedAt        time.Time `json:"admitted_at"`
-	Bindings          []Binding `json:"bindings"`
-	Evidence          *Evidence `json:"evidence,omitempty"`
-	Unresolved        *Evidence `json:"unresolved,omitempty"`
-	Pending           *Evidence `json:"pending,omitempty"`
+	// SettledAt retains the first settlement time across subsequent corrections.
+	SettledAt  time.Time `json:"settled_at,omitzero"`
+	Bindings   []Binding `json:"bindings"`
+	Evidence   *Evidence `json:"evidence,omitempty"`
+	Unresolved *Evidence `json:"unresolved,omitempty"`
+	Pending    *Evidence `json:"pending,omitempty"`
 	// NanoUSD is null when monetary cost is unknown. Explicit no-charge evidence records zero.
 	NanoUSD *int64 `json:"nano_usd"`
 	Reason  string `json:"reason,omitempty"`

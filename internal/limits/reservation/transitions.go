@@ -134,6 +134,14 @@ attempts:
 				record.State, record.Unresolved, record.Reason = Uncertain, evidence, "valuation_overflow"
 				record.Pending = nil
 			} else {
+				at, clockErr := r.store.AuthorityTime(ctx)
+				if clockErr != nil {
+					return clockErr
+				}
+				if at.IsZero() || at.Before(record.AdmittedAt) {
+					return ErrUnavailable
+				}
+				record.SettledAt = at
 				record.State, record.Evidence, record.NanoUSD, record.Reason = Settled, evidence, record.Attempt.money(amount), ""
 				if evidence.NoCharge {
 					record.NanoUSD = &amount

@@ -10,6 +10,7 @@ import (
 	"maps"
 	"time"
 
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -102,6 +103,9 @@ func correctionStateBinding(evidence, head, applied, budget string) string {
 // NewCorrection retains copied input without changing effective billing.
 // The caller must supply an authenticated actor and the inspected budget binding.
 func (j Job) NewCorrection(request ReconciliationRequest, actor, budgetBinding string, at time.Time) (CorrectionIntent, error) {
+	if err := j.checkCorrectionHorizon(at); err != nil {
+		return CorrectionIntent{}, err
+	}
 	request.Quantities = maps.Clone(request.Quantities)
 	intent := CorrectionIntent{Account: j.Account, JobID: j.ID, Decision: ReconciliationDecision{ReconciliationRequest: request, Actor: actor, DecidedAt: at.UTC()}, PreviousID: correctionID(j.correctionHead), PreviousAppliedID: correctionID(j.correctionApplied), EvidenceBinding: j.correctionEvidenceBinding(), BudgetBinding: budgetBinding}
 	if !intent.validFor(j) || request.Binding != j.CorrectionBinding(budgetBinding) || (j.correctionHead != nil && at.Before(j.correctionHead.Decision.DecidedAt)) {
@@ -112,6 +116,9 @@ func (j Job) NewCorrection(request ReconciliationRequest, actor, budgetBinding s
 
 func (c CorrectionIntent) validFor(job Job) bool {
 	d := c.Decision
+	if job.checkCorrectionHorizon(d.DecidedAt) != nil {
+		return false
+	}
 	if job.adminDecision == nil || c.Account != job.Account || c.JobID != job.ID || !d.valid(job.Valuation) || !reconciliationText(d.Actor, 256) || d.Actor == "anonymous" || d.DecidedAt.Before(job.TerminalAt) || !digestValid(d.Binding) || !digestValid(c.EvidenceBinding) {
 		return false
 	}
@@ -124,6 +131,21 @@ func (c CorrectionIntent) validFor(job Job) bool {
 		}
 	}
 	return d.DecisionID != job.adminDecision.DecisionID && d.Binding == correctionStateBinding(c.EvidenceBinding, c.PreviousID, c.PreviousAppliedID, c.BudgetBinding) && (c.PreviousAppliedID == "" || c.PreviousID != "")
+}
+
+// checkCorrectionHorizon covers jobs whose decision itself settles billing.
+// Required reservations use their storage authority's original settlement time.
+func (j Job) checkCorrectionHorizon(at time.Time) error {
+	if j.ReservationID != "" || j.adminDecision == nil {
+		return nil
+	}
+	if at.Before(j.adminDecision.DecidedAt) {
+		return ErrReconciliationInvalid
+	}
+	if !at.Before(j.adminDecision.DecidedAt.Add(limits.CorrectionHorizon)) {
+		return limits.ErrCorrectionExpired
+	}
+	return nil
 }
 
 // Evidence returns copied charge evidence without private administrator details.

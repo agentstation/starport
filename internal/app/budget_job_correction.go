@@ -21,6 +21,9 @@ func (o *budgetOwner) CorrectionBudgetBinding(ctx context.Context, job jobs.Job)
 	if record.JobID != job.ID || job.Valuation == nil || !reflect.DeepEqual(record.Attempt.Valuation, *job.Valuation) {
 		return "", reservation.ErrIdentityConflict
 	}
+	if err := o.ledger.CheckCorrection(ctx, *record); err != nil {
+		return "", err
+	}
 	return reservation.CorrectionBinding(*record), nil
 }
 

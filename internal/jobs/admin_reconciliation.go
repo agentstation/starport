@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -202,6 +203,11 @@ func (s *Service) InspectReconciliation(ctx context.Context, account, id string)
 	if job.adminDecision != nil {
 		binding, err := s.correctionBudgetBinding(ctx, job)
 		if err == nil {
+			err = job.checkCorrectionHorizon(s.now())
+		}
+		if errors.Is(err, limits.ErrCorrectionExpired) {
+			view.CorrectionUnavailableReason = "correction_horizon_expired"
+		} else if err == nil {
 			view.CorrectionBinding = job.CorrectionBinding(binding)
 		} else {
 			view.CorrectionUnavailableReason = "required_settlement_unavailable"

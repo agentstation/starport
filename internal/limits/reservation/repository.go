@@ -14,7 +14,7 @@ import (
 
 const (
 	recordVersion        = 1
-	attemptRecordVersion = 3
+	attemptRecordVersion = 4
 	windowRecordVersion  = 2
 	maxRecordSize        = 64 << 10
 	maxConflicts         = 64

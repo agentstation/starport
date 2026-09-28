@@ -24,6 +24,9 @@ func validateBindings(record *Record) error {
 }
 
 func validateSettlement(record *Record, amount int64) error {
+	if (record.State == Settled) != !record.SettledAt.IsZero() || (!record.SettledAt.IsZero() && record.SettledAt.Before(record.AdmittedAt)) {
+		return ErrUnavailable
+	}
 	if record.CorrectionID != "" && (!validID(record.CorrectionID) || record.State != Settled) {
 		return ErrUnavailable
 	}

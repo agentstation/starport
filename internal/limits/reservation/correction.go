@@ -161,6 +161,10 @@ func (r *Repository) correct(ctx context.Context, id string, correction Correcti
 		if at.Before(record.AdmittedAt) || at.IsZero() {
 			return nil, ErrUnavailable
 		}
+		window, err := correctionWindow(*record, at)
+		if err != nil {
+			return nil, err
+		}
 		receipt := CorrectionReceipt{PublicationDigest: digest, Version: correctionRecordVersion, Correction: correction, Before: *record, RecordedAt: at}
 		mutations, err := r.correctWindows(ctx, record, correction.Evidence, amount)
 		if err != nil {
@@ -173,7 +177,7 @@ func (r *Repository) correct(ctx context.Context, id string, correction Correcti
 			}
 			return nil, err
 		}
-		applyCorrection(record, correction, amount)
+		applyCorrection(record, correction, amount, at)
 		mutation, err := encodeMutation(storageKey("attempt", id), old, record)
 		if err != nil {
 			return nil, err
@@ -185,7 +189,7 @@ func (r *Repository) correct(ctx context.Context, id string, correction Correcti
 		}
 		mutations = append(mutations, mutation)
 		mutations = append(mutations, publication...)
-		err = r.store.CompareAndSwapInWindow(ctx, mutations, storage.TimeWindow{})
+		err = r.store.CompareAndSwapInWindow(ctx, mutations, window)
 		if err == nil {
 			return &receipt, nil
 		}
@@ -257,7 +261,10 @@ func (r *Repository) correctWindows(ctx context.Context, record *Record, evidenc
 	return mutations, nil
 }
 
-func applyCorrection(record *Record, correction Correction, amount int64) {
+func applyCorrection(record *Record, correction Correction, amount int64, at time.Time) {
+	if record.SettledAt.IsZero() {
+		record.SettledAt = at
+	}
 	record.State, record.Evidence, record.NanoUSD = Settled, &correction.Evidence, record.Attempt.money(amount)
 	if correction.Evidence.NoCharge {
 		record.NanoUSD = &amount
@@ -282,11 +289,38 @@ func (r *Repository) verifyCorrectionHead(ctx context.Context, record Record) er
 	if err != nil {
 		return ErrUnavailable
 	}
-	applyCorrection(&expected, receipt.Correction, amount)
+	applyCorrection(&expected, receipt.Correction, amount, receipt.RecordedAt)
 	// New provider evidence can add a dispute after this receipt commits.
 	expected.DisputeID = record.DisputeID
 	if CorrectionBinding(expected) != CorrectionBinding(record) {
 		return ErrUnavailable
 	}
 	return nil
+}
+
+// correctionWindow uses whole seconds conservatively at the storage boundary.
+// Unresolved capacity has no correction deadline until its first settlement.
+func correctionWindow(record Record, at time.Time) (storage.TimeWindow, error) {
+	if record.SettledAt.IsZero() {
+		return storage.TimeWindow{}, nil
+	}
+	window := storage.TimeWindow{Start: record.SettledAt.Truncate(time.Second), End: record.SettledAt.Add(limits.CorrectionHorizon).Truncate(time.Second)}
+	if at.Before(record.SettledAt) {
+		return storage.TimeWindow{}, ErrUnavailable
+	}
+	if !at.Before(window.End) {
+		return storage.TimeWindow{}, limits.ErrCorrectionExpired
+	}
+	return window, nil
+}
+
+// CheckCorrection reads the current correction deadline without granting a write.
+// Correct checks the deadline again atomically with the correction publication.
+func (r *Repository) CheckCorrection(ctx context.Context, record Record) error {
+	at, err := r.store.AuthorityTime(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = correctionWindow(record, at)
+	return err
 }

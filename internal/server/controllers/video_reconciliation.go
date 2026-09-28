@@ -10,6 +10,7 @@ import (
 
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/storage"
@@ -86,6 +87,8 @@ func (h *VideosController) writeReconciliationError(w http.ResponseWriter, err e
 	w.Header().Set("Cache-Control", "no-store")
 	status, message := http.StatusServiceUnavailable, "Reconciliation is pending. Inspect the decision before retrying."
 	switch {
+	case errors.Is(err, limits.ErrCorrectionExpired):
+		status, message = http.StatusConflict, "The 90-day correction deadline passed. Accepted audit evidence remains available."
 	case errors.Is(err, jobs.ErrJobNotFound), errors.Is(err, jobs.ErrCorrectionNotFound):
 		status, message = http.StatusNotFound, "Video job not found"
 	case errors.Is(err, jobs.ErrReconciliationInvalid):

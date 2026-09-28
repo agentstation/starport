@@ -70,8 +70,11 @@ func TestRecoveryPreservesUnmeasuredAndCorruptAttempts(t *testing.T) {
 			worker, err := NewRecovery(f.repository, f.raw)
 			require.NoError(t, err)
 			var scanned, recovered, held, failed int
-			for range 100 {
-				result, err := worker.Pass(t.Context(), 16)
+			scanContext, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			for {
+				require.NoError(t, scanContext.Err(), "complete the namespace scan before asserting record counts")
+				result, err := worker.Pass(scanContext, 16)
 				if result.Failed > 0 {
 					require.ErrorIs(t, err, ErrUnavailable)
 				} else {
