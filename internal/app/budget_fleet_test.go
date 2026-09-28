@@ -233,6 +233,7 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 			})
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
+			var fleetCandidate runtimecatalog.Candidate
 			if mode == "backend-replacement" {
 				// New opens the embedded baseline. Explicit refresh publishes the
 				// fleet snapshot before the fixture takes a recovery copy.
@@ -246,6 +247,7 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 				accepted, err := catalogRuntime.AcceptedGeneration(t.Context())
 				require.NoError(t, err)
 				require.Equal(t, candidate.State.GenerationID, accepted.Manifest.GenerationID)
+				fleetCandidate = candidate
 			}
 			now := time.Now().UTC()
 			budgets := func() *limits.Limits {
@@ -350,6 +352,19 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 				require.NoError(t, err)
 				_, err = copiedFleet.CurrentHead(t.Context())
 				require.ErrorContains(t, err, "another recovery identity", "budget approval does not adopt catalog history")
+				partialApproval, err := witness.Current(t.Context(), input.Deployment)
+				require.NoError(t, err)
+				closed, err = witness.Close(t.Context(), partialApproval)
+				require.NoError(t, err)
+				adoption := runtimecatalog.FleetAdoptionRequest{Closed: closed, SourceApproval: approved,
+					Head: fleetCandidate.FleetHead, BackendID: newID, OperationID: "catalog-and-budget-restore",
+					Evidence: "fixture-complete-snapshot-with-retained-dispatch"}
+				completed, err := runtimecatalog.AdoptFleet(t.Context(), newBackend, witness, adoption, catalogSettings(&restoredConfig))
+				require.NoError(t, err)
+				repeated, err := runtimecatalog.AdoptFleet(t.Context(), newBackend, witness, adoption, catalogSettings(&restoredConfig))
+				require.NoError(t, err)
+				require.Equal(t, completed, repeated)
+
 				authority, err := witness.OpenAuthority(t.Context(), newBackend, input.Deployment)
 				require.NoError(t, err)
 				ledger, err := reservation.Open(authority)
