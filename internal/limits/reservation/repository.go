@@ -14,7 +14,8 @@ import (
 
 const (
 	recordVersion        = 1
-	attemptRecordVersion = 2
+	attemptRecordVersion = 3
+	windowRecordVersion  = 2
 	maxRecordSize        = 64 << 10
 	maxConflicts         = 64
 )
@@ -39,7 +40,7 @@ func (r *Repository) EstablishWindow(ctx context.Context, meter Meter, at time.T
 	if !meter.valid() || at.IsZero() || consumed < 0 || (!validID(history.ID) || !validID(history.Proof)) {
 		return ErrInvalid
 	}
-	state := WindowState{Version: recordVersion, Meter: meter, Window: windowFor(meter.Interval, at), HistoryProof: history.Proof, HistoryID: history.ID, SeedConsumed: consumed, Consumed: consumed}
+	state := WindowState{Version: windowRecordVersion, Meter: meter, Window: windowFor(meter.Interval, at), HistoryProof: history.Proof, HistoryID: history.ID, SeedConsumed: consumed, Consumed: consumed}
 	key := meterKey(meter, state.Window)
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -201,7 +202,7 @@ func (r *Repository) readWindow(ctx context.Context, meter Meter, window storage
 		return nil, nil, err
 	}
 	var state WindowState
-	if json.Unmarshal(data, &state) != nil || state.Version != recordVersion || state.Meter != meter || state.Window != window || !validID(state.HistoryProof) || !validID(state.HistoryID) || state.SeedConsumed < 0 || state.Consumed < state.SeedConsumed || state.Reserved < 0 {
+	if json.Unmarshal(data, &state) != nil || state.Version != windowRecordVersion || state.ActiveDisputes < 0 || state.ReconciliationRequired != (state.ActiveDisputes > 0) || state.Meter != meter || state.Window != window || !validID(state.HistoryProof) || !validID(state.HistoryID) || state.SeedConsumed < 0 || state.Consumed < state.SeedConsumed || state.Reserved < 0 {
 		return nil, nil, ErrUnavailable
 	}
 	return &state, data, nil

@@ -94,7 +94,7 @@ func (r *Repository) admissionWindow(ctx context.Context, rule Rule, now time.Ti
 			}
 			return nil, nil, storage.CompareAndSwapMutation{}, err
 		}
-		state = &WindowState{Version: recordVersion, Meter: rule.Meter, Window: window, HistoryProof: head.History.Proof, HistoryID: head.History.ID}
+		state = &WindowState{Version: windowRecordVersion, Meter: rule.Meter, Window: window, HistoryProof: head.History.Proof, HistoryID: head.History.ID}
 		data = nil
 		head.Current = window
 	}

@@ -17,7 +17,7 @@ func TestStoredBytesJoinsTheLimitVocabulary(t *testing.T) {
 	require.False(t, limits.IsZero())
 
 	clone := limits.Clone()
-	require.NotSame(t, storedbytes.StoredBytes, clone.StoredBytes)
+	require.NotSame(t, limits.StoredBytes, clone.StoredBytes)
 	require.Equal(t, bound, *clone.StoredBytes)
 
 	zero := int64(0)

@@ -3,6 +3,7 @@ package reservation
 import (
 	"context"
 	"errors"
+	"math"
 
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -17,6 +18,9 @@ func (r *Repository) FlagDispute(ctx context.Context, id, evidenceID string) err
 		record, old, err := r.readRecord(ctx, id)
 		if err != nil {
 			return err
+		}
+		if record.ResolvedDisputeID == evidenceID {
+			return nil
 		}
 		if record.DisputeID != "" {
 			if record.DisputeID == evidenceID {
@@ -33,6 +37,10 @@ func (r *Repository) FlagDispute(ctx context.Context, id, evidenceID string) err
 			if err != nil {
 				return err
 			}
+			if window.ActiveDisputes == math.MaxInt64 {
+				return ErrOverflow
+			}
+			window.ActiveDisputes++
 			window.ReconciliationRequired = true
 			mutation, err := encodeMutation(meterKey(binding.Rule.Meter, binding.Window), previous, window)
 			if err != nil {

@@ -24,6 +24,12 @@ func validateBindings(record *Record) error {
 }
 
 func validateSettlement(record *Record, amount int64) error {
+	if record.CorrectionID != "" && (!validID(record.CorrectionID) || record.State != Settled) {
+		return ErrUnavailable
+	}
+	if record.ResolvedDisputeID != "" && (!validID(record.ResolvedDisputeID) || record.CorrectionID == "" || record.ResolvedDisputeID == record.DisputeID) {
+		return ErrUnavailable
+	}
 	if record.DisputeID != "" && (!validID(record.DisputeID) || record.State == Reserved || record.State == Canceled) {
 		return ErrUnavailable
 	}

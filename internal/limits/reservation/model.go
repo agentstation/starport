@@ -70,7 +70,7 @@ type Attempt struct {
 type State string
 
 const (
-	// Reserved holds capacity before dispatch permission has been consumed.
+	// Reserved holds capacity before a caller consumes dispatch permission.
 	Reserved State = "reserved"
 	// Dispatched means exactly one caller consumed dispatch permission.
 	Dispatched State = "dispatched"
@@ -78,7 +78,7 @@ const (
 	Uncertain State = "uncertain"
 	// Settled retains the identity and the final charge after reconciliation.
 	Settled State = "settled"
-	// Canceled releases capacity before any dispatch permission was consumed.
+	// Canceled releases capacity before a caller consumes dispatch permission.
 	Canceled State = "canceled"
 )
 
@@ -103,15 +103,19 @@ type Evidence struct {
 // No reservation record expires automatically in this implementation.
 type Record struct {
 	// DisputeID retains the evidence reference that blocks further reconciliation.
-	DisputeID  string    `json:"dispute_id,omitempty"`
-	Version    int       `json:"version"`
-	Attempt    Attempt   `json:"attempt"`
-	State      State     `json:"state"`
-	AdmittedAt time.Time `json:"admitted_at"`
-	Bindings   []Binding `json:"bindings"`
-	Evidence   *Evidence `json:"evidence,omitempty"`
-	Unresolved *Evidence `json:"unresolved,omitempty"`
-	Pending    *Evidence `json:"pending,omitempty"`
+	DisputeID string `json:"dispute_id,omitempty"`
+	// CorrectionID points to the last immutable correction receipt.
+	CorrectionID string `json:"correction_id,omitempty"`
+	// ResolvedDisputeID prevents a repeated observation from reopening the same dispute.
+	ResolvedDisputeID string    `json:"resolved_dispute_id,omitempty"`
+	Version           int       `json:"version"`
+	Attempt           Attempt   `json:"attempt"`
+	State             State     `json:"state"`
+	AdmittedAt        time.Time `json:"admitted_at"`
+	Bindings          []Binding `json:"bindings"`
+	Evidence          *Evidence `json:"evidence,omitempty"`
+	Unresolved        *Evidence `json:"unresolved,omitempty"`
+	Pending           *Evidence `json:"pending,omitempty"`
 	// NanoUSD is null when monetary cost is unknown. Explicit no-charge evidence records zero.
 	NanoUSD *int64 `json:"nano_usd"`
 	Reason  string `json:"reason,omitempty"`
@@ -122,7 +126,9 @@ type Record struct {
 // WindowState contains verified consumption and reserved capacity for one meter.
 // Overflow blocks new admission until explicit reconciliation repairs the aggregate.
 type WindowState struct {
-	// ReconciliationRequired blocks new admission after conflicting billing evidence.
+	// ActiveDisputes counts the attempts that restrict this window.
+	ActiveDisputes int64 `json:"active_disputes"`
+	// ReconciliationRequired must equal ActiveDisputes > 0.
 	ReconciliationRequired bool               `json:"reconciliation_required,omitempty"`
 	Version                int                `json:"version"`
 	Meter                  Meter              `json:"meter"`
