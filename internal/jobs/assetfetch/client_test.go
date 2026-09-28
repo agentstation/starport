@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -18,12 +19,13 @@ import (
 )
 
 func TestOriginGrants(t *testing.T) {
+	credentialOrigin := (&url.URL{Scheme: "https", Host: "media.example", User: url.UserPassword("u", "secret")}).String()
 	for _, origin := range []string{"https://media.example", "https://MEDIA.example:443", "http://127.0.0.1:1234", "http://[::1]:1234"} {
 		client, err := New([]string{origin})
 		require.NoError(t, err, origin)
 		require.NoError(t, client.Close())
 	}
-	for _, origin := range []string{"", "http://media.example", "http://localhost", "https://media.example/", "https://media.example/video", "https://u:secret@media.example", "https://media.example?token=secret", "https://media.example#", "https://*.example", "https://media.example:65536", "https://media.example:0", "//media.example"} {
+	for _, origin := range []string{"", "http://media.example", "http://localhost", "https://media.example/", "https://media.example/video", credentialOrigin, "https://media.example?token=secret", "https://media.example#", "https://*.example", "https://media.example:65536", "https://media.example:0", "//media.example"} {
 		_, err := New([]string{origin})
 		require.ErrorIs(t, err, ErrInvalidOrigin, origin)
 		require.NotContains(t, err.Error(), "secret")

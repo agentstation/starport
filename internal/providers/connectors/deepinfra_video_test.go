@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -54,6 +55,7 @@ func TestNativeVideoWireAndMeasuredUsage(t *testing.T) {
 
 func TestNativeVideoKeepsUsageWhenAssetOrStateFails(t *testing.T) {
 	t.Parallel()
+	credentialReference := (&url.URL{Scheme: "https", Host: "assets.example", Path: "/video.mp4", User: url.UserPassword("user", "password")}).String()
 	for _, tc := range []struct {
 		name, extra, video string
 		invalid            bool
@@ -71,7 +73,7 @@ func TestNativeVideoKeepsUsageWhenAssetOrStateFails(t *testing.T) {
 		{"loopback reference", `"output_length":5`, "http://127.0.0.1:8080/video.mp4", false},
 		{"relative reference", `"output_length":5`, "/video.mp4", false},
 		{"network relative", `"output_length":5`, "//assets.example/video.mp4", true},
-		{"credential reference", `"output_length":5`, "https://user:password@assets.example/video.mp4", true},
+		{"credential reference", `"output_length":5`, credentialReference, true},
 		{"insecure reference", `"output_length":5`, "http://assets.example/video.mp4", true},
 		{"empty reference", `"output_length":5`, "", true},
 	} {
