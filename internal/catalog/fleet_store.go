@@ -12,7 +12,7 @@ import (
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/runtime"
 
-	"github.com/agentstation/starport/internal/catalog/recovery"
+	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/storage"
 )
 

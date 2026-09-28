@@ -19,8 +19,9 @@ import (
 // hand-written fake of the blob interface would prove none of that, and the
 // adapter is the only thing FIL2 adds.
 type objectServer struct {
-	mu      sync.Mutex
-	objects map[string][]byte
+	mu       sync.Mutex
+	objects  map[string][]byte
+	metadata map[string]http.Header
 
 	// bucket is the one bucket this server serves. A request for another
 	// bucket answers 404, which catches a prefix or bucket the backend
@@ -30,7 +31,7 @@ type objectServer struct {
 
 func newObjectServer(t *testing.T, bucket string) (*objectServer, string) {
 	t.Helper()
-	server := &objectServer{objects: map[string][]byte{}, bucket: bucket}
+	server := &objectServer{objects: map[string][]byte{}, metadata: map[string]http.Header{}, bucket: bucket}
 	httpServer := httptest.NewServer(server)
 	t.Cleanup(httpServer.Close)
 	return server, httpServer.URL
@@ -91,7 +92,18 @@ func (s *objectServer) put(w http.ResponseWriter, r *http.Request, key string) {
 		return
 	}
 	s.mu.Lock()
+	if _, exists := s.objects[key]; exists && r.Header.Get("If-None-Match") == "*" {
+		s.mu.Unlock()
+		s.writeError(w, r, http.StatusPreconditionFailed, "PreconditionFailed")
+		return
+	}
 	s.objects[key] = body
+	s.metadata[key] = http.Header{}
+	for name, values := range r.Header {
+		if strings.HasPrefix(strings.ToLower(name), "x-amz-meta-") {
+			s.metadata[key][name] = values
+		}
+	}
 	s.mu.Unlock()
 	w.Header().Set("ETag", fmt.Sprintf("%q", key))
 	w.WriteHeader(http.StatusOK)
@@ -103,6 +115,11 @@ func (s *objectServer) get(w http.ResponseWriter, r *http.Request, key string) {
 		s.writeError(w, r, http.StatusNotFound, "NoSuchKey")
 		return
 	}
+	s.mu.Lock()
+	for name, values := range s.metadata[key] {
+		w.Header()[name] = values
+	}
+	s.mu.Unlock()
 	w.Header().Set("Content-Length", strconv.Itoa(len(value)))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(value)
@@ -116,6 +133,11 @@ func (s *objectServer) head(w http.ResponseWriter, r *http.Request, key string) 
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
+	s.mu.Lock()
+	for name, values := range s.metadata[key] {
+		w.Header()[name] = values
+	}
+	s.mu.Unlock()
 	w.Header().Set("Content-Length", strconv.Itoa(len(value)))
 	w.WriteHeader(http.StatusOK)
 }

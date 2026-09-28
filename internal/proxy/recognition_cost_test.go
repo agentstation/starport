@@ -8,6 +8,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/usage"
 	"github.com/stretchr/testify/require"
 )
@@ -160,4 +161,35 @@ func TestRecognitionPageTierRequiresContextMeasurement(t *testing.T) {
 	cost, reason = recognitionCost(offering, 2, &inference.Usage{InputTokens: 101, TotalTokens: 101}, time.Now())
 	require.Nil(t, cost)
 	require.Equal(t, usage.CostReasonNoPricing, reason)
+}
+
+func TestRecognitionUnknownTokensCannotReportFreeUsage(t *testing.T) {
+	offering := catalogs.ProviderOffering{
+		Billing: &catalogs.ModelBilling{Recognition: &catalogs.RecognitionBilling{Basis: catalogs.RecognitionBillingTokens}},
+		Pricing: &catalogs.ModelPricing{Currency: "USD", Tokens: &catalogs.ModelTokenPricing{Input: &catalogs.ModelTokenCost{Per1M: 1}, Output: &catalogs.ModelTokenCost{Per1M: 1}}},
+	}
+	cost, reason := recognitionCost(offering, 1, &inference.Usage{TokensUnknown: true}, time.Now())
+	require.Nil(t, cost)
+	require.Equal(t, usage.CostReasonNoUsage, reason)
+}
+
+func TestRecognitionMissingCacheMeasurementRemainsUnpriced(t *testing.T) {
+	var evidence connectors.Usage
+	require.NoError(t, json.Unmarshal([]byte(`{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120}`), &evidence))
+	response, err := connectors.RecognitionResponseToInference(&connectors.RecognitionResponse{TokenEvidence: &evidence, Usage: &connectors.MediaUsage{InputTokens: 100, OutputTokens: 20, TotalTokens: 120}})
+	require.NoError(t, err)
+	cost, reason := recognitionCost(tokenRecognitionOffering(), 1, response.Usage, time.Now())
+	require.Nil(t, cost)
+	require.Equal(t, usage.CostReasonNoUsage, reason)
+	prices := recognitionPrices()
+	prices.offerings = map[string]catalogs.ProviderOffering{"google/gemini-2.5-flash": tokenRecognitionOffering()}
+	report := parseReport{}
+	report.charge(prices, documentReading{Reading: document.Reading{Offering: "google/gemini-2.5-flash", Pages: 1}, Usage: response.Usage})
+	require.Len(t, report.Extractions, 1)
+	require.True(t, report.Extractions[0].CacheReadTokensUnknown)
+	require.False(t, report.Extractions[0].TokensUnknown)
+	require.EqualValues(t, 120, report.Extractions[0].Tokens.Total)
+	encoded, err := json.Marshal(report.Extractions[0])
+	require.NoError(t, err)
+	require.Contains(t, string(encoded), `"cache_read_tokens_unknown":true`)
 }

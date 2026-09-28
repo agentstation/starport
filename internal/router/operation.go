@@ -2,8 +2,10 @@ package router
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -11,6 +13,10 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
+	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/limits/admission"
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/routing"
 )
@@ -24,6 +30,10 @@ import (
 // OperationRequest carries one canonical request plus the account routing and
 // credential policy every operation reads.
 type OperationRequest[Request any] struct {
+	// JobSubmission is required by asynchronous submission operations.
+	JobSubmission jobs.SubmissionRecorder
+	// RequestID links every provider attempt to the gateway request.
+	RequestID    string
 	Request      Request
 	APIKeyConfig *APIKeyConfig
 	AccountID    string
@@ -34,19 +44,23 @@ type OperationRequest[Request any] struct {
 // unites them, so the caller states the model and the shared path stays free
 // of a constraint that would exist only to read one string.
 func (r *OperationRequest[Request]) policy(model string) operationPolicy {
-	return operationPolicy{Model: model, APIKeyConfig: r.APIKeyConfig, AccountID: r.AccountID}
+	return operationPolicy{RequestID: r.RequestID, Model: model, APIKeyConfig: r.APIKeyConfig, AccountID: r.AccountID}
 }
 
 // operationPolicy is everything the shared path reads that is not the
 // provider call itself.
 type operationPolicy struct {
-	Model        string
-	APIKeyConfig *APIKeyConfig
-	AccountID    string
+	ElapsedBudget time.Duration
+	RequestID     string
+	Model         string
+	APIKeyConfig  *APIKeyConfig
+	AccountID     string
 	// Provider pins the plan to one provider. It is empty for every operation
 	// that finishes inside its request, and set only when a request carries an
 	// identifier a single provider issued.
 	Provider string
+	// Purpose distinguishes submission from calls on an accepted provider job.
+	Purpose billingPurpose
 }
 
 // allows reports whether the key may reach one named provider. An empty
@@ -88,6 +102,7 @@ type operationAttempt[Response any] func(
 	connector connectors.Connector,
 	route routing.Route,
 	selected credentialSelection,
+	budget operationBudget,
 ) (*Response, *failure.Failure, execution.AttemptAction)
 
 // routeOperation runs one operation through the shared route plan and budget.
@@ -134,7 +149,8 @@ func routeOperation[Response any](
 		return nil, err
 	}
 
-	result, err := execution.Execute(ctx, r.executor, plan, func(
+	requestID := budgetRequestID(policy.RequestID)
+	result, err := execution.Execute(ctx, r.executor.WithElapsedBudget(policy.ElapsedBudget), plan, func(
 		attemptCtx context.Context,
 		planned routing.Attempt,
 	) (*Response, *failure.Failure, execution.AttemptAction) {
@@ -156,7 +172,14 @@ func routeOperation[Response any](
 		if bindFailure != nil {
 			return nil, bindFailure, execution.AttemptActionStop
 		}
-		response, attemptFailure, action := attempt(attemptCtx, connector, boundRoute, selected)
+		purpose := policy.Purpose
+		if purpose == "" {
+			purpose = billingPurpose(operation)
+		}
+		budget := operationBudget{snapshot: runtime.Snapshot(), start: func(quote admission.QuoteFunc) (admission.Ticket, *failure.Failure) {
+			return r.admit(attemptCtx, requestID, policy.AccountID, boundRoute, string(purpose), quote)
+		}}
+		response, attemptFailure, action := attempt(attemptCtx, connector, boundRoute, selected, budget)
 		if attemptFailure != nil {
 			if action == execution.AttemptActionDefault {
 				action = credentialPolicy.afterFailure(planned.Route, attemptFailure)
@@ -256,6 +279,12 @@ type providerCall[Request requestBinder, ProviderResponse, Response any] struct 
 	transport func(connectors.Connector, catalogs.EndpointType) (providerInvoke[Request, ProviderResponse], bool)
 	build     func() Request
 	convert   func(ProviderResponse) (Response, error)
+	charge    func(*runtimecatalog.RoutableSnapshot, routing.Route, Request) operationCharge[ProviderResponse]
+	prepare   func(*runtimecatalog.RoutableSnapshot, routing.Route, Request) error
+	// Dispatch hooks persist asynchronous ownership before and after the call.
+	// Once dispatch starts, an asynchronous operation cannot retry automatically.
+	beforeDispatch func(context.Context, routing.Route, admission.Ticket) error
+	afterDispatch  func(context.Context, routing.Route, ProviderResponse, error) error
 
 	// bounded refuses one route whose offering states a limit the request
 	// exceeds. Most operations leave it nil: a limit that every offering
@@ -277,6 +306,7 @@ func (call providerCall[Request, ProviderResponse, Response]) attempt(
 		connector connectors.Connector,
 		route routing.Route,
 		selected credentialSelection,
+		budget operationBudget,
 	) (*Response, *failure.Failure, execution.AttemptAction) {
 		invoke, implemented := call.transport(connector, endpointTypeOf(route))
 		if !implemented {
@@ -293,11 +323,61 @@ func (call providerCall[Request, ProviderResponse, Response]) attempt(
 			connectors.InferenceEndpoint{Type: endpointTypeOf(route), URL: route.Endpoint.URL},
 			selected.material,
 		)
+		if call.prepare != nil {
+			if err := call.prepare(budget.snapshot, route, request); err != nil {
+				return nil, offeringBoundExceeded(route, err), execution.AttemptActionStop
+			}
+		}
+		var charge operationCharge[ProviderResponse]
+		if call.charge != nil {
+			charge = call.charge(budget.snapshot, route, request)
+		}
+		var ticket admission.Ticket
+		if budget.start != nil {
+			var refusal *failure.Failure
+			ticket, refusal = budget.start(charge.quote)
+			if refusal != nil {
+				return nil, refusal, execution.AttemptActionStop
+			}
+		}
+		if call.beforeDispatch != nil {
+			if err := call.beforeDispatch(attemptCtx, route, ticket); err != nil {
+				return nil, submissionFailure(errors.Join(err, ticket.Finish(attemptCtx, nil))), execution.AttemptActionStop
+			}
+			if err := errors.Join(attemptCtx.Err(), inference.CheckPermission(attemptCtx)); err != nil {
+				return nil, submissionFailure(errors.Join(err, ticket.Finish(attemptCtx, nil))), execution.AttemptActionStop
+			}
+		}
 		response, requestErr := invoke(attemptCtx, request)
+		var persistenceErr error
+		if call.afterDispatch != nil {
+			persistenceErr = call.afterDispatch(attemptCtx, route, response, requestErr)
+		}
+		var evidence *reservation.Evidence
+		if ticket.ID() != "" && charge.evidence != nil {
+			evidence = charge.evidence(response, requestErr)
+			if evidence != nil {
+				evidence.ID = ticket.ID() + ":usage"
+			}
+		}
+		// A failed job write does not invalidate measured provider usage.
+		settlementErr := ticket.Finish(attemptCtx, evidence)
+		if persistenceErr != nil {
+			return nil, submissionFailure(errors.Join(persistenceErr, settlementErr)), execution.AttemptActionStop
+		}
+		if settlementErr != nil {
+			return nil, budgetFailure(settlementErr), execution.AttemptActionStop
+		}
 		if requestErr != nil {
+			if call.beforeDispatch != nil {
+				return nil, connectors.NormalizeFailure(route.ProviderID, requestErr), execution.AttemptActionStop
+			}
 			return nil, connectors.NormalizeFailure(route.ProviderID, requestErr), execution.AttemptActionDefault
 		}
 		canonical, convertErr := call.convert(response)
+		if convertErr != nil && call.beforeDispatch != nil {
+			return nil, submissionFailure(convertErr), execution.AttemptActionStop
+		}
 		return operationAnswer(route, canonical, convertErr)
 	}
 }
@@ -354,4 +434,16 @@ func transportInterfaceMissing(route routing.Route, operation string) *failure.F
 		failure.ProviderDetails{Provider: route.ProviderID},
 		nil,
 	)
+}
+
+// operationBudget binds admission to the selected request, route, and catalog.
+type operationBudget struct {
+	snapshot *runtimecatalog.RoutableSnapshot
+	start    func(admission.QuoteFunc) (admission.Ticket, *failure.Failure)
+}
+
+// operationCharge keeps raw provider evidence available before response conversion.
+type operationCharge[Response any] struct {
+	quote    admission.QuoteFunc
+	evidence func(Response, error) *reservation.Evidence
 }

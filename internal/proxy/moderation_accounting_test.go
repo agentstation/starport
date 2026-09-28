@@ -14,11 +14,6 @@ import (
 	"github.com/agentstation/starport/internal/usage"
 )
 
-// The one compiled moderation provider prices the operation at zero and its
-// wire answers with no usage block at all. The meter's honest record for such
-// a turn is a nil cost with the no-usage reason, not a zero-dollar bill that
-// claims the provider reported what it never sent.
-
 // shippedModerationRoute projects the shipped catalog with the moderation
 // provider's adapter registered and answers one routable moderation route.
 // Using the real projection rather than a hand-built snapshot proves the
@@ -78,6 +73,7 @@ func (r *moderationRouter) RouteModerations(
 		Response: inference.ModerationResponse{
 			ID:    "modr-1",
 			Model: req.Request.Model,
+			Usage: inference.Usage{TokensUnknown: true},
 			Results: []inference.ModerationResult{{
 				Flagged:    true,
 				Categories: []inference.ModerationCategory{{Name: "violence", Flagged: true, Score: 0.94}},
@@ -103,11 +99,8 @@ func moderationTurn() *ModerationRequest {
 	}
 }
 
-// TestAModerationTurnRecordsItsOperationWithoutInventingACost pins the meter's
-// answer for a free operation. The record names the operation and the route,
-// so activity shows the turn happened, and the cost stays nil under the
-// no-usage reason rather than becoming a zero-dollar bill.
-func TestAModerationTurnRecordsItsOperationWithoutInventingACost(t *testing.T) {
+// TestModerationRecordsDeclaredFreeCost preserves unknown token use.
+func TestModerationRecordsDeclaredFreeCost(t *testing.T) {
 	snapshot, routeID := shippedModerationRoute(t)
 	router := &moderationRouter{
 		capturingRouter: &capturingRouter{},
@@ -131,8 +124,10 @@ func TestAModerationTurnRecordsItsOperationWithoutInventingACost(t *testing.T) {
 	require.Equal(t, usage.OperationModerations, record.Operation)
 	require.Equal(t, routeID, record.ModelUsed)
 	require.Equal(t, "openai", record.Provider)
-	require.Nil(t, record.Cost)
-	require.Equal(t, usage.CostReasonNoUsage, record.CostUnavailableReason)
+	require.NotNil(t, record.Cost)
+	require.Zero(t, record.Cost.NanoUSD)
+	require.Empty(t, record.CostUnavailableReason)
+	require.True(t, record.TokensUnknown)
 }
 
 // TestModerationValidationNamesTheEmptyInputByPosition holds the validator's

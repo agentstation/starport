@@ -27,11 +27,12 @@ const (
 )
 
 type fleetBlob struct {
-	ID              string            `json:"id"`
-	Head            runtime.FleetHead `json:"head"`
-	Record          generationRecord  `json:"record"`
-	GenerationBytes int64             `json:"generation_bytes"`
-	RecoveryBytes   int64             `json:"recovery_bytes"`
+	ID              string                 `json:"id"`
+	Head            runtime.FleetHead      `json:"head"`
+	Record          generationRecord       `json:"record"`
+	GenerationBytes int64                  `json:"generation_bytes"`
+	RecoveryBytes   int64                  `json:"recovery_bytes"`
+	Adoption        *runtime.FleetAdoption `json:"adoption,omitempty"`
 }
 
 type fleetInventory struct {
@@ -241,6 +242,9 @@ func (m *fleetMaintenance) generation(id string) (fleetBlob, bool) {
 }
 
 func (m *fleetMaintenance) read(ctx context.Context, blob fleetBlob) (runtime.FleetSnapshot, error) {
+	if err := m.owner.verifyAdoption(ctx, blob); err != nil {
+		return runtime.FleetSnapshot{}, err
+	}
 	data, err := m.owner.readBlob(ctx, blob)
 	if err != nil {
 		return runtime.FleetSnapshot{}, err
@@ -251,6 +255,12 @@ func (m *fleetMaintenance) read(ctx context.Context, blob fleetBlob) (runtime.Fl
 	}
 	if err = snapshot.Validate(); err != nil {
 		return snapshot, err
+	}
+	if blob.Adoption != nil {
+		snapshot.Head, snapshot.Adoption = blob.Head, blob.Adoption
+		if err = snapshot.Validate(); err != nil {
+			return snapshot, err
+		}
 	}
 	if snapshot.Head != blob.Head {
 		return snapshot, fleetStoreConflict("the stored snapshot differs from the selected head")

@@ -20,7 +20,7 @@ import (
 )
 
 func TestCatalogWideProviderActivation(t *testing.T) {
-	application, err := New(validProductionConfig(t), withRuntimeFactories(explicitTestFactories()))
+	application, err := New(validProductionConfig(t), withRuntimeFactories(explicitTestFactories(t)))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
 	require.Contains(t, application.registry.ListProviders(), "openai")

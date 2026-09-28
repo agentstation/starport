@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/agentstation/starport/internal/account"
+	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
@@ -77,7 +79,7 @@ func (h *VideosController) Submit(w http.ResponseWriter, r *http.Request) {
 	// without spending either. The gateway failure is held aside because it
 	// answers a caller in the credential vocabulary, not the job one.
 	var gatewayErr error
-	job, err := h.jobs.Submit(ctx, func(ctx context.Context) (jobs.Runner, error) {
+	job, err := h.jobs.SubmitBackground(ctx, func(ctx context.Context) (jobs.Runner, error) {
 		gateway, buildErr := mediaGatewayRequest(ctx, h.BaseHandler, request)
 		if buildErr != nil {
 			gatewayErr = buildErr
@@ -124,6 +126,25 @@ func (h *VideosController) Get(w http.ResponseWriter, r *http.Request) {
 	h.writeJob(w, job)
 }
 
+// Reconcile handles one explicit provider check after automatic polling stops.
+func (h *VideosController) Reconcile(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	ctx := r.Context()
+	runner, err := h.runner(ctx)
+	if err != nil {
+		h.writeCredentialStrategyError(w, err)
+		return
+	}
+	job, err := h.jobs.Reconcile(ctx, runner, h.getAccountID(ctx), chi.URLParam(r, videoIDParam))
+	if err != nil {
+		h.writeJobError(ctx, w, err, "video job reconciliation failed")
+		return
+	}
+	h.writeJob(w, job)
+}
+
 // List handles GET /v1/videos. It reads records and asks no provider anything,
 // so a listing costs one storage read however many jobs are still running.
 func (h *VideosController) List(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +160,7 @@ func (h *VideosController) List(w http.ResponseWriter, r *http.Request) {
 	published := make([]inference.VideoJob, 0, len(records))
 	for _, record := range records {
 		if record.Operation == routing.OperationVideosGenerations {
-			published = append(published, canonicalVideoJob(record))
+			published = append(published, h.canonicalVideoJob(record))
 		}
 	}
 	h.writeJobList(w, published)
@@ -210,6 +231,11 @@ func (h *VideosController) writeAssetError(
 ) {
 	switch {
 	case errors.Is(err, jobs.ErrAssetExpired):
+		if job.Native {
+			h.writeVideoStatus(w, http.StatusGone, errorTypeInvalidRequest,
+				"The content for video "+job.ID+" expired under its original retention window.")
+			return
+		}
 		h.writeVideoStatus(w, http.StatusGone, errorTypeInvalidRequest,
 			"The content for video "+job.ID+" expired. This gateway keeps a finished video for "+
 				retentionWindowText(h.jobs.Retention())+" after it stores it.")
@@ -264,14 +290,22 @@ func (h *VideosController) runner(ctx context.Context) (jobs.Runner, error) {
 // canonicalVideoJob projects one record onto the canonical answer. The record
 // holds a provider job identifier and this value does not, which is what lets
 // each codec encode it without a field-by-field review.
-func canonicalVideoJob(job jobs.Job) inference.VideoJob {
+func (h *VideosController) canonicalVideoJob(job jobs.Job) inference.VideoJob {
 	answer := inference.VideoJob{
-		ID:          job.ID,
-		Model:       job.Model,
-		Provider:    job.Provider,
-		State:       string(job.State),
-		Reason:      job.Reason,
-		CreatedUnix: job.CreatedAt.Unix(),
+		ID:                   job.ID,
+		AssetStatus:          job.AssetStatus(time.Now()),
+		ReconciliationStatus: job.ReconciliationStatus(),
+		Model:                job.Model,
+		Provider:             job.Provider,
+		State:                string(job.State),
+		Reason:               job.Reason,
+		CreatedUnix:          job.CreatedAt.Unix(),
+	}
+	if h.jobs.NeedsReconciliation(job) {
+		answer.PollingStatus = "paused"
+	}
+	if job.SubmissionPending {
+		answer.SubmissionStatus = "unconfirmed"
 	}
 	if !job.TerminalAt.IsZero() {
 		answer.CompletedUnix = job.TerminalAt.Unix()
@@ -279,7 +313,7 @@ func canonicalVideoJob(job jobs.Job) inference.VideoJob {
 	// The window travels only while there are bytes behind it. A record keeps
 	// AssetExpiresAt after the sweep takes the asset, and reporting it then
 	// would tell a caller to come back for a video that is already gone.
-	if job.HasAsset() {
+	if job.HasAsset() && !job.AssetExpired(time.Now()) {
 		answer.ExpiresUnix = job.AssetExpiresAt.Unix()
 	}
 	return answer
@@ -293,7 +327,7 @@ func (h *VideosController) decodeSubmission(r *http.Request) (inference.VideoJob
 }
 
 func (h *VideosController) writeJob(w http.ResponseWriter, job jobs.Job) {
-	answer := canonicalVideoJob(job)
+	answer := h.canonicalVideoJob(job)
 	if h.protocol == ProtocolOpenRouter {
 		_ = openrouter.WriteJSON(w, http.StatusOK, openrouter.EncodeVideoJob(answer))
 		return
@@ -338,16 +372,34 @@ func (h *VideosController) writeJobError(
 	err error,
 	message string,
 ) {
+	if pending, ok := errors.AsType[*jobs.SubmissionError](err); ok {
+		prefix := "/v1/videos/"
+		if h.protocol == ProtocolOpenRouter {
+			prefix = "/api/v1/videos/"
+		}
+		w.Header().Set("Location", prefix+url.PathEscape(pending.JobID))
+		h.writeVideoStatus(w, http.StatusServiceUnavailable, errorTypeServiceUnavailable, pending.Error())
+		return
+	}
 	switch {
+	case errors.Is(err, blob.ErrPublicationUnavailable):
+		h.logError(ctx, err, "video publication readiness failed")
+		h.writeVideoStatus(w, http.StatusServiceUnavailable, errorTypeServiceUnavailable, "Video storage capability is unverified. Check conditional publication support and retry.")
 	case errors.Is(err, jobs.ErrJobNotFound):
 		// A job another account owns reads the same way as one that never
 		// existed. Any other answer would report that the identifier is real,
 		// and an identifier is the only thing a caller has to guess.
 		h.writeVideoStatus(w, http.StatusNotFound, errorTypeNotFound, "No such video job")
+	case errors.Is(err, jobs.ErrWorkersBusy), errors.Is(err, jobs.ErrServiceClosed):
+		h.writeVideoStatus(w, http.StatusServiceUnavailable, errorTypeServiceUnavailable, err.Error())
+	case errors.Is(err, jobs.ErrNativeCancellationUnsupported):
+		h.writeVideoStatus(w, http.StatusConflict, errorTypeInvalidRequest, err.Error())
 	case errors.Is(err, jobs.ErrJobAlreadyEnded):
 		h.writeVideoStatus(w, http.StatusConflict, errorTypeInvalidRequest, err.Error())
 	case errors.Is(err, jobs.ErrInvalidJob), errors.Is(err, jobs.ErrIllegalTransition):
 		h.writeVideoStatus(w, http.StatusConflict, errorTypeInvalidRequest, err.Error())
+	case errors.Is(err, limits.ErrOutstandingJobsRecoveryRequired), errors.Is(err, jobs.ErrClaimUnavailable):
+		h.writeVideoStatus(w, http.StatusServiceUnavailable, errorTypeServiceUnavailable, "Outstanding job ownership requires recovery.")
 	case errors.Is(err, limits.ErrTooManyOutstandingJobs):
 		// The submission is legal. What it would not fit inside is the number
 		// of jobs this account already holds open, which a finished job frees

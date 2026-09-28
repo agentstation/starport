@@ -31,6 +31,7 @@ var (
 // nothing a caller cannot state, because a field no provider reads would be a
 // promise Starport does not keep.
 type JobSubmission struct {
+	MaxBytes int64 `json:"-"`
 	MediaTarget
 	Prompt         string `json:"prompt"`
 	NegativePrompt string `json:"negative_prompt,omitempty"`
@@ -90,6 +91,7 @@ func (a JobAsset) Clone() JobAsset {
 // seam, because the provider's word is the only thing that knows which
 // provider reported it.
 type ProviderJob struct {
+	NativeResult *NativeVideoResponse
 	// ID is the provider's identifier for the job.
 	ID string
 	// State is the canonical state the provider's word names.
@@ -103,7 +105,13 @@ type ProviderJob struct {
 // Clone returns a copy that shares nothing with the original. The shared media
 // path clones every answer before it leaves the attempt budget, so a retry
 // cannot hand back a value an earlier attempt still holds.
-func (j ProviderJob) Clone() ProviderJob { return j }
+func (j ProviderJob) Clone() ProviderJob {
+	if j.NativeResult != nil {
+		copied := j.NativeResult.Clone()
+		j.NativeResult = &copied
+	}
+	return j
+}
 
 // JobRunner is the narrow optional interface a transport implements to submit,
 // poll, and cancel one provider job.

@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -33,6 +34,22 @@ import (
 // provider receives. A plugin therefore changes what the model reads and never
 // which model reads it, which is the invariant that keeps the same prompt
 // reaching the same provider with the plugin on and off.
+
+// retainParserRuntime binds recognition, cache identity, and chat to one generation.
+// The caller owns the returned lease until completion or stream closure.
+func (p *proxy) retainParserRuntime(ctx context.Context, req *ChatCompletionRequest) (context.Context, connectors.RuntimeLease, bool, error) {
+	if p.registry == nil || !req.Request.DocumentParser.Requested() || !carriesDocument(req.Request.Messages) {
+		return ctx, nil, false, nil
+	}
+	runtime, owned, err := p.acquireRuntime(ctx)
+	if err != nil {
+		return ctx, nil, false, err
+	}
+	if owned {
+		ctx = connectors.ContextWithRuntimeLease(ctx, runtime)
+	}
+	return ctx, runtime, owned, nil
+}
 
 // parseDocuments returns the request the provider receives, with every
 // attached document replaced by its text.
@@ -170,10 +187,14 @@ func (r *parseReport) charge(prices catalogPrices, reading documentReading) {
 	if reading.Cached || reading.Offering == "" {
 		return
 	}
-	entry := usage.Extraction{Offering: reading.Offering, GenerationID: r.GenerationID, Pages: int64(reading.Pages), StartedAt: reading.StartedAt}
+	entry := usage.Extraction{TokensUnknown: true, Offering: reading.Offering, GenerationID: r.GenerationID, Pages: int64(reading.Pages), StartedAt: reading.StartedAt}
 	if reading.Usage != nil {
 		tokens := usageTokens(*reading.Usage)
 		entry.Tokens = &tokens
+		entry.TokensUnknown = reading.Usage.TokensUnknown
+		entry.CacheReadTokensUnknown = reading.Usage.CacheReadTokensUnknown
+		entry.ProcessedPages = int64(reading.Usage.ProcessedPages)
+		entry.ProcessedPagesKnown = reading.Usage.ProcessedPagesKnown
 	}
 	entry.CostUnavailableReason = usage.CostReasonNoPricing
 	if prices != nil {
@@ -181,9 +202,9 @@ func (r *parseReport) charge(prices catalogPrices, reading documentReading) {
 			if offering.Billing != nil && offering.Billing.Recognition != nil {
 				entry.BillingBasis = string(offering.Billing.Recognition.Basis)
 			}
-			pages := reading.Pages
-			if reading.Failed {
-				pages = 0
+			pages := -1
+			if reading.Usage != nil && reading.Usage.ProcessedPagesKnown && !reading.Usage.Estimated {
+				pages = reading.Usage.ProcessedPages
 			}
 			entry.Cost, entry.CostUnavailableReason = recognitionCost(offering, pages, reading.Usage, recognitionPriceTime(reading.StartedAt))
 		}
@@ -434,6 +455,7 @@ func (p *proxy) recognize(
 		},
 		APIKeyConfig: policy,
 		AccountID:    req.AccountID,
+		RequestID:    req.RequestID,
 	})
 	if err != nil {
 		return "", "", nil, recognitionFailure(attached.Filename, err)
@@ -459,6 +481,9 @@ func (p *proxy) recognize(
 // was named, and the gateway did not read it. The cause carries which of them
 // happened to the operator.
 func recognitionFailure(filename string, cause error) error {
+	if admission, ok := errors.AsType[*failure.Failure](cause); ok && (admission.Kind() == failure.Quota || admission.Kind() == failure.GatewayUnavailable) {
+		return admission
+	}
 	named := filename
 	if named == "" {
 		named = "the attached document"

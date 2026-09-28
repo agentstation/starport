@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"github.com/agentstation/starport/internal/jobs"
 	"testing"
 
 	"github.com/agentstation/starport/internal/account"
@@ -45,7 +46,7 @@ func TestBatchLineUsesCurrentRoutingPolicyAndPermit(t *testing.T) {
 	ctx = inference.WithPermission(ctx, permission)
 	service := &batchProjectionProxy{}
 	runner := &batchLineRunner{service: service, governor: currentBatchGovernor{current: ctx}, endpoint: "/v1/chat/completions", batchID: "batch-test", accountID: "old-account", keyID: "old-key", teamID: "old-team", apiKeyConfig: &proxy.APIKeyRoutingConfig{AllowedModels: []string{"old/model"}}}
-	_, failed := runner.RunLine(t.Context(), 0, []byte(`{"custom_id":"line-1","method":"POST","url":"/v1/chat/completions","body":{"model":"current/model","messages":[{"role":"user","content":"hello"}]}}`))
+	_, failed := runner.RunLine(t.Context(), jobs.BatchLine{Number: 1, RequestID: "batch-line-request"}, []byte(`{"custom_id":"line-1","method":"POST","url":"/v1/chat/completions","body":{"model":"current/model","messages":[{"role":"user","content":"hello"}]}}`))
 	require.False(t, failed)
 	require.NotNil(t, service.request)
 	require.Equal(t, key.ID, service.request.KeyID)

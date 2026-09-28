@@ -16,7 +16,7 @@
       "windows/amd64"
     ],
     "exact_cpu_os_toolchain_artifact_required": true,
-    "platform_scope": "These four platforms receive initial numeric latency qualification. All six published archive targets still require native functional qualification. Other latency claims require a profile revision."
+    "platform_scope": "These four platforms receive initial numeric latency qualification. All five published archive targets still require native functional qualification. Other latency claims require a profile revision."
   },
   "workload": {
     "operation": "chat-completions",

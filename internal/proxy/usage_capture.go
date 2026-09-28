@@ -214,6 +214,7 @@ func (s *usageCaptureService) ProcessEmbeddings(ctx context.Context, req *Embedd
 	record := baseUsageRecord(usage.OperationEmbeddings, req.RequestID, req.KeyID, req.AccountID, req.TeamID, req.Protocol, req.Request.Model, start)
 	record.BatchID = req.BatchID
 	applyOutcome(&record, err)
+	record.TokensUnknown = true
 	var snapshot *runtimecatalog.RoutableSnapshot
 	if response != nil {
 		record.ModelUsed = response.ModelUsed
@@ -223,6 +224,8 @@ func (s *usageCaptureService) ProcessEmbeddings(ctx context.Context, req *Embedd
 		record.RoutingMS = response.RoutingDuration.Milliseconds()
 		record.CacheStatus = response.CacheStatus
 		record.Tokens = usageTokens(response.Response.Usage)
+		record.TokensUnknown = response.Response.Usage.TokensUnknown
+		record.TokensEstimated = response.Response.Usage.Estimated
 		snapshot = response.CatalogSnapshot
 	}
 	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
@@ -286,8 +289,20 @@ func captureOperation[Request, Response any](
 		record.Attempts = response.Attempts
 		record.RoutingMS = response.RoutingDuration.Milliseconds()
 		record.Tokens = usageTokens(operationUsage(response.Response))
+		record.TokensUnknown = operationUsage(response.Response).TokensUnknown
+		record.TokensEstimated = operationUsage(response.Response).Estimated
 		record.Media = usageMedia(operationUsage(response.Response))
+		if imageRequest, ok := any(req.Request).(inference.ImagesRequest); ok {
+			if record.Media == nil {
+				record.Media = &usage.Media{}
+			}
+			record.Media.ImageSize = imageRequest.Size
+			record.Media.ImagesEdited = imageRequest.IsEdit()
+		}
 		record.SearchUnits = int64(operationUsage(response.Response).SearchUnits)
+		record.SearchUnitsKnown = operationUsage(response.Response).SearchUnitsKnown
+		record.InputCharacters = operationUsage(response.Response).InputCharacters
+		record.InputCharactersKnown = operationUsage(response.Response).InputCharactersKnown
 		snapshot = response.CatalogSnapshot
 	}
 	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
@@ -684,6 +699,21 @@ func usageCost(snapshot *runtimecatalog.RoutableSnapshot, record usage.Record) (
 	if snapshot == nil || record.ModelUsed == "" {
 		return nil, usage.CostReasonNoRoute
 	}
+	if record.Operation == usage.OperationImages {
+		return imageUsageCost(snapshot, record)
+	}
+	if record.Operation == usage.OperationSpeech {
+		return speechUsageCost(snapshot, record)
+	}
+	if record.Operation == usage.OperationRerank {
+		return rerankUsageCost(snapshot, record)
+	}
+	if record.Operation == usage.OperationModerations {
+		return moderationUsageCost(snapshot, record)
+	}
+	if record.Operation == usage.OperationEmbeddings {
+		return embeddingUsageCost(snapshot, record)
+	}
 	tokens := record.Tokens
 	var units usage.Media
 	if record.Media != nil {
@@ -754,11 +784,9 @@ func mediaCost(pricing *starmapcatalogs.ModelPricing, tokens usage.Tokens, units
 		total += float64(units.GeneratedImages) * *pricing.Operations.ImageGen
 	}
 	if units.GeneratedVideos > 0 {
-		// A video is priced per video, the way an image is. An offering that
-		// serves videos and publishes no video price withdraws the whole cost,
-		// because a video is the most expensive unit this gateway meters and
-		// reporting the token half alone would read as the bill.
-		if pricing.Operations == nil || pricing.Operations.VideoGen == nil {
+		// Video counts price only declared per-video rates. A duration rate
+		// needs measured duration and a complete billing contract.
+		if pricing.Operations == nil || pricing.Operations.VideoGen == nil || pricing.Operations.InputSecond != nil || pricing.Operations.OutputSecond != nil {
 			return 0, usage.CostReasonMediaUnpriced
 		}
 		total += float64(units.GeneratedVideos) * *pricing.Operations.VideoGen

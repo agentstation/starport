@@ -167,7 +167,9 @@ type Totals struct {
 
 // Repository is the durable usage contract.
 type Repository interface {
-	// Put persists one record and advances the aggregate counters.
+	// Put atomically persists one record and its aggregate changes.
+	// An exact retry is idempotent during retention. Conflicting reuse refuses.
+	// Preserve the event timestamp and all recorded values across retries.
 	Put(context.Context, Record) error
 	// List returns records newest-first.
 	List(context.Context, Query) (Page, error)
@@ -178,8 +180,8 @@ type Repository interface {
 
 // Options configure a repository.
 type Options struct {
-	// Retention bounds record and counter lifetime; DefaultRetention
-	// when zero.
+	// Retention bounds lifetime from the event timestamp for records and
+	// from each window end for counters. Zero selects DefaultRetention.
 	Retention time.Duration
 }
 
@@ -206,61 +208,21 @@ func Open(store storage.KVStore, options Options) (Repository, error) {
 }
 
 func (r *repository) Put(ctx context.Context, record Record) error {
+	if record.BillingAdjustment != nil {
+		return ErrInvalidRecord
+	}
 	if err := record.Validate(); err != nil {
 		return err
 	}
-	data, err := json.Marshal(storedRecord{SchemaVersion: StorageSchemaVersion, Record: record})
+	data, err := encodeRecord(record)
 	if err != nil {
 		return fmt.Errorf("encode usage record: %w", err)
 	}
-	if err := r.store.SetWithTTL(ctx, recordKey(record.KeyID, record.Timestamp, record.RequestID), data, r.retention); err != nil {
-		return fmt.Errorf("put usage record: %w", err)
-	}
-	return r.accumulate(ctx, record)
+	return r.commitRecord(ctx, record, data)
 }
 
-func (r *repository) accumulate(ctx context.Context, record Record) error {
-	spend := record.knownSpendNanoUSD()
-	counters := []struct {
-		name  string
-		delta int64
-	}{
-		{counterRequests, 1},
-		{counterTokens, record.Tokens.Total},
-		{counterSpend, spend},
-	}
-	// A record advances one counter set per population that can cap it. The
-	// account set is skipped for a record written before account attribution
-	// existed: counting it under no account is worse than not counting it.
-	scopes := []Scope{KeyScope(record.KeyID), GatewayScope()}
-	if record.AccountID != "" {
-		scopes = append(scopes, AccountScope(record.AccountID))
-	}
-	if record.TeamID != "" {
-		scopes = append(scopes, TeamScope(record.TeamID))
-	}
-	for _, scope := range scopes {
-		for _, interval := range []string{IntervalDay, IntervalWeek, IntervalMonth} {
-			start, end := window(interval, record.Timestamp)
-			for _, counter := range counters {
-				if counter.delta == 0 && counter.name != counterRequests {
-					continue
-				}
-				key := aggregateKey(scope, interval, start, counter.name)
-				value, err := r.store.Increment(ctx, key, counter.delta)
-				if err != nil {
-					return fmt.Errorf("advance usage counter: %w", err)
-				}
-				if value == counter.delta {
-					// First write in this window: bound its lifetime.
-					if err := r.store.ExpireAt(ctx, key, end.Add(r.retention)); err != nil {
-						return fmt.Errorf("expire usage counter: %w", err)
-					}
-				}
-			}
-		}
-	}
-	return nil
+func encodeRecord(record Record) ([]byte, error) {
+	return json.Marshal(storedRecord{SchemaVersion: StorageSchemaVersion, Record: record})
 }
 
 func (r *repository) List(ctx context.Context, query Query) (Page, error) {
@@ -288,7 +250,7 @@ func (r *repository) List(ctx context.Context, query Query) (Page, error) {
 		stop := min(start+batchSize, len(ordered))
 		batch := make([]string, 0, stop-start)
 		for _, parsed := range ordered[start:stop] {
-			batch = append(batch, parsed.key)
+			batch = append(batch, parsed.key, adjustmentHeadKey(parsed.key))
 		}
 		values, err := r.store.BatchGet(ctx, batch)
 		if err != nil {
@@ -306,6 +268,10 @@ func (r *repository) List(ctx context.Context, query Query) (Page, error) {
 			}
 			if !matches(record, query) {
 				continue
+			}
+			record, err = applyBillingAdjustment(record, values[adjustmentHeadKey(parsed.key)])
+			if err != nil {
+				return Page{}, err
 			}
 			page.Records = append(page.Records, record)
 			if len(page.Records) == limit {
@@ -446,6 +412,9 @@ func decodeRecord(data []byte) (Record, error) {
 	}
 	if stored.SchemaVersion != StorageSchemaVersion {
 		return Record{}, fmt.Errorf("%w: unsupported schema", ErrCorruptRecord)
+	}
+	if stored.Record.BillingAdjustment != nil {
+		return Record{}, fmt.Errorf("%w: billing adjustments require separate records", ErrCorruptRecord)
 	}
 	if err := stored.Record.Validate(); err != nil {
 		return Record{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)

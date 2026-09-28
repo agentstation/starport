@@ -11,6 +11,8 @@ import (
 	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/authorization/revision"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/reservation"
 )
 
 const (
@@ -89,7 +91,15 @@ func (b *runtimeBuilder) openAuthorizationCache() error {
 			return err
 		}
 	}
+	teamHistory, ok := repositories.Teams.(reservation.TeamHistoryAuthority)
+	if !ok {
+		return limits.ErrBudgetPolicyUnknown
+	}
+	budgets := b.application.budget
 	source, err := authorization.NewRepositorySource(authorization.RepositorySources{
+		PrepareBudget: func(ctx context.Context, policy *limits.BudgetPolicy) error {
+			return budgets.preparePolicy(ctx, teamHistory, policy)
+		},
 		Users: repositories.Users, Grants: repositories.AccountGrants,
 		Keys: authorization.LocalKeys{Keys: b.apiKeys, Anonymous: apikey.Anonymous(b.config.Security.UnauthenticatedScopes)}, Accounts: b.accounts, Teams: repositories.Teams, KV: owner.kvRevision, SQL: owner.sqlRevision, KVAuthority: authorizationKV, SQLAuthority: authorizationSQL,
 	}, owner.authorities, owner.clock, authorizationPermissionLifetime)

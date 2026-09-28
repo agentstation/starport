@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/routing"
 )
 
@@ -46,7 +47,7 @@ const (
 	JobStateFailed JobState = "failed"
 	// JobStateCancelled marks a job its owner stopped. It is separate from
 	// JobStateFailed because a caller that stops its own work did not fail,
-	// and the two answer the caller differently even though neither costs.
+	// and the two answer the caller differently. Neither state proves a cost.
 	JobStateCancelled JobState = "cancelled"
 )
 
@@ -74,9 +75,7 @@ func (s JobState) Terminal() bool {
 	return s.Valid() && len(legalTransitions[s]) == 0
 }
 
-// Chargeable reports whether a job in this state produced work an account pays
-// for. Only a completed job did. A failed job produced no asset, and a
-// cancelled job is a caller stopping its own work, so neither draws a cost.
+// Chargeable reports a completed output for display. Billing requires measured usage.
 func (s JobState) Chargeable() bool { return s == JobStateCompleted }
 
 // legalTransitions is the one transition table. Every state this package knows
@@ -127,6 +126,35 @@ func CanTransition(from, to JobState) bool {
 // learned it could poll the provider directly, outside every limit and every
 // usage record Starport keeps.
 type Job struct {
+	correctionHead       *CorrectionIntent
+	correctionApplied    *CorrectionIntent
+	correctionReported   string
+	adminDecision        *ReconciliationDecision
+	lateProviderEvidence *LateProviderEvidence
+	// Native identifies inference that returns its result in one response.
+	Native bool
+	// Valuation pins submission prices. Measurement contains provider usage only.
+	Valuation              *reservation.Valuation
+	Measurement            *reservation.Evidence
+	nativeAssetBound       int64
+	nativeRetention        time.Duration
+	nativeReceiptKey       string
+	nativeAssetKey         string
+	assetPending           bool
+	assetDigest            string
+	nativeAssetDigest      string
+	nativeAssetContentType string
+	assetRecoveryStatus    string
+	// SlotID binds this job to its durable outstanding-work claim.
+	SlotID       string
+	SlotReleased bool
+	// SubmissionPending preserves an attempted dispatch without confirmed acceptance.
+	// Polling, cancellation, and timeout cleanup cannot infer its provider outcome.
+	SubmissionPending bool
+	// CatalogGeneration and ReservationID bind dispatch to its selected evidence.
+	CatalogGeneration string
+	ReservationID     string
+
 	ID      string
 	Account string
 	// KeyID names the gateway API key that submitted the work. A usage record
@@ -168,11 +196,14 @@ type Job struct {
 	// which is a different answer from a job that produced none.
 	AssetExpiredAt time.Time
 
-	// AccountedAt is when this job drew its one usage record and gave back the
-	// slot it held. It lives on the record rather than in the accounting seam
-	// because a poll is free and a caller may poll a finished job forever: the
-	// stamp is what makes the second poll draw nothing.
+	// AccountedAt records acknowledged optional reporting after required settlement.
+	// It does not own slot release or terminal notification.
 	AccountedAt time.Time
+	// ReportingExpiredAt records a reporter-confirmed retention expiry without delivery.
+	ReportingExpiredAt time.Time
+	// NotificationAttemptedAt claims one best-effort terminal notification.
+	// It does not prove delivery to a webhook recipient.
+	NotificationAttemptedAt time.Time
 
 	providerJobID string
 }
@@ -191,6 +222,21 @@ func (j Job) String() string {
 
 // Validate reports whether the record can be stored.
 func (j Job) Validate() error {
+	if err := j.validateCorrections(); err != nil {
+		return err
+	}
+	if err := j.validateAssetPublication(); err != nil {
+		return err
+	}
+	if err := j.validateAdministrator(); err != nil {
+		return err
+	}
+	if err := j.validateNative(); err != nil {
+		return err
+	}
+	if err := j.validateSubmission(); err != nil {
+		return err
+	}
 	switch {
 	case strings.TrimSpace(j.ID) == "":
 		return fmt.Errorf("%w: it has no identifier", ErrInvalidJob)
@@ -214,6 +260,12 @@ func (j Job) Validate() error {
 		return fmt.Errorf("%w: a failed job states no reason", ErrInvalidJob)
 	case j.State != JobStateFailed && strings.TrimSpace(j.Reason) != "":
 		return fmt.Errorf("%w: state %q states a failure reason", ErrInvalidJob, j.State)
+	}
+	return j.validateAssetState()
+}
+
+func (j Job) validateAssetState() error {
+	switch {
 	case j.AssetKey != "" && j.State != JobStateCompleted:
 		return fmt.Errorf("%w: state %q holds a stored asset", ErrInvalidJob, j.State)
 	case j.AssetKey != "" && strings.TrimSpace(j.AssetContentType) == "":
@@ -222,6 +274,10 @@ func (j Job) Validate() error {
 		return fmt.Errorf("%w: the stored asset states no retention window", ErrInvalidJob)
 	case j.AssetKey == "" && !j.AssetExpiredAt.IsZero():
 		return fmt.Errorf("%w: an expiry marker names no stored asset", ErrInvalidJob)
+	case !j.NotificationAttemptedAt.IsZero() && !j.State.Terminal():
+		return fmt.Errorf("%w: state %q has a terminal notification claim", ErrInvalidJob, j.State)
+	case !j.ReportingExpiredAt.IsZero() && (!j.State.Terminal() || !j.AccountedAt.IsZero()):
+		return fmt.Errorf("%w: inconsistent reporting expiry", ErrInvalidJob)
 	case !j.AccountedAt.IsZero() && !j.State.Terminal():
 		return fmt.Errorf("%w: state %q was already accounted", ErrInvalidJob, j.State)
 	}
@@ -260,10 +316,8 @@ func (j *Job) Transition(to JobState, now time.Time) error {
 	return j.transition(to, now)
 }
 
-// Fail moves the job to its terminal failed state and records why. Every path
-// that ends a job without an asset passes through here: a provider rejection, a
-// provider state word that names a failure, and a job that outlived its
-// polling budget.
+// Fail records a confirmed provider failure and its reason.
+// Local polling exhaustion does not establish this state.
 func (j *Job) Fail(reason string, now time.Time) error {
 	if strings.TrimSpace(reason) == "" {
 		return fmt.Errorf("%w: a failed job states no reason", ErrInvalidJob)
@@ -300,7 +354,7 @@ func (j *Job) AdoptProviderJob(id string) error {
 // HasProviderJob reports whether the provider named a job to poll. It answers
 // the only question anything outside this package has to ask about the
 // identifier, and it answers it without disclosing the value.
-func (j Job) HasProviderJob() bool { return j.providerJobID != "" }
+func (j Job) HasProviderJob() bool { return !j.Native && j.providerJobID != "" }
 
 // StoreAsset records bytes this gateway now holds for a completed job.
 //
@@ -349,18 +403,15 @@ func (j *Job) ExpireAsset(now time.Time) error {
 	return nil
 }
 
-// MarkAccounted stamps the job as priced and refuses a second stamp.
-//
-// The refusal is the invariant, not a convenience. Two concurrent polls of the
-// same finished job both read a record with no stamp, and the one that loses
-// the write refuses here rather than drawing a second cost for one video.
+// MarkAccounted records acknowledged reporting for a terminal job.
+// Delivery precedes this marker and must be idempotent across retries.
 func (j *Job) MarkAccounted(now time.Time) error {
 	switch {
 	case !j.State.Terminal():
 		return fmt.Errorf("%w: state %q has not ended", ErrInvalidJob, j.State)
 	case now.IsZero():
 		return fmt.Errorf("%w: an accounting states no time", ErrInvalidJob)
-	case !j.AccountedAt.IsZero():
+	case j.reportingComplete():
 		return fmt.Errorf("%w: %s was already accounted", ErrInvalidJob, j.ID)
 	}
 	j.AccountedAt = now
@@ -370,6 +421,8 @@ func (j *Job) MarkAccounted(now time.Time) error {
 // Accounted reports whether this job already drew its usage record.
 func (j Job) Accounted() bool { return !j.AccountedAt.IsZero() }
 
+func (j Job) reportingComplete() bool { return j.Accounted() || !j.ReportingExpiredAt.IsZero() }
+
 // Outstanding reports whether this job still holds a slot against its owner's
 // outstanding job limit. A job holds one from its submission until the moment
 // it is accounted, which is the same moment it stops being able to spend.
@@ -377,7 +430,7 @@ func (j Job) Outstanding() bool { return !j.Accounted() }
 
 // HasAsset reports whether this gateway holds readable bytes for the job.
 func (j Job) HasAsset() bool {
-	return j.AssetKey != "" && j.AssetExpiredAt.IsZero()
+	return j.AssetKey != "" && !j.assetPending && j.AssetExpiredAt.IsZero()
 }
 
 // AssetExpired reports whether the stored asset has passed its window. It reads
@@ -385,6 +438,12 @@ func (j Job) HasAsset() bool {
 // whose sweep has not yet run, so a read never serves bytes past the window the
 // caller was promised.
 func (j Job) AssetExpired(now time.Time) bool {
+	if j.Native && j.assetRecoveryStatus == assetRecoveryExpired {
+		return true
+	}
+	if j.Native && !j.SubmissionPending && j.State == JobStateCompleted && !now.Before(j.TerminalAt.Add(j.nativeRetention)) {
+		return true
+	}
 	if j.AssetKey == "" {
 		return false
 	}

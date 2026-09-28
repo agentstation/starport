@@ -256,6 +256,43 @@ Identity sessions receive account scopes, without deployment-admin access.
 Removing a user, grant, or team membership invalidates affected authorization.
 Each queued batch line checks current policy before execution. Its account and caller identity remain fixed.
 
+Before each batch line runs, Starport atomically records its input digest and request identity against the current batch state.
+Cancellation through another replica prevents later line claims. Lines claimed before cancellation can finish.
+A failed or ambiguous claim acknowledgment permits no dispatch. Reading a retained claim does not permit another execution.
+Each claimed line receives a stable output file before dispatch. Starport records the result digest and writes its bytes before starting another line in that worker slot.
+A process restart preserves completed line files. If result storage fails, Starport stops further dispatch and retains the outstanding batch claim.
+The record reports `batch_result_storage_unavailable`. It does not repeat the provider call.
+
+Prepared line files retain their original expiry. Internal checkpoints do not appear in ordinary file listings.
+The storage bound counts checkpoints and aggregate files while both exist. File scans continue beyond the first page.
+The worker and background sweep reconstruct complete aggregates from retained line results without another provider request.
+Each aggregate keeps one stable identity, content digest, and original expiry across retries.
+Starport confirms the aggregate bytes and batch references before it retires line checkpoints.
+A batch status request reads the record without reconstructing its files.
+
+Peak storage includes line checkpoints and aggregates until cleanup completes. A quota refusal preserves retained results.
+Free legitimate capacity before retrying recovery. Do not widen the original batch bound through replacement configuration.
+Incomplete failed runs retain their claims.
+
+After restart, the background sweep resumes only lines that durable records prove never started.
+It validates current caller permission before claiming another line. Each resumed line also requires normal authorization and budget admission.
+Completed results remain available. Uncertain claims never permit automatic replay.
+
+Batch records retain a gateway API key hash or an account-scoped, batch-scoped console receipt.
+They do not retain bearer secrets or reusable console cookies.
+Expired receipts, signing-key changes, and withdrawn permission prevent new claims.
+Affected untouched lines remain pending until recovery can validate permission.
+
+Shutdown refuses new batches and stops later line dispatch. Admitted calls retain time to finish and store their results.
+Starport waits for batch cleanup before closing its dependencies.
+
+If the shutdown deadline expires, Close returns an error and leaves those dependencies open.
+A later Close call can finish after workers drain. Forced process termination still requires recovery from durable evidence.
+Untouched lines and uncertain claims never gain permission to run from shutdown alone.
+
+File cleanup now confirms permanent retirement before it releases metadata or quota.
+A delayed writer cannot replace a retired identity. Full batch recovery qualification remains open.
+
 The console account picker remains incomplete in this candidate.
 API clients must supply the selection header when the grants name multiple accounts.
 
@@ -332,6 +369,12 @@ An internal authoritative catalog still requires its qualified clock and permiss
 An authorization cache deadline cannot replace that catalog contract.
 
 Budget windows use the admission authority's time. Strict budgets still refuse unknown capacity.
+
+`STARPORT_BUDGET_ADMISSION_MODE=atomic` is the default and the only supported budget mode.
+Each provider attempt reserves capacity before dispatch. Uncertain provider charges retain their reservation.
+
+Local quota leases, cached-balance admission, and disabled admission fail configuration validation.
+These restrictions apply to standalone and shared deployments. They do not disable catalog or authorization caches.
 A clock-dependent lease protocol must separately establish its required clock bounds.
 
 ### Authorization record limits
@@ -1330,6 +1373,64 @@ gateway answers a full account with HTTP 413 and tells the caller to delete a
 file to make room. A stored-byte bound is a level and not a rate: an upload
 raises it and a delete lowers it, and no interval resets it.
 
+Each file has a durable byte claim in the same KV store as its metadata.
+Cleanup releases that claim once, after the blob backend confirms retirement. Concurrent cleanup
+and lost acknowledgments cannot release another file's capacity. A failed
+release keeps the deleting record for the next sweep.
+
+An abandoned preparation can hold capacity for ten minutes. Recovery then
+closes its unattached claim. Attached files follow normal file retention.
+Missing or invalid accounting state refuses new uploads. Do not delete quota
+keys to restore capacity.
+
+File schema 5, batch schema 5, and byte-accounting schema 2 require
+coordinated migration. CSP13 owns that qualification.
+
+File bytes use immutable publication in the `retained-v1` blob namespace.
+An exact retry verifies existing content. Cleanup replaces live content with a
+permanent retirement marker, including when no content exists yet. A lost
+retirement acknowledgment retains the file record and byte claim for recovery.
+Each cleanup pass handles at most 256 records and preserves its continuation.
+
+Include retirement markers in backups. Do not apply object expiration or manual
+deletion to current objects in `retained-v1`. Removing a marker can allow an old
+writer to recreate content.
+
+File payload quotas exclude marker overhead,
+filesystem staging, incomplete multipart uploads, and noncurrent object versions.
+Budget and monitor these backend costs separately. CSP13 owns marker reclamation.
+A time limit alone does not prove that an old writer cannot resume.
+
+The shared backend requires conditional creation on both `PutObject` and
+`CompleteMultipartUpload`. It uses a real retirement object because an S3 delete
+marker permits conditional creation. Local tests cover a versioned MinIO bucket.
+Other S3 services, native platform behavior, staging recovery, and the complete
+shared-storage production recipe still require qualification for this candidate.
+
+Before new file allocation or video dispatch, Starport checks byte-publication
+capability. An object-store client runs one bounded probe before accepting this
+work. The probe checks single-part and multipart creation, retained content,
+and refusal to replace retirement markers. The constructor does not probe the
+bucket. General gateway readiness and unrelated text requests remain independent.
+
+Successful checks stay in process memory for that configured client. Concurrent
+first requests share the probe. Failed checks refuse affected requests and permit
+a later retry after one second. File and video responses return HTTP 503 with a
+storage-capability message. Logs retain the underlying cause.
+
+Repair endpoint
+permissions or conditional-write support before retrying. Restart after changing
+backend semantics so the client checks them again.
+
+The probe writes small objects and retains up to four identities per attempt.
+Preserve their retirement markers. Configure incomplete-multipart-upload cleanup
+for interrupted probes. The probe uses a small final part, which has no minimum
+size under the S3 multipart contract. See [Amazon S3 limits](https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html).
+A successful probe does not qualify physical erasure, backups, every server
+behind a load balancer, or future storage availability.
+
+
+
 ### Choosing a backend
 
 The default writes to the platform data directory:
@@ -1519,9 +1620,22 @@ A video takes minutes, so a submission answers with a job identifier rather
 than with a video. The caller comes back to that identifier until the job
 reaches a terminal state, and then reads the bytes this gateway stored for it.
 
-Starport polls the provider itself. A caller never learns the provider's own
-job identifier, so a deployment can move a model between providers without
-breaking a caller that is mid-poll.
+Starport polls providers that return asynchronous job handles.
+For native video inference, Starport retains one provider connection in a bounded worker.
+The submission returns after Starport stores dispatch ownership.
+The caller reads the gateway job while the worker waits for the result.
+Native request identifiers do not permit provider polling or cancellation.
+Starport returns HTTP 409 for native cancellation requests.
+
+A native response receipt retains the result, measured duration, and asset bytes.
+Recovery reads this receipt without another inference request.
+The first stored receipt is immutable. An exact callback retry preserves its original timestamp.
+A conflicting callback cannot replace its measured usage or content.
+Recovery verifies already-stored asset bytes before attempting another download.
+
+A lost response leaves `submission_status` as `unconfirmed` and retains required budget capacity.
+Starport never automatically repeats uncertain inference.
+Inline assets support durable recovery. External downloads require explicit origin grants, as described below.
 
 ### The routes and their scopes
 
@@ -1531,10 +1645,11 @@ breaking a caller that is mid-poll.
 | `GET /v1/videos` | `videos:write` | list the account's jobs |
 | `GET /v1/videos/{video_id}` | `videos:write` | read one job |
 | `GET /v1/videos/{video_id}/content` | `videos:write` | read the stored bytes |
-| `POST /v1/videos/{video_id}/cancel` | `videos:write` | cancel one job |
+| `POST /v1/videos/{video_id}/cancel` | `videos:write` | request cancellation |
+| `POST /v1/videos/{video_id}/reconcile` | `videos:write` | explicitly check an accepted provider job |
 
-The OpenRouter family serves the same five paths under `/api/v1/videos`. A
-caller polls a job through the family it submitted through.
+The OpenRouter family serves the same six paths under `/api/v1/videos`.
+The `reconcile` route is a Starport extension.
 
 One scope covers the whole surface. The account that submits a job is the only
 account that can read it. A separate read scope would therefore name a
@@ -1546,18 +1661,79 @@ A job holds one of five states:
 
 | State | Meaning |
 | --- | --- |
-| `queued` | the provider accepted the submission and has not started |
+| `queued` | dispatch ownership exists, or the provider accepted work that has not started |
 | `running` | the provider is working |
 | `completed` | the video is ready, and this gateway may still hold the bytes |
-| `failed` | the provider refused or gave up, and `error.message` says why |
-| `cancelled` | a caller stopped the job before it finished |
+| `failed` | the job ended without a usable result, and `error.message` says why |
+| `cancelled` | the provider confirmed cancellation |
 
 The last three are terminal. A terminal job never returns to `running`, so a
 caller that reads one of them can stop polling.
 
+A cancellation response can still report `queued` or `running`.
+Such a response does not release the outstanding slot.
+A deletion acknowledgement alone does not confirm cancellation.
+If the cancellation request fails, read the existing job before another submission.
+A completion that races cancellation remains `completed`.
+
 A completed job carries `expires_at` while this gateway still holds its bytes.
 The field goes once the retention window closes. That tells a caller the work
 finished and the video went, without spending a request to find out.
+
+### Administrator reconciliation
+
+If a native response is lost, get provider usage or explicit no-charge evidence before resolving its reservation.
+A timeout, estimated cost, or missing asset cannot establish a charge. This action never generates another video.
+
+An authenticated administrator can inspect and resolve the job through these Starport routes:
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/v1/admin/accounts/{account_id}/videos/{video_id}/reconciliation` | Read the original identity, pinned valuation, and audit evidence. |
+| `POST /api/v1/admin/accounts/{account_id}/videos/{video_id}/reconciliation` | Record an administrator decision and retry required settlement. |
+
+These routes require the `admin` scope and an authenticated key or console session.
+An anonymous administrator scope cannot supply an audit identity. The submitting account's `videos:write` scope cannot authorize either route.
+
+1. Read the inspection response.
+2. Verify its account, job, reservation, provider, model, and catalog generation against the provider evidence.
+3. Copy its `binding` into the decision request.
+4. Supply a stable `decision_id`, an `evidence_reference`, and a `reason`.
+5. Select `disposition: usage` with the actual `quantities` named by the pinned valuation, or select `disposition: no_charge`.
+
+A no-charge decision carries no quantities and zero tokens. It does not invent measured output duration.
+Use an evidence reference that your operators can retrieve. Do not put credentials in the evidence reference or reason.
+Starport stores the authenticated actor and decision time. The caller cannot set either field.
+
+Starport stores the immutable decision in the original job before releasing budget capacity or its outstanding slot.
+Job records use Badger locally and the selected shared KV store in replicated deployments.
+This required audit does not depend on the optional SQL audit trail.
+The repository refuses changes to an accepted decision and refuses to delete its job record.
+
+An exact retry from the same actor returns the accepted decision. Changed evidence returns HTTP 409 and requires explicit correction.
+HTTP 503 can follow a committed decision if settlement fails. Inspect the decision before retrying the same request.
+The original reservation and catalog valuation remain binding after a restart or configuration change.
+
+Ordinary job responses expose only `reconciliation_status`:
+
+| Value | Meaning |
+| --- | --- |
+| `evidence_required` | The dispatch has no confirmed response. |
+| `administrator_recorded` | The audit exists, but required settlement or optional reporting remains pending. |
+| `administrator_resolved` | Settlement and reporting acknowledged the administrator decision. |
+| `provider_evidence_review_required` | A later provider response requires review against the immutable decision. |
+
+The job ends as `failed` with `native_response_unavailable`. This describes the unavailable result, not a provider cancellation or free request.
+Usage records distinguish `administrator_usage` and `administrator_no_charge` through `billing_disposition`.
+Private evidence, reasons, and provider request identifiers remain on the administrator route.
+
+A later provider response cannot replace the administrator decision or silently change its charge.
+If that evidence cannot confirm the decision, Starport blocks new admission in the original budget windows in the same transaction that publishes the conflict.
+Matching evidence preserves the accepted charge and permits normal operation. Conflicts require explicit reconciliation.
+Unrelated accounts remain available. Existing evidence and charges remain unchanged.
+
+Starport retains its billing evidence and original private response through the response's retention deadline.
+The billing evidence remains after asset expiry. A conflicting decision requires explicit correction outside this endpoint.
 
 ### Retention and the polling budget
 
@@ -1565,26 +1741,94 @@ finished and the video went, without spending a request to find out.
 STARPORT_JOBS_ASSET_RETENTION=24h
 STARPORT_JOBS_MAX_ASSET_BYTES=268435456
 STARPORT_JOBS_SWEEP_INTERVAL=1h
+STARPORT_JOBS_MAX_WORKERS=2
+STARPORT_JOBS_EXECUTION_TIMEOUT=10m
 ```
 
-The retention window defaults to 24 hours, measured from the moment this
-gateway stored the asset. It is short beside the 30 days a file gets. A
-generated video is an answer a caller collects rather than a document it keeps.
-Both provider families publish their own links with windows measured in hours.
+External video downloads require an explicit origin grant. The default denies every external download.
+
+Set `STARPORT_JOBS_ASSET_DOWNLOAD_ORIGINS` to comma-separated HTTPS origins without paths, queries, or trailing slashes.
+For example, `https://assets.example.com,https://media.example.com:8443` grants those two origins.
+A provider response cannot add a grant. Configuration changes require a restart.
+Literal loopback HTTP origins support local development when explicitly configured.
+
+The download client sends no inference credentials, cookies, or referrer.
+It follows no redirects and uses no environment proxy. HTTPS certificate validation remains mandatory.
+Each transfer has a 30-second deadline and the submitted asset byte bound.
+The submission worker limit also bounds simultaneous native asset recovery on each replica.
+
+The `asset_status` field reports retrieval state.
+
+| Value | Meaning |
+| --- | --- |
+| `pending` | Asset recovery has not finished. |
+| `blocked` | The download requires an operator-approved origin. |
+| `retry` | A later read or sweep can retry the failed transfer. |
+| `invalid` | Content, size, or changed bytes failed validation. |
+| `stored` | Starport holds the asset. |
+| `expired` | The original retention window ended. |
+
+Recovery never starts another generation request. It cannot extend the original retention window.
+Asset failure does not discard measured usage or block budget settlement.
+
+Job reads, content retrieval, cancellation, and reconciliation remain available after budget exhaustion.
+Authentication and account ownership still apply. Routes that start paid work retain budget checks.
+
+Each replica permits two simultaneous video submission workers by default.
+A full worker set returns HTTP 503 before provider dispatch.
+Native inference uses the configured execution deadline, including response transfer.
+A timeout retains uncertain work and does not prove provider cancellation.
+Shutdown cancels workers before the provider registry and storage close.
+
+Optional usage reports use submission prices and measured duration.
+Provider cost estimates and terminal states cannot establish a charge.
+An explicit measured zero differs from absent usage.
+The job record preserves unknown usage for required settlement.
+
+The retention window defaults to 24 hours.
+Native jobs measure it from the stored response receipt.
+Provider-polled jobs measure it from their first durable asset preparation.
+Native recovery retains the submission asset bound and retention window.
+
+Provider-polled jobs retain their prepared identity, digest, measured size, and expiry before writing bytes.
+A lost write acknowledgment leaves that preparation available for refresh or startup recovery.
+The job reports `asset_status: "pending"` until Starport verifies the stored bytes.
+
+All video receipts and assets use immutable publication in `retained-v1`.
+Expiry confirms backend retirement before marking cleanup complete.
+Delayed writers cannot recreate retired content. Backups must preserve retirement markers.
+Job schema 5 requires coordinated migration under CSP13.
+Native platform, storage-readiness, staging-cleanup, and restore qualification remain open.
+
+A generated video is an answer a caller collects.
+Provider retention does not change the gateway retention window.
 A caller that comes back past the window reads HTTP 410 and the window length
 in the refusal.
 
-One stored asset defaults to a 256 MiB bound. Without it a provider's decision
-about how large its own answer is would size this deployment's storage. A sweep
-reclaims expired bytes every hour. The sweep is a floor on how long expired
-bytes survive on disk. It is not a floor on how long an asset reads: an expired
-asset stops reading the moment it expires.
+One stored asset defaults to a 256 MiB bound. Content reads stop at expiry.
+Cleanup replaces the live object with a retirement marker. Existing filesystem readers can finish.
 
-Starport polls a job for one hour. Past that it fails the job and states the
-budget in the message. A provider that has not answered in an hour is not going
-to. The wait between polls starts at two seconds and doubles to a 30-second
-ceiling. The provider request count therefore grows with the logarithm of the
-wait.
+On versioned object stores, noncurrent payload versions and incomplete uploads require backend cleanup.
+Preserve current retirement markers when configuring that cleanup.
+The gateway retention window does not set a physical deletion deadline for backups or object versions.
+
+For asynchronous provider jobs, a single-job GET can check the provider during the first hour after submission.
+After that window, GET retains the last provider state and returns `polling_status: "paused"`.
+A listing reads stored records without provider calls.
+A local timeout does not prove that provider work stopped.
+The outstanding slot remains held until the provider confirms a terminal state.
+A timeout does not prove a zero charge or permit a reservation refund.
+
+Select **Check provider** in the Jobs page, or call the `reconcile` route.
+This action uses current caller authorization and provider access to check the existing provider handle.
+The operation has a 30-second timeout. It never submits generation or restarts automatic polling.
+
+A provider error retains the job and its capacity claim. Retry the check when provider access returns.
+An unconfirmed submission has no trusted provider handle and refuses this action.
+
+The sweep reports `awaiting_reconciliation` for accepted jobs beyond the polling window.
+This count describes records observed during that pass. It is not a count of new failures.
+Provider completion and billing settlement remain separate facts.
 
 Video bytes go to the same backend that `## File Storage` above configures. A
 deployment that sets `STARPORT_FILES_BACKEND=objectstore` serves a video from
@@ -2083,3 +2327,64 @@ bash scripts/smoke-openrouter-sdks.sh
 The verifier must report `Summary: 12 passed, 0 failed`. Required raw HTTP
 smoke checks must pass. Optional SDK checks can be green or `UNVERIFIED`. Do
 not report an unverified SDK as compatible.
+
+### Correct an administrator billing decision
+
+Use a correction when new evidence changes an accepted decision. The first decision and independent provider evidence remain immutable.
+Corrections never submit another generation. They use the original reservation, budget windows, and pinned prices.
+
+| Route | Purpose |
+| --- | --- |
+| `POST /api/v1/admin/accounts/{account_id}/videos/{video_id}/reconciliation/corrections` | Retain a new decision and apply it to the inspected job. |
+| `GET /api/v1/admin/accounts/{account_id}/videos/{video_id}/reconciliation/corrections/{decision_id}` | Inspect one retained intent, application result, and optional report result. |
+
+Both routes require authenticated administrator access. Account inference scopes cannot authorize them.
+
+New corrections must commit within 90 days after the original settlement.
+A correction never extends this deadline. Exact accepted retries remain idempotent after the deadline.
+Unresolved reservations and accepted audit evidence never expire through retention cleanup.
+
+Required reservations use their storage authority's original settlement time.
+Jobs without required reservations use the original administrator decision time.
+After expiry, inspection reports `correction_horizon_expired`, and a new correction returns HTTP 409.
+
+1. Read the original reconciliation inspection route.
+2. Review the first decision, late provider evidence, latest correction, and pinned valuation.
+3. Copy `correction_binding` into the new request's `binding`.
+4. Supply a new stable `decision_id`, actual quantities or explicit no-charge evidence, an evidence reference, and a reason.
+5. Submit the request to the corrections route.
+6. Inspect the result before retrying after an unavailable response.
+
+The request uses the same fields as the first reconciliation.
+
+The service supplies the authenticated actor and decision time.
+An empty `correction_binding` with `correction_unavailable_reason` means required settlement cannot currently support inspection.
+
+Starport retains intent before changing a charge. It then commits the job, audit outcome, required charge, and dispute resolution in one transaction.
+A pending intent does not change effective billing. New evidence invalidates its inspected state and requires a new decision.
+A new intent can supersede a pending intent while preserving both. It cannot erase an applied decision.
+
+An exact retry from the same actor returns retained state.
+
+Changed content under the same identifier returns HTTP 409.
+An older exact retry never reverses a newer correction. HTTP 503 can follow a committed transaction, so inspect before retrying.
+
+The inspection includes `applied_correction_id`, `reported_correction_id`, and the latest correction audit.
+Each intent links to its previous intent and previous applied decision. Use the correction inspection route to follow that history.
+
+| Status | Meaning |
+| --- | --- |
+| `correction_pending` | Durable intent awaits required settlement. |
+| `correction_review_required` | Evidence changed after the operator inspected it. |
+| `correction_reporting_pending` | Required settlement completed, but optional usage reporting has not acknowledged the correction. |
+
+Optional reports retry in applied-decision order. A report failure does not prevent a new required budget decision.
+Activity and exports preserve original billing fields alongside corrected values. Corrections do not add another request count.
+Report outcomes are `delivered`, `expired`, or `disabled`. Expired reports cannot recreate usage outside its original retention deadline.
+
+Required audit history remains in the selected KV store after optional usage expires. Missing audit records prevent further correction.
+If original reporting expires before delivery, inspection records `reporting_expired_at` and leaves `accounted` false.
+Recovery stops retrying that original report. Required settlement and later corrections remain independent.
+
+Job payload schema 6 and correction history schema 1 require the matching migration contract.
+The production qualification plan still owns populated migration and full fleet recovery evidence.

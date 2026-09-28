@@ -465,7 +465,17 @@ func (s *BadgerStore) CompareAndSwap(ctx context.Context, key string, old, newVa
 }
 
 // CompareAndSwapBatch applies all conditional writes or none of them.
-func (s *BadgerStore) CompareAndSwapBatch(_ context.Context, mutations []CompareAndSwapMutation) error {
+func (s *BadgerStore) CompareAndSwapBatch(ctx context.Context, mutations []CompareAndSwapMutation) error {
+	return s.compareAndSwapBatch(ctx, mutations, TimeWindow{})
+}
+
+func (s *BadgerStore) compareAndSwapBatch(ctx context.Context, mutations []CompareAndSwapMutation, window TimeWindow) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := window.validate(); err != nil {
+		return err
+	}
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
@@ -478,6 +488,12 @@ func (s *BadgerStore) CompareAndSwapBatch(_ context.Context, mutations []Compare
 	}
 
 	err := s.db.Update(func(txn *badger.Txn) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if !window.contains(time.Now().UTC()) {
+			return ErrTimeWindowChanged
+		}
 		for _, mutation := range mutations {
 			item, err := txn.Get([]byte(mutation.Key))
 			if err != nil {

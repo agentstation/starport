@@ -59,7 +59,8 @@ var mediaInterfaces = []struct {
 	}},
 	{catalogs.ProviderOperationVideosGenerations, "JobRunner", ErrJobsUnsupported, func(c Connector) bool {
 		_, ok := c.(JobRunner)
-		return ok
+		_, native := c.(NativeVideoGenerator)
+		return ok || native
 	}},
 	{catalogs.ProviderOperationDocumentsRecognition, "DocumentRecognizer", ErrTransportInterfaceMissing, func(c Connector) bool {
 		_, ok := c.(DocumentRecognizer)
@@ -210,6 +211,16 @@ func ProductionTransportRegistry() (*TransportRegistry, error) {
 			EndpointType: catalogs.EndpointTypeVoyage,
 			Operations:   []catalogs.ProviderOperation{catalogs.ProviderOperationRerank},
 			Factory:      newVoyageConnector,
+		},
+		TransportDescriptor{
+			EndpointType: catalogs.EndpointTypeDeepInfraVideo,
+			Operations:   []catalogs.ProviderOperation{catalogs.ProviderOperationVideosGenerations},
+			Factory:      newDeepInfraVideoConnector,
+		},
+		TransportDescriptor{
+			EndpointType: catalogs.EndpointTypeMistralOCR,
+			Operations:   []catalogs.ProviderOperation{catalogs.ProviderOperationDocumentsRecognition},
+			Factory:      newMistralOCRConnector,
 		},
 		TransportDescriptor{
 			EndpointType: catalogs.EndpointTypeOllama,

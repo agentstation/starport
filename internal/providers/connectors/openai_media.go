@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -61,8 +62,13 @@ func (c *OpenAICompatibleConnector) GenerateImages(
 	defer func() { _ = resp.Body.Close() }()
 
 	var decoded ImagesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	decoder := json.NewDecoder(resp.Body)
+	if err := decoder.Decode(&decoded); err != nil {
+		return nil, fmt.Errorf("failed to decode image response: %w", err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return nil, fmt.Errorf("image response did not end after its JSON value: %v", err)
 	}
 	return &decoded, nil
 }
@@ -94,7 +100,8 @@ func (c *OpenAICompatibleConnector) SynthesizeSpeech(
 	if err != nil {
 		return nil, fmt.Errorf("failed to read audio response: %w", err)
 	}
-	return &SpeechResponse{Audio: audio, ContentType: resp.Header.Get("Content-Type")}, nil
+	characters := int64(utf8.RuneCountInString(req.Input))
+	return &SpeechResponse{InputCharacters: &characters, Audio: audio, ContentType: resp.Header.Get("Content-Type")}, nil
 }
 
 // Transcribe performs a speech-to-text call. One method serves transcription

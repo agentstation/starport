@@ -22,7 +22,7 @@ func TestStartupMintsTheTokenTheCLIReads(t *testing.T) {
 	path := cfg.Security.LocalTokenPath
 	require.NoFileExists(t, path, "the machine starts cold")
 
-	application, err := New(cfg, withTestFactories())
+	application, err := New(cfg, withTestFactories(t))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
 
@@ -40,7 +40,7 @@ func TestStartupMintsTheTokenTheCLIReads(t *testing.T) {
 // they would find out when their console session stopped working.
 func TestASecondStartKeepsTheFirstToken(t *testing.T) {
 	cfg := validProductionConfig(t)
-	first, err := New(cfg, withTestFactories())
+	first, err := New(cfg, withTestFactories(t))
 	require.NoError(t, err)
 	require.NoError(t, first.Close(context.Background()))
 
@@ -49,7 +49,7 @@ func TestASecondStartKeepsTheFirstToken(t *testing.T) {
 	afterFirst, err := store.Load(context.Background())
 	require.NoError(t, err)
 
-	second, err := New(cfg, withTestFactories())
+	second, err := New(cfg, withTestFactories(t))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, second.Close(context.Background())) })
 
@@ -65,7 +65,7 @@ func TestANetworkBindRefusesAFirstBootToken(t *testing.T) {
 	cfg := validProductionConfig(t)
 	cfg.Server.Host = "0.0.0.0"
 
-	_, err := New(cfg, withTestFactories())
+	_, err := New(cfg, withTestFactories(t))
 
 	require.ErrorIs(t, err, ErrLocalTokenExposed)
 	assert.Contains(t, err.Error(), localauth.RotateCommand)
@@ -82,7 +82,7 @@ func TestANetworkBindAcceptsARotatedToken(t *testing.T) {
 	_, err = store.Rotate(context.Background(), time.Now())
 	require.NoError(t, err)
 
-	application, err := New(cfg, withTestFactories())
+	application, err := New(cfg, withTestFactories(t))
 
 	require.NoError(t, err)
 	require.NoError(t, application.Close(context.Background()))
@@ -94,7 +94,7 @@ func TestLoopbackAcceptsAFirstBootToken(t *testing.T) {
 	cfg := validProductionConfig(t)
 	cfg.Server.Host = "127.0.0.1"
 
-	application, err := New(cfg, withTestFactories())
+	application, err := New(cfg, withTestFactories(t))
 
 	require.NoError(t, err)
 	require.NoError(t, application.Close(context.Background()))
@@ -108,7 +108,7 @@ func TestCompositionRefusesAConfigurationWithNowhereToKeepTheToken(t *testing.T)
 	cfg := validProductionConfig(t)
 	cfg.Security.LocalTokenPath = ""
 
-	_, err := New(cfg, withTestFactories())
+	_, err := New(cfg, withTestFactories(t))
 
 	require.ErrorIs(t, err, ErrLocalTokenPathRequired)
 }
@@ -123,7 +123,7 @@ func TestStartupRefusesAnUnreadableTokenRatherThanReplacingIt(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
 	require.NoError(t, os.WriteFile(path, []byte("{"), 0o600))
 
-	_, err := New(cfg, withTestFactories())
+	_, err := New(cfg, withTestFactories(t))
 
 	require.ErrorIs(t, err, localauth.ErrCorruptRecord)
 	after, readErr := os.ReadFile(path)
@@ -131,7 +131,8 @@ func TestStartupRefusesAnUnreadableTokenRatherThanReplacingIt(t *testing.T) {
 	assert.Equal(t, []byte("{"), after)
 }
 
-func withTestFactories() func(*buildOptions) {
-	factories := explicitTestFactories()
+func withTestFactories(t *testing.T) func(*buildOptions) {
+	t.Helper()
+	factories := explicitTestFactories(t)
 	return func(options *buildOptions) { options.factories = factories }
 }

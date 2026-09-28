@@ -308,7 +308,10 @@ func EmbeddingResponseToInference(response *EmbeddingsResponse) (inference.Embed
 	for i, embedding := range response.Data {
 		data[i] = inference.Embedding{Index: embedding.Index, Vector: append([]float32(nil), embedding.Embedding...)}
 	}
-	return inference.EmbeddingResponse{Model: response.Model, Data: data, Usage: usageToInference(response.Usage)}, nil
+	usage := usageToInference(response.Usage)
+	_, known := response.ReportedInputTokens()
+	usage.TokensUnknown = !known
+	return inference.EmbeddingResponse{Model: response.Model, Data: data, Usage: usage}, nil
 }
 
 func messagesFromInference(messages []inference.Message) ([]Message, error) {

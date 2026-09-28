@@ -134,11 +134,14 @@ func TestAScannedDocumentReachesRecognitionThenTheChatModel(t *testing.T) {
 	router := newRecognizingRouter("INVOICE 4471\nAmount due: $912.00")
 	service := &proxy{router: router}
 
-	_, err := service.ProcessChatCompletion(context.Background(),
-		parsedRequest(t, "scanned.pdf", inference.ParserEngineRecognition))
+	request := parsedRequest(t, "scanned.pdf", inference.ParserEngineRecognition)
+	request.RequestID = "request-with-document"
+	_, err := service.ProcessChatCompletion(t.Context(), request)
 	require.NoError(t, err)
 
 	require.NotNil(t, router.asked, "the scanned document never reached a recognition offering")
+	require.Equal(t, request.RequestID, router.asked.RequestID)
+	require.Equal(t, request.RequestID, router.req.RequestID)
 	require.Equal(t, "scanned.pdf", router.asked.Request.Document.Filename)
 	require.Equal(t, 1, router.asked.Request.Pages,
 		"the recognizer was not told how many pages it must return")

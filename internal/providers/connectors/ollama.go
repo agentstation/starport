@@ -105,15 +105,25 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 		} `json:"message"`
 		TotalDuration      int64 `json:"total_duration"`
 		LoadDuration       int64 `json:"load_duration"`
-		PromptEvalCount    int   `json:"prompt_eval_count"`
+		PromptEvalCount    *int  `json:"prompt_eval_count"`
 		PromptEvalDuration int64 `json:"prompt_eval_duration"`
-		EvalCount          int   `json:"eval_count"`
+		EvalCount          *int  `json:"eval_count"`
 		EvalDuration       int64 `json:"eval_duration"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
+
+	usage := Usage{}
+	usage.setReportedTotals(ollamaResp.PromptEvalCount != nil, ollamaResp.EvalCount != nil, ollamaResp.PromptEvalCount != nil && ollamaResp.EvalCount != nil)
+	if ollamaResp.PromptEvalCount != nil {
+		usage.PromptTokens = *ollamaResp.PromptEvalCount
+	}
+	if ollamaResp.EvalCount != nil {
+		usage.CompletionTokens = *ollamaResp.EvalCount
+	}
+	usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
 
 	// Convert to OpenAI format
 	return &ChatResponse{
@@ -131,11 +141,7 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 				FinishReason: finishReasonStop,
 			},
 		},
-		Usage: Usage{
-			PromptTokens:     ollamaResp.PromptEvalCount,
-			CompletionTokens: ollamaResp.EvalCount,
-			TotalTokens:      ollamaResp.PromptEvalCount + ollamaResp.EvalCount,
-		},
+		Usage: usage,
 	}, nil
 }
 
@@ -253,6 +259,7 @@ func (c *OllamaConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest
 		},
 		Model: req.Model,
 		Usage: Usage{
+			decoded:      true,
 			PromptTokens: 0, // Ollama doesn't report token usage for embeddings
 			TotalTokens:  0,
 		},

@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -52,9 +53,9 @@ func TestAnAccountAtItsOutstandingJobLimitReadsARefusal(t *testing.T) {
 	// Hold the account's one slot the way a queued job holds it. Submitting a
 	// real job first is not available here: nothing in this server routes a
 	// video, so no submission ever reaches a record.
-	meter, err := limits.NewJobMeter(store)
+	meter, err := jobslots.Open(store)
 	require.NoError(t, err)
-	require.NoError(t, meter.Reserve(t.Context(), account.DefaultID, 1, bound))
+	require.NoError(t, meter.Reserve(t.Context(), account.DefaultID, "held", "held-job", "video", bound))
 
 	refused := submitVideo(server, key)
 	require.Equal(t, http.StatusTooManyRequests, refused.Code, refused.Body.String())
@@ -68,7 +69,7 @@ func TestAnAccountAtItsOutstandingJobLimitReadsARefusal(t *testing.T) {
 
 	// The slot comes back when a job ends. The same request is then admitted
 	// and fails further along, at the router.
-	require.NoError(t, meter.Release(t.Context(), account.DefaultID, 1))
+	require.NoError(t, meter.Release(t.Context(), account.DefaultID, "held"))
 	admitted := submitVideo(server, key)
 	require.Equal(t, http.StatusServiceUnavailable, admitted.Code, admitted.Body.String())
 	require.NotContains(t, admitted.Body.String(), "outstanding job")
@@ -82,14 +83,29 @@ func TestAnAccountThatStatesNoOutstandingJobLimitStillHasOne(t *testing.T) {
 	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20}, withTestStore(store))
 	key := storeFileTestKey(t, server, "video-default-bound", "videos:write")
 
-	meter, err := limits.NewJobMeter(store)
+	meter, err := jobslots.Open(store)
 	require.NoError(t, err)
 	// Fill the default. The number itself belongs to internal/account; what this
 	// asserts is that the route reads it rather than treating an absent limit
 	// as no limit.
 	filled := account.DefaultOutstandingJobs
-	require.NoError(t, meter.Reserve(t.Context(), account.DefaultID, filled, filled))
+	for i := range filled {
+		require.NoError(t, meter.Reserve(t.Context(), account.DefaultID, strconv.FormatInt(i, 10), "held-job", "video", filled))
+	}
 
 	refused := submitVideo(server, key)
 	require.Equal(t, http.StatusTooManyRequests, refused.Code, refused.Body.String())
+}
+
+func TestLegacyJobCounterRequiresRecoveryBeforeVideoDispatch(t *testing.T) {
+	store := storage.NewMockStore()
+	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20}, withTestStore(store))
+	key := storeFileTestKey(t, server, "video-legacy-counter", "videos:write")
+	require.NoError(t, store.Set(t.Context(), limits.OutstandingJobsPrefix+account.DefaultID, []byte("0")))
+	response := submitVideo(server, key)
+	require.Equal(t, http.StatusServiceUnavailable, response.Code, response.Body.String())
+	require.Contains(t, response.Body.String(), "ownership requires recovery")
+	value, err := store.Get(t.Context(), limits.OutstandingJobsPrefix+account.DefaultID)
+	require.NoError(t, err)
+	require.Equal(t, "0", string(value))
 }

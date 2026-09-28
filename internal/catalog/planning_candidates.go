@@ -99,7 +99,8 @@ func clonePlanningCandidate(candidate routing.Candidate) routing.Candidate {
 	candidate.Capabilities = slices.Clone(candidate.Capabilities)
 	candidate.InputModalities = slices.Clone(candidate.InputModalities)
 	if candidate.Cost != nil {
-		candidate.Cost = new(*candidate.Cost)
+		cost := *candidate.Cost
+		candidate.Cost = &cost
 	}
 	return candidate
 }

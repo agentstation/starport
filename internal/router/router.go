@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/agentstation/starmap/pkg/catalogs"
 	"sort"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/limits/admission"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/routing"
 	"github.com/agentstation/starport/internal/telemetry"
@@ -67,6 +69,8 @@ type modelRouter struct {
 	credentialGate OperatorCredentialGate
 	storedKeys     StoredCredentialResolver
 	destinations   *credentials.DestinationApprovals
+	budget         *admission.Owner
+	checkBudgets   bool
 
 	// Advanced routing features
 	config                       Config
@@ -256,6 +260,7 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		return nil, err
 	}
 
+	requestID := budgetRequestID(req.RequestID)
 	result, err := r.executor.ExecuteChat(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (*inference.ChatResponse, *failure.Failure, execution.AttemptAction) {
 		connector := runtime.Get(planned.Route.ProviderID)
 		if connector == nil {
@@ -277,6 +282,11 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		}
 		request := prepareChatAttempt(req, boundRoute, false)
 		request.Credential = selected.material
+		var billing *catalogs.TextChatBilling
+		ticket, refusal := r.admit(attemptCtx, requestID, accountID, boundRoute, string(routing.OperationChatCompletions), chatTokenQuote(runtime.Snapshot(), boundRoute, request, &billing))
+		if refusal != nil {
+			return nil, refusal, execution.AttemptActionStop
+		}
 		callCtx, callSpan := telemetry.StartSpan(attemptCtx, telemetry.SpanProviderCall,
 			attribute.String(telemetry.AttrProvider, planned.Route.ProviderID),
 			attribute.String(telemetry.AttrModel, planned.Route.ID()),
@@ -288,6 +298,13 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 			callSpan.RecordError(requestErr)
 		}
 		callSpan.End()
+		var reported *connectors.Usage
+		if response != nil {
+			reported = response.ReportedUsage()
+		}
+		if settlementErr := finishChatBudget(attemptCtx, ticket, reported, billing); settlementErr != nil {
+			return nil, budgetFailure(errors.Join(requestErr, settlementErr)), execution.AttemptActionStop
+		}
 		if requestErr != nil {
 			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)
 			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)

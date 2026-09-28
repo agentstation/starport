@@ -55,6 +55,7 @@ func (r *modelRouter) RouteImages(ctx context.Context, req *ImagesRequest) (*Ima
 	}
 	call := providerCall[*connectors.ImagesRequest, *connectors.ImagesResponse, inference.ImagesResponse]{
 		transport: imageTransport,
+		charge:    imageCharge,
 		build:     func() *connectors.ImagesRequest { return connectors.ImagesRequestFromInference(req.Request) },
 		convert:   connectors.ImagesResponseToInference,
 	}
@@ -69,6 +70,7 @@ func (r *modelRouter) RouteSpeech(ctx context.Context, req *SpeechRequest) (*Spe
 	}
 	call := providerCall[*connectors.SpeechRequest, *connectors.SpeechResponse, inference.SpeechResponse]{
 		transport: speechTransport,
+		charge:    speechCharge,
 		build:     func() *connectors.SpeechRequest { return connectors.SpeechRequestFromInference(req.Request) },
 		convert:   connectors.SpeechResponseToInference,
 	}

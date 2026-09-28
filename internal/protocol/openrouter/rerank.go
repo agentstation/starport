@@ -61,8 +61,8 @@ type RerankResponse struct {
 // unit: one bills a search unit and another bills tokens, so the answer states
 // whichever one the provider reported and omits the other.
 type RerankUsage struct {
-	SearchUnits int `json:"search_units,omitempty"`
-	TotalTokens int `json:"total_tokens,omitempty"`
+	SearchUnits *int `json:"search_units,omitempty"`
+	TotalTokens *int `json:"total_tokens,omitempty"`
 	// Cost is what the gateway charged, in US dollars. OpenRouter states it on
 	// every rerank answer. A turn the catalog could not price omits it rather
 	// than reporting zero, because zero is a price a caller would believe.
@@ -160,13 +160,21 @@ func EncodeRerank(
 			Document:       documents[index],
 		}
 	}
+	var totalTokens, searchUnits *int
+	if !response.Usage.TokensUnknown {
+		totalTokens = &response.Usage.TotalTokens
+	}
+	if response.Usage.SearchUnitsKnown {
+		searchUnits = &response.Usage.SearchUnits
+	}
+
 	return RerankResponse{
 		Model:    responseModel(response.Model, request.Model),
 		Provider: provider,
 		Results:  results,
 		Usage: RerankUsage{
-			SearchUnits: response.Usage.SearchUnits,
-			TotalTokens: response.Usage.TotalTokens,
+			SearchUnits: searchUnits,
+			TotalTokens: totalTokens,
 			Cost:        costUSD,
 		},
 	}, nil

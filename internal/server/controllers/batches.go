@@ -5,15 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/jobs/fileio"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/proxy"
@@ -128,6 +127,11 @@ func (h *BatchesController) Create(w http.ResponseWriter, r *http.Request) {
 	// the line runner has to stamp it on every usage record it draws and the
 	// runner is built before the record exists.
 	batchID := jobs.NewBatchID()
+	authorization, err := requestctx.RetainBatchAuthorization(ctx, account, batchID)
+	if err != nil {
+		h.writeBatchStatus(w, http.StatusServiceUnavailable, errorTypeServer, "Batch authorization is unavailable.")
+		return
+	}
 	runner := &batchLineRunner{
 		service:   h.service,
 		governor:  h.governor,
@@ -139,17 +143,19 @@ func (h *BatchesController) Create(w http.ResponseWriter, r *http.Request) {
 		teamID:    h.getTeamID(ctx),
 	}
 	batch, err := h.batches.Submit(ctx, jobs.BatchSubmission{
+		Authorization:    authorization,
 		ID:               batchID,
 		Account:          account,
 		KeyID:            h.getAPIKeyID(ctx),
 		Endpoint:         request.Endpoint,
 		InputFileID:      request.InputFileID,
 		OutstandingBound: outstandingJobBound(r),
-		IO: &batchFileIO{
-			files:            h.files,
-			account:          account,
-			inputFileID:      request.InputFileID,
-			storedBytesBound: storedBytesBound(r),
+		StoredBytesBound: storedBytesBound(r),
+		IO: &fileio.Store{
+			Files:            h.files,
+			Account:          account,
+			InputFileID:      request.InputFileID,
+			StoredBytesBound: storedBytesBound(r),
 		},
 		Runner: runner,
 	})
@@ -263,12 +269,16 @@ func (h *BatchesController) writeBatchError(
 	message string,
 ) {
 	switch {
+	case errors.Is(err, jobs.ErrServiceClosed):
+		h.writeBatchStatus(w, http.StatusServiceUnavailable, errorTypeServiceUnavailable, "Batch workers are shutting down. Retry on an available gateway.")
 	case errors.Is(err, jobs.ErrBatchNotFound):
 		h.writeBatchStatus(w, http.StatusNotFound, errorTypeNotFound, "No such Batch object")
 	case errors.Is(err, jobs.ErrBatchAlreadyEnded),
 		errors.Is(err, jobs.ErrInvalidBatch),
 		errors.Is(err, jobs.ErrIllegalTransition):
 		h.writeBatchStatus(w, http.StatusConflict, errorTypeInvalidRequest, err.Error())
+	case errors.Is(err, limits.ErrOutstandingJobsRecoveryRequired), errors.Is(err, jobs.ErrClaimUnavailable):
+		h.writeBatchStatus(w, http.StatusServiceUnavailable, errorTypeServiceUnavailable, "Outstanding job ownership requires recovery.")
 	case errors.Is(err, limits.ErrTooManyOutstandingJobs):
 		// The submission is legal. What it would not fit inside is the number
 		// of jobs this account already holds open, which a finished batch
@@ -286,37 +296,6 @@ func (h *BatchesController) writeBatchStatus(
 	errorType, message string,
 ) {
 	openai.WriteError(w, status, errorType, message, nil)
-}
-
-// batchFileIO adapts the file service to the batch's two file needs. It is
-// built per submission, because it closes over one account and one input file.
-type batchFileIO struct {
-	files            *files.Service
-	account          string
-	inputFileID      string
-	storedBytesBound int64
-}
-
-// OpenInput opens the stored input file for one full read.
-func (b *batchFileIO) OpenInput(ctx context.Context) (io.ReadCloser, error) {
-	_, reader, err := b.files.Open(ctx, b.account, b.inputFileID)
-	return reader, err
-}
-
-// StoreOutput stores one result file under the purpose no upload may claim.
-// The size is unknown while the lines stream, so it lands as zero and the
-// service reconciles it against what the write actually stored.
-func (b *batchFileIO) StoreOutput(ctx context.Context, name string, content io.Reader) (string, error) {
-	record, err := b.files.Upload(ctx, files.UploadRequest{
-		Account:          b.account,
-		Filename:         name,
-		Purpose:          files.PurposeBatchOutput,
-		StoredBytesBound: b.storedBytesBound,
-	}, content)
-	if err != nil {
-		return "", err
-	}
-	return record.ID, nil
 }
 
 // batchLineRunner executes one input line on the same pipeline the online
@@ -337,8 +316,8 @@ type batchLineRunner struct {
 // RunLine decodes, admits, executes, and encodes one line. Every failure
 // answers through the encoded line rather than an error, because a failed
 // line belongs in the error file and the batch keeps going.
-func (r *batchLineRunner) RunLine(ctx context.Context, _ int, line []byte) ([]byte, bool) {
-	requestID := uuid.NewString()
+func (r *batchLineRunner) RunLine(ctx context.Context, claim jobs.BatchLine, line []byte) ([]byte, bool) {
+	requestID := claim.RequestID
 	decoded, err := openai.DecodeBatchLine(line, r.endpoint)
 	if err != nil {
 		return r.failureLine(bestEffortCustomID(line), requestID,
@@ -508,4 +487,9 @@ func bestEffortCustomID(line []byte) string {
 	}
 	_ = json.Unmarshal(line, &probe)
 	return probe.CustomID
+}
+
+// NewBatchRecoveryRunner applies the live governor to retained batch identity.
+func NewBatchRecoveryRunner(service proxy.Proxy, governor BatchGovernor, batch jobs.Batch, admission BatchAdmission) jobs.LineRunner {
+	return &batchLineRunner{service: service, governor: governor, admission: admission, endpoint: batch.Endpoint, batchID: batch.ID, accountID: batch.Account, keyID: batch.KeyID}
 }

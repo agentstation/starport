@@ -9,8 +9,8 @@ import (
 
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/catalog"
-	"github.com/agentstation/starport/internal/catalog/recovery"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/jackc/pgx/v5"

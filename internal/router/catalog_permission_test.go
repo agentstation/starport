@@ -138,7 +138,7 @@ func TestEmbeddingAndGenericAttemptsRecheckPermission(t *testing.T) {
 			if generic {
 				request := &OperationRequest[inference.EmbeddingRequest]{Request: inference.EmbeddingRequest{Model: "author/embed"}}
 				_, err = routeOperation(t.Context(), r, request.policy("author/embed"), routing.OperationEmbeddings, inference.EmbeddingResponse.Clone,
-					func(context.Context, connectors.Connector, routing.Route, credentialSelection) (*inference.EmbeddingResponse, *failure.Failure, execution.AttemptAction) {
+					func(context.Context, connectors.Connector, routing.Route, credentialSelection, operationBudget) (*inference.EmbeddingResponse, *failure.Failure, execution.AttemptAction) {
 						calls++
 						source.allowed.Store(false)
 						return nil, failure.New(failure.RateLimit, "retry fixture", true, failure.ProviderDetails{}, nil), execution.AttemptActionDefault

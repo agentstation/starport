@@ -150,4 +150,12 @@ func testQueuedBatchLineRechecksPermission(t *testing.T, revokeKey bool) {
 	require.Equal(t, fmt.Sprintf("line-%d", jobs.DefaultBatchConcurrency), failure.CustomID)
 	require.Equal(t, http.StatusServiceUnavailable, failure.Response.StatusCode)
 	require.Same(t, accepted, plane.Current().Catalog())
+	// Terminal status promises readable aggregate bytes. Checkpoint retirement
+	// follows publication and must finish before this test removes its byte store.
+	records, err := jobs.OpenBatchRepository(store)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		page, err := records.RecoveryPage(t.Context(), "")
+		return err == nil && len(page.Records) == 1 && page.Records[0].ResultsReleased
+	}, 10*time.Second, time.Millisecond)
 }

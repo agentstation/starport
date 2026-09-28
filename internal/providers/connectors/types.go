@@ -146,7 +146,7 @@ type ContentPart struct {
 
 // CacheControl represents cache control configuration for content parts
 type CacheControl struct {
-	Type string `json:"type"` // Currently only "ephemeral" is supported
+	Type string `json:"type"` // The current protocol accepts "ephemeral".
 }
 
 // ImageURL represents an image in a message
@@ -226,6 +226,20 @@ type ChatResponse struct {
 	SystemFingerprint string   `json:"system_fingerprint,omitempty"`
 }
 
+// ReportedUsage returns retained provider usage without requiring valid content.
+// An absent or unmarked zero report cannot authorize a budget refund.
+func (r *ChatResponse) ReportedUsage() *Usage {
+	if r == nil {
+		return nil
+	}
+	reported := r.usageReported || r.Usage.TotalTokens != 0 || r.Usage.decoded && r.Usage.HasReportedTotals()
+	if !reported {
+		return nil
+	}
+	usage := r.Usage.Copy()
+	return &usage
+}
+
 // Choice represents a completion choice
 type Choice struct {
 	Index        int       `json:"index"`
@@ -256,9 +270,11 @@ type TopLogProb struct {
 
 // Usage represents token usage information. PromptTokens uses OpenAI
 // semantics: it includes cached prompt tokens. CacheWriteTokens has no
-// OpenAI wire field; connectors whose providers report cache writes set it
+// OpenAI wire field. Connectors whose providers report cache writes set it
 // for internal accounting.
 type Usage struct {
+	decoded                 bool
+	reportedTotals          uint8
 	PromptTokens            int                      `json:"prompt_tokens"`
 	CompletionTokens        int                      `json:"completion_tokens"`
 	TotalTokens             int                      `json:"total_tokens"`
@@ -267,13 +283,64 @@ type Usage struct {
 	CacheWriteTokens        int                      `json:"-"`
 }
 
+// Copy returns usage with independent detail records for retained settlement evidence.
+func (u Usage) Copy() Usage {
+	if u.PromptTokensDetails != nil {
+		value := *u.PromptTokensDetails
+		u.PromptTokensDetails = &value
+	}
+	if u.CompletionTokensDetails != nil {
+		value := *u.CompletionTokensDetails
+		u.CompletionTokensDetails = &value
+	}
+	return u
+}
+
 // PromptTokensDetails provides detailed prompt token counts
 type PromptTokensDetails struct {
 	CachedTokens int `json:"cached_tokens,omitempty"`
-	// AudioTokens counts the audio share of PromptTokens. It is a breakdown
-	// of that total rather than an addition to it, the way CachedTokens is,
-	// and a provider that meters audio at its own rate reports it here.
-	AudioTokens int `json:"audio_tokens,omitempty"`
+	// AudioTokens counts audio input tokens within PromptTokens.
+	// CachedTokens is another breakdown of PromptTokens.
+	AudioTokens    int `json:"audio_tokens,omitempty"`
+	decoded        bool
+	cachedReported bool
+}
+
+// UnmarshalJSON retains the distinction between absent and explicit zero cache usage.
+func (d *PromptTokensDetails) UnmarshalJSON(data []byte) error {
+	var fields struct {
+		Cached *int `json:"cached_tokens"`
+		Audio  int  `json:"audio_tokens"`
+	}
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	*d = PromptTokensDetails{AudioTokens: fields.Audio, decoded: true, cachedReported: fields.Cached != nil}
+	if fields.Cached != nil {
+		d.CachedTokens = *fields.Cached
+	}
+	return nil
+}
+
+// ReportedCachedTokens returns an explicit count, including an explicit zero.
+// Programmatic connector values are explicit. Missing decoded counts remain unknown.
+func (d *PromptTokensDetails) ReportedCachedTokens() (int, bool) {
+	if d == nil {
+		return 0, false
+	}
+	return d.CachedTokens, !d.decoded || d.cachedReported
+}
+
+// MarshalJSON preserves an explicit zero cache count across serialization.
+func (d PromptTokensDetails) MarshalJSON() ([]byte, error) {
+	var cached *int
+	if _, known := d.ReportedCachedTokens(); known {
+		cached = &d.CachedTokens
+	}
+	return json.Marshal(struct {
+		Cached *int `json:"cached_tokens,omitempty"`
+		Audio  int  `json:"audio_tokens,omitempty"`
+	}{cached, d.AudioTokens})
 }
 
 // CompletionTokensDetails provides detailed token counts
@@ -281,7 +348,45 @@ type CompletionTokensDetails struct {
 	ReasoningTokens int `json:"reasoning_tokens,omitempty"`
 	// AudioTokens counts the audio share of CompletionTokens, and is a
 	// breakdown of that total rather than an addition to it.
-	AudioTokens int `json:"audio_tokens,omitempty"`
+	AudioTokens       int `json:"audio_tokens,omitempty"`
+	decoded           bool
+	reasoningReported bool
+}
+
+// UnmarshalJSON retains absent reasoning usage independently of its numeric value.
+func (d *CompletionTokensDetails) UnmarshalJSON(data []byte) error {
+	var fields struct {
+		Reasoning *int `json:"reasoning_tokens"`
+		Audio     int  `json:"audio_tokens"`
+	}
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	*d = CompletionTokensDetails{AudioTokens: fields.Audio, decoded: true, reasoningReported: fields.Reasoning != nil}
+	if fields.Reasoning != nil {
+		d.ReasoningTokens = *fields.Reasoning
+	}
+	return nil
+}
+
+// ReportedReasoningTokens returns an explicit count, including an explicit zero.
+func (d *CompletionTokensDetails) ReportedReasoningTokens() (int, bool) {
+	if d == nil {
+		return 0, false
+	}
+	return d.ReasoningTokens, !d.decoded || d.reasoningReported
+}
+
+// MarshalJSON preserves an explicit zero reasoning count across serialization.
+func (d CompletionTokensDetails) MarshalJSON() ([]byte, error) {
+	var reasoning *int
+	if _, known := d.ReportedReasoningTokens(); known {
+		reasoning = &d.ReasoningTokens
+	}
+	return json.Marshal(struct {
+		Reasoning *int `json:"reasoning_tokens,omitempty"`
+		Audio     int  `json:"audio_tokens,omitempty"`
+	}{reasoning, d.AudioTokens})
 }
 
 // ChatStreamChunk represents a chunk in a streaming response

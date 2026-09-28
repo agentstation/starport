@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap/runtime"
-	"github.com/agentstation/starport/internal/catalog/recovery"
+	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )

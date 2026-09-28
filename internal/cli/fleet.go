@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/agentstation/starport/internal/catalog/recovery"
+	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/config"
 	urfavecli "github.com/urfave/cli/v3"
 )

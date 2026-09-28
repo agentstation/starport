@@ -1,7 +1,6 @@
-// Package usage owns the canonical per-request usage record: what one
-// inference request consumed, where it ran, and what it cost. Records are
-// written best-effort after request completion and feed the activity API,
-// the console usage page, and budget enforcement.
+// Package usage owns per-request usage reports and billing adjustments.
+// These records support activity results, exports, and reporting totals.
+// They cannot grant required budget capacity.
 package usage
 
 import (
@@ -97,11 +96,15 @@ type Tokens struct {
 // carries no token count at all, so a token total cannot describe it, and a
 // spend budget that reads tokens alone would meter such a turn as free.
 type Media struct {
-	GeneratedImages int64 `json:"generated_images,omitempty"`
-	// GeneratedVideos counts finished videos. A provider prices a video per
-	// video, not per second and not per token, so this is the whole meter for
-	// the operation rather than a share of another one.
+	// ImageSize retains the requested dimensions for image valuation.
+	ImageSize       string `json:"image_size,omitempty"`
+	ImagesEdited    bool   `json:"images_edited,omitzero"`
+	GeneratedImages int64  `json:"generated_images,omitempty"`
+	// GeneratedVideos counts completed outputs. It does not establish billing units.
 	GeneratedVideos int64 `json:"generated_videos,omitempty"`
+	// VideoOutputSeconds preserves provider duration, including an explicit zero.
+	VideoOutputSeconds      int64 `json:"video_output_seconds,omitempty"`
+	VideoOutputSecondsKnown bool  `json:"video_output_seconds_known,omitzero"`
 }
 
 // Cost is the Starmap-derived cost of one request in integer nano-USD.
@@ -112,6 +115,14 @@ type Cost struct {
 
 // Record is one completed inference request.
 type Record struct {
+	// BillingAdjustment identifies corrected billing and preserves the original values.
+	BillingAdjustment *BillingAdjustment `json:"billing_adjustment,omitempty"`
+	// BillingDisposition distinguishes administrator decisions from provider measurements.
+	BillingDisposition string `json:"billing_disposition,omitempty"`
+	// InputCharacters preserves the measured Unicode code-point count for speech.
+	InputCharacters      int64 `json:"input_characters,omitempty"`
+	InputCharactersKnown bool  `json:"input_characters_known,omitzero"`
+
 	RequestID string `json:"request_id"`
 	KeyID     string `json:"key_id"`
 	// AccountID is the account the key belongs to. It is what an account-wide
@@ -155,11 +166,15 @@ type Record struct {
 	// converts into it: a Cohere turn reports a search unit and no tokens at
 	// all, and a record that read tokens alone would meter it as free.
 	SearchUnits int64 `json:"search_units,omitempty"`
+	// SearchUnitsKnown preserves explicit zero separately from missing usage.
+	SearchUnitsKnown bool `json:"search_units_known,omitzero"`
 	// TokensEstimated marks counts the gateway synthesized with a
 	// tokenizer because the provider reported none.
-	TokensEstimated bool  `json:"tokens_estimated,omitempty"`
-	LatencyMS       int64 `json:"latency_ms"`
-	RoutingMS       int64 `json:"routing_ms,omitempty"`
+	TokensEstimated bool `json:"tokens_estimated,omitempty"`
+	// TokensUnknown marks incomplete or invalid provider token evidence.
+	TokensUnknown bool  `json:"tokens_unknown,omitempty"`
+	LatencyMS     int64 `json:"latency_ms"`
+	RoutingMS     int64 `json:"routing_ms,omitempty"`
 	// OverheadMS is the gateway-added latency: total handling time
 	// minus upstream provider waits.
 	OverheadMS int64 `json:"overhead_ms,omitempty"`
@@ -225,6 +240,14 @@ type Record struct {
 
 // Validate reports whether the record can be persisted.
 func (r Record) Validate() error {
+	switch r.BillingDisposition {
+	case "", "administrator_usage", billingAdministratorNoCharge:
+	default:
+		return fmt.Errorf("%w: unknown billing disposition", ErrInvalidRecord)
+	}
+	if r.BillingDisposition == billingAdministratorNoCharge && (r.Cost == nil || r.Cost.NanoUSD != 0) {
+		return fmt.Errorf("%w: no-charge decision requires zero cost", ErrInvalidRecord)
+	}
 	if strings.TrimSpace(r.RequestID) == "" {
 		return fmt.Errorf("%w: request id is required", ErrInvalidRecord)
 	}

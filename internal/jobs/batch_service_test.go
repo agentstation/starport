@@ -2,6 +2,8 @@ package jobs_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"strings"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -21,31 +24,59 @@ import (
 type memoryBatchIO struct {
 	input string
 
-	mu     sync.Mutex
-	stored map[string]string
-	nextID int
+	mu          sync.Mutex
+	stored      map[string]string
+	checkpoints map[string]string
+	prepared    map[string]jobs.ResultFile
 }
 
 func newMemoryBatchIO(input string) *memoryBatchIO {
-	return &memoryBatchIO{input: input, stored: map[string]string{}}
+	return &memoryBatchIO{input: input, stored: map[string]string{}, checkpoints: map[string]string{}, prepared: map[string]jobs.ResultFile{}}
 }
 
 func (m *memoryBatchIO) OpenInput(context.Context) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(m.input)), nil
 }
 
-func (m *memoryBatchIO) StoreOutput(_ context.Context, name string, content io.Reader) (string, error) {
+func (m *memoryBatchIO) StoreAggregate(_ context.Context, batch jobs.Batch, failed bool, size int64, digest string, content io.Reader) (string, error) {
 	data, err := io.ReadAll(content)
 	if err != nil {
 		return "", err
 	}
+	sum := sha256.Sum256(data)
+	if int64(len(data)) != size || hex.EncodeToString(sum[:]) != digest {
+		return "", fmt.Errorf("invalid aggregate")
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.nextID++
-	id := fmt.Sprintf("file-%d", m.nextID)
+	id := fmt.Sprintf("aggregate-%s-%t", batch.ID, failed)
+	if old, ok := m.stored[id]; ok && old != string(data) {
+		return "", fmt.Errorf("aggregate changed")
+	}
 	m.stored[id] = string(data)
-	_ = name
 	return id, nil
+}
+func (m *memoryBatchIO) RecoverResult(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.checkpoints[id]; !ok {
+		return fmt.Errorf("missing checkpoint")
+	}
+	return nil
+}
+func (m *memoryBatchIO) ConfirmAggregate(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.stored[id]; !ok {
+		return fmt.Errorf("missing aggregate")
+	}
+	return nil
+}
+func (m *memoryBatchIO) DeleteResult(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.checkpoints, id)
+	return nil
 }
 
 func (m *memoryBatchIO) file(id string) string {
@@ -61,12 +92,12 @@ type echoRunner struct {
 	lines []int
 }
 
-func (r *echoRunner) RunLine(_ context.Context, number int, line []byte) ([]byte, bool) {
+func (r *echoRunner) RunLine(_ context.Context, claim jobs.BatchLine, line []byte) ([]byte, bool) {
 	r.mu.Lock()
-	r.lines = append(r.lines, number)
+	r.lines = append(r.lines, claim.Number)
 	r.mu.Unlock()
 	failed := strings.Contains(string(line), "fail")
-	return fmt.Appendf(nil, `{"line":%d}`, number), failed
+	return fmt.Appendf(nil, `{"line":%d}`, claim.Number), failed
 }
 
 func (r *echoRunner) ranLines() []int {
@@ -173,13 +204,13 @@ func newBlockingRunner() *blockingRunner {
 	return &blockingRunner{started: make(chan int, 16), release: make(chan struct{})}
 }
 
-func (r *blockingRunner) RunLine(_ context.Context, number int, _ []byte) ([]byte, bool) {
+func (r *blockingRunner) RunLine(_ context.Context, claim jobs.BatchLine, _ []byte) ([]byte, bool) {
 	r.mu.Lock()
-	r.lines = append(r.lines, number)
+	r.lines = append(r.lines, claim.Number)
 	r.mu.Unlock()
-	r.started <- number
+	r.started <- claim.Number
 	<-r.release
-	return fmt.Appendf(nil, `{"line":%d}`, number), false
+	return fmt.Appendf(nil, `{"line":%d}`, claim.Number), false
 }
 
 func (r *blockingRunner) ranLines() []int {
@@ -255,9 +286,13 @@ func TestALinePastTheByteBoundFailsTheWholeBatch(t *testing.T) {
 // a bound of one refuses a second submission while the first runs, and the
 // first batch's end gives the slot back.
 func TestABatchHoldsOneOutstandingJobSlot(t *testing.T) {
-	meter, err := limits.NewJobMeter(storage.NewMockStore())
+	backing := storage.NewMockStore()
+	meter, err := jobslots.Open(backing)
 	require.NoError(t, err)
-	service := newBatchService(t, jobs.WithBatchJobMeter(meter), jobs.WithBatchConcurrency(1))
+	records, err := jobs.OpenBatchRepository(backing)
+	require.NoError(t, err)
+	service, err := jobs.NewBatchService(records, jobs.WithBatchJobMeter(meter), jobs.WithBatchConcurrency(1))
+	require.NoError(t, err)
 	runner := newBlockingRunner()
 	batchIO := newMemoryBatchIO("{\"a\":1}\n")
 
@@ -304,4 +339,41 @@ func TestASubmissionWithoutARunnerLeavesNoRecord(t *testing.T) {
 	records, err := service.List(context.Background(), "account_a", 10)
 	require.NoError(t, err)
 	require.Empty(t, records)
+}
+
+func (m *memoryBatchIO) PrepareResult(_ context.Context, claim jobs.BatchLine) (jobs.ResultFile, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if file, ok := m.prepared[claim.RequestID]; ok {
+		return file, nil
+	}
+	file := jobs.ResultFile{ID: "result-" + claim.RequestID, ExpiresAt: time.Now().Add(24 * time.Hour)}
+	m.prepared[claim.RequestID] = file
+	return file, nil
+}
+func (m *memoryBatchIO) StoreResult(_ context.Context, id string, size int64, digest string, reader io.Reader) error {
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(data)
+	if int64(len(data)) != size || hex.EncodeToString(sum[:]) != digest {
+		return fmt.Errorf("invalid retained output")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if previous, ok := m.checkpoints[id]; ok && previous != string(data) {
+		return fmt.Errorf("changed retained output")
+	}
+	m.checkpoints[id] = string(data)
+	return nil
+}
+func (m *memoryBatchIO) OpenResult(_ context.Context, id string) (io.ReadCloser, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	data, ok := m.checkpoints[id]
+	if !ok {
+		return nil, fmt.Errorf("missing retained output")
+	}
+	return io.NopCloser(strings.NewReader(data)), nil
 }

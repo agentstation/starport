@@ -151,7 +151,7 @@ func TestAJobPollReadsTheProviderAnswer(t *testing.T) {
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"id":"video_77","status":"queued"}`))
 		case r.Method == http.MethodDelete:
-			w.WriteHeader(http.StatusNoContent)
+			_, _ = w.Write([]byte(`{"id":"video_77","status":"cancelled"}`))
 		default:
 			_, _ = w.Write([]byte(`{"id":"video_77","status":"failed","error":{"code":"content_policy","message":"the prompt was refused"}}`))
 		}

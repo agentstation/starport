@@ -9,38 +9,18 @@ import (
 	"github.com/agentstation/starport/internal/jobs"
 )
 
-// TestAJobPastItsLifetimeReachesAFailedStateWithAReason is the stop on an
-// unbounded poll. A provider that never reports a terminal word would otherwise
-// leave a job polling for as long as the process runs, spending the account's
-// own credential on asking rather than on work.
-func TestAJobPastItsLifetimeReachesAFailedStateWithAReason(t *testing.T) {
+// TestPollingBudgetDoesNotChangeProviderState keeps polling policy separate from execution.
+func TestPollingBudgetDoesNotChangeProviderState(t *testing.T) {
 	t.Parallel()
-
 	policy := jobs.DefaultPollPolicy()
 	require.NoError(t, policy.Validate())
-
 	job := newTestJob(t)
 	require.NoError(t, job.Transition(jobs.JobStateRunning, submitted.Add(time.Minute)))
-
-	// Inside the budget nothing happens, and the caller is told so rather than
-	// left to read an unchanged record as a job that was just ended.
-	inside := submitted.Add(policy.Lifetime - time.Second)
-	require.False(t, policy.Spent(job, inside))
-	require.ErrorIs(t, policy.FailSpent(&job, inside), jobs.ErrJobLifetimeExceeded)
-	require.Equal(t, jobs.JobStateRunning, job.State)
-
-	spent := submitted.Add(policy.Lifetime)
-	require.True(t, policy.Spent(job, spent))
-	require.NoError(t, policy.FailSpent(&job, spent))
-	require.Equal(t, jobs.JobStateFailed, job.State)
-	require.Equal(t, spent, job.TerminalAt)
-	require.Contains(t, job.Reason, policy.Lifetime.String())
-	require.NoError(t, job.Validate())
-
-	// Failed is terminal, so a later sweep finds nothing left to end.
-	require.False(t, policy.Spent(job, spent.Add(time.Hour)))
-	require.ErrorIs(t, policy.FailSpent(&job, spent.Add(time.Hour)), jobs.ErrJobLifetimeExceeded)
-	require.Equal(t, spent, job.TerminalAt, "a second sweep restamped the end")
+	before := job
+	require.False(t, policy.Spent(job, submitted.Add(policy.Lifetime-time.Nanosecond)))
+	require.True(t, policy.Spent(job, submitted.Add(policy.Lifetime)))
+	require.True(t, policy.Spent(job, submitted.Add(10*policy.Lifetime)))
+	require.Equal(t, before, job)
 }
 
 // TestATerminalJobIsNeverSpent keeps the lifetime from rewriting an answer the

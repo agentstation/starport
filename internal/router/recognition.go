@@ -41,6 +41,7 @@ func (r *modelRouter) RouteDocumentRecognition(
 			return connectors.RecognitionRequestFromInference(req.Request)
 		},
 		convert: connectors.RecognitionResponseToInference,
+		charge:  recognitionCharge,
 	}
 	return routeOperation(ctx, r, req.policy(req.Request.Model), routing.OperationDocumentsRecognition,
 		inference.RecognitionResponse.Clone, call.attempt(routing.OperationDocumentsRecognition))

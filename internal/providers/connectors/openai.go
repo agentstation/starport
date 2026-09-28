@@ -48,12 +48,12 @@ func (c *OpenAIConnector) Name() string {
 	return c.provider
 }
 
-// Chat performs a chat completion request
+// Chat sends a chat completion request.
 func (c *OpenAIConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
 	return c.OpenAICompatibleConnector.Chat(ctx, req, c.setHeaders, c.handleError)
 }
 
-// ChatStream performs a streaming chat completion request
+// ChatStream sends a streaming chat request.
 func (c *OpenAIConnector) ChatStream(ctx context.Context, req *ChatRequest) (ChatStream, error) {
 	return c.OpenAICompatibleConnector.ChatStream(ctx, req, c.setHeaders, c.handleError, newOpenAICompatibleStream)
 }
@@ -114,7 +114,10 @@ func (c *OpenAIConnector) setHeaders(material credentials.Material, req *http.Re
 	if err := applyRequestAuthentication(material, req); err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	// Preserve the encoder's multipart boundary for media uploads.
+	if req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	return nil
 }
 

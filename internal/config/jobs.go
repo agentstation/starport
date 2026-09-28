@@ -9,6 +9,12 @@ import "time"
 // turn a gateway into unbounded storage that no operator sized, which is what
 // these three settings exist to stop.
 type JobsConfig struct {
+	// AssetDownloadOrigins grants external video downloads to exact origins.
+	AssetDownloadOrigins []string `env:"ASSET_DOWNLOAD_ORIGINS"`
+	// MaxWorkers limits concurrent video submissions per replica.
+	MaxWorkers int `env:"MAX_WORKERS,default=2"`
+	// ExecutionTimeout bounds native generation and its response transfer.
+	ExecutionTimeout time.Duration `env:"EXECUTION_TIMEOUT,default=10m"`
 	// AssetRetention is how long a finished asset stays readable, measured from
 	// the moment this gateway stored it. A caller that comes back past it reads
 	// that the asset expired rather than that the job never produced one.
@@ -61,4 +67,20 @@ func (c *JobsConfig) SweepEvery() time.Duration {
 		return DefaultJobSweepInterval
 	}
 	return c.SweepInterval
+}
+
+// WorkerBound reports the replica submission limit.
+func (c *JobsConfig) WorkerBound() int {
+	if c == nil || c.MaxWorkers <= 0 {
+		return 2
+	}
+	return c.MaxWorkers
+}
+
+// ExecutionWindow reports the native generation deadline.
+func (c *JobsConfig) ExecutionWindow() time.Duration {
+	if c == nil || c.ExecutionTimeout <= 0 {
+		return 10 * time.Minute
+	}
+	return c.ExecutionTimeout
 }

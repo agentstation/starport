@@ -25,7 +25,7 @@ type PresetSource interface {
 
 // PresetResolver is a proxy middleware that resolves preset references on
 // chat requests and merges the stored configuration into them. Fields the
-// request supplies win over preset fields; an unknown preset fails the
+// request supplies win over preset fields. An unknown preset fails the
 // request with ErrPresetNotFound before any routing happens.
 type PresetResolver struct {
 	source PresetSource
@@ -118,9 +118,9 @@ func (r *PresetResolver) lookup(ctx context.Context, name string, revision uint6
 }
 
 // mergePresetConfig applies one preset config to a chat request. The request
-// wins: only absent request fields inherit preset values. usedReference
-// reports that the request selected the preset through its model field, so
-// the preset owns model selection.
+// wins: only absent request fields inherit preset values.
+// usedReference reports selection through the request's model field.
+// That selection gives the preset ownership of model selection.
 func mergePresetConfig(req *ChatCompletionRequest, config presets.Config, usedReference bool) {
 	request := &req.Request
 	if usedReference || request.Model == "" {
@@ -131,7 +131,9 @@ func mergePresetConfig(req *ChatCompletionRequest, config presets.Config, usedRe
 			remainder = config.Models[1:]
 		}
 		if len(request.FallbackModels) == 0 && len(remainder) > 0 {
-			request.FallbackModels = append([]string(nil), remainder...)
+			// Routing treats this list as the complete ordered selection.
+			// Preserve the primary model before the preset's fallback models.
+			request.FallbackModels = append([]string{request.Model}, remainder...)
 		}
 	}
 

@@ -70,6 +70,9 @@ type ModelRouter interface {
 
 // Request contains the original request plus routing preferences
 type Request struct {
+	// RequestID links every provider attempt to the gateway request.
+	RequestID string
+
 	// Original chat request
 	*connectors.ChatRequest
 
@@ -201,6 +204,8 @@ type Response struct {
 // EmbeddingRequest contains one provider-neutral embedding request plus
 // account routing and credential policy.
 type EmbeddingRequest struct {
+	// RequestID links every provider attempt to the gateway request.
+	RequestID string
 	*connectors.EmbeddingsRequest
 	APIKeyConfig *APIKeyConfig
 	AccountID    string

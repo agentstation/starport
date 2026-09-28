@@ -166,3 +166,19 @@ func TestExpiredReadsTheBoundary(t *testing.T) {
 	require.False(t, file.Expired(at.Add(-time.Nanosecond)))
 	require.True(t, file.Expired(at.Add(time.Nanosecond)))
 }
+
+func TestFileReadRejectsChangedStoredIdentity(t *testing.T) {
+	records, store := newRepository(t)
+	file := sampleFile("other", "file-one")
+	data, err := encodeFile(file)
+	require.NoError(t, err)
+	require.NoError(t, store.Set(t.Context(), storageKey("a", "file-one"), data))
+	_, err = records.Get(t.Context(), "a", "file-one")
+	require.ErrorIs(t, err, ErrCorruptRecord)
+	file = sampleFile("a", "file-two")
+	data, err = encodeFile(file)
+	require.NoError(t, err)
+	require.NoError(t, store.Set(t.Context(), storageKey("a", "file-one"), data))
+	_, err = records.Get(t.Context(), "a", "file-one")
+	require.ErrorIs(t, err, ErrCorruptRecord)
+}

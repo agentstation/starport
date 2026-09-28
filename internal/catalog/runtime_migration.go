@@ -52,7 +52,7 @@ func (m RuntimeMigration) Prepare(ctx context.Context, store storage.KVStore, se
 	if err == nil {
 		err = m.bindStore(ctx, store, settings)
 	}
-	return RuntimeMigrationResult{HostJournalDirectory: m.hostJournalDirectory(settings), Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: m.TargetDirectory, SchedulerIdentity: m.SourceIdentity, FileCount: result.FileCount, IdentityVerified: new(result.IdentityVerified)}, err
+	return RuntimeMigrationResult{HostJournalDirectory: m.hostJournalDirectory(settings), Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: m.TargetDirectory, SchedulerIdentity: m.SourceIdentity, FileCount: result.FileCount, IdentityVerified: &result.IdentityVerified}, err
 }
 
 // Stage copies and verifies private staging files without publishing the target.
@@ -61,7 +61,7 @@ func (m RuntimeMigration) Stage(ctx context.Context, store storage.KVStore, sett
 		return RuntimeMigrationResult{}, err
 	}
 	result, err := runtime.StageDirectoryMigration(ctx, m.request(settings))
-	return RuntimeMigrationResult{HostJournalDirectory: m.hostJournalDirectory(settings), Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: m.TargetDirectory, SchedulerIdentity: m.SourceIdentity, FileCount: result.FileCount, IdentityVerified: new(result.IdentityVerified)}, err
+	return RuntimeMigrationResult{HostJournalDirectory: m.hostJournalDirectory(settings), Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: m.TargetDirectory, SchedulerIdentity: m.SourceIdentity, FileCount: result.FileCount, IdentityVerified: &result.IdentityVerified}, err
 }
 
 // Publish installs the verified target and retires the source runtime.

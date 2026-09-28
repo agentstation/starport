@@ -43,12 +43,15 @@ type Info struct {
 // Every method takes a context and honors its cancellation. A backend that
 // reaches a network respects the deadline the caller sets.
 type Store interface {
+	PublicationStore
+
 	// Put stores the bytes the reader yields at the key. It reads until the
 	// reader reports io.EOF.
 	//
-	// A put that fails leaves no readable object at a key that held none
-	// before, and leaves the prior object intact at a key that did. A backend
-	// therefore stages the bytes and makes them reachable in one final step.
+	// A backend stages bytes and publishes a complete object. A lost reply
+	// can leave the new object present despite an error. The caller must
+	// inspect retained identity and content before deciding how to recover.
+	// A rejected input stream does not publish a partial object.
 	//
 	// Put returns ErrInvalidKey before it writes anything when the key breaks
 	// the key rules.

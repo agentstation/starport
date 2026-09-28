@@ -2,30 +2,31 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/storage"
 )
 
-// AccountingEntry is what one finished job reports to whoever prices it.
-//
-// The entry carries a state and a chargeable flag rather than a price. This
-// package owns when a job ends and whether the end produced work; it owns no
-// price, no catalog, and no currency. The half that reads a Starmap offering
-// reads them here.
-//
-// The provider job identifier is absent, as it is from every other value that
-// leaves this package. Invariant J1 keeps it inside.
+// AccountingEntry reports a terminal job with its pinned rates and measured usage.
+// Provider request identifiers remain private to the job record.
 type AccountingEntry struct {
-	JobID     string
-	Account   string
-	KeyID     string
-	Provider  string
-	Model     string
-	Operation routing.Operation
-	State     JobState
-	// Chargeable reports whether this end produced work the account pays for.
-	// The recipient still decides what it costs, and may find no price at all.
+	// BillingDisposition identifies administrator-supplied billing evidence.
+	BillingDisposition string
+	// BillingEvidence can contain administrator evidence without a provider measurement.
+	BillingEvidence *reservation.Evidence
+	Valuation       *reservation.Valuation
+	Measurement     *reservation.Evidence
+	JobID           string
+	Account         string
+	KeyID           string
+	Provider        string
+	Model           string
+	Operation       routing.Operation
+	State           JobState
+	// Chargeable reports completed output for display. It does not prove cost.
 	Chargeable bool
 	// SubmittedAt and TerminalAt bound the work. A record of the two is what
 	// lets an operator tell a job that took two minutes from one that took two
@@ -34,27 +35,33 @@ type AccountingEntry struct {
 	TerminalAt  time.Time
 }
 
-// Accountant records what one finished job cost.
-//
-// This package declares the interface rather than importing the usage seam,
-// because internal/jobs is a leaf that owns state and nothing about spend. The
-// recipient prices the entry from the catalog and writes one usage record.
-//
-// A failure here is not the job's failure. The work happened, the caller holds
-// the answer, and a job that reported an accounting failure back to a caller
-// would tell it the wrong thing. The service therefore absorbs the error.
+// Accountant records optional usage for a terminal job.
+// RecordJob must accept exact retries without duplicate charges or counters.
+// A delivery can succeed before the service stores its acknowledgement.
+// Errors retain pending reporting and do not change the provider result.
 type Accountant interface {
 	RecordJob(ctx context.Context, entry AccountingEntry) error
 }
 
-// Notifier hears each job that reached its terminal state, exactly once.
-//
-// It is declared here for the reason Accountant is: the event surface
-// lives in another package, and this leaf owns state alone. The settle
-// stamp that keeps the accounting entry single keeps the notification
-// single too, so a receiver hears one end per job however often a caller
-// polls. A failure to notify is absorbed the way an accounting failure
-// is: the caller holds its answer either way.
+// AccountingCorrection reports a durable administrator decision against original usage.
+// It carries no private reason, evidence reference, or operator identity.
+type AccountingCorrection struct {
+	Original   AccountingEntry
+	ID         string
+	PreviousID string
+	RecordedAt time.Time
+	Evidence   reservation.Evidence
+}
+
+// CorrectionAccountant preserves original usage and applies one reporting adjustment.
+// Required budget correction must complete independently of this optional report.
+type CorrectionAccountant interface {
+	RecordJobCorrection(context.Context, AccountingCorrection) error
+}
+
+// Notifier receives a best-effort terminal notification independently of billing.
+// The service claims one attempt before calling JobEnded. A crash between the
+// claim and the call can lose the event. This is not a durable delivery contract.
 type Notifier interface {
 	JobEnded(ctx context.Context, entry AccountingEntry)
 }
@@ -63,50 +70,78 @@ type Notifier interface {
 //
 // The interface is declared here for the same reason Accountant is: the limit
 // vocabulary lives in another package, and a leaf that owns job state may not
-// reach across for it. limits.JobMeter satisfies this shape.
+// reach across for it. jobslots.Store satisfies this shape.
 type Meter interface {
-	Reserve(ctx context.Context, holder string, count, bound int64) error
-	Release(ctx context.Context, holder string, count int64) error
+	Reserve(ctx context.Context, holder, claimID, jobID, kind string, bound int64) error
+	Release(ctx context.Context, holder, claimID string) error
+	Attachment(ctx context.Context, holder, claimID, jobID, kind string) (storage.CompareAndSwapMutation, error)
 }
 
-// settle draws the one usage record a terminal job draws and frees the slot it
-// held.
-//
-// It stamps the record before it reports the entry. That order is what makes
-// the count exactly one however often a caller polls: the stamp is a compare
-// and swap against the record store, so of two concurrent polls only one gets
-// past it. Reporting first and stamping after would draw a second cost for one
-// video whenever the stamp lost the race.
-//
-// The other direction of that trade is that a report lost between the stamp and
-// the recipient is lost for good. That is the correct half to give up. The usage
-// seam is best-effort by construction and drops records under load already,
-// while a duplicated charge is money an account did not spend.
+// settle preserves the provider result while required accounting can retry.
 func (s *Service) settle(ctx context.Context, job Job) Job {
-	if !job.State.Terminal() || job.Accounted() {
-		return job
-	}
-	settled := job
-	if err := settled.MarkAccounted(s.now()); err != nil {
-		return job
-	}
-	if err := s.records.Replace(ctx, settled); err != nil {
-		return job
-	}
-	if s.accountant != nil {
-		// The caller holds its answer either way. See the note above.
-		_ = s.accountant.RecordJob(ctx, entryFor(settled))
-	}
-	if s.notifier != nil {
-		s.notifier.JobEnded(ctx, entryFor(settled))
-	}
-	s.releaseSlot(ctx, settled)
+	settled, _ := s.settleAccounting(ctx, job)
 	return settled
+}
+
+// settleAccounting confirms required settlement before it retries reporting.
+// Notifications and slot release do not depend on settlement or reporting.
+func (s *Service) settleAccounting(ctx context.Context, job Job) (Job, error) {
+	if !job.State.Terminal() {
+		return job, nil
+	}
+	job = s.settleSlot(ctx, job)
+	job, notificationErr := s.notifyTerminal(ctx, job)
+	job, correctionErr := s.recoverCorrection(ctx, job)
+	settlementErr := s.confirmSettlement(ctx, job)
+	var reportErr error
+	if correctionErr == nil && settlementErr == nil && !job.reportingComplete() {
+		if s.accountant != nil {
+			reportErr = s.accountant.RecordJob(ctx, entryFor(job))
+		}
+		if reportErr == nil || errors.Is(reportErr, ErrAccountingExpired) {
+			next := job
+			if errors.Is(reportErr, ErrAccountingExpired) {
+				next.ReportingExpiredAt = s.now()
+				reportErr = nil
+			} else {
+				reportErr = next.MarkAccounted(s.now())
+			}
+			if reportErr == nil {
+				reportErr = s.records.Replace(ctx, job, next)
+			}
+			if reportErr == nil {
+				job = next
+			}
+		}
+	}
+	// Applied adjustments can report even when later evidence needs review.
+	job, adjustmentErr := s.reportCorrections(ctx, job)
+	return job, errors.Join(notificationErr, correctionErr, settlementErr, reportErr, adjustmentErr)
+}
+
+// notifyTerminal claims one optional notification across concurrent replicas.
+func (s *Service) notifyTerminal(ctx context.Context, job Job) (Job, error) {
+	if s.notifier == nil || !job.NotificationAttemptedAt.IsZero() {
+		return job, nil
+	}
+	next := job
+	next.NotificationAttemptedAt = s.now()
+	if err := s.records.Replace(ctx, job, next); err != nil {
+		return job, err
+	}
+	s.notifier.JobEnded(ctx, entryFor(next))
+	return next, nil
 }
 
 // entryFor projects a settled record into what the accounting seam reads.
 func entryFor(job Job) AccountingEntry {
+	disposition := ""
+	if job.adminDecision != nil {
+		disposition = "administrator_" + job.adminDecision.Disposition
+	}
 	return AccountingEntry{
+		BillingDisposition: disposition,
+		BillingEvidence:    job.originalBillingEvidence(), Valuation: copyValuation(job.Valuation), Measurement: copyMeasurement(job.Measurement),
 		JobID:       job.ID,
 		Account:     job.Account,
 		KeyID:       job.KeyID,
@@ -120,27 +155,36 @@ func entryFor(job Job) AccountingEntry {
 	}
 }
 
-// reserveSlot claims one outstanding job slot for the account.
-//
-// The claim happens before the provider call. A submission refused for being
-// over the limit must not have spent provider work first, or the limit would
-// bound what an account reads rather than what it pays for.
-func (s *Service) reserveSlot(ctx context.Context, account string, bound int64) error {
+// reserveSlot records one claim before routing or provider work.
+func (s *Service) reserveSlot(ctx context.Context, submission Submission) error {
 	if s.meter == nil {
 		return nil
 	}
-	return s.meter.Reserve(ctx, account, 1, bound)
+	return s.meter.Reserve(ctx, submission.Account, submission.slotID, submission.jobID, "video", submission.OutstandingBound)
 }
 
-// releaseSlot gives one slot back and reports nothing.
-//
-// Every caller is either unwinding from a failure it already reports or has
-// just settled a job whose answer the caller holds. A leaked slot costs the
-// account one slot until the sweep settles the record, and a refused release
-// that propagated would turn that into a failed request.
-func (s *Service) releaseSlot(ctx context.Context, job Job) {
-	if s.meter == nil {
-		return
+// releaseSlot retains the same identity through a bounded cleanup attempt.
+func (s *Service) releaseSlot(ctx context.Context, job Job) error {
+	if s.meter == nil || job.SlotID == "" {
+		return nil
 	}
-	_ = s.meter.Release(ctx, job.Account, 1)
+	commit, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return s.meter.Release(commit, job.Account, job.SlotID)
+}
+
+// settleSlot separates retryable release from optional usage reporting.
+func (s *Service) settleSlot(ctx context.Context, job Job) Job {
+	if job.SlotID == "" || job.SlotReleased || s.meter == nil {
+		return job
+	}
+	if err := s.releaseSlot(ctx, job); err != nil {
+		return job
+	}
+	next := job
+	next.SlotReleased = true
+	if err := s.records.Replace(ctx, job, next); err != nil {
+		return job
+	}
+	return next
 }

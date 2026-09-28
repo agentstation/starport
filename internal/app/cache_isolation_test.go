@@ -23,7 +23,7 @@ func TestDefaultResponseCacheDoesNotWriteDurableKV(t *testing.T) {
 	created, err := keys.Create(t.Context(), testAPIKey())
 	require.NoError(t, err)
 	require.NoError(t, store.Close())
-	factories := explicitTestFactories()
+	factories := explicitTestFactories(t)
 	factories.openStorage = openStorage
 	application, err := New(cfg, withRuntimeFactories(factories))
 	require.NoError(t, err)

@@ -5,11 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starmap"
 	"github.com/stretchr/testify/require"
 
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/routing"
 	"github.com/agentstation/starport/internal/usage"
 )
@@ -39,7 +41,7 @@ func TestAFinishedJobDrawsOneValidRecord(t *testing.T) {
 	t.Parallel()
 
 	recorder := &recordingUsageRepository{}
-	accountant := NewJobAccountant(nil, recorder)
+	accountant := NewJobAccountant(recorder)
 
 	require.NoError(t, accountant.RecordJob(context.Background(), videoEntry(jobs.JobStateCompleted)))
 
@@ -57,14 +59,12 @@ func TestAFinishedJobDrawsOneValidRecord(t *testing.T) {
 	require.Equal(t, int64(1), record.Media.GeneratedVideos)
 }
 
-// TestAFailedJobRecordsNoCostAndNoMediaUnit is the rule an account reads its bill
-// through. The provider produced nothing, so nothing is priced, and the record
-// carries a named reason rather than a zero that would read as a free video.
+// Missing usage leaves a failed job unpriced. Failure does not prove a free request.
 func TestAFailedJobRecordsNoCostAndNoMediaUnit(t *testing.T) {
 	t.Parallel()
 
 	recorder := &recordingUsageRepository{}
-	accountant := NewJobAccountant(nil, recorder)
+	accountant := NewJobAccountant(recorder)
 
 	require.NoError(t, accountant.RecordJob(context.Background(), videoEntry(jobs.JobStateFailed)))
 
@@ -77,14 +77,12 @@ func TestAFailedJobRecordsNoCostAndNoMediaUnit(t *testing.T) {
 	require.Equal(t, usage.StatusError, records[0].Status)
 }
 
-// TestACancelledJobIsNotAFailure separates the two free ends. Both cost
-// nothing, and an account reading its own history needs to tell a provider that
-// broke from a caller that changed its mind.
+// Cancellation remains distinct from failure and does not establish cost.
 func TestACancelledJobIsNotAFailure(t *testing.T) {
 	t.Parallel()
 
 	recorder := &recordingUsageRepository{}
-	accountant := NewJobAccountant(nil, recorder)
+	accountant := NewJobAccountant(recorder)
 
 	require.NoError(t, accountant.RecordJob(context.Background(), videoEntry(jobs.JobStateCancelled)))
 
@@ -94,9 +92,7 @@ func TestACancelledJobIsNotAFailure(t *testing.T) {
 	require.Nil(t, records[0].Cost)
 }
 
-// TestAVideoPricesPerVideo holds the pricing half. Starmap prices a video per
-// video, not per second and not per token, so the video count is the whole
-// meter for the operation.
+// TestAVideoPricesPerVideo checks an explicitly declared per-video price.
 func TestAVideoPricesPerVideo(t *testing.T) {
 	t.Parallel()
 
@@ -107,6 +103,33 @@ func TestAVideoPricesPerVideo(t *testing.T) {
 	cost, reason := mediaCost(pricing, usage.Tokens{}, usage.Media{GeneratedVideos: 2})
 	require.Empty(t, reason)
 	require.InDelta(t, 0.70, cost, 1e-12)
+}
+
+func TestVideoCountCannotPriceDurationOffering(t *testing.T) {
+	t.Parallel()
+	client, err := starmap.New()
+	require.NoError(t, err)
+	offering, err := client.Catalog().Offering(starmapcatalogs.ProviderIDDeepInfra, "Wan-AI/Wan2.2-T2V-A14B")
+	require.NoError(t, err)
+	require.NotNil(t, offering.Pricing)
+	require.NotNil(t, offering.Pricing.Operations)
+	require.NotNil(t, offering.Pricing.Operations.OutputSecond)
+	require.Nil(t, offering.Pricing.Operations.VideoGen)
+	cost, reason := mediaCost(offering.Pricing, usage.Tokens{}, usage.Media{GeneratedVideos: 1})
+	require.Zero(t, cost)
+	require.Equal(t, usage.CostReasonMediaUnpriced, reason)
+}
+
+func TestVideoCountCannotIgnoreAdditionalDurationRates(t *testing.T) {
+	for _, operations := range []*starmapcatalogs.ModelOperationPricing{
+		{VideoGen: float(0.35), InputSecond: float(0.01)},
+		{VideoGen: float(0.35), OutputSecond: float(0.075)},
+	} {
+		pricing := &starmapcatalogs.ModelPricing{Currency: starmapcatalogs.ModelPricingCurrencyUSD, Operations: operations}
+		cost, reason := mediaCost(pricing, usage.Tokens{}, usage.Media{GeneratedVideos: 1})
+		require.Zero(t, cost)
+		require.Equal(t, usage.CostReasonMediaUnpriced, reason)
+	}
 }
 
 // TestAnOfferingThatPricesNoVideoWithdrawsTheWholeCost is why the media half
@@ -142,6 +165,59 @@ func TestAVideoAloneIsUsage(t *testing.T) {
 func TestAJobWithNoRecorderStillSettles(t *testing.T) {
 	t.Parallel()
 
-	accountant := NewJobAccountant(nil, nil)
+	accountant := NewJobAccountant(nil)
 	require.NoError(t, accountant.RecordJob(context.Background(), videoEntry(jobs.JobStateCompleted)))
+}
+
+func TestJobReportingUsesPinnedMeasurementInEveryTerminalState(t *testing.T) {
+	for _, state := range []jobs.JobState{jobs.JobStateCompleted, jobs.JobStateFailed, jobs.JobStateCancelled} {
+		for _, quantity := range []int64{0, 5} {
+			entry := videoEntry(state)
+			entry.Valuation = &reservation.Valuation{Version: reservation.ArithmeticVersion, Components: []reservation.Component{{Unit: "video_output_seconds", Price: reservation.Price{USD: "0.075", PerUnits: 1}}}}
+			entry.Measurement = &reservation.Evidence{ID: entry.JobID + ":usage", Quantities: reservation.Quantities{"video_output_seconds": quantity}}
+			recorder := &recordingUsageRepository{}
+			accountant := NewJobAccountant(recorder)
+			require.NoError(t, accountant.RecordJob(t.Context(), entry))
+			record := recorder.all()[0]
+			require.NotNil(t, record.Cost)
+			require.Equal(t, quantity*75_000_000, record.Cost.NanoUSD)
+			require.Empty(t, record.CostUnavailableReason)
+			require.True(t, record.Media.VideoOutputSecondsKnown)
+			require.Equal(t, quantity, record.Media.VideoOutputSeconds)
+		}
+	}
+}
+
+func TestJobReportingDoesNotInventMissingMeasurement(t *testing.T) {
+	for _, state := range []jobs.JobState{jobs.JobStateCompleted, jobs.JobStateFailed, jobs.JobStateCancelled} {
+		recorder := &recordingUsageRepository{}
+		require.NoError(t, NewJobAccountant(recorder).RecordJob(t.Context(), videoEntry(state)))
+		record := recorder.all()[0]
+		require.Nil(t, record.Cost)
+		require.Equal(t, usage.CostReasonNoUsage, record.CostUnavailableReason)
+	}
+}
+
+func TestAdministratorBillingDoesNotFabricateProviderUsage(t *testing.T) {
+	for _, disposition := range []string{"no_charge", "usage"} {
+		t.Run(disposition, func(t *testing.T) {
+			recorder := &recordingUsageRepository{}
+			accountant := NewJobAccountant(recorder)
+			entry := videoEntry(jobs.JobStateFailed)
+			entry.BillingDisposition = "administrator_" + disposition
+			entry.Valuation = &reservation.Valuation{Version: reservation.ArithmeticVersion, Components: []reservation.Component{{Unit: "output_seconds", Price: reservation.Price{USD: "0.075", PerUnits: 1}}}}
+			entry.BillingEvidence = &reservation.Evidence{ID: "admin-decision", NoCharge: disposition == "no_charge"}
+			expected := int64(0)
+			if disposition == "usage" {
+				entry.BillingEvidence.Quantities = reservation.Quantities{"output_seconds": 5}
+				expected = 375000000
+			}
+			require.NoError(t, accountant.RecordJob(t.Context(), entry))
+			records := recorder.all()
+			require.Len(t, records, 1)
+			require.Equal(t, expected, records[0].Cost.NanoUSD)
+			require.Equal(t, entry.BillingDisposition, records[0].BillingDisposition)
+			require.Nil(t, records[0].Media, "operator billing does not invent an output or provider duration")
+		})
+	}
 }

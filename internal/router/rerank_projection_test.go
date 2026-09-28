@@ -82,7 +82,7 @@ func TestTheDocumentBoundRefusesBeforeTheProviderCall(t *testing.T) {
 	// The offering whose bound is below the list refuses it. Nothing was
 	// invoked and nothing was bound, which is the whole reason the check sits
 	// where it does.
-	answer, refusal, action := attempt(context.Background(), nil, route("cohere", 2), credentialSelection{})
+	answer, refusal, action := attempt(context.Background(), nil, route("cohere", 2), credentialSelection{}, operationBudget{})
 	require.Nil(t, answer)
 	require.NotNil(t, refusal)
 	require.Zero(t, invoked)
@@ -99,7 +99,7 @@ func TestTheDocumentBoundRefusesBeforeTheProviderCall(t *testing.T) {
 
 	// That second offering accepts the same list, so the refusal belongs to the
 	// offering rather than to the request.
-	answer, refusal, _ = attempt(context.Background(), nil, route("voyage", 1000), credentialSelection{})
+	answer, refusal, _ = attempt(context.Background(), nil, route("voyage", 1000), credentialSelection{}, operationBudget{})
 	require.Nil(t, refusal)
 	require.NotNil(t, answer)
 	require.Equal(t, 1, invoked)
@@ -107,7 +107,7 @@ func TestTheDocumentBoundRefusesBeforeTheProviderCall(t *testing.T) {
 	// An offering whose catalog entry states no bound accepts it too. Reading
 	// zero as "no documents allowed" would refuse every request to a model the
 	// catalog has not described yet.
-	_, refusal, _ = attempt(context.Background(), nil, route("jina", 0), credentialSelection{})
+	_, refusal, _ = attempt(context.Background(), nil, route("jina", 0), credentialSelection{}, operationBudget{})
 	require.Nil(t, refusal)
 	require.Equal(t, 2, invoked)
 }

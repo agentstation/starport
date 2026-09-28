@@ -1,13 +1,9 @@
 package jobs
 
 import (
-	"errors"
 	"fmt"
 	"time"
 )
-
-// ErrJobLifetimeExceeded reports a job that outlived the budget for polling it.
-var ErrJobLifetimeExceeded = errors.New("jobs: job outlived its polling budget")
 
 // Default polling bounds. A provider that answers in seconds is served by the
 // first interval, and one that takes minutes is served by the cap without
@@ -17,9 +13,8 @@ const (
 	DefaultFirstPoll = 2 * time.Second
 	// DefaultMaxPoll is the longest wait between two polls.
 	DefaultMaxPoll = 30 * time.Second
-	// DefaultLifetime is the longest a job stays pollable. Past it the job is
-	// failed rather than polled again, because a provider that has not
-	// answered in an hour is not going to.
+	// DefaultLifetime bounds automatic polling. Explicit reconciliation can
+	// check an unresolved provider outcome after this interval.
 	DefaultLifetime = time.Hour
 )
 
@@ -62,10 +57,8 @@ func (p PollPolicy) Validate() error {
 	return nil
 }
 
-// Backoff returns the wait before the poll with this number. The first poll is
-// number zero and waits First. Each later poll doubles the wait up to Max, so
-// the request count grows with the logarithm of the wait rather than with the
-// wait.
+// Backoff returns the suggested delay for a numbered poll.
+// Poll zero waits First. Later polls double the delay up to Max.
 func (p PollPolicy) Backoff(poll int) time.Duration {
 	wait := p.First
 	for range poll {
@@ -88,21 +81,4 @@ func (p PollPolicy) Spent(job Job, now time.Time) bool {
 		return false
 	}
 	return !now.Before(job.CreatedAt.Add(p.Lifetime))
-}
-
-// FailSpent moves a job that outlived the budget to its terminal failed state
-// and states why. It reports ErrJobLifetimeExceeded rather than doing nothing,
-// so a caller that asks about a job still inside its budget cannot mistake the
-// answer for a job it just ended.
-func (p PollPolicy) FailSpent(job *Job, now time.Time) error {
-	if job == nil {
-		return fmt.Errorf("%w: no record was given", ErrInvalidJob)
-	}
-	if !p.Spent(*job, now) {
-		return fmt.Errorf("%w: %s is inside its budget", ErrJobLifetimeExceeded, job.ID)
-	}
-	return job.Fail(fmt.Sprintf(
-		"the provider did not finish within the %s Starport polls a job for",
-		p.Lifetime,
-	), now)
 }

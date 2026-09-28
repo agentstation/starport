@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -15,7 +16,8 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/jobs"
-	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/jobslots"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -218,7 +220,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	}
 	// The meter is part of production composition, so a route test that skipped
 	// it would exercise an upload path no deployment runs.
-	storedBytes, err := limits.NewStorageMeter(testConfig.store)
+	storedBytes, err := storedbytes.NewStorageMeter(testConfig.store)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -239,7 +241,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	// The outstanding job meter is production composition as well. Without it
 	// every submission is admitted, and the refusal this surface publishes
 	// would be untestable through the router.
-	outstandingJobs, err := limits.NewJobMeter(testConfig.store)
+	outstandingJobs, err := jobslots.Open(testConfig.store)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -261,6 +263,13 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	if err != nil {
 		tb.Fatal(err)
 	}
+	tb.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := batchService.Close(ctx); err != nil {
+			tb.Errorf("drain test batch workers: %v", err)
+		}
+	})
 
 	// Match production composition: preset references resolve before routing.
 	var proxyOptions []proxy.Option

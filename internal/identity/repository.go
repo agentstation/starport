@@ -304,6 +304,7 @@ type teamRepository struct {
 
 func (r *teamRepository) Create(ctx context.Context, value Team) (TeamRecord, error) {
 	stored := teamRecord{SchemaVersion: StorageSchemaVersion, Revision: 1, Team: value}
+	stored.Team.Budget = value.Budget.WithBudgetHistory(nil)
 	created := r.now().UTC()
 	stored.Team.CreatedAt = created
 	stored.Team.UpdatedAt = created
@@ -316,7 +317,10 @@ func (r *teamRepository) Create(ctx context.Context, value Team) (TeamRecord, er
 	}
 	err = r.authority.Apply(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, r.db.Bind(`INSERT INTO teams (id, revision, record) VALUES (?, ?, ?)`), stored.Team.ID, stored.Revision, string(data))
-		return err
+		if err != nil {
+			return err
+		}
+		return r.retainBudgetOrigin(ctx, tx, stored.Team)
 	})
 	if err != nil {
 		if exists, existsErr := r.exists(ctx, stored.Team.ID); existsErr == nil && exists {
@@ -376,6 +380,7 @@ func (r *teamRepository) Update(ctx context.Context, value Team, expectedRevisio
 		Revision:      current.Revision + 1,
 		Team:          value,
 	}
+	updated.Team.Budget = value.Budget.WithBudgetHistory(current.Team.Budget)
 	updated.Team.CreatedAt = current.Team.CreatedAt
 	updated.Team.UpdatedAt = r.now().UTC()
 	if err := updated.Team.Validate(); err != nil {

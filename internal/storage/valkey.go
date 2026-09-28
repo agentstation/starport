@@ -407,10 +407,9 @@ func (v *ValkeyStore) BatchSetWithTTL(ctx context.Context, items map[string][]by
 func (v *ValkeyStore) Scan(ctx context.Context, pattern string, limit int) ([]string, error) {
 	var keys []string
 	cursor := uint64(0)
-	count := int64(1000)
-	if limit > 0 && limit < int(count) {
-		count = int64(limit)
-	}
+	// COUNT controls scan work, not the number of matching results. A small
+	// result limit must not force one network request per unrelated key.
+	const count int64 = 1000
 
 	for {
 		cmd := v.client.B().Scan().Cursor(cursor).Match(v.prefix + pattern).Count(count).Build()

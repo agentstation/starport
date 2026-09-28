@@ -5,6 +5,7 @@ import (
 
 	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/limits"
 )
 
 type authorizationKey struct{}
@@ -46,6 +47,20 @@ func (state *authorizationState) Check() error {
 	now, healthy := state.clock()
 	return state.bundle.Permit().Check(now, healthy)
 }
+
+// BudgetPolicy keeps child dispatches inside the original permission and policy.
+func (state *authorizationState) BudgetPolicy() (*limits.BudgetPolicy, error) {
+	if err := state.Check(); err != nil {
+		return nil, err
+	}
+	policy := state.bundle.BudgetPolicy()
+	if policy == nil {
+		return nil, limits.ErrBudgetPolicyUnknown
+	}
+	return policy, nil
+}
+
+var _ limits.BudgetPolicyReader = (*authorizationState)(nil)
 
 // AuthorizationRefresh resolves current policy for one queued operation.
 // It must preserve caller identity and must not retain the submitting context.

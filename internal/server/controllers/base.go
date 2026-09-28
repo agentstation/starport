@@ -367,6 +367,8 @@ func normalizedFailureShape(kind failure.Kind) (int, string) {
 		return http.StatusUnauthorized, "authentication_error"
 	case failure.Permission:
 		return http.StatusForbidden, errorTypePermission
+	case failure.Quota, failure.Billing:
+		return http.StatusPaymentRequired, errorTypePermission
 	case failure.RateLimit:
 		return http.StatusTooManyRequests, errorTypeRateLimit
 	case failure.NotFound:

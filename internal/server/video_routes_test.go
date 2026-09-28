@@ -30,11 +30,13 @@ var videoRoutes = []struct {
 	{method: http.MethodGet, path: "/v1/videos/{video_id}"},
 	{method: http.MethodGet, path: "/v1/videos/{video_id}/content"},
 	{method: http.MethodPost, path: "/v1/videos/{video_id}/cancel"},
+	{method: http.MethodPost, path: "/v1/videos/{video_id}/reconcile"},
 	{method: http.MethodPost, path: "/api/v1/videos"},
 	{method: http.MethodGet, path: "/api/v1/videos"},
 	{method: http.MethodGet, path: "/api/v1/videos/{video_id}"},
 	{method: http.MethodGet, path: "/api/v1/videos/{video_id}/content"},
 	{method: http.MethodPost, path: "/api/v1/videos/{video_id}/cancel"},
+	{method: http.MethodPost, path: "/api/v1/videos/{video_id}/reconcile"},
 }
 
 // TestServerRegistersTheVideoPaths walks the router the server builds. A path
@@ -70,16 +72,18 @@ func TestVideoRoutesCarryTheVideoScope(t *testing.T) {
 	// names a job this account never submitted. Both answers prove the request
 	// passed the scope guard and ran the controller.
 	reached := map[string]int{
-		http.MethodPost + " /v1/videos":                   http.StatusBadRequest,
-		http.MethodGet + " /v1/videos":                    http.StatusOK,
-		http.MethodGet + " /v1/videos/absent":             http.StatusNotFound,
-		http.MethodGet + " /v1/videos/absent/content":     http.StatusNotFound,
-		http.MethodPost + " /v1/videos/absent/cancel":     http.StatusNotFound,
-		http.MethodPost + " /api/v1/videos":               http.StatusBadRequest,
-		http.MethodGet + " /api/v1/videos":                http.StatusOK,
-		http.MethodGet + " /api/v1/videos/absent":         http.StatusNotFound,
-		http.MethodGet + " /api/v1/videos/absent/content": http.StatusNotFound,
-		http.MethodPost + " /api/v1/videos/absent/cancel": http.StatusNotFound,
+		http.MethodPost + " /v1/videos/absent/reconcile":     http.StatusNotFound,
+		http.MethodPost + " /api/v1/videos/absent/reconcile": http.StatusNotFound,
+		http.MethodPost + " /v1/videos":                      http.StatusBadRequest,
+		http.MethodGet + " /v1/videos":                       http.StatusOK,
+		http.MethodGet + " /v1/videos/absent":                http.StatusNotFound,
+		http.MethodGet + " /v1/videos/absent/content":        http.StatusNotFound,
+		http.MethodPost + " /v1/videos/absent/cancel":        http.StatusNotFound,
+		http.MethodPost + " /api/v1/videos":                  http.StatusBadRequest,
+		http.MethodGet + " /api/v1/videos":                   http.StatusOK,
+		http.MethodGet + " /api/v1/videos/absent":            http.StatusNotFound,
+		http.MethodGet + " /api/v1/videos/absent/content":    http.StatusNotFound,
+		http.MethodPost + " /api/v1/videos/absent/cancel":    http.StatusNotFound,
 	}
 
 	for call, expected := range reached {
@@ -144,6 +148,12 @@ func TestVideoJobOfAnotherAccountIsNotFound(t *testing.T) {
 	cancelled := videoRequest(server, http.MethodPost,
 		"/v1/videos/"+owned.ID+"/cancel", stranger)
 	require.Equal(t, http.StatusNotFound, cancelled.Code, cancelled.Body.String())
+
+	for _, prefix := range []string{"/v1", "/api/v1"} {
+		reconciled := videoRequest(server, http.MethodPost, prefix+"/videos/"+owned.ID+"/reconcile", stranger)
+		require.Equal(t, http.StatusNotFound, reconciled.Code, reconciled.Body.String())
+		require.NotContains(t, reconciled.Body.String(), "provider-side-identifier")
+	}
 
 	// The owner still reads its own job, so the answer above is about the
 	// account and not about a record no one can reach.

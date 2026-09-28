@@ -1,7 +1,6 @@
 package jobs
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -63,34 +62,35 @@ type Asset struct {
 // once the bytes land, and the retention window is what ends it if they never
 // do.
 func (s *Service) collect(ctx context.Context, runner Runner, job Job) Job {
-	if s.assets == nil || runner == nil {
+	if job.Native {
+		recovered, _ := s.recoverNative(ctx, job)
+		return recovered
+	}
+	if s.assets == nil || job.State != JobStateCompleted || job.HasAsset() {
 		return job
 	}
-	if job.State != JobStateCompleted || job.AssetKey != "" {
+	if job.AssetExpired(s.now()) {
+		expired, _ := s.expire(ctx, job)
+		return expired
+	}
+	if job.assetPending {
+		retained, found, err := s.recoverProviderAsset(ctx, job)
+		if found || err != nil {
+			return retained
+		}
+	}
+	if runner == nil {
 		return job
 	}
-	asset, err := runner.Fetch(ctx, s.handle(job), s.maxAssetBytes)
-	if err != nil {
+	bound := s.maxAssetBytes
+	if job.assetPending {
+		bound = job.AssetBytes
+	}
+	asset, err := runner.Fetch(ctx, s.handle(job), bound)
+	if err != nil || int64(len(asset.Bytes)) > bound {
 		return job
 	}
-	key := newAssetKey()
-	info, err := s.assets.Put(ctx, key, bytes.NewReader(asset.Bytes))
-	if err != nil {
-		return job
-	}
-	stored := job
-	if err := stored.StoreAsset(key, asset.ContentType, info.Size, s.now().Add(s.retention)); err != nil {
-		s.discard(ctx, key)
-		return job
-	}
-	if err := s.records.Replace(ctx, stored); err != nil {
-		// The record is the only thing that names the bytes, so bytes no record
-		// names are unreachable and go now rather than at a sweep that would
-		// never find them.
-		s.discard(ctx, key)
-		return job
-	}
-	return stored
+	return s.storeProviderAsset(ctx, job, asset)
 }
 
 // Open returns one job and a reader over its stored asset.
@@ -113,7 +113,7 @@ func (s *Service) Open(ctx context.Context, account, id string) (Job, io.ReadClo
 	if !job.HasAsset() {
 		return job, nil, ErrAssetNotFound
 	}
-	reader, err := s.assets.Get(ctx, job.AssetKey)
+	reader, err := s.assets.ReadPublished(ctx, job.AssetKey)
 	if err != nil {
 		if errors.Is(err, blob.ErrNotFound) {
 			// The record outlived its bytes. Not found is the honest answer, and
@@ -128,75 +128,68 @@ func (s *Service) Open(ctx context.Context, account, id string) (Job, io.ReadClo
 // SweepResult counts what one pass reclaimed. An operator reads it to tell a
 // deployment with nothing to reclaim from a sweep that never runs.
 type SweepResult struct {
+	// Scanned counts records read during this invocation.
+	Scanned int
+	// Released counts records whose slot release this pass confirms.
+	Released int
+	// Failed counts records that need another recovery attempt.
+	Failed int
 	// Expired counts jobs whose asset passed its window and went.
 	Expired int
-	// Abandoned counts jobs nobody polled that outlived their polling budget.
-	Abandoned int
+	// AwaitingReconciliation counts accepted work beyond automatic polling.
+	AwaitingReconciliation int
 	// Accounted counts jobs that reached a terminal state without a caller
 	// present to settle them.
 	Accounted int
 }
 
-// Sweep reclaims what nothing may read any more, and closes the books on what
-// nobody came back for.
-//
-// A sweep is what makes the outstanding job limit a bound in practice rather
-// than only on paper. Every other path settles a job because a caller polled
-// it, and a caller that submits and never returns is exactly the caller the
-// limit exists for. Without this pass, one abandoned job holds one account slot
-// forever.
-//
-// The record stays. A completed job stays completed after its bytes go, because
-// the work happened and the account paid for it, and the expiry marker is what
-// separates the two answers a caller reads.
-//
-// One failing record does not stop the pass. A sweep that returned on the first
-// error would let one unreachable object hold every later one hostage, and the
-// caller runs on a ticker that would repeat the same failure forever.
+// Sweep expires assets and retries confirmed terminal cleanup.
+// Local polling exhaustion retains provider work and its outstanding capacity.
+// A failed record does not prevent recovery of later records.
 func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
-	records, err := s.records.Scan(ctx, 0)
-	if err != nil {
-		return SweepResult{}, err
-	}
-	now := s.now()
-	var result SweepResult
-	var failures error
-	for _, job := range records {
-		swept, err := s.sweepOne(ctx, job, now, &result)
-		if err != nil {
-			failures = errors.Join(failures, fmt.Errorf("jobs: sweep %s: %w", job.ID, err))
-			continue
-		}
-		job = swept
-		if job.State.Terminal() && !job.Accounted() {
-			if settled := s.settle(ctx, job); settled.Accounted() {
+	return recoverPages(ctx, &s.recovery, s.records.RecoveryPage, func(ctx context.Context, job Job, result *SweepResult) error {
+		swept, err := s.sweepOne(ctx, job, s.now(), result)
+		if swept.State.Terminal() {
+			settled, settlementErr := s.settleAccounting(ctx, swept)
+			if !swept.SlotReleased && settled.SlotReleased {
+				result.Released++
+			}
+			if !swept.Accounted() && settled.Accounted() {
 				result.Accounted++
 			}
+			if settled.SlotID != "" && !settled.SlotReleased && s.meter != nil {
+				return errors.Join(err, ErrSlotReleasePending, settlementErr)
+			}
+			return errors.Join(err, settlementErr)
 		}
-	}
-	return result, failures
+		return err
+	})
 }
 
-// sweepOne runs the two reclaims one record may need and reports what it became.
-//
-// Ending an abandoned job comes before expiring an asset, because a job the
-// budget just ended may hold no asset at all, and a job that holds one is
-// already terminal and cannot be ended again.
+// sweepOne expires retained assets and reports work that needs reconciliation.
 func (s *Service) sweepOne(ctx context.Context, job Job, now time.Time, result *SweepResult) (Job, error) {
-	if !job.State.Terminal() && s.policy.Spent(job, now) {
-		// FailSpent needs no runner. A job past its budget has outlived what
-		// this gateway is willing to ask a provider about.
-		if err := s.policy.FailSpent(&job, now); err != nil {
-			return job, err
-		}
-		ended, err := s.commit(ctx, job)
+	if job.Native {
+		var err error
+		job, err = s.recoverNative(ctx, job)
 		if err != nil {
 			return job, err
 		}
-		result.Abandoned++
-		return ended, nil
+		if job.SubmissionPending {
+			result.AwaitingReconciliation++
+		}
 	}
-	if s.assets == nil || !job.HasAsset() || !job.AssetExpired(now) {
+	if job.SubmissionPending {
+		return job, nil
+	}
+	if s.policy.Spent(job, now) {
+		result.AwaitingReconciliation++
+		return job, nil
+	}
+	if !job.Native && job.assetPending && s.assets != nil && !job.AssetExpired(now) {
+		recovered, _, err := s.recoverProviderAsset(ctx, job)
+		return recovered, err
+	}
+	if s.assets == nil || (!job.HasAsset() && !job.assetPending) || !job.AssetExpired(now) {
 		return job, nil
 	}
 	expired, err := s.expire(ctx, job)
@@ -213,26 +206,32 @@ func (s *Service) sweepOne(ctx context.Context, job Job, now time.Time, result *
 // bytes that may already be gone, which the next pass finishes, rather than an
 // object no record names and that nothing can ever find again.
 func (s *Service) expire(ctx context.Context, job Job) (Job, error) {
+	if job.Native && job.AssetExpired(s.now()) {
+		var err error
+		job, err = s.expireNativeReceipt(ctx, job)
+		if err != nil {
+			return job, err
+		}
+	}
 	if job.AssetKey == "" {
 		return job, nil
 	}
-	if err := s.assets.Delete(ctx, job.AssetKey); err != nil && !errors.Is(err, blob.ErrNotFound) {
-		return Job{}, fmt.Errorf("jobs: delete the asset: %w", err)
+	if err := s.assets.Retire(ctx, job.AssetKey); err != nil {
+		return job, fmt.Errorf("jobs: delete the asset: %w", err)
 	}
 	if !job.AssetExpiredAt.IsZero() {
 		return job, nil
 	}
 	marked := job
+	marked.assetPending = false
 	if err := marked.ExpireAsset(s.now()); err != nil {
 		return Job{}, err
 	}
-	return s.commit(ctx, marked)
-}
-
-// discard removes bytes no record names and reports nothing. Every caller is
-// already unwinding from a failure it is about to report or absorb.
-func (s *Service) discard(ctx context.Context, key string) {
-	_ = s.assets.Delete(ctx, key)
+	updated, err := s.commit(ctx, job, marked)
+	if err != nil {
+		return job, err
+	}
+	return updated, nil
 }
 
 // newAssetKey names the bytes. It is not the job identifier and not derived

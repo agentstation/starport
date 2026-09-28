@@ -15,7 +15,7 @@ import (
 // not-found, and no request would report the mistake.
 func TestCompositionOpensTheConfiguredByteStore(t *testing.T) {
 	cfg := validProductionConfig(t)
-	application, err := New(cfg, withRuntimeFactories(explicitTestFactories()))
+	application, err := New(cfg, withRuntimeFactories(explicitTestFactories(t)))
 	require.NoError(t, err)
 	require.NotNil(t, application.blobStore)
 	require.Equal(t, config.BlobBackendFilesystem, application.blobStore.Backend())
@@ -38,7 +38,7 @@ func TestObjectStoreCompositionReachesNoBucket(t *testing.T) {
 		},
 	}
 
-	application, err := New(cfg, withRuntimeFactories(explicitTestFactories()))
+	application, err := New(cfg, withRuntimeFactories(explicitTestFactories(t)))
 	require.NoError(t, err)
 	require.Equal(t, config.BlobBackendObjectStore, application.blobStore.Backend())
 	require.NoError(t, application.Close(context.Background()))

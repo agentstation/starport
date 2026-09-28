@@ -102,6 +102,9 @@ type SpeechRequest struct {
 // file itself rather than with JSON, so the bytes and their media type are the
 // whole answer.
 type SpeechResponse struct {
+	// InputCharacters counts submitted Unicode code points after a completed provider response.
+	InputCharacters *int64
+
 	Audio       []byte
 	ContentType string
 }
@@ -131,6 +134,8 @@ type TranscriptionResponse struct {
 // reads its pages in order and this gateway carries no writer that could split
 // one container into many.
 type RecognitionRequest struct {
+	// MaxTokens is the enforced output cap from the selected offering.
+	MaxTokens *int
 	MediaTarget
 	Document UploadedFile
 	// Pages is the page count the native read produced. A transport reports
@@ -147,8 +152,12 @@ type RecognizedPage struct {
 
 // RecognitionResponse is the text a provider read off a document's pages.
 type RecognitionResponse struct {
-	Pages []RecognizedPage `json:"pages"`
-	Usage *MediaUsage      `json:"usage,omitempty"`
+	// TokenEvidence retains complete provider count presence for required settlement.
+	TokenEvidence *Usage `json:"-"`
+	// ProcessedPages is measured provider usage, independent of returned page text.
+	ProcessedPages *int             `json:"processed_pages,omitempty"`
+	Pages          []RecognizedPage `json:"pages"`
+	Usage          *MediaUsage      `json:"usage,omitempty"`
 }
 
 // ImageGenerator is the narrow optional interface a transport implements to

@@ -24,3 +24,4 @@
 | runtime generation | One immutable Starport runtime value that binds catalog state, configuration, source handles, connectors, operations, and availability. | | approved | `internal/registry/generation.go` |
 | Badger | The embedded storage backend for one Starport process. | | approved | `docs/ARCHITECTURE.md` |
 | Valkey | The shared storage backend for a multi-process Starport deployment. | | approved | `docs/ARCHITECTURE.md` |
+| Begin | The reservation repository method that consumes permission for one provider dispatch. | | approved | `internal/limits/reservation/transitions.go` |
