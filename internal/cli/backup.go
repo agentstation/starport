@@ -21,6 +21,7 @@ type BackupVerifier func(context.Context, *config.Config, recovery.VerifyRequest
 
 func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.Command {
 	return &urfavecli.Command{Name: "backup", Usage: "Capture and verify a stopped deployment", Commands: []*urfavecli.Command{
+		newPrepareBackupCommand(deps, usageError),
 		{
 			Name: "close", Usage: "Close recovery approval; separately stop and fence all writers", OnUsageError: usageError,
 			Flags: []urfavecli.Flag{&urfavecli.BoolFlag{Name: flagStructuredJSON, Usage: jsonOutputUsage}},

@@ -71,6 +71,7 @@ func runContext(
 		CloseBackupBoundary: app.CloseBackupBoundary,
 		CaptureBackup:       app.CaptureBackup,
 		VerifyBackup:        app.VerifyBackup,
+		PrepareBackup:       app.PrepareBackup,
 	})
 	if err == nil {
 		return 0

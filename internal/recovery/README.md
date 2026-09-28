@@ -92,7 +92,7 @@ Filesystem blob retries also verify every retained object and the import receipt
 A preparation receipt records completed imports. It does not prove independent history or authorize admission.
 The coordinator checks SQL restrictions again before file publication.
 Target writers must remain fenced through independent reconciliation, canonical file placement, and activation.
-These later operations and the operator restore commands remain open.
+These later operations and the activation commands remain open.
 
 These checks prove internal consistency, not completeness against later acknowledged work.
 Independent later history and restore commands remain required before deployment recovery is complete.
@@ -157,3 +157,40 @@ A recorded result digest with pending output remains a valid interrupted state.
 A missing execution claim causes refusal because it cannot prove that the line never started.
 It does not reopen admission or establish independent recovery history.
 External environment settings, credential sources, cloud permissions, and upstream authority trust remain explicit recovery requirements.
+
+## Restricted preparation
+
+Stop and fence the source and every target writer before preparation.
+Select isolated target stores through the normal Starport configuration.
+Keep the deployment ID and master key consistent with the verified backup.
+The preparation command does not start the gateway or fetch catalog sources.
+
+```sh
+starport backup prepare \
+  --directory /private/recovery/capture-001 \
+  --manifest-sha256 "$RETAINED_MANIFEST_SHA256" \
+  --files-directory /private/recovery/prepared-001 \
+  --operation restore-001 \
+  --fencing-evidence incident-123/writer-fence \
+  --json
+```
+
+The current configuration selects target KV, SQL, and blob storage.
+The source configuration inside the backup does not select live destinations.
+Complete source verification and deployment matching precede target creation.
+The command refuses overlapping local targets and targets inside the backup.
+
+The fencing reference enters the retained preparation receipt and component claims.
+Retry with the same operation, manifest digest, fencing reference, and target stores.
+A changed reference causes refusal. The reference does not stop processes or prove network isolation.
+
+SQL setup initializes empty tables and can resume empty schema setup at a completed migration boundary.
+It does not upgrade populated schemas. Unresolved MySQL migration attempts require their existing reconciliation procedure.
+KV recovery access retains import barriers and does not start application maintenance.
+Selected files remain inactive, including saved operator tokens and runtime identity files.
+
+A command failure can follow completed restricted component imports.
+It does not prove rollback. Preserve the targets and retry the same operation after correcting the failure.
+Ordinary startup refuses imported stores while their barriers remain.
+Canonical file placement, independent-history reconciliation, and activation commands remain unfinished.
+Do not remove barriers manually or treat a preparation receipt as permission to start inference.

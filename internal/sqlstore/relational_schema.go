@@ -58,35 +58,8 @@ type relationalQuery interface {
 }
 
 func validateRelationalSchema(ctx context.Context, q relationalQuery, dialect string) error {
-	query := ""
-	switch dialect {
-	case TypeSQLite:
-		query = "SELECT name,type FROM sqlite_schema WHERE type IN ('table','view','trigger') AND name NOT GLOB 'sqlite_*' ORDER BY name"
-	case TypePostgres:
-		query = `SELECT c.relname, CASE WHEN c.relkind='r' AND NOT c.relrowsecurity THEN 'table' ELSE 'unsupported' END
- FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname=current_schema() AND c.relkind IN ('r','p','f','v','m') ORDER BY c.relname`
-	case TypeMySQL:
-		query = "SELECT TABLE_NAME, CASE WHEN TABLE_TYPE='BASE TABLE' AND ENGINE='InnoDB' THEN 'table' ELSE 'unsupported' END FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME"
-	default:
-		return ErrUnknownType
-	}
-	rows, err := q.QueryContext(ctx, query)
+	actual, err := relationalObjects(ctx, q, dialect)
 	if err != nil {
-		return err
-	}
-	actual := map[string]bool{}
-	for rows.Next() {
-		var name, kind string
-		if err := rows.Scan(&name, &kind); err != nil {
-			return errors.Join(err, rows.Close())
-		}
-		if kind != "table" {
-			return errors.Join(fmt.Errorf("unsupported relational object %s", name), rows.Close())
-		}
-		actual[name] = true
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		return err
 	}
 	if dialect == TypeMySQL {
@@ -115,7 +88,7 @@ func validateRelationalSchema(ctx context.Context, q relationalQuery, dialect st
 		return errors.New("unknown relational tables prevent complete transfer")
 	}
 	if dialect != TypeSQLite {
-		query = "SELECT count(*) FROM information_schema.triggers WHERE trigger_schema=current_schema()"
+		query := "SELECT count(*) FROM information_schema.triggers WHERE trigger_schema=current_schema()"
 		if dialect == TypeMySQL {
 			query = "SELECT count(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE()"
 		}
@@ -182,4 +155,39 @@ func (t relationalTable) columnNames() string {
 		names[i] = c.name
 	}
 	return strings.Join(names, ",")
+}
+
+func relationalObjects(ctx context.Context, q relationalQuery, dialect string) (map[string]bool, error) {
+	query := ""
+	switch dialect {
+	case TypeSQLite:
+		query = "SELECT name,type FROM sqlite_schema WHERE type IN ('table','view','trigger') AND name NOT GLOB 'sqlite_*' ORDER BY name"
+	case TypePostgres:
+		query = `SELECT c.relname, CASE WHEN c.relkind='r' AND NOT c.relrowsecurity THEN 'table' ELSE 'unsupported' END
+ FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname=current_schema() AND c.relkind IN ('r','p','f','v','m') ORDER BY c.relname`
+	case TypeMySQL:
+		query = "SELECT TABLE_NAME, CASE WHEN TABLE_TYPE='BASE TABLE' AND ENGINE='InnoDB' THEN 'table' ELSE 'unsupported' END FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME"
+	default:
+		return nil, ErrUnknownType
+	}
+	rows, err := q.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	actual := map[string]bool{}
+	for rows.Next() {
+		var name, kind string
+		if err := rows.Scan(&name, &kind); err != nil {
+			return nil, errors.Join(err, rows.Close())
+		}
+		if kind != "table" {
+			return nil, errors.Join(fmt.Errorf("unsupported relational object %s", name), rows.Close())
+		}
+		actual[name] = true
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	return actual, nil
 }

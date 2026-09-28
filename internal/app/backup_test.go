@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json/v2"
 	"os"
 	"path/filepath"
@@ -26,7 +27,7 @@ func backupApplicationFixture(t *testing.T) (*config.Config, recovery.CaptureReq
 	_, err := productfiles.CreateDirectory(parent)
 	require.NoError(t, err)
 	cfg, err := config.NewLoader().WithPaths(config.PathsForConfigDir(parent)).WithEnvFiles().WithEnvironment(map[string]string{
-		"STARPORT_SECURITY_MASTER_KEY": strings.Repeat("k", 32), "STARPORT_DEPLOYMENT_ID": "backup-test",
+		"STARPORT_SECURITY_MASTER_KEY": strings.Repeat("k", 32), "STARPORT_DEPLOYMENT_ID": "backup-test-" + rand.Text(),
 	}).Load(t.Context())
 	require.NoError(t, err)
 	for _, directory := range []string{cfg.Storage.Badger.Path, filepath.Dir(cfg.Storage.SQL.SQLite.Path), cfg.Files.Path, filepath.Dir(cfg.EffectivePaths().LocalTokenFile)} {

@@ -1683,17 +1683,21 @@ func openSQL(cfg config.StorageConfig) (*sqlstore.DB, error) {
 func openBlob(ctx context.Context, cfg config.FilesConfig) (blob.Store, error) {
 	switch cfg.SelectedBackend() {
 	case config.BlobBackendObjectStore:
-		return blob.NewObjectStore(ctx, blob.ObjectStoreOptions{
-			Bucket:          cfg.ObjectStore.Bucket,
-			Region:          cfg.ObjectStore.Region,
-			Endpoint:        cfg.ObjectStore.Endpoint,
-			Prefix:          cfg.ObjectStore.Prefix,
-			AccessKeyID:     cfg.ObjectStore.AccessKeyID,
-			SecretAccessKey: cfg.ObjectStore.SecretAccessKey,
-		})
+		return openObjectBlob(ctx, cfg)
 	default:
 		return blob.NewFilesystem(cfg.Path)
 	}
+}
+
+func openObjectBlob(ctx context.Context, cfg config.FilesConfig) (*blob.ObjectStore, error) {
+	return blob.NewObjectStore(ctx, blob.ObjectStoreOptions{
+		Bucket:          cfg.ObjectStore.Bucket,
+		Region:          cfg.ObjectStore.Region,
+		Endpoint:        cfg.ObjectStore.Endpoint,
+		Prefix:          cfg.ObjectStore.Prefix,
+		AccessKeyID:     cfg.ObjectStore.AccessKeyID,
+		SecretAccessKey: cfg.ObjectStore.SecretAccessKey,
+	})
 }
 
 func serverConfig(cfg *config.Config, auth authRuntime) *server.Config {

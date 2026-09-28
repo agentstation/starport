@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode"
 
 	"github.com/agentstation/starmap/pkg/productfiles"
 	"github.com/agentstation/starport/internal/blob"
@@ -31,43 +30,62 @@ type BundleTargets struct {
 // PreparedBundle records completed import, not independent history or admission approval.
 // Every imported store retains its startup barrier. Selected files remain inactive.
 type PreparedBundle struct {
-	Version        int            `json:"version"`
-	OperationID    string         `json:"operation_id"`
-	ManifestSHA256 string         `json:"manifest_sha256"`
-	Boundary       Record         `json:"boundary"`
-	KV             KVImportResult `json:"kv"`
-	Files          int            `json:"files"`
+	Version         int            `json:"version"`
+	OperationID     string         `json:"operation_id"`
+	ManifestSHA256  string         `json:"manifest_sha256"`
+	FencingEvidence string         `json:"fencing_evidence,omitempty"`
+	Boundary        Record         `json:"boundary"`
+	KV              KVImportResult `json:"kv"`
+	Files           int            `json:"files"`
 }
 
 // PrepareBundle validates the complete source before importing its components.
 // Retries require the same operation, manifest, and isolated targets.
 // Failure leaves imported stores restricted. Activation is a separate operation.
 func PrepareBundle(ctx context.Context, target BundleTargets, request VerifyRequest, operation string, encryption *credentials.EncryptionService) (result PreparedBundle, resultErr error) {
-	if err := request.Validate(); err != nil {
+	if err := validateBundlePreparation(target, request, RestoreOperation{ID: operation}); err != nil {
 		return result, err
 	}
-	if target.SQL == nil || target.KV == nil || target.Blobs == nil {
-		return result, errors.New("restore requires all storage targets")
+	source, err := InspectRestoreSource(ctx, request, encryption)
+	if err != nil {
+		return result, err
 	}
-	if strings.TrimSpace(operation) == "" || len(operation) > 128 || strings.ContainsFunc(operation, unicode.IsControl) {
-		return result, errors.New("restore requires a bounded operation identifier")
+	return source.Prepare(ctx, target, RestoreOperation{ID: operation})
+}
+
+func validateBundlePreparation(target BundleTargets, request VerifyRequest, operation RestoreOperation) error {
+	if err := request.Validate(); err != nil {
+		return err
+	}
+	if target.SQL == nil || target.KV == nil || target.Blobs == nil {
+		return errors.New("restore requires all storage targets")
+	}
+	if err := operation.Validate(); err != nil {
+		return err
 	}
 	scratch := request.ScratchDirectory
 	if scratch == "" {
 		scratch = filepath.Dir(request.Directory)
 	}
-	if err := validateRestoreFilesPath(target.FilesDirectory, request.Directory, scratch); err != nil {
+	return validateRestoreFilesPath(target.FilesDirectory, request.Directory, scratch)
+}
+
+// Prepare imports only the verified source. Every component rechecks its bytes against the retained digest.
+func (s *RestoreSource) Prepare(ctx context.Context, target BundleTargets, operation RestoreOperation) (result PreparedBundle, resultErr error) {
+	if s == nil || s.manifest.Format != bundleFormat {
+		return result, errors.New("restore source has not passed verification")
+	}
+	if err := validateBundlePreparation(target, s.request, operation); err != nil {
 		return result, err
 	}
-	manifest, references, err := InspectBundleReferences(ctx, request.Directory, request.ManifestSHA256, scratch, encryption)
-	if err != nil {
-		return result, err
-	}
+	request, manifest, references := s.request, s.manifest, s.references
+	scratch := request.ScratchDirectory
 	// Bind each adapter's import claim to the entire bundle, including selected files.
 	identity, err := json.Marshal(struct {
 		Version             int
 		Operation, Manifest string
-	}{1, operation, request.ManifestSHA256})
+		FencingEvidence     string `json:",omitempty"`
+	}{1, operation.ID, request.ManifestSHA256, operation.FencingEvidence})
 	if err != nil {
 		return result, err
 	}
@@ -87,7 +105,7 @@ func PrepareBundle(ctx context.Context, target BundleTargets, request VerifyRequ
 	if err := verifyPreparedSQL(ctx, target.SQL, sql.Boundary); err != nil {
 		return result, err
 	}
-	result = PreparedBundle{Version: 1, OperationID: operation, ManifestSHA256: request.ManifestSHA256, Boundary: sql.Boundary, KV: kv}
+	result = PreparedBundle{Version: 1, OperationID: operation.ID, FencingEvidence: operation.FencingEvidence, ManifestSHA256: request.ManifestSHA256, Boundary: sql.Boundary, KV: kv}
 	for _, artifact := range manifest.Artifacts {
 		if strings.HasPrefix(artifact.Path, "files/") {
 			result.Files++
@@ -106,8 +124,29 @@ func validateRestoreFilesPath(destination, source, scratch string) error {
 	if _, err := productfiles.ExistingDirectory(filepath.Dir(destination)); err != nil {
 		return err
 	}
-	// Keep the backup and scratch trees outside the destination.
-	for _, pair := range [][2]string{{source, destination}, {destination, source}, {destination, scratch}} {
+	return CheckRestoreDestinations(source, scratch, destination)
+}
+
+// CheckRestoreDestinations refuses overlap with source state or another target.
+// It checks lexical paths and native identities before the caller creates missing targets.
+func CheckRestoreDestinations(source, scratch string, destinations ...string) error {
+	for i, destination := range destinations {
+		if !filepath.IsAbs(destination) || filepath.Clean(destination) != destination {
+			return errors.New("restore requires clean absolute target paths")
+		}
+		pairs := [][2]string{{source, destination}, {destination, source}, {destination, scratch}}
+		for _, other := range destinations[:i] {
+			pairs = append(pairs, [2]string{other, destination}, [2]string{destination, other})
+		}
+		if err := checkRestorePathPairs(pairs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkRestorePathPairs(pairs [][2]string) error {
+	for _, pair := range pairs {
 		relative, err := filepath.Rel(pair[0], pair[1])
 		if err != nil {
 			return err
