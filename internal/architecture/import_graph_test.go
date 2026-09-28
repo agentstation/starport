@@ -217,11 +217,11 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/blob",
 		"github.com/agentstation/starport/internal/storage",
 	)
-	// Jobs owns work that outlives its request. It reaches the operation
-	// vocabulary, retained valuation, and record store. A dependency on
-	// execution or a provider connector would put the poll loop inside the
-	// record, and this boundary keeps the two apart.
+	// Jobs owns work that outlives its request. It reads operation vocabulary,
+	// correction limits, retained valuation, and stored records.
+	// Execution and provider connectors remain outside this record boundary.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/jobs"],
+		"github.com/agentstation/starport/internal/limits",
 		"github.com/agentstation/starport/internal/limits/reservation",
 		"github.com/agentstation/starport/internal/blob",
 		"github.com/agentstation/starport/internal/routing",
