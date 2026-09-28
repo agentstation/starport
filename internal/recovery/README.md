@@ -68,6 +68,16 @@ Original publication digests remain retained evidence. Inspection does not recon
 Unknown correction kinds, missing chain records, conflicting decisions, and orphan records cause refusal.
 Inspection never applies corrections or advances reporting.
 
+`PrepareSQLRestore` validates the complete bundle before copying relational records into a fresh target.
+It advances retained recovery epochs, closes all gates, and disables bootstrap and unused team initialization grants.
+The same transaction retains an operation receipt and a persistent startup barrier.
+An exact retry verifies the original source and receipt without repeating the restriction callback.
+A changed operation or recovery policy causes refusal.
+
+Ordinary application startup refuses a retained SQL import barrier before opening concept repositories.
+SQL preparation does not restore KV, blobs, selected files, or independent later history.
+The coordinator must complete those steps before a separate activation procedure can remove barriers.
+
 These checks prove internal consistency, not completeness against later acknowledged work.
 Independent later history and restore commands remain required before deployment recovery is complete.
 

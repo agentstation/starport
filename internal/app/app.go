@@ -319,6 +319,9 @@ func (b *runtimeBuilder) openSQLStore() error {
 	if err := db.Migrate(migrateCtx); err != nil {
 		return fmt.Errorf("migrate relational storage: %w", err)
 	}
+	if err := db.CheckImportBarrier(migrateCtx); err != nil {
+		return fmt.Errorf("relational recovery required: %w", err)
+	}
 	log.Info().Str("dialect", db.Dialect()).Msg("relational storage ready")
 	return nil
 }

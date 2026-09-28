@@ -14,6 +14,10 @@ import (
 // restrict must close restored permission gates in the same transaction before commit.
 // This operation does not change application configuration or approve recovery.
 func (db *DB) ImportRelational(ctx context.Context, source string, expected SQLiteSnapshot, scratch string, restrict func(context.Context, *sql.Conn) error) (resultErr error) {
+	return db.importRelationalImage(ctx, source, expected, scratch, restrict, nil)
+}
+
+func (db *DB) importRelationalImage(ctx context.Context, source string, expected SQLiteSnapshot, scratch string, restrict func(context.Context, *sql.Conn) error, claim []byte) (resultErr error) {
 	if db == nil || db.DB == nil {
 		return ErrClosed
 	}
@@ -30,10 +34,15 @@ func (db *DB) ImportRelational(ctx context.Context, source string, expected SQLi
 	if err != nil {
 		return err
 	}
-	return db.importRelational(ctx, image, high, restrict)
+	if marker, err := readRelationalImport(ctx, image); err != nil {
+		return err
+	} else if marker != "" {
+		return ErrImportRestricted
+	}
+	return db.importRelational(ctx, image, high, restrict, claim)
 }
 
-func (db *DB) importRelational(ctx context.Context, source relationalQuery, high int64, restrict func(context.Context, *sql.Conn) error) (resultErr error) {
+func (db *DB) importRelational(ctx context.Context, source relationalQuery, high int64, restrict func(context.Context, *sql.Conn) error, claim []byte) (resultErr error) {
 	owner, err := db.acquireMigrationOwner(ctx)
 	if err != nil {
 		return err
@@ -62,6 +71,16 @@ func (db *DB) importRelational(ctx context.Context, source relationalQuery, high
 		if err := validateRelationalSchema(ctx, owner.conn, db.dialect); err != nil {
 			return err
 		}
+		marker, err := readRelationalImport(ctx, owner.conn)
+		if err != nil {
+			return err
+		}
+		if marker != "" {
+			if len(claim) > 0 && marker == string(claim) {
+				return nil
+			}
+			return ErrImportRestricted
+		}
 		if err := checkRelationalEmpty(ctx, owner.conn, db.dialect); err != nil {
 			return err
 		}
@@ -82,6 +101,11 @@ func (db *DB) importRelational(ctx context.Context, source relationalQuery, high
 		}
 		if err := restrict(ctx, owner.conn); err != nil {
 			return err
+		}
+		if len(claim) > 0 {
+			if _, err := owner.conn.ExecContext(ctx, db.Bind("INSERT INTO sqlstore_meta(name,value) VALUES(?,?)"), relationalImportMarker, string(claim)); err != nil {
+				return err
+			}
 		}
 		return restoreAuditHighWater(ctx, owner.conn, owner.conn, db.dialect, max(high, currentHigh))
 	})

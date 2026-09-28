@@ -111,6 +111,9 @@ func BackupBundle(ctx context.Context, destination string, source BundleSources,
 	if source.KV == nil || source.SQL == nil || source.Blobs == nil || source.Encryption == nil {
 		return manifest, errors.New("backup requires all storage adapters and encryption-key access")
 	}
+	if err := source.SQL.CheckImportBarrier(ctx); err != nil {
+		return manifest, err
+	}
 	if err := validateBundleFiles(source.Files); err != nil {
 		return manifest, err
 	}
