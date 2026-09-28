@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/limits"
@@ -118,6 +119,50 @@ func TestProductionSemanticEmbeddingSharesBudget(t *testing.T) {
 	require.Equal(t, reservation.Settled, parent.State)
 	require.EqualValues(t, 3000, *parent.NanoUSD)
 	require.EqualValues(t, 2, fixture.calls.Load())
+	// Wait for optional fills without submitting more inference requests.
+	require.Eventually(t, func() bool {
+		status := fixture.application.cacheManager.FillStatus()
+		return status.RetainedEntries == 0 && status.ActiveFills == 0
+	}, time.Second, time.Millisecond)
+	req, err = http.NewRequestWithContext(t.Context(), http.MethodPost, fixture.gateway.URL+"/v1/chat/completions", strings.NewReader(`{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"hi there"}]}`))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+performanceGatewayKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Request-ID", "semantic-hit")
+	req.Header.Set("X-Semantic-Cache", "true")
+	response, err = fixture.client.Do(req)
+	require.NoError(t, err)
+	body, err = io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	require.Equal(t, http.StatusOK, response.StatusCode, string(body))
+	require.Equal(t, "HIT", response.Header.Get("X-Cache"))
+	require.Equal(t, "1.0000", response.Header.Get("X-Cache-Similarity"))
+	require.Contains(t, string(body), "hello")
+	require.EqualValues(t, 3, fixture.calls.Load(), "only the second embedding reaches the provider")
+	keys, err = fixture.application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 10)
+	require.NoError(t, err)
+	require.Len(t, keys, 3, "a semantic hit must not reserve another chat attempt")
+	for _, key := range keys {
+		data, err := fixture.application.store.Get(t.Context(), key)
+		require.NoError(t, err)
+		var record reservation.Record
+		require.NoError(t, json.Unmarshal(data, &record))
+		records[record.Attempt.RequestID] = record
+	}
+	hit, ok := records["semantic-hit-semantic-cache"]
+	require.True(t, ok)
+	require.Equal(t, reservation.Settled, hit.State)
+	require.EqualValues(t, 160, *hit.NanoUSD)
+	require.Equal(t, child.Attempt.Rules, hit.Attempt.Rules)
+	_, exists := records["semantic-hit"]
+	require.False(t, exists)
+	for _, rule := range hit.Attempt.Rules {
+		window, err := fixture.application.budget.ledger.Window(t.Context(), rule.Meter, hit.AdmittedAt)
+		require.NoError(t, err)
+		require.Zero(t, window.Reserved)
+		require.EqualValues(t, 3320, window.Consumed)
+	}
 }
 
 func TestProductionEmbeddingRefusalBeforeDispatch(t *testing.T) {

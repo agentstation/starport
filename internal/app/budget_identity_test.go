@@ -55,6 +55,7 @@ func TestProductionBudgetPreservesRequestIdentity(t *testing.T) {
 			require.EqualValues(t, 3, calls.Load())
 			ids := map[string]bool{}
 			states := map[reservation.State]int{}
+			var uncertain reservation.Record
 			for _, key := range keys {
 				data, err := fixture.application.store.Get(t.Context(), key)
 				require.NoError(t, err)
@@ -65,8 +66,17 @@ func TestProductionBudgetPreservesRequestIdentity(t *testing.T) {
 				require.False(t, ids[record.Attempt.ID], "a repeated request ID must not reuse a dispatch permit")
 				ids[record.Attempt.ID] = true
 				states[record.State]++
+				if record.State == reservation.Uncertain {
+					uncertain = record
+				}
 			}
 			require.Equal(t, map[reservation.State]int{reservation.Uncertain: 1, reservation.Settled: 2}, states)
+			for _, binding := range uncertain.Bindings {
+				window, err := fixture.application.budget.ledger.Window(t.Context(), binding.Rule.Meter, uncertain.AdmittedAt)
+				require.NoError(t, err)
+				require.Equal(t, binding.Amount, window.Reserved)
+				require.EqualValues(t, 22, window.Consumed, "both measured retries charge the same token meter")
+			}
 		})
 	}
 }

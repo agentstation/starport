@@ -289,8 +289,29 @@ func (s *lostAcknowledgement) CompareAndSwapInWindow(ctx context.Context, mutati
 }
 
 func TestFixedUTCWindows(t *testing.T) {
-	at := time.Date(2027, time.January, 1, 23, 59, 59, 0, time.FixedZone("east", 2*3600))
-	require.Equal(t, time.Date(2026, time.December, 28, 0, 0, 0, 0, time.UTC), windowFor(limits.IntervalWeek, at).Start)
-	require.Equal(t, time.Date(2027, time.January, 2, 0, 0, 0, 0, time.UTC), windowFor(limits.IntervalDay, at).End)
-	require.Equal(t, time.Date(2027, time.February, 1, 0, 0, 0, 0, time.UTC), windowFor(limits.IntervalMonth, at).End)
+	for _, tc := range []struct {
+		name, at, start, end string
+		interval             string
+	}{
+		{"day before midnight", "2026-12-31T23:59:59.999999999Z", "2026-12-31T00:00:00Z", "2027-01-01T00:00:00Z", limits.IntervalDay},
+		{"day at midnight", "2027-01-01T00:00:00Z", "2027-01-01T00:00:00Z", "2027-01-02T00:00:00Z", limits.IntervalDay},
+		{"ISO week across year", "2027-01-01T23:59:59+02:00", "2026-12-28T00:00:00Z", "2027-01-04T00:00:00Z", limits.IntervalWeek},
+		{"ISO week before Monday", "2027-01-03T23:59:59.999999999Z", "2026-12-28T00:00:00Z", "2027-01-04T00:00:00Z", limits.IntervalWeek},
+		{"ISO week at Monday", "2027-01-04T00:00:00Z", "2027-01-04T00:00:00Z", "2027-01-11T00:00:00Z", limits.IntervalWeek},
+		{"month before boundary", "2027-01-31T23:59:59.999999999Z", "2027-01-01T00:00:00Z", "2027-02-01T00:00:00Z", limits.IntervalMonth},
+		{"month at boundary", "2027-02-01T00:00:00Z", "2027-02-01T00:00:00Z", "2027-03-01T00:00:00Z", limits.IntervalMonth},
+		{"leap February", "2028-02-29T12:00:00Z", "2028-02-01T00:00:00Z", "2028-03-01T00:00:00Z", limits.IntervalMonth},
+		{"offset crosses UTC date", "2027-01-01T00:30:00+02:00", "2026-12-31T00:00:00Z", "2027-01-01T00:00:00Z", limits.IntervalDay},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parse := func(value string) time.Time {
+				at, err := time.Parse(time.RFC3339Nano, value)
+				require.NoError(t, err)
+				return at
+			}
+			window := windowFor(tc.interval, parse(tc.at))
+			require.Equal(t, parse(tc.start), window.Start)
+			require.Equal(t, parse(tc.end), window.End)
+		})
+	}
 }

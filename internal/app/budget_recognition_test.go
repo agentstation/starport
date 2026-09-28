@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json/v2"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starport/internal/apikey"
@@ -124,17 +126,22 @@ func TestProductionRecognitionBudget(t *testing.T) {
 	}
 }
 
-func sendRecognitionRequest(t *testing.T, fixture *performanceFixture) (*http.Response, []byte) {
+func recognitionRequest(t *testing.T, ctx context.Context, fixture *performanceFixture) *http.Request {
 	t.Helper()
 	pdf, err := os.ReadFile("../document/testdata/scanned.pdf")
 	require.NoError(t, err)
 	body := fmt.Sprintf(`{"model":"openai/gpt-4o-mini","max_tokens":32,"messages":[{"role":"user","content":[{"type":"file","file":{"filename":"scanned.pdf","file_data":"data:application/pdf;base64,%s"}}]}],"plugins":[{"id":"file-parser","pdf":{"engine":"recognition"}}]}`, base64.StdEncoding.EncodeToString(pdf))
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, fixture.gateway.URL+"/api/v1/chat/completions", strings.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, fixture.gateway.URL+"/api/v1/chat/completions", strings.NewReader(body))
 	require.NoError(t, err)
 	request.Header.Set("Authorization", "Bearer "+performanceGatewayKey)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Request-ID", "recognition-parent")
-	response, err := fixture.client.Do(request)
+	return request
+}
+
+func sendRecognitionRequest(t *testing.T, fixture *performanceFixture) (*http.Response, []byte) {
+	t.Helper()
+	response, err := fixture.client.Do(recognitionRequest(t, t.Context(), fixture))
 	require.NoError(t, err)
 	data, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
@@ -155,4 +162,89 @@ func TestProductionRecognitionRefusesInsufficientBudget(t *testing.T) {
 	keys, err := fixture.application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 10)
 	require.NoError(t, err)
 	require.Empty(t, keys)
+}
+
+func TestProductionRecognitionThenCancel(t *testing.T) {
+	const googlePath = "/gemini-2.5-flash:generateContent"
+	chatEntered, release := make(chan struct{}), make(chan struct{})
+	fixture := newPerformanceFixtureForProviders(t, 0, nil, true,
+		&limits.Limits{Spend: &limits.Budget{Limit: 2_000_000_000, Interval: limits.IntervalDay}},
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == googlePath {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"candidates":[{"content":{"role":"model","parts":[{"text":"<<<STARPORT_PAGE_1>>>\nInvoice"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":20,"totalTokenCount":120,"cachedContentTokenCount":0}}`)
+				return
+			}
+			_, _ = io.Copy(io.Discard, r.Body)
+			close(chatEntered)
+			select {
+			case <-r.Context().Done():
+			case <-release:
+			}
+		}), []performanceProvider{
+			{catalogs.ProviderIDOpenAI, "OPENAI_API_KEY", "Authorization", "Bearer sk-test-key", []string{"/v1/chat/completions"}},
+			{catalogs.ProviderIDGoogleAIStudio, "GOOGLE_API_KEY", "X-Goog-Api-Key", "sk-test-key", []string{googlePath}},
+		}, func(key *apikey.APIKey) {
+			key.AllowedModels = []string{"openai/gpt-4o-mini", "google-ai-studio/gemini-2.5-flash"}
+		})
+	t.Cleanup(func() { close(release) })
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	request := recognitionRequest(t, ctx, fixture)
+	completed := make(chan error, 1)
+	go func() {
+		response, err := fixture.client.Do(request)
+		if response != nil {
+			_ = response.Body.Close()
+		}
+		completed <- err
+	}()
+	select {
+	case <-chatEntered:
+	case err := <-completed:
+		t.Fatalf("request stopped before chat dispatch: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("chat dispatch did not start")
+	}
+	keys, err := fixture.application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 10)
+	require.NoError(t, err)
+	require.Len(t, keys, 2)
+	var child, parent reservation.Record
+	for _, key := range keys {
+		raw, err := fixture.application.store.Get(t.Context(), key)
+		require.NoError(t, err)
+		var record reservation.Record
+		require.NoError(t, json.Unmarshal(raw, &record))
+		if record.Attempt.OfferingID == "google-ai-studio/gemini-2.5-flash" {
+			child = record
+		} else {
+			parent = record
+		}
+	}
+	require.Equal(t, reservation.Settled, child.State)
+	require.EqualValues(t, 80000, *child.NanoUSD)
+	require.Equal(t, reservation.Dispatched, parent.State)
+	require.NotEqual(t, child.Attempt.ID, parent.Attempt.ID)
+	require.Equal(t, child.Attempt.Rules, parent.Attempt.Rules)
+	cancel()
+	select {
+	case err := <-completed:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(5 * time.Second):
+		t.Fatal("client did not observe cancellation")
+	}
+	require.Eventually(t, func() bool {
+		current, err := fixture.application.budget.ledger.Inspect(t.Context(), parent.Attempt.ID)
+		return err == nil && current.State == reservation.Uncertain
+	}, 5*time.Second, time.Millisecond)
+	current, err := fixture.application.budget.ledger.Inspect(t.Context(), child.Attempt.ID)
+	require.NoError(t, err)
+	require.Equal(t, &child, current, "outer cancellation must preserve the measured recognition charge")
+	for _, binding := range parent.Bindings {
+		window, err := fixture.application.budget.ledger.Window(t.Context(), binding.Rule.Meter, parent.AdmittedAt)
+		require.NoError(t, err)
+		require.EqualValues(t, 80000, window.Consumed)
+		require.Equal(t, binding.Amount, window.Reserved)
+	}
+	require.EqualValues(t, 2, fixture.calls.Load())
 }
