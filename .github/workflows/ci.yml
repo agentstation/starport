@@ -180,8 +180,8 @@ jobs:
   catalog-fleet:
     name: Catalog Fleet Recovery
     runs-on: ubuntu-latest
-    # Includes cold compilation, both bounded test steps, and evidence upload.
-    timeout-minutes: 20
+    # Includes cold compilation, three bounded test steps, and evidence upload.
+    timeout-minutes: 30
     services:
       valkey:
         image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
@@ -233,6 +233,12 @@ jobs:
           TEST_FRESH_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey-fresh.ports['6379'] }}
           TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
         run: go test -json -race -count=1 -timeout 3m ./internal/app -run '^TestInitializeFleet' > fleet-initialization.jsonl
+      - name: Verify budget admission across processes and backend replacement
+        env:
+          TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+          TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
+          TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
+        run: go test -json -race -count=1 -timeout 7m ./internal/app -run '^(TestProductionBudgetAcrossProcesses|TestSettledJobRequiresOriginalSharedApproval)$' > fleet-budget.jsonl
       - name: Retain catalog fleet evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -241,6 +247,7 @@ jobs:
           path: |
             fleet-catalog.jsonl
             fleet-initialization.jsonl
+            fleet-budget.jsonl
           retention-days: 7
           if-no-files-found: error
 

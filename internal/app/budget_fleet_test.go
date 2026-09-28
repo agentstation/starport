@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -30,8 +31,10 @@ import (
 	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/keyring"
+	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/server"
 	"github.com/agentstation/starport/internal/sqlstore"
+	"github.com/agentstation/starport/internal/storage"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 )
@@ -131,8 +134,11 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 	if valkey == "" || postgres == "" {
 		t.Skip("UNVERIFIED: TEST_VALKEY_URL and TEST_POSTGRES_URL are required")
 	}
-	for _, mode := range []string{"concurrent-settlement", "dispatched-process-loss"} {
+	for _, mode := range []string{"concurrent-settlement", "dispatched-process-loss", "backend-replacement"} {
 		t.Run(mode, func(t *testing.T) {
+			if mode == "backend-replacement" && os.Getenv("TEST_VALKEY_REPLACEMENT_URL") == "" {
+				t.Skip("UNVERIFIED: TEST_VALKEY_REPLACEMENT_URL is required")
+			}
 			entered, release := make(chan struct{}, 2), make(chan struct{})
 			var calls atomic.Int64
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -259,7 +265,79 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 				require.Positive(t, state.Reserved)
 				require.Zero(t, state.Consumed)
 			}
-			if mode == "dispatched-process-loss" {
+			if mode == "backend-replacement" {
+				first.stop()
+				<-pending
+				second.stop()
+				require.NoError(t, application.Close(t.Context()))
+				restoredConfig := *cfg
+				restoredConfig.Storage.Valkey.URL = os.Getenv("TEST_VALKEY_REPLACEMENT_URL")
+				original, err := openStorage(cfg.RuntimeStorage())
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, original.Close()) })
+				restored, err := openStorage(restoredConfig.RuntimeStorage())
+				require.NoError(t, err)
+				t.Cleanup(func() {
+					keys, err := restored.ScanWithPrefix(context.Background(), "", 0)
+					require.NoError(t, err)
+					require.NoError(t, restored.BatchDelete(context.Background(), keys))
+					require.NoError(t, restored.Close())
+				})
+				oldBackend := original.(storage.IncarnationProvider)
+				newBackend := restored.(storage.IncarnationProvider)
+				oldID, err := oldBackend.ObserveIncarnation(t.Context())
+				require.NoError(t, err)
+				newID, err := newBackend.ObserveIncarnation(t.Context())
+				require.NoError(t, err)
+				require.NotEqual(t, oldID, newID, "replacement must use an independent backend process")
+				copyBudgetFleetSnapshot(t, original, restored)
+				unapproved, err := New(&restoredConfig)
+				require.Error(t, err, "copied authority records cannot approve a new backend")
+				require.Nil(t, unapproved)
+				require.EqualValues(t, 1, calls.Load())
+
+				db, err := sqlstore.Open(cfg.Storage.RuntimeSQL())
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, db.Close()) })
+				witness, err := recovery.New(db)
+				require.NoError(t, err)
+				_, err = witness.OpenAuthority(t.Context(), newBackend, input.Deployment)
+				require.ErrorIs(t, err, storage.ErrIncarnationChanged)
+				approved, err := witness.Current(t.Context(), input.Deployment)
+				require.NoError(t, err)
+				closed, err := witness.Close(t.Context(), approved)
+				require.NoError(t, err)
+				_, err = witness.ApproveAuthority(t.Context(), newBackend, closed, newID, "fixture-complete-snapshot-with-retained-dispatch", "restore-fixture")
+				require.NoError(t, err)
+				authority, err := witness.OpenAuthority(t.Context(), newBackend, input.Deployment)
+				require.NoError(t, err)
+				ledger, err := reservation.Open(authority)
+				require.NoError(t, err)
+				current, err := ledger.Inspect(t.Context(), record.Attempt.ID)
+				require.NoError(t, err)
+				require.Equal(t, &record, current, "restoration cannot change the dispatched reservation")
+				input.Valkey = restoredConfig.Storage.Valkey.URL
+				replacement := startBudgetFleetProcess(t, input)
+				status, body, err = request(replacement.base)
+				require.NoError(t, err)
+				require.Equal(t, http.StatusPaymentRequired, status, body)
+				require.EqualValues(t, 1, calls.Load(), "approval cannot refund the retained dispatch")
+				for _, rule := range record.Attempt.Rules {
+					state, err := ledger.Window(t.Context(), rule.Meter, record.AdmittedAt)
+					require.NoError(t, err)
+					require.Positive(t, state.Reserved)
+					require.Zero(t, state.Consumed)
+				}
+				// The fixture supplies external no-charge evidence only after recovery.
+				evidence := reservation.Evidence{ID: "fixture-provider-no-charge", NoCharge: true}
+				require.NoError(t, ledger.Reconcile(t.Context(), record.Attempt.ID, evidence))
+				require.NoError(t, ledger.Reconcile(t.Context(), record.Attempt.ID, evidence))
+				close(release)
+				status, body, err = request(replacement.base)
+				require.NoError(t, err)
+				require.Equal(t, http.StatusOK, status, body)
+				require.EqualValues(t, 2, calls.Load())
+			} else if mode == "dispatched-process-loss" {
 				first.stop()
 				<-pending
 				replacement := startBudgetFleetProcess(t, input)
@@ -302,5 +380,28 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 				require.EqualValues(t, 2, calls.Load())
 			}
 		})
+	}
+}
+
+// copyBudgetFleetSnapshot copies only this test's namespace after its writers stop.
+func copyBudgetFleetSnapshot(t *testing.T, source, target storage.KVStore) {
+	t.Helper()
+	reader, ok := source.(storage.LifetimeReader)
+	require.True(t, ok)
+	keys, err := source.ScanWithPrefix(t.Context(), "", 0)
+	require.NoError(t, err)
+	require.NotEmpty(t, keys)
+	for _, key := range keys {
+		started := time.Now()
+		data, ttl, err := reader.ReadWithLifetime(t.Context(), key, 32<<20)
+		if errors.Is(err, storage.ErrNotFound) {
+			continue
+		}
+		require.NoError(t, err)
+		if ttl == 0 {
+			require.NoError(t, target.Set(t.Context(), key, data))
+		} else if remaining := ttl - time.Since(started); remaining > 0 {
+			require.NoError(t, target.SetWithTTL(t.Context(), key, data, remaining))
+		}
 	}
 }
