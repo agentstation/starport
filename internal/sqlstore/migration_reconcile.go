@@ -70,7 +70,7 @@ func (db *DB) reconcileMySQLMigration(ctx context.Context, decision MigrationRec
   outcome VARCHAR(16) NOT NULL,
   actor VARCHAR(191) NOT NULL,
   evidence_sha256 VARCHAR(64) NOT NULL,
-  recorded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  recorded_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
  ) ENGINE=InnoDB`); err != nil {
 		return err
 	}

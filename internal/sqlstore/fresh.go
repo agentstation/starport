@@ -71,9 +71,9 @@ WHERE n.nspname = current_schema() AND c.relkind IN ('r', 'p', 'f', 'v', 'm') OR
 	}
 	for _, t := range tables {
 		switch t.name {
-		case "schema_migrations":
+		case migrationTable:
 			continue
-		case "sqlstore_meta":
+		case metadataTable:
 			var count int
 			if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM "+t.quoted+" WHERE name <> 'schema' OR value <> 'starport'").Scan(&count); err != nil {
 				return err

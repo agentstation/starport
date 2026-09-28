@@ -75,13 +75,15 @@ func (db *DB) migrate(ctx context.Context, fsys fs.FS) (err error) {
 func (db *DB) schemaMigrationsDDL() string {
 	name := "name TEXT PRIMARY KEY"
 	engine := ""
+	timestamp := "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
 	if db.dialect == TypeMySQL {
 		name = "name VARCHAR(191) PRIMARY KEY"
 		engine = " ENGINE=InnoDB"
+		timestamp = "TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)"
 	}
 	return `CREATE TABLE IF NOT EXISTS schema_migrations (
 		` + name + `,
-		applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		applied_at ` + timestamp + `
 	)` + engine
 }
 
