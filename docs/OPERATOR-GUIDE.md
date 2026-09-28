@@ -272,7 +272,16 @@ A batch status request reads the record without reconstructing its files.
 
 Peak storage includes line checkpoints and aggregates until cleanup completes. A quota refusal preserves retained results.
 Free legitimate capacity before retrying recovery. Do not widen the original batch bound through replacement configuration.
-Incomplete failed runs retain their claims. Automatic continuation of untouched lines remains unimplemented pending the restart-policy decision.
+Incomplete failed runs retain their claims.
+
+After restart, the background sweep resumes only lines that durable records prove never started.
+It validates current caller permission before claiming another line. Each resumed line also requires normal authorization and budget admission.
+Completed results remain available. Uncertain claims never permit automatic replay.
+
+Batch records retain a gateway API key hash or an account-scoped, batch-scoped console receipt.
+They do not retain bearer secrets or reusable console cookies.
+Expired receipts, signing-key changes, and withdrawn permission prevent new claims.
+Affected untouched lines remain pending until recovery can validate permission.
 
 Shutdown refuses new batches and stops later line dispatch. Admitted calls retain time to finish and store their results.
 Starport waits for batch cleanup before closing its dependencies.
@@ -1374,7 +1383,7 @@ closes its unattached claim. Attached files follow normal file retention.
 Missing or invalid accounting state refuses new uploads. Do not delete quota
 keys to restore capacity.
 
-File schema 5, batch schema 4, and byte-accounting schema 2 require
+File schema 5, batch schema 5, and byte-accounting schema 2 require
 coordinated migration. CSP13 owns that qualification.
 
 File bytes use immutable publication in the `retained-v1` blob namespace.
@@ -2330,6 +2339,14 @@ Corrections never submit another generation. They use the original reservation, 
 | `GET /api/v1/admin/accounts/{account_id}/videos/{video_id}/reconciliation/corrections/{decision_id}` | Inspect one retained intent, application result, and optional report result. |
 
 Both routes require authenticated administrator access. Account inference scopes cannot authorize them.
+
+New corrections must commit within 90 days after the original settlement.
+A correction never extends this deadline. Exact accepted retries remain idempotent after the deadline.
+Unresolved reservations and accepted audit evidence never expire through retention cleanup.
+
+Required reservations use their storage authority's original settlement time.
+Jobs without required reservations use the original administrator decision time.
+After expiry, inspection reports `correction_horizon_expired`, and a new correction returns HTTP 409.
 
 1. Read the original reconciliation inspection route.
 2. Review the first decision, late provider evidence, latest correction, and pinned valuation.
