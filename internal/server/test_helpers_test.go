@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -262,6 +263,13 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	if err != nil {
 		tb.Fatal(err)
 	}
+	tb.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := batchService.Close(ctx); err != nil {
+			tb.Errorf("drain test batch workers: %v", err)
+		}
+	})
 
 	// Match production composition: preset references resolve before routing.
 	var proxyOptions []proxy.Option

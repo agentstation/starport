@@ -1296,6 +1296,11 @@ func (a *App) Run(ctx context.Context) error {
 
 // Close stops owned dependencies in reverse construction order.
 func (a *App) Close(ctx context.Context) error {
+	if a.batches != nil {
+		if err := a.batches.Close(ctx); err != nil {
+			return fmt.Errorf("drain batch workers: %w", err)
+		}
+	}
 	a.closeOnce.Do(func() { a.closeErr = a.closeLifecycle(ctx) })
 	return a.closeErr
 }

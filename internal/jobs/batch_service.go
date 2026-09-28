@@ -88,6 +88,7 @@ type BatchSubmission struct {
 
 // BatchService owns the batch lifecycle: the record, the run, and the cancel.
 type BatchService struct {
+	workerLife  batchWorkerLifecycle
 	openFiles   func(Batch) BatchIO
 	recovery    recoveryState[Batch]
 	repository  BatchRepository
@@ -159,6 +160,7 @@ func NewBatchService(repository BatchRepository, options ...BatchServiceOption) 
 		concurrency: DefaultBatchConcurrency,
 		lineBytes:   DefaultBatchLineBytes,
 		cancels:     map[string]context.CancelFunc{},
+		workerLife:  newBatchWorkerLifecycle(),
 	}
 	for _, option := range options {
 		option(service)
@@ -175,6 +177,15 @@ func (s *BatchService) Submit(ctx context.Context, submission BatchSubmission) (
 	if submission.IO == nil || submission.Runner == nil {
 		return Batch{}, fmt.Errorf("%w: it carries no file access or no line runner", ErrBatchSubmissionIncomplete)
 	}
+	if err := s.workerLife.start(); err != nil {
+		return Batch{}, err
+	}
+	started := false
+	defer func() {
+		if !started {
+			s.workerLife.finish()
+		}
+	}()
 	id := strings.TrimSpace(submission.ID)
 	if id == "" {
 		id = s.mint()
@@ -203,7 +214,11 @@ func (s *BatchService) Submit(ctx context.Context, submission BatchSubmission) (
 	// The batch outlives the request that submitted it, so the run detaches
 	// from the request context on purpose. Cancel reaches it through the
 	// stored cancel function, not through the submitter's context.
-	go s.run(batch, submission.IO, submission.Runner) // #nosec G118 -- detaching is the contract.
+	started = true
+	go func() { // #nosec G118 -- the batch worker lifecycle owns this detached run.
+		defer s.workerLife.finish()
+		s.run(batch, submission.IO, submission.Runner)
+	}()
 	return batch, nil
 }
 
@@ -268,7 +283,7 @@ func (s *BatchService) run(batch Batch, batchIO BatchIO, runner LineRunner) {
 	// The dispatch context gates new lines and nothing else. A cancel ends
 	// it, lines already running keep the background context and drain, and
 	// the result files still store what those lines produced.
-	dispatchCtx, stopDispatch := context.WithCancel(ctx)
+	dispatchCtx, stopDispatch := context.WithCancel(s.workerLife.dispatch)
 	defer stopDispatch()
 	s.mu.Lock()
 	s.cancels[batch.ID] = stopDispatch
@@ -313,6 +328,11 @@ func (s *BatchService) run(batch Batch, batchIO BatchIO, runner LineRunner) {
 	}
 	outcome := s.runLines(ctx, dispatchCtx, batch, batchIO, runner)
 	outcome.total = total
+	if s.workerLife.dispatch.Err() != nil && outcome.recoveryRequired {
+		// Shutdown leaves incomplete work for restart recovery. Existing claims
+		// and result evidence remain durable and do not authorize another call.
+		return
+	}
 	s.finish(ctx, batch, outcome)
 	_, _ = s.RecoverResults(ctx, batch.Account, batch.ID, batchIO)
 }

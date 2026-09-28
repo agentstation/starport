@@ -274,6 +274,13 @@ Peak storage includes line checkpoints and aggregates until cleanup completes. A
 Free legitimate capacity before retrying recovery. Do not widen the original batch bound through replacement configuration.
 Incomplete failed runs retain their claims. Automatic continuation of untouched lines remains unimplemented pending the restart-policy decision.
 
+Shutdown refuses new batches and stops later line dispatch. Admitted calls retain time to finish and store their results.
+Starport waits for batch cleanup before closing its dependencies.
+
+If the shutdown deadline expires, Close returns an error and leaves those dependencies open.
+A later Close call can finish after workers drain. Forced process termination still requires recovery from durable evidence.
+Untouched lines and uncertain claims never gain permission to run from shutdown alone.
+
 File cleanup now confirms permanent retirement before it releases metadata or quota.
 A delayed writer cannot replace a retired identity. Full batch recovery qualification remains open.
 

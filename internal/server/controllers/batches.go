@@ -263,6 +263,8 @@ func (h *BatchesController) writeBatchError(
 	message string,
 ) {
 	switch {
+	case errors.Is(err, jobs.ErrServiceClosed):
+		h.writeBatchStatus(w, http.StatusServiceUnavailable, errorTypeServiceUnavailable, "Batch workers are shutting down. Retry on an available gateway.")
 	case errors.Is(err, jobs.ErrBatchNotFound):
 		h.writeBatchStatus(w, http.StatusNotFound, errorTypeNotFound, "No such Batch object")
 	case errors.Is(err, jobs.ErrBatchAlreadyEnded),
