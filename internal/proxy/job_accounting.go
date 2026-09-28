@@ -25,6 +25,10 @@ func (a *JobAccountant) RecordJob(ctx context.Context, entry jobs.AccountingEntr
 	if a == nil || a.recorder == nil {
 		return nil
 	}
+	return a.put(ctx, jobUsageRecord(entry))
+}
+
+func jobUsageRecord(entry jobs.AccountingEntry) usage.Record {
 	record := usage.Record{
 		BillingDisposition: entry.BillingDisposition,
 		RequestID:          entry.JobID,
@@ -68,7 +72,7 @@ func (a *JobAccountant) RecordJob(ctx context.Context, entry jobs.AccountingEntr
 			record.Cost = &usage.Cost{NanoUSD: amount, Currency: "USD"}
 		}
 	}
-	return a.put(ctx, record)
+	return record
 }
 
 func (a *JobAccountant) put(ctx context.Context, record usage.Record) error {

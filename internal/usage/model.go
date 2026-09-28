@@ -1,7 +1,6 @@
-// Package usage owns the canonical per-request usage record: what one
-// inference request consumed, where it ran, and what it cost. Records are
-// written best-effort after request completion and feed the activity API,
-// the console usage page, and budget enforcement.
+// Package usage owns per-request usage reports and billing adjustments.
+// These records support activity results, exports, and reporting totals.
+// They cannot grant required budget capacity.
 package usage
 
 import (
@@ -116,6 +115,8 @@ type Cost struct {
 
 // Record is one completed inference request.
 type Record struct {
+	// BillingAdjustment identifies corrected billing and preserves the original values.
+	BillingAdjustment *BillingAdjustment `json:"billing_adjustment,omitempty"`
 	// BillingDisposition distinguishes administrator decisions from provider measurements.
 	BillingDisposition string `json:"billing_disposition,omitempty"`
 	// InputCharacters preserves the measured Unicode code-point count for speech.

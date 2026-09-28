@@ -22,6 +22,7 @@ var (
 const maxCommitConflicts = 64
 
 type counterChange struct {
+	counter string
 	key     string
 	delta   int64
 	expires time.Time
@@ -121,7 +122,7 @@ func (r *repository) counterChanges(record Record) []counterChange {
 				if counter.delta == 0 && counter.name != counterRequests {
 					continue
 				}
-				changes = append(changes, counterChange{key: aggregateKey(scope, interval, start, counter.name), delta: counter.delta, expires: end.Add(r.retention)})
+				changes = append(changes, counterChange{counter: counter.name, key: aggregateKey(scope, interval, start, counter.name), delta: counter.delta, expires: end.Add(r.retention)})
 			}
 		}
 	}

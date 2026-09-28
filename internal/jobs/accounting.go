@@ -43,6 +43,22 @@ type Accountant interface {
 	RecordJob(ctx context.Context, entry AccountingEntry) error
 }
 
+// AccountingCorrection reports a durable administrator decision against original usage.
+// It carries no private reason, evidence reference, or operator identity.
+type AccountingCorrection struct {
+	Original   AccountingEntry
+	ID         string
+	PreviousID string
+	RecordedAt time.Time
+	Evidence   reservation.Evidence
+}
+
+// CorrectionAccountant preserves original usage and applies one reporting adjustment.
+// Required budget correction must complete independently of this optional report.
+type CorrectionAccountant interface {
+	RecordJobCorrection(context.Context, AccountingCorrection) error
+}
+
 // Notifier receives a best-effort terminal notification independently of billing.
 // The service claims one attempt before calling JobEnded. A crash between the
 // claim and the call can lose the event. This is not a durable delivery contract.

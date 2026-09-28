@@ -208,14 +208,21 @@ func Open(store storage.KVStore, options Options) (Repository, error) {
 }
 
 func (r *repository) Put(ctx context.Context, record Record) error {
+	if record.BillingAdjustment != nil {
+		return ErrInvalidRecord
+	}
 	if err := record.Validate(); err != nil {
 		return err
 	}
-	data, err := json.Marshal(storedRecord{SchemaVersion: StorageSchemaVersion, Record: record})
+	data, err := encodeRecord(record)
 	if err != nil {
 		return fmt.Errorf("encode usage record: %w", err)
 	}
 	return r.commitRecord(ctx, record, data)
+}
+
+func encodeRecord(record Record) ([]byte, error) {
+	return json.Marshal(storedRecord{SchemaVersion: StorageSchemaVersion, Record: record})
 }
 
 func (r *repository) List(ctx context.Context, query Query) (Page, error) {
@@ -243,7 +250,7 @@ func (r *repository) List(ctx context.Context, query Query) (Page, error) {
 		stop := min(start+batchSize, len(ordered))
 		batch := make([]string, 0, stop-start)
 		for _, parsed := range ordered[start:stop] {
-			batch = append(batch, parsed.key)
+			batch = append(batch, parsed.key, adjustmentHeadKey(parsed.key))
 		}
 		values, err := r.store.BatchGet(ctx, batch)
 		if err != nil {
@@ -261,6 +268,10 @@ func (r *repository) List(ctx context.Context, query Query) (Page, error) {
 			}
 			if !matches(record, query) {
 				continue
+			}
+			record, err = applyBillingAdjustment(record, values[adjustmentHeadKey(parsed.key)])
+			if err != nil {
+				return Page{}, err
 			}
 			page.Records = append(page.Records, record)
 			if len(page.Records) == limit {
@@ -401,6 +412,9 @@ func decodeRecord(data []byte) (Record, error) {
 	}
 	if stored.SchemaVersion != StorageSchemaVersion {
 		return Record{}, fmt.Errorf("%w: unsupported schema", ErrCorruptRecord)
+	}
+	if stored.Record.BillingAdjustment != nil {
+		return Record{}, fmt.Errorf("%w: billing adjustments require separate records", ErrCorruptRecord)
 	}
 	if err := stored.Record.Validate(); err != nil {
 		return Record{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)
