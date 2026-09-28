@@ -36,7 +36,13 @@ Native response receipts retain unconfirmed submissions without repeating provid
 Batch validation requires every recorded execution claim and its parent batch.
 Missing batch files remain visible for reconciliation.
 
-SQL identity and budget references, independent later history, and restore commands remain required before deployment recovery is complete.
+SQL identity checks verify users, teams, memberships, account grants, and templates through their owners.
+The captured SQL recovery boundary must match the manifest and remain closed.
+Grants can retain deleted-account references, which verification reports without restoring access.
+User, team, and account checks use the 64 KiB authorization-record bound.
+Template checks use the 64 MiB portable-record bound.
+
+Budget references, independent later history, and restore commands remain required before deployment recovery is complete.
 
 A verified bundle grants no permission to resume inference.
 Recovery must reconcile permission withdrawals, acknowledged spending, and uncertain work after the backup against independent evidence.

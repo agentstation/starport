@@ -2,17 +2,11 @@ package sqlstore
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
 	"math"
-	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
-
-	"github.com/agentstation/starmap/pkg/productfiles"
 )
 
 // ImportRelational copies a verified image into an empty, migrated target database.
@@ -26,42 +20,12 @@ func (db *DB) ImportRelational(ctx context.Context, source string, expected SQLi
 	if restrict == nil {
 		return errors.New("relational import requires a recovery restriction callback")
 	}
-	parent, err := productfiles.ExistingDirectory(scratch)
-	if err != nil {
-		return err
-	}
-	root, err := parent.Open()
-	if err != nil {
-		return err
-	}
-	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
-	name := ".relational-import-" + rand.Text()
-	destination := filepath.Join(scratch, name)
-	result, copyErr := RestoreSQLiteSnapshot(ctx, destination, source, expected)
-	if !result.Published {
-		return copyErr
-	}
-	identity, err := root.Lstat(name)
-	if err != nil {
-		return errors.Join(copyErr, err)
-	}
-	defer func() {
-		current, err := root.Lstat(name)
-		if err == nil && os.SameFile(identity, current) {
-			resultErr = errors.Join(resultErr, root.RemoveAll(name), productfiles.SyncDirectory(root))
-		}
-	}()
-	if copyErr != nil {
-		return copyErr
-	}
-	image, err := sql.Open("sqlite", "file:"+url.PathEscape(filepath.Join(destination, "starport.db"))+"?mode=ro&immutable=1&_pragma=trusted_schema(0)")
+	image, err := OpenRelationalSnapshot(ctx, source, expected, scratch)
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, image.Close()) }()
-	if err := validateRelationalSchema(ctx, image, TypeSQLite); err != nil {
-		return err
-	}
+
 	high, err := auditHighWater(ctx, image, TypeSQLite)
 	if err != nil {
 		return err

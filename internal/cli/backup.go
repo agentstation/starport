@@ -120,5 +120,9 @@ func writeBackupResult(cmd *urfavecli.Command, result recovery.CaptureResult) er
 		return err
 	}
 	_, err = fmt.Fprintf(cmd.Writer, "Reference checks: %d credential values, %d file records, %d jobs, %d batches.\nUnconfirmed provider submissions: %d; unfinished batch lines: %d; missing batch file references: %d.\nRetain unresolved work for reconciliation. Verification does not authorize retries.\n", result.References.CredentialValues, result.References.FileRecords, result.References.JobRecords, result.References.BatchRecords, result.References.UncertainJobs, result.References.UnfinishedBatchLines, result.References.MissingBatchFiles)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(cmd.Writer, "Identity checks: %d accounts, %d templates, %d users, %d teams, %d memberships, %d grants.\nGrants referencing missing accounts: %d.\n", result.References.AccountRecords, result.References.AccountTemplates, result.References.Identity.Users, result.References.Identity.Teams, result.References.Identity.Memberships, result.References.Identity.Grants, result.References.Identity.MissingGrantAccounts)
 	return err
 }
