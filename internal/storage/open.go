@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -17,12 +19,25 @@ func Open(config Config) (KVStore, error) {
 		if err != nil {
 			return nil, err
 		}
-		return store, nil
+		return checkOpenedImport(store)
 	case StorageTypeValkey:
-		return OpenValkey(config.Valkey)
+		store, err := OpenValkey(config.Valkey)
+		if err != nil {
+			return nil, err
+		}
+		return checkOpenedImport(store)
 	default:
 		return nil, fmt.Errorf("unknown storage type: %s", config.Type)
 	}
+}
+
+func checkOpenedImport(store KVStore) (KVStore, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := CheckImportBarrier(ctx, store); err != nil {
+		return nil, errors.Join(err, store.Close())
+	}
+	return store, nil
 }
 
 // OpenReadOnly opens configured storage without permitting a logical write.

@@ -141,3 +141,33 @@ A namespace alone cannot approve populated state or a replacement backend.
 Existing unprefixed records require an explicit migration before use.
 Ordinary startup never copies them or falls back to them.
 Badger retains its local layout inside private product storage.
+
+## Portable recovery records
+
+`OpenRecordTransfer` exposes stopped-deployment export and conditional import for Badger and Valkey.
+The caller must stop and fence source and target writers.
+Valkey operations bind every scan, read, and write to the selected backend process identity.
+This contract does not qualify automatic failover.
+
+Each record retains its exact key, value, and absolute expiry.
+Values have a 64-MiB transfer limit. Keys have a 65,000-byte limit.
+
+Badger rounds millisecond expiry down to whole seconds. Import reports each adjustment and never extends the original deadline.
+An expired record cannot become persistent. Persistent records retain zero expiry.
+
+The recovery package writes a private SQLite image and its digest receipt.
+The image needs no WAL sidecar. It deduplicates identical scan records and rejects changed duplicates.
+Import verifies a private copy and all records before it claims an empty target namespace.
+An exact retry accepts only the same operation and image.
+
+Import retains `storage:import:v1` after success or failure.
+Ordinary `Open` refuses that barrier before application startup.
+The recovery coordinator must retain it until every deployment component and the independent recovery evidence pass verification.
+Raw backend constructors permit explicit recovery access. They do not approve admission.
+
+Badger import requires persistent storage with `sync_writes` enabled.
+Valkey namespace inspection requires externally fenced writers. Its final claim and each record write use native conditional operations.
+Other deployment namespaces remain unchanged. Fresh fleet initialization retains its separate empty-database requirement.
+
+These components do not complete deployment recovery.
+The full procedure still requires matching SQL, blobs, catalog state, credential access, and post-backup revocation and spending evidence.
