@@ -1,7 +1,6 @@
 package jobs
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -12,7 +11,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/agentstation/starport/internal/blob"
-	"github.com/agentstation/starport/internal/storage"
 )
 
 var (
@@ -68,41 +66,31 @@ func (s *Service) collect(ctx context.Context, runner Runner, job Job) Job {
 		recovered, _ := s.recoverNative(ctx, job)
 		return recovered
 	}
-	if s.assets == nil || runner == nil {
+	if s.assets == nil || job.State != JobStateCompleted || job.HasAsset() {
 		return job
 	}
-	if job.State != JobStateCompleted || job.AssetKey != "" {
-		return job
+	if job.AssetExpired(s.now()) {
+		expired, _ := s.expire(ctx, job)
+		return expired
 	}
-	asset, err := runner.Fetch(ctx, s.handle(job), s.maxAssetBytes)
-	if err != nil {
-		return job
-	}
-	key := newAssetKey()
-	info, err := s.assets.Put(ctx, key, bytes.NewReader(asset.Bytes))
-	if err != nil {
-		return job
-	}
-	stored := job
-	if err := stored.StoreAsset(key, asset.ContentType, info.Size, s.now().Add(s.retention)); err != nil {
-		s.discard(ctx, key)
-		return job
-	}
-	if err := s.records.Replace(ctx, job, stored); err != nil {
-		if errors.Is(err, storage.ErrConflict) || errors.Is(err, ErrJobNotFound) {
-			// A definite refusal leaves this candidate unreferenced.
-			s.discard(ctx, key)
-			return job
+	if job.assetPending {
+		retained, found, err := s.recoverProviderAsset(ctx, job)
+		if found || err != nil {
+			return retained
 		}
-		// An interrupted response can hide a successful commit. Keep the bytes
-		// until the stored record resolves that uncertainty.
-		current, readErr := s.records.Get(ctx, job.Account, job.ID)
-		if readErr == nil && current.AssetKey == key {
-			return current
-		}
+	}
+	if runner == nil {
 		return job
 	}
-	return stored
+	bound := s.maxAssetBytes
+	if job.assetPending {
+		bound = job.AssetBytes
+	}
+	asset, err := runner.Fetch(ctx, s.handle(job), bound)
+	if err != nil || int64(len(asset.Bytes)) > bound {
+		return job
+	}
+	return s.storeProviderAsset(ctx, job, asset)
 }
 
 // Open returns one job and a reader over its stored asset.
@@ -125,7 +113,7 @@ func (s *Service) Open(ctx context.Context, account, id string) (Job, io.ReadClo
 	if !job.HasAsset() {
 		return job, nil, ErrAssetNotFound
 	}
-	reader, err := s.assets.Get(ctx, job.AssetKey)
+	reader, err := s.assets.ReadPublished(ctx, job.AssetKey)
 	if err != nil {
 		if errors.Is(err, blob.ErrNotFound) {
 			// The record outlived its bytes. Not found is the honest answer, and
@@ -197,7 +185,11 @@ func (s *Service) sweepOne(ctx context.Context, job Job, now time.Time, result *
 		result.AwaitingReconciliation++
 		return job, nil
 	}
-	if s.assets == nil || !job.HasAsset() || !job.AssetExpired(now) {
+	if !job.Native && job.assetPending && s.assets != nil && !job.AssetExpired(now) {
+		recovered, _, err := s.recoverProviderAsset(ctx, job)
+		return recovered, err
+	}
+	if s.assets == nil || (!job.HasAsset() && !job.assetPending) || !job.AssetExpired(now) {
 		return job, nil
 	}
 	expired, err := s.expire(ctx, job)
@@ -224,23 +216,22 @@ func (s *Service) expire(ctx context.Context, job Job) (Job, error) {
 	if job.AssetKey == "" {
 		return job, nil
 	}
-	if err := s.assets.Delete(ctx, job.AssetKey); err != nil && !errors.Is(err, blob.ErrNotFound) {
-		return Job{}, fmt.Errorf("jobs: delete the asset: %w", err)
+	if err := s.assets.Retire(ctx, job.AssetKey); err != nil {
+		return job, fmt.Errorf("jobs: delete the asset: %w", err)
 	}
 	if !job.AssetExpiredAt.IsZero() {
 		return job, nil
 	}
 	marked := job
+	marked.assetPending = false
 	if err := marked.ExpireAsset(s.now()); err != nil {
 		return Job{}, err
 	}
-	return s.commit(ctx, job, marked)
-}
-
-// discard removes bytes no record names and reports nothing. Every caller is
-// already unwinding from a failure it is about to report or absorb.
-func (s *Service) discard(ctx context.Context, key string) {
-	_ = s.assets.Delete(ctx, key)
+	updated, err := s.commit(ctx, job, marked)
+	if err != nil {
+		return job, err
+	}
+	return updated, nil
 }
 
 // newAssetKey names the bytes. It is not the job identifier and not derived

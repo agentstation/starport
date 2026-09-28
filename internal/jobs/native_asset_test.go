@@ -247,3 +247,36 @@ func TestNativeRecoveryBoundsTransfers(t *testing.T) {
 	require.NoError(t, <-done)
 	require.Equal(t, 2, runner.submits)
 }
+
+func TestNativeStoredAssetRecoversWithoutDownload(t *testing.T) {
+	_, records, assets, clock := newAssetService(t)
+	interrupted := &interruptedNativeAssets{Store: assets, failAt: 2, after: true}
+	downloads := 0
+	fetcher := assetFetcher(func(context.Context, string, int64) (jobs.Asset, error) {
+		downloads++
+		if downloads > 1 {
+			return jobs.Asset{}, jobs.ErrAssetDownloadUnavailable
+		}
+		return jobs.Asset{ContentType: "video/mp4", Bytes: []byte("original-video")}, nil
+	})
+	service, err := jobs.NewService(records, jobs.WithAssetStore(interrupted), jobs.WithExternalAssets(fetcher), jobs.WithClock(clock.read))
+	require.NoError(t, err)
+	runner := nativeFixture()
+	runner.asset = jobs.Asset{}
+	runner.assetURL = "https://asset.example/expiring-video"
+	job, err := service.Submit(t.Context(), open(runner), submissionFor(accountA))
+	require.Error(t, err)
+	reopened, err := jobs.NewService(records, jobs.WithAssetStore(assets), jobs.WithExternalAssets(fetcher), jobs.WithClock(clock.read))
+	require.NoError(t, err)
+	recovered, err := reopened.Refresh(t.Context(), runner, accountA, job.ID)
+	require.NoError(t, err)
+	require.True(t, recovered.HasAsset())
+	require.Equal(t, 1, downloads, "retained bytes must recover after the provider download stops working")
+	_, reader, err := reopened.Open(t.Context(), accountA, job.ID)
+	require.NoError(t, err)
+	data, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.NoError(t, reader.Close())
+	require.Equal(t, "original-video", string(data))
+	require.Equal(t, 1, runner.submits)
+}

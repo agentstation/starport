@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	// StorageSchemaVersion adds native receipts and pinned job billing.
-	StorageSchemaVersion = 4
+	// StorageSchemaVersion binds receipts and assets to immutable blob publication.
+	StorageSchemaVersion = 5
 	// StoragePrefix is the job record v1 namespace.
 	StoragePrefix = "jobs:v1:account:"
 
@@ -31,6 +31,8 @@ type repository struct{ store storage.KVStore }
 // jobRecord is the durable form. It carries the provider job identifier that
 // Job keeps unexported, because the record store is the one place it belongs.
 type jobRecord struct {
+	AssetPending           bool                    `json:"asset_pending,omitempty"`
+	AssetDigest            string                  `json:"asset_digest,omitempty"`
 	AdminDecision          *ReconciliationDecision `json:"admin_decision,omitempty"`
 	LateProviderEvidence   *LateProviderEvidence   `json:"late_provider_evidence,omitempty"`
 	NativeAssetDigest      string                  `json:"native_asset_digest,omitempty"`
@@ -158,6 +160,12 @@ func (r *repository) Scan(ctx context.Context, limit int) ([]Job, error) {
 }
 
 func (r *repository) Replace(ctx context.Context, expected, job Job) error {
+	if expected.assetDigest != "" && (expected.assetDigest != job.assetDigest || expected.AssetKey != job.AssetKey || expected.AssetContentType != job.AssetContentType || expected.AssetBytes != job.AssetBytes || !expected.AssetExpiresAt.Equal(job.AssetExpiresAt) || (!expected.assetPending && job.assetPending)) {
+		return ErrInvalidJob
+	}
+	if !expected.AssetExpiredAt.IsZero() && !expected.AssetExpiredAt.Equal(job.AssetExpiredAt) {
+		return ErrInvalidJob
+	}
 	if !immutableAdministrator(expected, job) {
 		return ErrInvalidJob
 	}
@@ -220,6 +228,9 @@ func (r *repository) Delete(ctx context.Context, account, id string) error {
 	if job.adminDecision != nil {
 		return ErrAuditRetention
 	}
+	if job.AssetKey != "" && job.AssetExpiredAt.IsZero() {
+		return ErrAssetRetirementRequired
+	}
 	return r.store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{{Key: key, ExpectedValue: data}})
 }
 
@@ -239,6 +250,7 @@ func encodeJob(job Job) ([]byte, error) {
 		return nil, err
 	}
 	data, err := json.Marshal(jobRecord{
+		AssetPending: job.assetPending, AssetDigest: job.assetDigest,
 		AdminDecision: job.adminDecision, LateProviderEvidence: job.lateProviderEvidence,
 		NativeAssetDigest: job.nativeAssetDigest, NativeAssetContentType: job.nativeAssetContentType, AssetRecoveryStatus: job.assetRecoveryStatus,
 		NativeAssetBound: job.nativeAssetBound, NativeRetention: job.nativeRetention,
@@ -285,6 +297,7 @@ func decodeJob(data []byte) (Job, error) {
 		return Job{}, fmt.Errorf("%w: unsupported schema %d", ErrCorruptRecord, stored.SchemaVersion)
 	}
 	job := Job{
+		assetPending: stored.AssetPending, assetDigest: stored.AssetDigest,
 		adminDecision: stored.AdminDecision, lateProviderEvidence: stored.LateProviderEvidence,
 		nativeAssetDigest: stored.NativeAssetDigest, nativeAssetContentType: stored.NativeAssetContentType, assetRecoveryStatus: stored.AssetRecoveryStatus,
 		nativeAssetBound: stored.NativeAssetBound, nativeRetention: stored.NativeRetention,

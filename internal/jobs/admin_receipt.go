@@ -30,7 +30,7 @@ func (s *Service) retainAdministratorReceipt(ctx context.Context, job Job) (Job,
 				return job, nil
 			}
 			// Billing evidence survives private URL and asset expiry.
-			if err := s.assets.Delete(ctx, job.nativeReceiptKey); err != nil && !errors.Is(err, blob.ErrNotFound) {
+			if err := s.assets.Retire(ctx, job.nativeReceiptKey); err != nil {
 				return job, err
 			}
 			return job, nil

@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
-	"github.com/agentstation/starport/internal/blob"
 )
 
 var (
@@ -35,6 +33,8 @@ func (j Job) AssetStatus(now time.Time) string {
 		return "expired"
 	case j.HasAsset():
 		return "stored"
+	case j.assetPending:
+		return "pending"
 	case !j.Native || j.State != JobStateCompleted:
 		return ""
 	case j.assetRecoveryStatus != "":
@@ -68,11 +68,11 @@ func assetFailureStatus(err error) string {
 }
 
 func (s *Service) expireNativeReceipt(ctx context.Context, job Job) (Job, error) {
-	if err := s.assets.Delete(ctx, job.nativeReceiptKey); err != nil && !errors.Is(err, blob.ErrNotFound) {
+	if err := s.assets.Retire(ctx, job.nativeReceiptKey); err != nil {
 		return job, err
 	}
 	// The preallocated asset key also covers an interrupted final publication.
-	if err := s.assets.Delete(ctx, job.nativeAssetKey); err != nil && !errors.Is(err, blob.ErrNotFound) {
+	if err := s.assets.Retire(ctx, job.nativeAssetKey); err != nil {
 		return job, err
 	}
 	return s.assetRecoveryResult(ctx, job, "expired")

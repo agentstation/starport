@@ -98,8 +98,18 @@ func (r *submissionRecorder) acceptNative(ctx context.Context, answer Acceptance
 	}
 	var prefix [8]byte
 	binary.BigEndian.PutUint64(prefix[:], uint64(len(header)))
-	_, err = r.service.assets.Put(bounded, r.job.nativeReceiptKey, io.MultiReader(bytes.NewReader(prefix[:]), bytes.NewReader(header), bytes.NewReader(result.Asset.Bytes)))
-	if err != nil {
+	_, err = r.service.assets.Publish(bounded, r.job.nativeReceiptKey, io.MultiReader(bytes.NewReader(prefix[:]), bytes.NewReader(header), bytes.NewReader(result.Asset.Bytes)))
+	if errors.Is(err, blob.ErrPublicationExists) {
+		retained, _, readErr := r.service.readNativeReceipt(bounded, r.job)
+		if readErr != nil {
+			return readErr
+		}
+		// An exact callback retry preserves the first receipt's retention clock.
+		receipt.RecordedAt = retained.RecordedAt
+		if !reflect.DeepEqual(receipt, retained) {
+			return ErrReconciliationConflict
+		}
+	} else if err != nil {
 		return err
 	}
 	job, err := r.service.recoverNative(bounded, r.job)
@@ -114,7 +124,7 @@ func (r *submissionRecorder) acceptNative(ctx context.Context, answer Acceptance
 }
 
 func (s *Service) readNativeReceipt(ctx context.Context, job Job) (nativeReceipt, []byte, error) {
-	reader, err := s.assets.Get(ctx, job.nativeReceiptKey)
+	reader, err := s.assets.ReadPublished(ctx, job.nativeReceiptKey)
 	if err != nil {
 		return nativeReceipt{}, nil, err
 	}
@@ -172,7 +182,10 @@ func (s *Service) recoverNative(ctx context.Context, job Job) (Job, error) {
 		return s.expireNativeReceipt(ctx, job)
 	}
 	if !job.SubmissionPending && (job.AssetKey != "" || job.State != JobStateCompleted) {
-		return job, s.assets.Delete(ctx, job.nativeReceiptKey)
+		return job, s.assets.Retire(ctx, job.nativeReceiptKey)
+	}
+	if recovered, found, err := s.recoverPublishedNativeAsset(ctx, job); found || err != nil {
+		return recovered, err
 	}
 	receipt, asset, err := s.readNativeReceipt(ctx, job)
 	if errors.Is(err, blob.ErrNotFound) {
@@ -257,7 +270,14 @@ func (s *Service) recoverNative(ctx context.Context, job Job) (Job, error) {
 	if next.nativeAssetDigest != encoded || next.nativeAssetContentType != contentType {
 		return s.assetRecoveryResult(ctx, next, "invalid")
 	}
-	info, err := s.assets.Put(ctx, next.nativeAssetKey, bytes.NewReader(asset))
+	info, err := s.assets.Publish(ctx, next.nativeAssetKey, bytes.NewReader(asset))
+	if errors.Is(err, blob.ErrPublicationExists) {
+		recovered, found, readErr := s.recoverPublishedNativeAsset(ctx, next)
+		if found || readErr != nil {
+			return recovered, readErr
+		}
+		return next, ErrAssetNotFound
+	}
 	if err != nil {
 		return next, err
 	}

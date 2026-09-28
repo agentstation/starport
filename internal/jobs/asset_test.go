@@ -141,7 +141,7 @@ func TestAFinishedJobFetchesItsAssetOnce(t *testing.T) {
 	require.Equal(t, runner.asset.Bytes, bytes)
 	require.Equal(t, stored.AssetKey, finished.AssetKey)
 
-	info, err := store.Stat(ctx, finished.AssetKey)
+	info, err := store.StatPublished(ctx, finished.AssetKey)
 	require.NoError(t, err)
 	require.Equal(t, finished.AssetBytes, info.Size)
 }
@@ -200,7 +200,7 @@ func TestTheSweepDeletesAnAssetPastItsWindow(t *testing.T) {
 	result, err := service.Sweep(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 0, result.Expired)
-	_, err = store.Stat(ctx, finished.AssetKey)
+	_, err = store.StatPublished(ctx, finished.AssetKey)
 	require.NoError(t, err)
 
 	clock.now = finished.AssetExpiresAt.Add(time.Second)
@@ -214,7 +214,7 @@ func TestTheSweepDeletesAnAssetPastItsWindow(t *testing.T) {
 	require.Equal(t, clock.now, expired.AssetExpiredAt)
 	require.False(t, expired.HasAsset())
 
-	_, err = store.Stat(ctx, finished.AssetKey)
+	_, err = store.StatPublished(ctx, finished.AssetKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
 
 	// A second pass finds nothing to do. The marker is what stops it, and a
@@ -247,7 +247,7 @@ func TestAnAssetPastItsWindowIsRefusedBeforeTheSweepRuns(t *testing.T) {
 	require.False(t, expired.AssetExpiredAt.IsZero())
 
 	// The read reclaimed the bytes rather than only refusing to serve them.
-	_, err = store.Stat(ctx, finished.AssetKey)
+	_, err = store.StatPublished(ctx, finished.AssetKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
 }
 

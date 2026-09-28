@@ -137,6 +137,8 @@ type Job struct {
 	nativeRetention        time.Duration
 	nativeReceiptKey       string
 	nativeAssetKey         string
+	assetPending           bool
+	assetDigest            string
 	nativeAssetDigest      string
 	nativeAssetContentType string
 	assetRecoveryStatus    string
@@ -215,6 +217,9 @@ func (j Job) String() string {
 
 // Validate reports whether the record can be stored.
 func (j Job) Validate() error {
+	if err := j.validateAssetPublication(); err != nil {
+		return err
+	}
 	if err := j.validateAdministrator(); err != nil {
 		return err
 	}
@@ -407,7 +412,7 @@ func (j Job) Outstanding() bool { return !j.Accounted() }
 
 // HasAsset reports whether this gateway holds readable bytes for the job.
 func (j Job) HasAsset() bool {
-	return j.AssetKey != "" && j.AssetExpiredAt.IsZero()
+	return j.AssetKey != "" && !j.assetPending && j.AssetExpiredAt.IsZero()
 }
 
 // AssetExpired reports whether the stored asset has passed its window. It reads

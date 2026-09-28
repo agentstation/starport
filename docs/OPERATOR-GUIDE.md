@@ -1577,6 +1577,10 @@ Starport returns HTTP 409 for native cancellation requests.
 
 A native response receipt retains the result, measured duration, and asset bytes.
 Recovery reads this receipt without another inference request.
+The first stored receipt is immutable. An exact callback retry preserves its original timestamp.
+A conflicting callback cannot replace its measured usage or content.
+Recovery verifies already-stored asset bytes before attempting another download.
+
 A lost response leaves `submission_status` as `unconfirmed` and retains required budget capacity.
 Starport never automatically repeats uncertain inference.
 Inline assets support durable recovery. External downloads require explicit origin grants, as described below.
@@ -1731,19 +1735,30 @@ The job record preserves unknown usage for required settlement.
 
 The retention window defaults to 24 hours.
 Native jobs measure it from the stored response receipt.
-Other jobs measure it from asset storage.
+Provider-polled jobs measure it from their first durable asset preparation.
 Native recovery retains the submission asset bound and retention window.
+
+Provider-polled jobs retain their prepared identity, digest, measured size, and expiry before writing bytes.
+A lost write acknowledgment leaves that preparation available for refresh or startup recovery.
+The job reports `asset_status: "pending"` until Starport verifies the stored bytes.
+
+All video receipts and assets use immutable publication in `retained-v1`.
+Expiry confirms backend retirement before marking cleanup complete.
+Delayed writers cannot recreate retired content. Backups must preserve retirement markers.
+Job schema 5 requires coordinated migration under CSP13.
+Native platform, storage-readiness, staging-cleanup, and restore qualification remain open.
 
 A generated video is an answer a caller collects.
 Provider retention does not change the gateway retention window.
 A caller that comes back past the window reads HTTP 410 and the window length
 in the refusal.
 
-One stored asset defaults to a 256 MiB bound. Without it a provider's decision
-about how large its own answer is would size this deployment's storage. A sweep
-reclaims expired bytes every hour. The sweep is a floor on how long expired
-bytes survive on disk. It is not a floor on how long an asset reads: an expired
-asset stops reading the moment it expires.
+One stored asset defaults to a 256 MiB bound. Content reads stop at expiry.
+Cleanup replaces the live object with a retirement marker. Existing filesystem readers can finish.
+
+On versioned object stores, noncurrent payload versions and incomplete uploads require backend cleanup.
+Preserve current retirement markers when configuring that cleanup.
+The gateway retention window does not set a physical deletion deadline for backups or object versions.
 
 For asynchronous provider jobs, a single-job GET can check the provider during the first hour after submission.
 After that window, GET retains the last provider state and returns `polling_status: "paused"`.

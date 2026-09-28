@@ -56,20 +56,20 @@ type interruptedNativeAssets struct {
 	after  bool
 }
 
-func (s *interruptedNativeAssets) Put(ctx context.Context, key string, r io.Reader) (blob.Info, error) {
+func (s *interruptedNativeAssets) Publish(ctx context.Context, key string, r io.Reader) (blob.Info, error) {
 	s.puts++
 	if s.puts == 1 {
 		s.firstKey = key
 	}
 	if s.puts == s.failAt {
 		if s.after {
-			if _, err := s.Store.Put(ctx, key, r); err != nil {
+			if _, err := s.Store.Publish(ctx, key, r); err != nil {
 				return blob.Info{}, err
 			}
 		}
 		return blob.Info{}, errors.New("blob acknowledgement unavailable")
 	}
-	return s.Store.Put(ctx, key, r)
+	return s.Store.Publish(ctx, key, r)
 }
 
 func TestNativeReceiptRecoversWithoutProviderReplay(t *testing.T) {
@@ -184,7 +184,7 @@ func TestNativeReceiptRejectsCorruptionBeforeCompletion(t *testing.T) {
 			runner := nativeFixture()
 			job, err := service.Submit(t.Context(), open(runner), submissionFor(accountA))
 			require.Error(t, err)
-			reader, err := assets.Get(t.Context(), blobs.firstKey)
+			reader, err := assets.ReadPublished(t.Context(), blobs.firstKey)
 			require.NoError(t, err)
 			raw, err := io.ReadAll(reader)
 			require.NoError(t, err)
@@ -210,9 +210,8 @@ func TestNativeReceiptRejectsCorruptionBeforeCompletion(t *testing.T) {
 				combined = append(combined, encoded...)
 				raw = append(combined, raw[8+size:]...)
 			}
-			_, err = assets.Put(t.Context(), blobs.firstKey, bytes.NewReader(raw))
-			require.NoError(t, err)
-			reopened, err := jobs.NewService(records, jobs.WithAssetStore(assets))
+			damaged := damagedNativeReceipt{Store: assets, key: blobs.firstKey, bytes: raw}
+			reopened, err := jobs.NewService(records, jobs.WithAssetStore(damaged))
 			require.NoError(t, err)
 			_, err = reopened.Refresh(t.Context(), runner, accountA, job.ID)
 			require.Error(t, err)
@@ -239,4 +238,19 @@ func TestNativeExternalAssetExpiresWithoutDownload(t *testing.T) {
 	_, _, err = service.Open(t.Context(), accountA, job.ID)
 	require.ErrorIs(t, err, jobs.ErrAssetExpired)
 	require.Equal(t, 1, runner.submits)
+}
+
+// damagedNativeReceipt supplies corrupt medium bytes to the receipt parser.
+// Production publication cannot overwrite a retained identity.
+type damagedNativeReceipt struct {
+	blob.Store
+	key   string
+	bytes []byte
+}
+
+func (b damagedNativeReceipt) ReadPublished(ctx context.Context, key string) (io.ReadCloser, error) {
+	if key == b.key {
+		return io.NopCloser(bytes.NewReader(b.bytes)), nil
+	}
+	return b.Store.ReadPublished(ctx, key)
 }
