@@ -12,6 +12,11 @@ import (
 )
 
 const (
+	fileRoleAcquisitionPolicy = "credential-policy"
+	fileRoleInferencePolicy   = "inference-credential-policy"
+	fileRoleWorkspace         = "workspace"
+	fileKindPatterns          = "patterns"
+
 	fileKindRegular         = "file"
 	fileRoleSourceCheckout  = "source-checkout"
 	fileRoleSourceHTTP      = "source-http"
@@ -89,13 +94,13 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 		{"setup-transaction", siblingPath(p.ConfigFile, ".starport-setup"), fileKindTree, pathRoleConfiguration, "Local setup retains its transaction and stable lock."},
 		{"setup-config-publications", siblingPath(p.ConfigFile, ".record-publications"), fileKindTree, pathRoleConfiguration, "Local setup publishes configuration through private records."},
 		{"setup-storage-guard", siblingPath(p.BadgerDir, ".starport-setup-"+filepath.Base(p.BadgerDir)), fileKindTree, pathRoleBadger, "Local setup and gateway startup coordinate database ownership."},
-		{"setup-database-stage", siblingPath(p.BadgerDir, ""), "patterns", pathRoleBadger, "Local setup stages databases and retains interrupted rollback state."},
+		{"setup-database-stage", siblingPath(p.BadgerDir, ""), fileKindPatterns, pathRoleBadger, "Local setup stages databases and retains interrupted rollback state."},
 	} {
 		add(item.id, item.path, item.kind, badger, policy.OwnerOnly, item.creation,
 			"Preserve stable locks and pending records. Recovery must verify ownership before removal.", "STARPORT_CONFIG_FILE", badgerPathEnvironment)
 		entry := &report.Files[len(report.Files)-1]
 		entry.Location = manifestPath(p, item.origin, item.path)
-		if item.kind == "patterns" {
+		if item.kind == fileKindPatterns {
 			entry.Patterns = []string{".starport-init-*/**"}
 		}
 	}
@@ -139,13 +144,13 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 	}
 
 	policyDirectory := c.CatalogCredentialPolicyDirectory()
-	add("credential-policy", policyDirectory, fileKindTree, selectedAvailability(policyDirectory != ""), policy.OwnerOnly,
+	add(fileRoleAcquisitionPolicy, policyDirectory, fileKindTree, selectedAvailability(policyDirectory != ""), policy.OwnerOnly,
 		"Catalog startup records the acquisition policy before it creates catalog state.", "Preserve policy records with the deployment. Resolve conflicts through explicit credential references.", "STARPORT_STATE_ROOT", "STARPORT_INSTANCE_ID")
 
 	inferencePolicyDirectory := c.InferenceCredentialPolicyDirectory()
-	add("inference-credential-policy", inferencePolicyDirectory, fileKindTree, selectedAvailability(inferencePolicyDirectory != ""), policy.OwnerOnly,
+	add(fileRoleInferencePolicy, inferencePolicyDirectory, fileKindTree, selectedAvailability(inferencePolicyDirectory != ""), policy.OwnerOnly,
 		"Gateway startup records inference selection policy before provider activation.", "Preserve accepted policy records. Resolve conflicts with explicit inference references.", "STARPORT_STATE_ROOT", "STARPORT_INSTANCE_ID")
-	workspaceFiles, err := productpaths.WorkspaceFiles(manifestPath(p, "workspace", c.Catalog.WorkspacePath), "STARPORT_CATALOG_WORKSPACE_PATH")
+	workspaceFiles, err := productpaths.WorkspaceFiles(manifestPath(p, fileRoleWorkspace, c.Catalog.WorkspacePath), "STARPORT_CATALOG_WORKSPACE_PATH")
 	if err != nil {
 		return productpaths.FileManifest{}, err
 	}
@@ -241,7 +246,7 @@ func childPath(parent string, parts ...string) string {
 func manifestPath(paths Paths, role, path string) productpaths.Path {
 	originRole := role
 	switch role {
-	case "credential-policy", "inference-credential-policy":
+	case fileRoleAcquisitionPolicy, fileRoleInferencePolicy:
 		originRole = "state"
 	case fileRoleBaselineRecovery:
 		originRole = pathRoleBaseline

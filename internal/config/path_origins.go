@@ -17,7 +17,7 @@ type pathSelection struct {
 
 func pathSelections(cfg *Config) []pathSelection {
 	selections := []pathSelection{
-		{"workspace", "", catalogconfig.WorkspacePath, "", &cfg.Catalog.WorkspacePath, false},
+		{fileRoleWorkspace, "", catalogconfig.WorkspacePath, "", &cfg.Catalog.WorkspacePath, false},
 		{pathRoleRuntime, "", catalogconfig.StateDirectory, productpaths.State, &cfg.Catalog.StateDirectory, !cfg.Catalog.StateDirectoryIsScratch()},
 		{fileRoleLocalToken, "", "", productpaths.Data, &cfg.Security.LocalTokenPath, true},
 		{fileRoleTLSCertificate, "STARPORT_SECURITY_TLS_CERT_PATH", "", "", &cfg.Security.TLSCertPath, false},

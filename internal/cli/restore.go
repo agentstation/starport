@@ -51,7 +51,7 @@ func newPrepareBackupCommand(deps Dependencies, usageError usageErrorHandler) *u
 			if cmd.Bool(flagStructuredJSON) {
 				return writeIndentedJSON(cmd.Writer, result)
 			}
-			_, err = fmt.Fprintf(cmd.Writer, "Prepared restricted recovery for %s at epoch %d.\nOperation: %s\nManifest SHA-256: %s\nInactive files: %s\nAll import barriers remain. This result does not approve admission.\nComplete independent reconciliation and activation before starting the gateway.\n", result.Prepared.Boundary.DeploymentID, result.Prepared.Boundary.Epoch, result.Prepared.OperationID, result.Prepared.ManifestSHA256, result.FilesDirectory)
+			_, err = fmt.Fprintf(cmd.Writer, "Prepared restricted recovery for %s at epoch %d.\nOperation: %s\nManifest SHA-256: %s\nInactive files: %s\nFile recovery: %d selected files await their required publication procedures.\nUse --json to inspect target locations and file recovery actions.\nAll import barriers remain. This result does not approve admission.\nComplete independent reconciliation and activation before starting the gateway.\n", result.Prepared.Boundary.DeploymentID, result.Prepared.Boundary.Epoch, result.Prepared.OperationID, result.Prepared.ManifestSHA256, result.FilesDirectory, len(result.FilePlan))
 			return err
 		},
 	}

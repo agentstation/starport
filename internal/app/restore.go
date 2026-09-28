@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json/v2"
 	"errors"
 	"os"
 	"path/filepath"
@@ -34,6 +35,10 @@ func PrepareBackup(ctx context.Context, cfg *config.Config, request recovery.Pre
 	}
 	if cfg.EffectivePaths().DeploymentID != source.DeploymentID() {
 		return result, errors.New("restore target deployment ID differs from the verified backup")
+	}
+	filePlan, err := planBackupFiles(ctx, cfg, source)
+	if err != nil {
+		return result, err
 	}
 	// Create private target parents only after the complete source passes verification.
 	for _, path := range paths {
@@ -68,7 +73,7 @@ func PrepareBackup(ctx context.Context, cfg *config.Config, request recovery.Pre
 	if err != nil {
 		return result, err
 	}
-	return recovery.PrepareResult{Prepared: prepared, FilesDirectory: request.FilesDirectory, References: source.References()}, nil
+	return recovery.PrepareResult{Prepared: prepared, FilesDirectory: request.FilesDirectory, References: source.References(), FilePlan: filePlan}, nil
 }
 
 func restoreTargetPaths(cfg *config.Config, request recovery.PrepareRequest) ([]string, error) {
@@ -128,4 +133,26 @@ func restoreBlobTarget(ctx context.Context, cfg config.FilesConfig) (blob.Restor
 		return nil, err
 	}
 	return blob.ObjectRestoreTarget(store)
+}
+
+func planBackupFiles(ctx context.Context, cfg *config.Config, source *recovery.RestoreSource) ([]recovery.FileDisposition, error) {
+	body, err := source.SelectedFile(ctx, "inventory.json", 16<<20)
+	if err != nil {
+		return nil, err
+	}
+	var inventory config.BackupInventory
+	if err := json.Unmarshal(body, &inventory, json.RejectUnknownMembers(true)); err != nil {
+		return nil, err
+	}
+	hashes := source.SelectedFileHashes()
+	delete(hashes, "inventory.json")
+	plan, err := cfg.PlanRestoreFiles(inventory, hashes)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]recovery.FileDisposition, 0, len(plan))
+	for _, file := range plan {
+		result = append(result, recovery.FileDisposition{ArtifactID: file.ArtifactID, Role: file.Role, Relative: file.Relative, SHA256: file.SHA256, Destination: file.Destination, Action: file.Action, Reason: file.Reason})
+	}
+	return result, nil
 }

@@ -85,7 +85,8 @@ func (r PrepareRequest) Validate() error {
 
 // PrepareResult reports staged state and unresolved history, never activation approval.
 type PrepareResult struct {
-	Prepared       PreparedBundle  `json:"prepared"`
-	FilesDirectory string          `json:"files_directory"`
-	References     ReferenceReport `json:"references"`
+	Prepared       PreparedBundle    `json:"prepared"`
+	FilesDirectory string            `json:"files_directory"`
+	References     ReferenceReport   `json:"references"`
+	FilePlan       []FileDisposition `json:"file_plan"`
 }

@@ -132,7 +132,7 @@ func backupRoleCapture(entry productpaths.FileEntry) (string, error) {
 		return "rebuild-under-source-policy", nil
 	case pathRoleConfiguration, "setup-transaction", "setup-config-publications", "setup-storage-guard", "setup-database-stage",
 		fileRoleLocalToken, "local-token-lock", fileRoleWelcome, pathRoleBaseline, fileRoleBaselineRecovery, fileRoleRuntimeEvidence,
-		"credential-policy", "inference-credential-policy", "workspace", "workspace-receipt", "workspace-journal", "workspace-lock",
+		fileRoleAcquisitionPolicy, fileRoleInferencePolicy, fileRoleWorkspace, "workspace-receipt", "workspace-journal", "workspace-lock",
 		"catalog-migration-lock", "workspace-preparing", "workspace-staging", "workspace-backup", fileRoleSourceFile, fileRoleTLSCertificate, fileRoleTLSKey, cacheCAFileRole, valkeyCAFileRole:
 		return backupCaptureFiles, nil
 	default:
