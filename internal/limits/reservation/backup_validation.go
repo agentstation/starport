@@ -20,9 +20,12 @@ type BackupReader interface {
 
 // BackupRecord describes one validated record without issuing a dispatch permit.
 type BackupRecord struct {
-	Kind       string
-	Held       bool
-	TeamOrigin *BackupTeamOrigin
+	Kind          string
+	Held          bool
+	TeamOrigin    *BackupTeamOrigin
+	Window        *WindowState
+	Contributions []BackupContribution
+	Corrections   int64
 }
 
 // BackupTeamOrigin binds a completed KV initialization to its consumed SQL grant.
@@ -53,9 +56,15 @@ func VerifyBackupRecord(ctx context.Context, source BackupReader, record storage
 		if err == nil {
 			result.Held = value.State != Settled && value.State != Canceled
 			err = verifyBackupAttemptReferences(ctx, source, value)
+			if err == nil {
+				result.Corrections, err = verifyBackupCorrectionChain(ctx, source, *value)
+			}
+			if err == nil {
+				result.Contributions, err = backupContributions(value)
+			}
 		}
 	case "meter":
-		err = verifyBackupMeter(record)
+		result.Window, err = verifyBackupMeter(record)
 	case "history":
 		err = verifyBackupHistory(ctx, source, record)
 	case "holder":
@@ -92,14 +101,7 @@ func verifyBackupAttemptReferences(ctx context.Context, source BackupReader, val
 			return ErrUnavailable
 		}
 	}
-	if value.CorrectionID != "" {
-		data, err := readBackupValue(ctx, source, correctionKey(value.Attempt.ID, value.CorrectionID))
-		if err != nil {
-			return err
-		}
-		_, err = decodeCorrectionReceipt(value.Attempt.ID, value.CorrectionID, data)
-		return err
-	}
+
 	return nil
 }
 
@@ -125,13 +127,12 @@ func verifyBackupHistory(ctx context.Context, source BackupReader, record storag
 	return nil
 }
 
-func verifyBackupMeter(record storage.TransferRecord) error {
+func verifyBackupMeter(record storage.TransferRecord) (*WindowState, error) {
 	var value WindowState
 	if json.Unmarshal(record.Value, &value) != nil || !value.Meter.valid() || value.Window != windowFor(value.Meter.Interval, value.Window.Start) || record.Key != meterKey(value.Meter, value.Window) {
-		return ErrUnavailable
+		return nil, ErrUnavailable
 	}
-	_, err := decodeWindowRecord(value.Meter, value.Window, record.Value)
-	return err
+	return decodeWindowRecord(value.Meter, value.Window, record.Value)
 }
 
 func verifyBackupHolder(record storage.TransferRecord) error {

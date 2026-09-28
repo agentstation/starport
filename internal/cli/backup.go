@@ -128,6 +128,6 @@ func writeBackupResult(cmd *urfavecli.Command, result recovery.CaptureResult) er
 		return err
 	}
 	keys := result.References.GatewayKeys
-	_, err = fmt.Fprintf(cmd.Writer, "Gateway keys: %d; hash indexes: %d; missing accounts: %d; missing teams: %d; deleted initial keys: %d.\nBudget records: %d; held reservations: %d; retained team origins: %d.\nUnknown budget histories: %d account, %d key, %d team.\nUnknown history does not establish zero consumption or permission.\n", keys.Keys, keys.HashIndexes, keys.MissingAccounts, keys.MissingTeams, keys.MissingInitialKeys, result.References.BudgetRecords, result.References.HeldReservations, result.References.Identity.BudgetOrigins, result.References.UnknownAccountBudgetHistories, keys.UnknownBudgetHistories, result.References.Identity.UnknownBudgetHistories)
+	_, err = fmt.Fprintf(cmd.Writer, "Gateway keys: %d; hash indexes: %d; missing accounts: %d; missing teams: %d; deleted initial keys: %d.\nBudget records: %d; verified windows: %d; held reservations: %d; retained team origins: %d.\nUnknown budget histories: %d account, %d key, %d team.\nUnknown history does not establish zero consumption or permission.\n", keys.Keys, keys.HashIndexes, keys.MissingAccounts, keys.MissingTeams, keys.MissingInitialKeys, result.References.BudgetRecords, result.References.BudgetWindows, result.References.HeldReservations, result.References.Identity.BudgetOrigins, result.References.UnknownAccountBudgetHistories, keys.UnknownBudgetHistories, result.References.Identity.UnknownBudgetHistories)
 	return err
 }

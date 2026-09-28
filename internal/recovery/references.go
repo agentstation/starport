@@ -24,6 +24,7 @@ import (
 // It does not establish later authorization, spending, or restoration permission.
 type ReferenceReport struct {
 	UnknownAccountBudgetHistories int64                   `json:"unknown_account_budget_histories"`
+	BudgetWindows                 int64                   `json:"budget_windows"`
 	BudgetRecords                 int64                   `json:"budget_records"`
 	HeldReservations              int64                   `json:"held_reservations"`
 	GatewayKeys                   apikey.RecoveryReport   `json:"gateway_keys"`
@@ -66,12 +67,20 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 		return report, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, blobs.Close()) }()
+	accounting, err := openBackupAccountingIndex(ctx, records)
+	if err != nil {
+		return report, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, accounting.Close()) }()
 	err = records.Enumerate(ctx, func(record storage.TransferRecord) error {
 		var checkErr error
 		switch {
 		case strings.HasPrefix(record.Key, reservation.StoragePrefix):
 			var budget reservation.BackupRecord
 			budget, checkErr = reservation.VerifyBackupRecord(ctx, records, record)
+			if checkErr == nil {
+				checkErr = accounting.Add(ctx, record.Key, budget)
+			}
 			if checkErr == nil {
 				report.BudgetRecords++
 				if budget.Held {
@@ -137,5 +146,8 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 		}
 		return nil
 	})
+	if err == nil {
+		report.BudgetWindows, err = accounting.Verify(ctx)
+	}
 	return report, err
 }

@@ -268,6 +268,10 @@ func (r *Repository) verifyCorrectionHead(ctx context.Context, record Record) er
 	if err != nil {
 		return errors.Join(ErrUnavailable, err)
 	}
+	return verifyCorrectionRecord(record, *receipt)
+}
+
+func verifyCorrectionRecord(record Record, receipt CorrectionReceipt) error {
 	expected := receipt.Before
 	amount, err := expected.Attempt.evidenceAmount(&receipt.Correction.Evidence)
 	if err != nil {

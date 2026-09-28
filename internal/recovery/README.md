@@ -51,7 +51,15 @@ Completed KV team initialization requires the matching consumed SQL grant, inclu
 Missing current account, key, or team history remains unknown. Verification never creates zero consumption.
 Uncertain attempts retain their reservations. Verification cannot settle, refund, or repeat them.
 
-Aggregate accounting reconciliation, independent later history, and restore commands remain required before deployment recovery is complete.
+A private on-disk index compares window totals with every retained attempt and the recorded seed consumption.
+Checks include reserved capacity, consumed amounts, active disputes, and both aggregate and valuation overflow.
+Correction chains must reproduce the retained attempt and remain within the original correction deadline.
+Immutable state bindings establish ancestry even if authority time moves backward within the permitted interval.
+Cycles and receipts outside the retained chains cause refusal.
+Verification never changes balances to repair a mismatch.
+
+These checks prove internal consistency, not completeness against later acknowledged work.
+Independent later history and restore commands remain required before deployment recovery is complete.
 
 A verified bundle grants no permission to resume inference.
 Recovery must reconcile permission withdrawals, acknowledged spending, and uncertain work after the backup against independent evidence.
