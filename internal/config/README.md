@@ -72,6 +72,17 @@ Use [the configuration reference](../../.env.example) for the complete field
 list. Starmap acquisition credentials stay separate from Starport inference
 credentials.
 
+## Budget admission
+
+`STARPORT_BUDGET_ADMISSION_MODE=atomic` is the default and the only supported mode.
+Each provider attempt reserves required budget capacity through the configured storage authority.
+Standalone deployments use Badger. Shared deployments use independently approved Valkey with PostgreSQL recovery records.
+Confirmed absent budgets need no reservation.
+
+Other mode values fail configuration validation before startup.
+Local quota leases and cached balances cannot authorize spending.
+Memory caches for authorization and catalog routing remain independent of budget reservations.
+
 ## Provider credential references
 
 The active Starmap catalog defines each provider field. Without an explicit

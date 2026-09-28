@@ -97,7 +97,7 @@ func TestChatReferenceMergesPresetConfig(t *testing.T) {
 
 	resolved := inner.lastChat.Request
 	require.Equal(t, "openai/gpt-4o-mini", resolved.Model)
-	require.Equal(t, []string{"groq/llama-3.3-70b"}, resolved.FallbackModels)
+	require.Equal(t, []string{"openai/gpt-4o-mini", "groq/llama-3.3-70b"}, resolved.FallbackModels)
 	require.Equal(t, float32(0.2), *resolved.Sampling.Temperature)
 	require.Equal(t, 256, *resolved.Sampling.MaxTokens)
 	require.Len(t, resolved.Messages, 2, "the preset system prompt is prepended")

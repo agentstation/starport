@@ -360,6 +360,12 @@ An internal authoritative catalog still requires its qualified clock and permiss
 An authorization cache deadline cannot replace that catalog contract.
 
 Budget windows use the admission authority's time. Strict budgets still refuse unknown capacity.
+
+`STARPORT_BUDGET_ADMISSION_MODE=atomic` is the default and the only supported budget mode.
+Each provider attempt reserves capacity before dispatch. Uncertain provider charges retain their reservation.
+
+Local quota leases, cached-balance admission, and disabled admission fail configuration validation.
+These restrictions apply to standalone and shared deployments. They do not disable catalog or authorization caches.
 A clock-dependent lease protocol must separately establish its required clock bounds.
 
 ### Authorization record limits
