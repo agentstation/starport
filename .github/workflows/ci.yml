@@ -188,7 +188,7 @@ jobs:
   catalog-fleet:
     name: Catalog Fleet Recovery
     runs-on: ubuntu-latest
-    # Includes cold compilation, five bounded test steps, and evidence upload.
+    # Includes cold compilation, bounded recovery groups, and evidence upload.
     timeout-minutes: 30
     services:
       valkey:
@@ -252,7 +252,15 @@ jobs:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
           TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
           TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
-        run: go test -json -race -count=1 -timeout 7m ./internal/app -run '^(TestProductionBudgetAcrossProcesses|TestSettledJobRequiresOriginalSharedApproval|TestProductionBudgetBackendOperations)$' > fleet-budget.jsonl
+        run: |
+          # Each scenario starts full gateway processes with the complete catalog.
+          # Isolate parent lifetimes and keep a separate bound for each scenario.
+          for scenario in concurrent-settlement dispatched-process-loss backend-replacement; do
+            go test -json -race -count=1 -timeout 7m ./internal/app \
+              -run "^TestProductionBudgetAcrossProcesses$/${scenario}$" >> fleet-budget.jsonl
+          done
+          go test -json -race -count=1 -timeout 7m ./internal/app \
+            -run '^(TestSettledJobRequiresOriginalSharedApproval|TestProductionBudgetBackendOperations)$' >> fleet-budget.jsonl
       - name: Start the recovery object store
         id: recovery-objectstore
         shell: bash

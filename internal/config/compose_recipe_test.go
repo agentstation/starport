@@ -14,20 +14,32 @@ import (
 )
 
 // TestComposeStorageRecipes loads the actual Compose environments through the
-// production loader. No operator dotenv file or service connection is used.
+// production loader. It uses no operator dotenv file or service connection.
 func TestComposeStorageRecipes(t *testing.T) {
 	docker, err := exec.LookPath("docker")
 	if err != nil {
 		t.Skip("Docker Compose is required for recipe qualification")
 	}
+	// Preserve host paths for Docker plugin discovery. Operator configuration
+	// stays outside the subprocess environment and comes from the fixture.
+	var environment []string
+	for _, key := range []string{"PATH", "HOME", "USERPROFILE", "SystemRoot", "SystemDrive", "ProgramFiles", "ProgramFiles(x86)", "ProgramData", "APPDATA", "LOCALAPPDATA", "DOCKER_CONFIG", "DOCKER_CLI_PLUGIN_EXTRA_DIRS", "TMP", "TEMP"} {
+		if value, exists := os.LookupEnv(key); exists {
+			environment = append(environment, key+"="+value)
+		}
+	}
 	probeContext, cancelProbe := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancelProbe()
-	if err := exec.CommandContext(probeContext, docker, "compose", "version").Run(); err != nil {
+	probe := exec.CommandContext(probeContext, docker, "compose", "version")
+	probe.Env = environment
+	if err := probe.Run(); err != nil {
 		if os.Getenv("STARPORT_RECIPE_IMAGE") != "" {
 			t.Fatalf("container qualification requires Docker Compose: %v", err)
 		}
 		t.Skipf("UNVERIFIED: Docker Compose is unavailable: %v", err)
 	}
+	t.Setenv("STARPORT_DEPLOYMENT_ID", "ambient-deployment-must-not-override-fixture")
+	t.Setenv("STARPORT_SECURITY_MASTER_KEY", "ambient-key-must-not-override-fixture")
 	repository, err := filepath.Abs("../..")
 	require.NoError(t, err)
 	for _, tc := range []struct {
@@ -55,7 +67,7 @@ func TestComposeStorageRecipes(t *testing.T) {
 			defer cancel()
 			cmd := exec.CommandContext(ctx, docker, "compose", "--project-directory", directory,
 				"--env-file", file, "-f", filepath.Join(repository, tc.file), "config", "--format", "json")
-			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME")}
+			cmd.Env = environment
 			output, err := cmd.CombinedOutput()
 			require.NoError(t, err, "%s", output)
 			var rendered struct {

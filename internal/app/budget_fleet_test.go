@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
+	starmapruntime "github.com/agentstation/starmap/runtime"
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
@@ -40,7 +42,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const budgetFleetChild = "STARPORT_BUDGET_FLEET_CHILD"
+const (
+	budgetFleetChild = "STARPORT_BUDGET_FLEET_CHILD"
+	// These limits bound race-instrumented gateway construction and fixture life.
+	budgetFleetReadinessTimeout = 90 * time.Second
+	budgetFleetChildTimeout     = 5 * time.Minute
+)
 
 type budgetFleetInput struct{ Valkey, Postgres, Deployment, Upstream, Ready string }
 
@@ -107,16 +114,23 @@ func startBudgetFleetProcess(t *testing.T, input budgetFleetInput) *budgetFleetP
 	input.Ready = filepath.Join(t.TempDir(), "ready")
 	encoded, err := json.Marshal(input)
 	require.NoError(t, err)
-	child := &budgetFleetProcess{command: exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestProductionBudgetAcrossProcesses$", "-test.timeout=90s"), done: make(chan struct{})}
+	childTimeout := budgetFleetChildTimeout
+	if deadline, ok := t.Deadline(); ok {
+		childTimeout = min(childTimeout, time.Until(deadline))
+	}
+	child := &budgetFleetProcess{command: exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestProductionBudgetAcrossProcesses$", "-test.timeout="+childTimeout.String()), done: make(chan struct{})}
 	child.command.Env = append(os.Environ(), budgetFleetChild+"="+string(encoded))
 	child.command.Stdout, child.command.Stderr = &child.output, &child.output
+	// Catalog setup and adoption allocate complete generations in the parent.
+	// Release their temporary memory before another instrumented gateway starts.
+	debug.FreeOSMemory()
 	require.NoError(t, child.command.Start())
 	go func() {
 		_ = child.command.Wait()
 		close(child.done)
 	}()
 	t.Cleanup(func() { child.stop() })
-	deadline := time.NewTimer(45 * time.Second)
+	deadline := time.NewTimer(budgetFleetReadinessTimeout)
 	defer deadline.Stop()
 	poll := time.NewTicker(10 * time.Millisecond)
 	defer poll.Stop()
@@ -223,49 +237,8 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 				require.NoError(t, err)
 				require.NoError(t, cleanup.BatchDelete(ctx, keys))
 			})
-			var deps server.Dependencies
-			application, err := New(cfg, func(options *buildOptions) {
-				original := options.factories.newServer
-				options.factories.newServer = func(settings *server.Config, dependencies server.Dependencies) (httpRuntime, error) {
-					deps = dependencies
-					return original(settings, dependencies)
-				}
-			})
-			require.NoError(t, err)
-			t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
-			var fleetCandidate runtimecatalog.Candidate
-			if mode == "backend-replacement" {
-				// New opens the embedded baseline. Explicit refresh publishes the
-				// fleet snapshot before the fixture takes a recovery copy.
-				catalogRuntime, ok := application.catalogRuntime.(*runtimecatalog.Runtime)
-				require.True(t, ok)
-				_, err := catalogRuntime.AcceptedGeneration(t.Context())
-				require.ErrorIs(t, err, starmaperrors.ErrNotFound, "construction alone has not accepted a fleet publication")
-				candidate, err := application.syncCatalog(t.Context())
-				require.NoError(t, err)
-				require.NoError(t, application.activateRuntimeState(t.Context(), candidate))
-				accepted, err := catalogRuntime.AcceptedGeneration(t.Context())
-				require.NoError(t, err)
-				require.Equal(t, candidate.State.GenerationID, accepted.Manifest.GenerationID)
-				fleetCandidate = candidate
-			}
-			now := time.Now().UTC()
-			budgets := func() *limits.Limits {
-				return &limits.Limits{Tokens: &limits.Budget{Limit: 200_000, Interval: limits.IntervalDay}, Spend: &limits.Budget{Limit: 1_000_000_000, Interval: limits.IntervalDay}}
-			}
-			_, err = deps.Accounts.Create(t.Context(), account.Account{ID: "fleet-account", Name: "Fleet account", Limits: budgets(), Active: true, CreatedAt: now})
-			require.NoError(t, err)
-			team, err := deps.Identity.Teams.Create(t.Context(), identity.Team{ID: "fleet-team", Name: "Fleet team", Budget: &limits.TeamBudget{Limit: 1_000_000_000, Interval: limits.IntervalDay}})
-			require.NoError(t, err)
-			digest := sha256.Sum256([]byte(performanceGatewayKey))
-			key := testAPIKey()
-			key.ID = "fleet-key"
-			key.Hash = hex.EncodeToString(digest[:])
-			key.AccountID = "fleet-account"
-			key.TeamID = team.Team.ID
-			key.Limits = budgets()
-			_, err = deps.APIKeys.Create(t.Context(), key)
-			require.NoError(t, err)
+			fleetHead := seedBudgetFleet(t, cfg, mode == "backend-replacement")
+			store, ledger := inspectBudgetFleet(t, cfg)
 			first, second := startBudgetFleetProcess(t, input), startBudgetFleetProcess(t, input)
 			client := &http.Client{Timeout: 20 * time.Second}
 			request := func(base string) (int, string, error) {
@@ -289,17 +262,17 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, http.StatusPaymentRequired, status, body)
 			require.EqualValues(t, 1, calls.Load())
-			keys, err := application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 100)
+			keys, err := store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 100)
 			require.NoError(t, err)
 			require.Len(t, keys, 1)
-			raw, err := application.store.Get(t.Context(), keys[0])
+			raw, err := store.Get(t.Context(), keys[0])
 			require.NoError(t, err)
 			var record reservation.Record
 			require.NoError(t, json.Unmarshal(raw, &record))
 			require.Equal(t, reservation.Dispatched, record.State)
 			require.Len(t, record.Attempt.Rules, 5, "account/key token and spend meters plus team spend")
 			for _, rule := range record.Attempt.Rules {
-				state, err := application.budget.ledger.Window(t.Context(), rule.Meter, record.AdmittedAt)
+				state, err := ledger.Window(t.Context(), rule.Meter, record.AdmittedAt)
 				require.NoError(t, err)
 				require.Positive(t, state.Reserved)
 				require.Zero(t, state.Consumed)
@@ -308,7 +281,6 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 				first.stop()
 				<-pending
 				second.stop()
-				require.NoError(t, application.Close(t.Context()))
 				restoredConfig := *cfg
 				restoredConfig.Storage.Valkey.URL = os.Getenv("TEST_VALKEY_REPLACEMENT_URL")
 				original, err := openStorage(cfg.RuntimeStorage())
@@ -344,6 +316,15 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 				require.ErrorIs(t, err, storage.ErrIncarnationChanged)
 				approved, err := witness.Current(t.Context(), input.Deployment)
 				require.NoError(t, err)
+				sourceFleet, err := runtimecatalog.NewFleetStore(t.Context(), oldBackend, witness, input.Deployment)
+				require.NoError(t, err)
+				stoppedHead, err := sourceFleet.CurrentHead(t.Context())
+				require.NoError(t, err)
+				// Closing the setup owner permits a successor publication. Recovery
+				// must select the exact stopped head, including its current revision.
+				require.Equal(t, fleetHead.GenerationID, stoppedHead.GenerationID)
+				require.Equal(t, fleetHead.RecoveryChecksum, stoppedHead.RecoveryChecksum)
+				fleetHead = stoppedHead
 				closed, err := witness.Close(t.Context(), approved)
 				require.NoError(t, err)
 				_, err = witness.ApproveAuthority(t.Context(), newBackend, closed, newID, "fixture-complete-snapshot-with-retained-dispatch", "restore-fixture")
@@ -356,9 +337,10 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 				require.NoError(t, err)
 				closed, err = witness.Close(t.Context(), partialApproval)
 				require.NoError(t, err)
+				// The fixture stops both gateways before abandoning their readers.
 				adoption := runtimecatalog.FleetAdoptionRequest{Closed: closed, SourceApproval: approved,
-					Head: fleetCandidate.FleetHead, BackendID: newID, OperationID: "catalog-and-budget-restore",
-					Evidence: "fixture-complete-snapshot-with-retained-dispatch"}
+					Head: fleetHead, BackendID: newID, OperationID: "catalog-and-budget-restore",
+					Evidence: "fixture-complete-snapshot-with-retained-dispatch", ResolveReaders: true}
 				completed, err := runtimecatalog.AdoptFleet(t.Context(), newBackend, witness, adoption, catalogSettings(&restoredConfig))
 				require.NoError(t, err)
 				repeated, err := runtimecatalog.AdoptFleet(t.Context(), newBackend, witness, adoption, catalogSettings(&restoredConfig))
@@ -401,12 +383,12 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, http.StatusPaymentRequired, status, body)
 				require.EqualValues(t, 1, calls.Load(), "restart cannot refund uncertain dispatch")
-				current, err := application.budget.ledger.Inspect(t.Context(), record.Attempt.ID)
+				current, err := ledger.Inspect(t.Context(), record.Attempt.ID)
 				require.NoError(t, err)
 				require.Equal(t, reservation.Dispatched, current.State)
 				require.Nil(t, current.Evidence)
 				for _, rule := range record.Attempt.Rules {
-					state, err := application.budget.ledger.Window(t.Context(), rule.Meter, record.AdmittedAt)
+					state, err := ledger.Window(t.Context(), rule.Meter, record.AdmittedAt)
 					require.NoError(t, err)
 					require.Positive(t, state.Reserved)
 					require.Zero(t, state.Consumed)
@@ -416,12 +398,12 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 				result := <-pending
 				require.NoError(t, result.err)
 				require.Equal(t, http.StatusOK, result.status, result.body)
-				current, err := application.budget.ledger.Inspect(t.Context(), record.Attempt.ID)
+				current, err := ledger.Inspect(t.Context(), record.Attempt.ID)
 				require.NoError(t, err)
 				require.Equal(t, reservation.Settled, current.State)
 				require.EqualValues(t, 11, current.Evidence.Tokens)
 				for _, rule := range record.Attempt.Rules {
-					state, err := application.budget.ledger.Window(t.Context(), rule.Meter, record.AdmittedAt)
+					state, err := ledger.Window(t.Context(), rule.Meter, record.AdmittedAt)
 					require.NoError(t, err)
 					require.Zero(t, state.Reserved)
 					if rule.Meter.Dimension == limits.DimensionTokens {
@@ -437,6 +419,75 @@ func TestProductionBudgetAcrossProcesses(t *testing.T) {
 			}
 		})
 	}
+}
+
+// seedBudgetFleet closes the setup gateway before the independent processes start.
+// Durable repositories inspect the result without retaining another full runtime.
+func seedBudgetFleet(t *testing.T, cfg *config.Config, publish bool) starmapruntime.FleetHead {
+	t.Helper()
+	var deps server.Dependencies
+	application, err := New(cfg, func(options *buildOptions) {
+		original := options.factories.newServer
+		options.factories.newServer = func(settings *server.Config, dependencies server.Dependencies) (httpRuntime, error) {
+			deps = dependencies
+			return original(settings, dependencies)
+		}
+	})
+	require.NoError(t, err)
+	defer func() { require.NoError(t, application.Close(context.Background())) }()
+	var head starmapruntime.FleetHead
+	if publish {
+		// New opens the embedded baseline. Explicit refresh publishes the
+		// fleet snapshot before the fixture takes a recovery copy.
+		catalogRuntime, ok := application.catalogRuntime.(*runtimecatalog.Runtime)
+		require.True(t, ok)
+		_, err := catalogRuntime.AcceptedGeneration(t.Context())
+		require.ErrorIs(t, err, starmaperrors.ErrNotFound, "construction alone has not accepted a fleet publication")
+		candidate, err := application.syncCatalog(t.Context())
+		require.NoError(t, err)
+		require.NoError(t, application.activateRuntimeState(t.Context(), candidate))
+		accepted, err := catalogRuntime.AcceptedGeneration(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, candidate.State.GenerationID, accepted.Manifest.GenerationID)
+		head = candidate.FleetHead
+	}
+	now := time.Now().UTC()
+	budgets := func() *limits.Limits {
+		return &limits.Limits{Tokens: &limits.Budget{Limit: 200_000, Interval: limits.IntervalDay}, Spend: &limits.Budget{Limit: 1_000_000_000, Interval: limits.IntervalDay}}
+	}
+	_, err = deps.Accounts.Create(t.Context(), account.Account{ID: "fleet-account", Name: "Fleet account", Limits: budgets(), Active: true, CreatedAt: now})
+	require.NoError(t, err)
+	team, err := deps.Identity.Teams.Create(t.Context(), identity.Team{ID: "fleet-team", Name: "Fleet team", Budget: &limits.TeamBudget{Limit: 1_000_000_000, Interval: limits.IntervalDay}})
+	require.NoError(t, err)
+	digest := sha256.Sum256([]byte(performanceGatewayKey))
+	key := testAPIKey()
+	key.ID = "fleet-key"
+	key.Hash = hex.EncodeToString(digest[:])
+	key.AccountID = "fleet-account"
+	key.TeamID = team.Team.ID
+	key.Limits = budgets()
+	_, err = deps.APIKeys.Create(t.Context(), key)
+	require.NoError(t, err)
+	return head
+}
+
+func inspectBudgetFleet(t *testing.T, cfg *config.Config) (storage.KVStore, *reservation.Repository) {
+	t.Helper()
+	store, err := openStorage(cfg.RuntimeStorage())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	db, err := sqlstore.Open(cfg.Storage.RuntimeSQL())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	witness, err := recovery.New(db)
+	require.NoError(t, err)
+	backend, ok := store.(storage.IncarnationProvider)
+	require.True(t, ok)
+	authority, err := witness.OpenAuthority(t.Context(), backend, cfg.EffectivePaths().DeploymentID)
+	require.NoError(t, err)
+	ledger, err := reservation.Open(authority)
+	require.NoError(t, err)
+	return store, ledger
 }
 
 // copyBudgetFleetSnapshot copies only this test's namespace after its writers stop.
