@@ -180,7 +180,7 @@ jobs:
   catalog-fleet:
     name: Catalog Fleet Recovery
     runs-on: ubuntu-latest
-    # Includes cold compilation, three bounded test steps, and evidence upload.
+    # Includes cold compilation, four bounded test steps, and evidence upload.
     timeout-minutes: 30
     services:
       valkey:
@@ -227,7 +227,13 @@ jobs:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
           TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
           TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
-        run: go test -json -race -count=1 -timeout 7m ./internal/catalog ./internal/recovery ./internal/storage -run '^(TestFleet|TestFreshFleet|TestRecoveryWitness|TestBudgetAuthority|TestValkeyIncarnation)' > fleet-catalog.jsonl
+        run: go test -json -race -count=1 -timeout 7m ./internal/catalog ./internal/recovery ./internal/storage -run '^(TestFleet|TestFreshFleet|TestRecoveryWitness|TestBudgetAuthority|TestValkeyIncarnation)' -skip '^TestFleetAdoption' > fleet-catalog.jsonl
+      - name: Verify controlled catalog adoption
+        env:
+          TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+          TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
+          TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
+        run: go test -json -race -count=1 -timeout 7m ./internal/catalog -run '^TestFleetAdoption' > fleet-adoption.jsonl
       - name: Verify explicit fleet initialization and startup
         env:
           TEST_FRESH_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey-fresh.ports['6379'] }}
@@ -246,6 +252,7 @@ jobs:
           name: catalog-fleet-recovery
           path: |
             fleet-catalog.jsonl
+            fleet-adoption.jsonl
             fleet-initialization.jsonl
             fleet-budget.jsonl
           retention-days: 7
