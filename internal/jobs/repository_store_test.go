@@ -334,3 +334,38 @@ func identifiers(records []jobs.Job) []string {
 	}
 	return ids
 }
+
+func TestPreparedJobReplacementPreservesTransaction(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		records, err := jobs.OpenRepository(store)
+		require.NoError(t, err)
+		job := storedJob(t, "prepared-job", accountA, submitted)
+		require.NoError(t, job.Transition(jobs.JobStateCompleted, submitted.Add(time.Minute)))
+		require.NoError(t, records.Create(t.Context(), job))
+		next := job
+		require.NoError(t, next.MarkAccounted(submitted.Add(2*time.Minute)))
+		mutation, err := records.Replacement(t.Context(), job, next)
+		require.NoError(t, err)
+		unchanged, err := records.Get(t.Context(), accountA, job.ID)
+		require.NoError(t, err)
+		require.False(t, unchanged.Accounted(), "preparation publishes nothing")
+		marker := storage.CompareAndSwapMutation{Key: "budget:fixture:prepared", NewValue: []byte("settled")}
+		concurrent := job
+		concurrent.NotificationAttemptedAt = submitted.Add(time.Minute)
+		require.NoError(t, records.Replace(t.Context(), job, concurrent))
+		require.ErrorIs(t, store.CompareAndSwapBatch(t.Context(), []storage.CompareAndSwapMutation{mutation, marker}), storage.ErrConflict)
+		_, err = store.Get(t.Context(), marker.Key)
+		require.ErrorIs(t, err, storage.ErrNotFound, "stale job cannot publish a budget change")
+		next.NotificationAttemptedAt = concurrent.NotificationAttemptedAt
+		mutation, err = records.Replacement(t.Context(), concurrent, next)
+		require.NoError(t, err)
+		require.NoError(t, store.CompareAndSwapBatch(t.Context(), []storage.CompareAndSwapMutation{mutation, marker}))
+		stored, err := records.Get(t.Context(), accountA, job.ID)
+		require.NoError(t, err)
+		require.True(t, stored.Accounted())
+		invalid := stored
+		invalid.Account = accountB
+		_, err = records.Replacement(t.Context(), stored, invalid)
+		require.ErrorIs(t, err, jobs.ErrInvalidJob)
+	})
+}

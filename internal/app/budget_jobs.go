@@ -7,6 +7,7 @@ import (
 
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits/reservation"
+	"github.com/agentstation/starport/internal/storage"
 )
 
 // BindJob verifies the selected dispatch before it assigns the reservation.
@@ -84,7 +85,7 @@ func (o *budgetOwner) checkJobAuthority(ctx context.Context) error {
 }
 
 // RecordJobConflict retains the original charge and blocks its disputed budget windows.
-func (o *budgetOwner) RecordJobConflict(ctx context.Context, job jobs.Job) error {
+func (o *budgetOwner) RecordJobConflict(ctx context.Context, job jobs.Job, mutation storage.CompareAndSwapMutation) error {
 	ctx, cancel := context.WithTimeout(ctx, budgetSettlementTimeout)
 	defer cancel()
 	if err := job.Validate(); err != nil {
@@ -97,5 +98,5 @@ func (o *budgetOwner) RecordJobConflict(ctx context.Context, job jobs.Job) error
 	if job.ReconciliationStatus() != "provider_evidence_review_required" || record.JobID != job.ID || job.Valuation == nil || !reflect.DeepEqual(record.Attempt.Valuation, *job.Valuation) {
 		return reservation.ErrIdentityConflict
 	}
-	return o.ledger.FlagDispute(ctx, job.ReservationID, "job:"+job.ID)
+	return o.ledger.FlagDisputeWith(ctx, job.ReservationID, "job:"+job.ID, mutation)
 }

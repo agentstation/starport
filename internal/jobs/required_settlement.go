@@ -3,6 +3,8 @@ package jobs
 import (
 	"context"
 	"errors"
+
+	"github.com/agentstation/starport/internal/storage"
 )
 
 // ErrSettlementPending reports required accounting that remains unresolved.
@@ -44,19 +46,23 @@ func (s *Service) confirmSettlement(ctx context.Context, job Job) error {
 	return nil
 }
 
-// BillingConflictRecorder blocks affected admission before late evidence is published.
-// The original provider receipt remains durable if this operation fails.
+// BillingConflictRecorder commits late evidence with its required budget restriction.
+// The mutation must come from the job repository on the same storage authority.
 type BillingConflictRecorder interface {
-	RecordJobConflict(context.Context, Job) error
+	RecordJobConflict(context.Context, Job, storage.CompareAndSwapMutation) error
 }
 
-func (s *Service) recordBillingConflict(ctx context.Context, job Job) error {
-	if job.ReservationID == "" {
-		return nil
+func (s *Service) publishBillingConflict(ctx context.Context, expected, next Job) error {
+	if next.ReservationID == "" {
+		return s.records.Replace(ctx, expected, next)
 	}
 	recorder, ok := s.requiredSettlement.(BillingConflictRecorder)
 	if !ok {
 		return ErrSettlementPending
 	}
-	return recorder.RecordJobConflict(ctx, job)
+	mutation, err := s.records.Replacement(ctx, expected, next)
+	if err != nil {
+		return err
+	}
+	return recorder.RecordJobConflict(ctx, next, mutation)
 }

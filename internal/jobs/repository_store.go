@@ -112,9 +112,8 @@ func (r *repository) Get(ctx context.Context, account, id string) (Job, error) {
 	return decodeJob(data)
 }
 
-// List answers newest first. A caller polling a job it just submitted looks at
-// the top of the page, and a storage layer that ordered by key would put it
-// wherever its identifier happened to sort.
+// List returns the newest jobs first so callers can find recent submissions.
+// Storage key order does not define this order.
 func (r *repository) List(ctx context.Context, account string, limit int) ([]Job, error) {
 	if strings.TrimSpace(account) == "" {
 		return nil, nil
@@ -160,56 +159,66 @@ func (r *repository) Scan(ctx context.Context, limit int) ([]Job, error) {
 }
 
 func (r *repository) Replace(ctx context.Context, expected, job Job) error {
+	mutation, err := r.Replacement(ctx, expected, job)
+	if err != nil {
+		return err
+	}
+	if err := r.store.CompareAndSwap(ctx, mutation.Key, mutation.ExpectedValue, mutation.NewValue); err != nil {
+		return fmt.Errorf("jobs: replace record: %w", err)
+	}
+	return nil
+}
+
+// Replacement validates a job change for an atomic write with required settlement.
+// The caller must commit it against the same storage authority as this repository.
+func (r *repository) Replacement(ctx context.Context, expected, job Job) (storage.CompareAndSwapMutation, error) {
 	if expected.assetDigest != "" && (expected.assetDigest != job.assetDigest || expected.AssetKey != job.AssetKey || expected.AssetContentType != job.AssetContentType || expected.AssetBytes != job.AssetBytes || !expected.AssetExpiresAt.Equal(job.AssetExpiresAt) || (!expected.assetPending && job.assetPending)) {
-		return ErrInvalidJob
+		return storage.CompareAndSwapMutation{}, ErrInvalidJob
 	}
 	if !expected.AssetExpiredAt.IsZero() && !expected.AssetExpiredAt.Equal(job.AssetExpiredAt) {
-		return ErrInvalidJob
+		return storage.CompareAndSwapMutation{}, ErrInvalidJob
 	}
 	if !immutableAdministrator(expected, job) {
-		return ErrInvalidJob
+		return storage.CompareAndSwapMutation{}, ErrInvalidJob
 	}
 	if expected.nativeAssetBound != job.nativeAssetBound || expected.nativeRetention != job.nativeRetention || expected.Native != job.Native || expected.nativeReceiptKey != job.nativeReceiptKey || expected.nativeAssetKey != job.nativeAssetKey || !reflect.DeepEqual(expected.Valuation, job.Valuation) || (expected.Measurement != nil && !reflect.DeepEqual(expected.Measurement, job.Measurement)) {
-		return ErrInvalidJob
+		return storage.CompareAndSwapMutation{}, ErrInvalidJob
 	}
 	if expected.nativeAssetDigest != "" && (expected.nativeAssetDigest != job.nativeAssetDigest || expected.nativeAssetContentType != job.nativeAssetContentType) {
-		return ErrInvalidJob
+		return storage.CompareAndSwapMutation{}, ErrInvalidJob
 	}
 	if expected.SlotReleased && !job.SlotReleased {
-		return ErrInvalidJob
+		return storage.CompareAndSwapMutation{}, ErrInvalidJob
 	}
 	if expected.Account != job.Account || expected.ID != job.ID || expected.KeyID != job.KeyID || expected.Provider != job.Provider || expected.Model != job.Model || expected.Operation != job.Operation || !expected.CreatedAt.Equal(job.CreatedAt) {
-		return ErrInvalidJob
+		return storage.CompareAndSwapMutation{}, ErrInvalidJob
 	}
 	if expected.SlotID != job.SlotID || expected.CatalogGeneration != job.CatalogGeneration || expected.ReservationID != job.ReservationID {
-		return ErrInvalidJob
+		return storage.CompareAndSwapMutation{}, ErrInvalidJob
 	}
 	previous, err := encodeJob(expected)
 	if err != nil {
-		return err
+		return storage.CompareAndSwapMutation{}, err
 	}
 	data, err := encodeJob(job)
 	if err != nil {
-		return err
+		return storage.CompareAndSwapMutation{}, err
 	}
 	key := storageKey(job.Account, job.ID)
 	current, err := r.store.Get(ctx, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			return ErrJobNotFound
+			return storage.CompareAndSwapMutation{}, ErrJobNotFound
 		}
-		return fmt.Errorf("jobs: read record for replace: %w", err)
+		return storage.CompareAndSwapMutation{}, fmt.Errorf("jobs: read record for replace: %w", err)
 	}
 	if !bytes.Equal(current, previous) {
-		return storage.ErrConflict
+		return storage.CompareAndSwapMutation{}, storage.ErrConflict
 	}
 	if expected.State != job.State && !CanTransition(expected.State, job.State) {
-		return fmt.Errorf("%w: %q to %q", ErrIllegalTransition, expected.State, job.State)
+		return storage.CompareAndSwapMutation{}, fmt.Errorf("%w: %q to %q", ErrIllegalTransition, expected.State, job.State)
 	}
-	if err := r.store.CompareAndSwap(ctx, key, previous, data); err != nil {
-		return fmt.Errorf("jobs: replace record: %w", err)
-	}
-	return nil
+	return storage.CompareAndSwapMutation{Key: key, ExpectedValue: previous, NewValue: data}, nil
 }
 
 func (r *repository) Delete(ctx context.Context, account, id string) error {

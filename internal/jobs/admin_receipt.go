@@ -41,11 +41,10 @@ func (s *Service) retainAdministratorReceipt(ctx context.Context, job Job) (Job,
 			return job, err
 		}
 		if next.BillingConflict() {
-			if err := s.recordBillingConflict(ctx, next); err != nil {
-				return job, err
-			}
+			err = s.publishBillingConflict(ctx, job, next)
+		} else {
+			err = s.records.Replace(ctx, job, next)
 		}
-		err := s.records.Replace(ctx, job, next)
 		if err == nil {
 			job = next
 			continue
