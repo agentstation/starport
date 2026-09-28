@@ -267,7 +267,8 @@ Prepared line files retain their original expiry. Internal checkpoints do not ap
 The storage bound counts checkpoints and aggregate files while both exist. File scans continue beyond the first page.
 Automatic interrupted-run recovery, aggregate reconstruction, and early checkpoint cleanup remain incomplete in this candidate.
 
-Prepared-output retirement also needs a backend fence against delayed publication. Full recovery qualification remains open.
+File cleanup now confirms permanent retirement before it releases metadata or quota.
+A delayed writer cannot replace a retired identity. Full batch recovery qualification remains open.
 
 The console account picker remains incomplete in this candidate.
 API clients must supply the selection header when the grants name multiple accounts.
@@ -1344,7 +1345,7 @@ file to make room. A stored-byte bound is a level and not a rate: an upload
 raises it and a delete lowers it, and no interval resets it.
 
 Each file has a durable byte claim in the same KV store as its metadata.
-Cleanup releases that claim once, after deleting the bytes. Concurrent cleanup
+Cleanup releases that claim once, after the blob backend confirms retirement. Concurrent cleanup
 and lost acknowledgments cannot release another file's capacity. A failed
 release keeps the deleting record for the next sweep.
 
@@ -1353,8 +1354,30 @@ closes its unattached claim. Attached files follow normal file retention.
 Missing or invalid accounting state refuses new uploads. Do not delete quota
 keys to restore capacity.
 
-File schema 3 and byte-accounting schema 2 require
+File schema 4 and byte-accounting schema 2 require
 coordinated migration. CSP13 owns that qualification.
+
+File bytes use immutable publication in the `retained-v1` blob namespace.
+An exact retry verifies existing content. Cleanup replaces live content with a
+permanent retirement marker, including when no content exists yet. A lost
+retirement acknowledgment retains the file record and byte claim for recovery.
+Each cleanup pass handles at most 256 records and preserves its continuation.
+
+Include retirement markers in backups. Do not apply object expiration or manual
+deletion to current objects in `retained-v1`. Removing a marker can allow an old
+writer to recreate content.
+
+File payload quotas exclude marker overhead,
+filesystem staging, incomplete multipart uploads, and noncurrent object versions.
+Budget and monitor these backend costs separately. CSP13 owns marker reclamation.
+A time limit alone does not prove that an old writer cannot resume.
+
+The shared backend requires conditional creation on both `PutObject` and
+`CompleteMultipartUpload`. It uses a real retirement object because an S3 delete
+marker permits conditional creation. Local tests cover a versioned MinIO bucket.
+Other S3 services, native platform behavior, staging recovery, and the complete
+shared-storage production recipe still require qualification for this candidate.
+
 
 ### Choosing a backend
 

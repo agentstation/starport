@@ -27,8 +27,11 @@ const objectStoreBackend = "objectstore"
 // ObjectStoreOptions addresses one S3-compatible bucket.
 //
 // One client reaches AWS S3, Cloudflare R2, MinIO, and Backblaze B2, because
-// each of them serves the same API. Endpoint selects the implementation, and
-// an absent Endpoint selects AWS itself.
+// Endpoint selects the implementation; an absent Endpoint selects AWS.
+// Immutable publication additionally requires verified conditional creation
+// on PutObject and CompleteMultipartUpload. API compatibility alone does not
+// qualify that concurrency contract. Retained objects require lifecycle rules
+// that preserve current retirement markers.
 type ObjectStoreOptions struct {
 	Bucket   string
 	Region   string

@@ -21,7 +21,7 @@ type synchronizedDeletes struct {
 	ready chan struct{}
 }
 
-func (b *synchronizedDeletes) Delete(ctx context.Context, key string) error {
+func (b *synchronizedDeletes) Retire(ctx context.Context, key string) error {
 	if b.calls.Add(1) == 2 {
 		close(b.ready)
 	}
@@ -30,7 +30,7 @@ func (b *synchronizedDeletes) Delete(ctx context.Context, key string) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	return b.Store.Delete(ctx, key)
+	return b.Store.Retire(ctx, key)
 }
 func TestConcurrentFileRetirementPreservesOtherStoredBytes(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {

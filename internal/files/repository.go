@@ -15,7 +15,7 @@ import (
 
 const (
 	// StorageSchemaVersion identifies the only file record schema.
-	StorageSchemaVersion = 3
+	StorageSchemaVersion = 4
 	// StoragePrefix is the file record v1 namespace.
 	StoragePrefix = "files:v1:account:"
 

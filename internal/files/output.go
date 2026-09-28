@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -89,7 +90,10 @@ func (s *Service) CommitOutput(ctx context.Context, account, id string, size int
 		}
 	}
 	verified := &outputReader{reader: content, hash: sha256.New(), remaining: size, digest: digest}
-	info, err := s.blobs.Put(ctx, file.blobKey, verified)
+	info, err := s.blobs.Publish(ctx, file.blobKey, verified)
+	if errors.Is(err, blob.ErrPublicationExists) {
+		return s.RecoverOutput(ctx, account, id)
+	}
 	if err != nil {
 		return File{}, err
 	}
@@ -146,7 +150,7 @@ func (s *Service) RecoverOutput(ctx context.Context, account, id string) (File, 
 	if file.outputDigest == "" {
 		return File{}, ErrOutputIncomplete
 	}
-	reader, err := s.blobs.Get(ctx, file.blobKey)
+	reader, err := s.blobs.ReadPublished(ctx, file.blobKey)
 	if err != nil {
 		return File{}, errors.Join(ErrOutputIncomplete, err)
 	}

@@ -28,8 +28,8 @@ type lostOutputAck struct {
 	fail bool
 }
 
-func (b *lostOutputAck) Put(ctx context.Context, key string, r io.Reader) (blob.Info, error) {
-	info, err := b.Store.Put(ctx, key, r)
+func (b *lostOutputAck) Publish(ctx context.Context, key string, r io.Reader) (blob.Info, error) {
+	info, err := b.Store.Publish(ctx, key, r)
 	if err == nil && b.fail {
 		b.fail = false
 		return blob.Info{}, context.DeadlineExceeded

@@ -230,7 +230,7 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest, r io.Reader
 		return File{}, err
 	}
 
-	info, putErr := s.blobs.Put(ctx, pending.blobKey, r)
+	info, putErr := s.blobs.Publish(ctx, pending.blobKey, r)
 	if putErr != nil {
 		// The record is the only thing that names the bytes, so it goes last
 		// and comes back first. A failure here leaves the record for the
@@ -325,7 +325,7 @@ func (s *Service) Open(ctx context.Context, account, id string) (File, io.ReadCl
 	if err != nil {
 		return File{}, nil, err
 	}
-	reader, err := s.blobs.Get(ctx, file.blobKey)
+	reader, err := s.blobs.ReadPublished(ctx, file.blobKey)
 	if err != nil {
 		if errors.Is(err, blob.ErrNotFound) {
 			// The record outlived its bytes. A caller asked for a file that no
@@ -438,6 +438,7 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 	now := s.now().UTC()
 	abandonedBefore := now.Add(-s.pendingGrace)
 	var result SweepResult
+	processed := 0
 	for {
 		if err := ctx.Err(); err != nil {
 			return result, errors.Join(failures, err)
@@ -469,6 +470,12 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 			}
 			s.sweepPending[0] = File{}
 			s.sweepPending = s.sweepPending[1:]
+			processed++
+			// Bound durable writes per pass as well as elapsed time. Preserve the
+			// current page so the next call continues before loading another page.
+			if processed == 256 {
+				return result, failures
+			}
 		}
 		s.sweepCursor, s.sweepLoaded, s.sweepPending = s.sweepNext, false, nil
 		if s.sweepCursor == "" {
@@ -494,8 +501,8 @@ func (s *Service) sweepReason(file File, now, abandonedBefore time.Time, result 
 			return nil
 		}
 		if file.CreatedAt.After(abandonedBefore) {
-			// A live upload looks exactly like an abandoned one. Only time
-			// separates them, and the grace window is that time.
+			// Grace bounds how long an upload can remain pending. Retirement
+			// fences a delayed writer before its byte claim is released.
 			return nil
 		}
 		return &result.Abandoned
@@ -509,14 +516,10 @@ func (s *Service) sweepReason(file File, now, abandonedBefore time.Time, result 
 	}
 }
 
-// remove deletes the bytes and then the record.
-//
-// A missing object is not a failure here. Both shipped backends already treat
-// a delete of an absent object as done, and the guard states the rule for any
-// backend that does not: the record is what makes a file reachable, so a
-// second pass over a half-finished delete has to get to the record.
+// remove durably fences delayed publication before releasing quota and metadata.
+// A retirement error retains both, even when the object appears absent.
 func (s *Service) remove(ctx context.Context, file File) error {
-	if err := s.blobs.Delete(ctx, file.blobKey); err != nil && !errors.Is(err, blob.ErrNotFound) {
+	if err := s.blobs.Retire(ctx, file.blobKey); err != nil {
 		return fmt.Errorf("files: delete the bytes: %w", err)
 	}
 	if file.metered {

@@ -43,6 +43,8 @@ type Info struct {
 // Every method takes a context and honors its cancellation. A backend that
 // reaches a network respects the deadline the caller sets.
 type Store interface {
+	PublicationStore
+
 	// Put stores the bytes the reader yields at the key. It reads until the
 	// reader reports io.EOF.
 	//

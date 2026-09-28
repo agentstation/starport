@@ -108,7 +108,7 @@ func TestCrashBeforeTheCommitLeavesNoReachableFile(t *testing.T) {
 		CreatedAt: created, blobKey: blobKey,
 	}
 	require.NoError(t, records.Create(ctx, pending))
-	_, err := bytes.Put(ctx, blobKey, strings.NewReader("the payload"))
+	_, err := bytes.Publish(ctx, blobKey, strings.NewReader("the payload"))
 	require.NoError(t, err)
 
 	// No caller can reach it, through either the record or a listing.
@@ -124,7 +124,7 @@ func TestCrashBeforeTheCommitLeavesNoReachableFile(t *testing.T) {
 	result, err := service.Sweep(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 0, result.Abandoned)
-	_, err = bytes.Stat(ctx, blobKey)
+	_, err = bytes.StatPublished(ctx, blobKey)
 	require.NoError(t, err)
 
 	// Past the window the sweep deletes the bytes the pending record names,
@@ -134,7 +134,7 @@ func TestCrashBeforeTheCommitLeavesNoReachableFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Abandoned)
 
-	_, err = bytes.Stat(ctx, blobKey)
+	_, err = bytes.StatPublished(ctx, blobKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
 	_, err = records.Get(ctx, "account-a", pending.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
@@ -265,7 +265,7 @@ func TestDeleteRemovesBothWrites(t *testing.T) {
 
 	_, err := records.Get(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
-	_, err = bytes.Stat(ctx, blobKey)
+	_, err = bytes.StatPublished(ctx, blobKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
 }
 
@@ -278,7 +278,7 @@ func TestOpenReportsNotFoundWhenTheBytesAreGone(t *testing.T) {
 	ctx := context.Background()
 
 	file := upload(t, service, "account-a", "notes.txt", "the payload")
-	require.NoError(t, bytes.Delete(ctx, file.blobKey))
+	require.NoError(t, bytes.Retire(ctx, file.blobKey))
 
 	_, _, err := service.Open(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)

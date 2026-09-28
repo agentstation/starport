@@ -135,7 +135,16 @@ func TestTheClaimSettlesAgainstTheRealSize(t *testing.T) {
 	}, strings.NewReader(payload))
 	require.ErrorIs(t, err, errStorageFull)
 	require.Equal(t, int64(0), storedTotal(t, meter, "account-a"))
-	require.Equal(t, 0, countObjects(t, root), "the refused upload left its bytes behind")
+	require.Equal(t, 1, countObjects(t, root), "retirement must retain exactly one marker")
+	require.NoError(t, filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		require.Equal(t, "SPBLOB1R", string(data), "the refused upload retained payload bytes")
+		return nil
+	}))
 
 	// Overstated: the claim falls to the real size, so the account does not hold
 	// room it never used.
@@ -237,6 +246,6 @@ type failingPut struct {
 	blob.Store
 }
 
-func (s *failingPut) Put(context.Context, string, io.Reader) (blob.Info, error) {
+func (s *failingPut) Publish(context.Context, string, io.Reader) (blob.Info, error) {
 	return blob.Info{}, os.ErrPermission
 }
