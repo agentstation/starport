@@ -173,10 +173,7 @@ func (r *Registry) Register(provider string, connector connectors.Connector) err
 	}
 	generation.catalog = r.catalog
 	if r.catalog != nil {
-		generation.snapshot = r.catalog.Current()
-		if generation.snapshot != nil {
-			generation.catalogGenerationID = generation.snapshot.GenerationID()
-		}
+		generation.bindSnapshot(r.catalog.Current())
 	}
 	// Register is a construction-only API. The new generation reuses prior
 	// connectors, so it replaces the unpublished construction view without

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -36,7 +37,10 @@ import (
 type budgetOperationCounts struct {
 	reads, clocks, writes atomic.Int64
 	queries, approvals    atomic.Int64
+	backgroundQueries     atomic.Int64
 }
+
+type budgetMeasuredRequest struct{}
 
 type budgetOperationSample struct {
 	KVReads      int64 `json:"budget_read_eval"`
@@ -55,6 +59,10 @@ func (s budgetOperationSample) since(previous budgetOperationSample) budgetOpera
 }
 
 func (c *budgetOperationCounts) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	if ctx.Value(budgetMeasuredRequest{}) != c {
+		c.backgroundQueries.Add(1)
+		return ctx
+	}
 	c.queries.Add(1)
 	if strings.Contains(data.SQL, "FROM catalog_recovery") {
 		c.approvals.Add(1)
@@ -153,7 +161,8 @@ func TestProductionBudgetBackendOperations(t *testing.T) {
 	}
 	var counts budgetOperationCounts
 	var calls atomic.Int64
-	atDispatch := make(chan budgetOperationSample, 2)
+	samples := budgetMeasurementCount(t)
+	atDispatch := make(chan budgetDispatchObservation, 2)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer sk-test-key" {
 			t.Error("unexpected provider destination or credential")
@@ -161,7 +170,7 @@ func TestProductionBudgetBackendOperations(t *testing.T) {
 			return
 		}
 		calls.Add(1)
-		atDispatch <- counts.sample()
+		atDispatch <- budgetDispatchObservation{At: time.Now(), Operations: counts.sample()}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"id":"operation-fixture","object":"chat.completion","model":"gpt-4o-mini","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11,"prompt_tokens_details":{"cached_tokens":0}}}`)
 	}))
@@ -223,30 +232,57 @@ func TestProductionBudgetBackendOperations(t *testing.T) {
 	key.Hash = hex.EncodeToString(digest[:])
 	_, err = deps.APIKeys.Create(t.Context(), key)
 	require.NoError(t, err)
-	gateway := httptest.NewServer(application.httpServer.(*server.Server).Router())
+	handler := application.httpServer.(*server.Server).Router()
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), budgetMeasuredRequest{}, &counts)
+		handler.ServeHTTP(w, r.WithContext(ctx))
+	}))
 	t.Cleanup(gateway.Close)
 	fixture := &performanceFixture{application: application, gateway: gateway, client: &http.Client{Timeout: 15 * time.Second}}
 	require.Equal(t, http.StatusOK, budgetDispatch(t, fixture))
 	<-atDispatch // Populate permission and pricing state before the measured request.
-	before := counts.sample()
-	require.Equal(t, http.StatusOK, budgetDispatch(t, fixture))
-	admitted := <-atDispatch
-	finished := counts.sample()
-	admission, settlement := admitted.since(before), finished.since(admitted)
-	require.Positive(t, admission.KVReads)
-	require.Positive(t, admission.KVClocks)
-	require.Positive(t, admission.KVWrites)
-	require.Positive(t, settlement.KVReads)
-	require.Positive(t, settlement.KVWrites)
-	require.Equal(t, 2*admission.KVWrites, admission.SQLApprovals, "each budget write checks independent approval before and after its native transaction")
-	require.Equal(t, 2*settlement.KVWrites, settlement.SQLApprovals)
-	require.Equal(t, admission.SQLApprovals, admission.SQLQueries, "warm admission must not reload unrelated SQL state")
-	require.Equal(t, settlement.SQLApprovals, settlement.SQLQueries)
-	require.LessOrEqual(t, finished.since(before).KVReads, int64(5), "group meter and history reads within each atomic attempt")
-	require.EqualValues(t, 2, calls.Load())
-	attempts, err := application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", 100)
+	measurements := make([]budgetTimingSample, 0, samples)
+	var memoryBefore, memoryAfter runtime.MemStats
+	profile := os.Getenv("STARPORT_BUDGET_PROFILE_REPORT") != ""
+	if profile {
+		runtime.ReadMemStats(&memoryBefore)
+	}
+	var admission, settlement, total budgetOperationSample
+	backgroundBefore := counts.backgroundQueries.Load()
+	for range samples {
+		before := counts.sample()
+		started := time.Now()
+		status, body, err := budgetRequest(t.Context(), fixture)
+		finishedAt := time.Now()
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status, body)
+		admitted := <-atDispatch
+		finished := counts.sample()
+		admission, settlement, total = admitted.Operations.since(before), finished.since(admitted.Operations), finished.since(before)
+		require.Positive(t, admission.KVReads)
+		require.Positive(t, admission.KVClocks)
+		require.Positive(t, admission.KVWrites)
+		require.Positive(t, settlement.KVReads)
+		require.Positive(t, settlement.KVWrites)
+		require.Equal(t, 2*admission.KVWrites, admission.SQLApprovals, "each budget write checks independent approval before and after its native transaction")
+		require.Equal(t, 2*settlement.KVWrites, settlement.SQLApprovals)
+		require.Equal(t, admission.SQLApprovals, admission.SQLQueries, "warm admission must not reload unrelated SQL state")
+		require.Equal(t, settlement.SQLApprovals, settlement.SQLQueries)
+		require.LessOrEqual(t, total.KVReads, int64(5), "group meter and history reads within each atomic attempt")
+		measurements = append(measurements, budgetTimingSample{
+			BeforeProviderNS: admitted.At.Sub(started).Nanoseconds(), ResponseNS: finishedAt.Sub(started).Nanoseconds(),
+			Admission: admission, Settlement: settlement,
+		})
+	}
+	if profile {
+		runtime.ReadMemStats(&memoryAfter)
+	}
+	backgroundQueries := counts.backgroundQueries.Load() - backgroundBefore
+	requests := samples + 1
+	require.EqualValues(t, requests, calls.Load())
+	attempts, err := application.store.ScanWithPrefix(t.Context(), "budget:v1:attempt:", requests+1)
 	require.NoError(t, err)
-	require.Len(t, attempts, 2)
+	require.Len(t, attempts, requests)
 	for _, key := range attempts {
 		data, err := application.store.Get(t.Context(), key)
 		require.NoError(t, err)
@@ -260,13 +296,18 @@ func TestProductionBudgetBackendOperations(t *testing.T) {
 			require.NoError(t, err)
 			require.Zero(t, window.Reserved)
 			if binding.Rule.Meter.Dimension == limits.DimensionTokens {
-				require.EqualValues(t, 22, window.Consumed)
+				require.EqualValues(t, requests*11, window.Consumed)
 			} else {
-				require.Equal(t, 2**record.NanoUSD, window.Consumed)
+				require.Equal(t, int64(requests)**record.NanoUSD, window.Consumed)
 			}
 		}
 	}
-	evidence, err := json.Marshal(map[string]budgetOperationSample{"warm_admission": admission, "settlement": settlement, "total": finished.since(before)})
+	evidence, err := json.Marshal(map[string]budgetOperationSample{"warm_admission": admission, "settlement": settlement, "total": total})
 	require.NoError(t, err)
 	t.Logf("BUDGET_BACKEND_OPERATIONS %s", evidence)
+	writeBudgetMeasurement(t, application, measurements, requests, backgroundQueries, budgetProcessMemory{
+		AllocatedBytes: memoryAfter.TotalAlloc - memoryBefore.TotalAlloc,
+		Allocations:    memoryAfter.Mallocs - memoryBefore.Mallocs,
+		HeapBefore:     memoryBefore.HeapAlloc, HeapAfter: memoryAfter.HeapAlloc,
+	})
 }
