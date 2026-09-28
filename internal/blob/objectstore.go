@@ -47,7 +47,8 @@ type ObjectStoreOptions struct {
 // ObjectStore stores objects in an S3-compatible bucket. It serves every node
 // of a deployment, which the filesystem backend cannot.
 type ObjectStore struct {
-	client *s3.Client
+	readiness publicationReadiness
+	client    *s3.Client
 	//nolint:staticcheck // See the import comment.
 	uploader *manager.Uploader
 	bucket   string

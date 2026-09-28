@@ -29,6 +29,9 @@ func (s *Service) PrepareOutput(ctx context.Context, account, identity, name str
 	if strings.TrimSpace(account) == "" || strings.TrimSpace(identity) == "" || len(identity) > 512 || bound < 0 {
 		return File{}, ErrInvalidFile
 	}
+	if err := s.blobs.EnsurePublicationReady(ctx); err != nil {
+		return File{}, err
+	}
 	ctx, cancel := context.WithTimeout(ctx, outputWriteTimeout)
 	defer cancel()
 	sum := sha256.Sum256([]byte(account + "\x00" + identity))

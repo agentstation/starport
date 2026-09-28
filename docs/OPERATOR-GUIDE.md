@@ -1378,6 +1378,29 @@ marker permits conditional creation. Local tests cover a versioned MinIO bucket.
 Other S3 services, native platform behavior, staging recovery, and the complete
 shared-storage production recipe still require qualification for this candidate.
 
+Before new file allocation or video dispatch, Starport checks byte-publication
+capability. An object-store client runs one bounded probe before accepting this
+work. The probe checks single-part and multipart creation, retained content,
+and refusal to replace retirement markers. The constructor does not probe the
+bucket. General gateway readiness and unrelated text requests remain independent.
+
+Successful checks stay in process memory for that configured client. Concurrent
+first requests share the probe. Failed checks refuse affected requests and permit
+a later retry after one second. File and video responses return HTTP 503 with a
+storage-capability message. Logs retain the underlying cause.
+
+Repair endpoint
+permissions or conditional-write support before retrying. Restart after changing
+backend semantics so the client checks them again.
+
+The probe writes small objects and retains up to four identities per attempt.
+Preserve their retirement markers. Configure incomplete-multipart-upload cleanup
+for interrupted probes. The probe uses a small final part, which has no minimum
+size under the S3 multipart contract. See [Amazon S3 limits](https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html).
+A successful probe does not qualify physical erasure, backups, every server
+behind a load balancer, or future storage availability.
+
+
 
 ### Choosing a backend
 

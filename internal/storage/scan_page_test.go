@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starport/internal/repotest"
 	"github.com/agentstation/starport/internal/storage"
@@ -21,8 +22,12 @@ func TestScanPagesPreserveEveryKeyAndLiteralPrefix(t *testing.T) {
 		seen := map[string]bool{}
 		cursor := ""
 		complete := false
-		for range 1000 {
-			page, err := store.ScanPage(t.Context(), prefix, cursor, 7)
+		// Valkey scans the whole database before filtering this namespace.
+		// Bound elapsed time without assuming a fixed number of cursor steps.
+		ctx, cancelScan := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancelScan()
+		for {
+			page, err := store.ScanPage(ctx, prefix, cursor, 7)
 			require.NoError(t, err)
 			for _, key := range page.Keys {
 				require.True(t, strings.HasPrefix(key, prefix), key)
@@ -40,9 +45,9 @@ func TestScanPagesPreserveEveryKeyAndLiteralPrefix(t *testing.T) {
 		require.ErrorIs(t, err, storage.ErrInvalidScan)
 		_, err = store.ScanPage(t.Context(), prefix, "invalid cursor!", 7)
 		require.ErrorIs(t, err, storage.ErrInvalidScan)
-		ctx, cancel := context.WithCancel(t.Context())
+		canceled, cancel := context.WithCancel(t.Context())
 		cancel()
-		_, err = store.ScanPage(ctx, prefix, "", 7)
+		_, err = store.ScanPage(canceled, prefix, "", 7)
 		require.ErrorIs(t, err, context.Canceled)
 	})
 }

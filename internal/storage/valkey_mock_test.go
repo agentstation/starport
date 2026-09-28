@@ -134,7 +134,7 @@ func TestValkeyStoreWithMock(t *testing.T) {
 		pattern := "test:*"
 
 		// Scan - first call
-		client.EXPECT().Do(boundedCommandContext(), mock.Match("SCAN", "0", "MATCH", pattern, "COUNT", "100")).Return(
+		client.EXPECT().Do(boundedCommandContext(), mock.Match("SCAN", "0", "MATCH", pattern, "COUNT", "1000")).Return(
 			mock.Result(mock.ValkeyArray(
 				mock.ValkeyString("5"), // next cursor
 				mock.ValkeyArray(
@@ -145,7 +145,7 @@ func TestValkeyStoreWithMock(t *testing.T) {
 			)),
 		)
 		// Scan - second call
-		client.EXPECT().Do(boundedCommandContext(), mock.Match("SCAN", "5", "MATCH", pattern, "COUNT", "100")).Return(
+		client.EXPECT().Do(boundedCommandContext(), mock.Match("SCAN", "5", "MATCH", pattern, "COUNT", "1000")).Return(
 			mock.Result(mock.ValkeyArray(
 				mock.ValkeyString("0"), // cursor 0 means done
 				mock.ValkeyArray(
@@ -161,7 +161,7 @@ func TestValkeyStoreWithMock(t *testing.T) {
 
 		// ScanWithPrefix
 		prefix := "prefix:"
-		client.EXPECT().Do(boundedCommandContext(), mock.Match("SCAN", "0", "MATCH", prefix+"*", "COUNT", "10")).Return(
+		client.EXPECT().Do(boundedCommandContext(), mock.Match("SCAN", "0", "MATCH", prefix+"*", "COUNT", "1000")).Return(
 			mock.Result(mock.ValkeyArray(
 				mock.ValkeyString("0"),
 				mock.ValkeyArray(

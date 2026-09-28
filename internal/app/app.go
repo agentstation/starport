@@ -346,7 +346,7 @@ func (b *runtimeBuilder) openBlob() error {
 		event = event.Str("bucket", b.config.Files.ObjectStore.Bucket).
 			Str("prefix", b.config.Files.ObjectStore.Prefix)
 	}
-	event.Msg("file byte storage ready")
+	event.Msg("file byte storage configured")
 	return nil
 }
 

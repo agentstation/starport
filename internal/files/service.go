@@ -226,6 +226,9 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest, r io.Reader
 	if err := pending.Validate(); err != nil {
 		return File{}, err
 	}
+	if err := s.blobs.EnsurePublicationReady(ctx); err != nil {
+		return File{}, err
+	}
 	if err := s.prepare(ctx, pending, request.StoredBytesBound); err != nil {
 		return File{}, err
 	}

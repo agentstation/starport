@@ -101,6 +101,11 @@ func (r *submissionRecorder) BeforeDispatch(ctx context.Context, dispatch Dispat
 		job.nativeReceiptKey, job.nativeAssetKey = newAssetKey(), newAssetKey()
 		job.nativeAssetBound, job.nativeRetention = r.service.maxAssetBytes, r.service.retention
 	}
+	if r.service.assets != nil {
+		if err := r.service.assets.EnsurePublicationReady(ctx); err != nil {
+			return err
+		}
+	}
 	if err := r.service.bindReservation(ctx, job); err != nil {
 		return err
 	}

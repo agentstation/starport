@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/agentstation/starport/internal/account"
+	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
@@ -381,6 +382,9 @@ func (h *VideosController) writeJobError(
 		return
 	}
 	switch {
+	case errors.Is(err, blob.ErrPublicationUnavailable):
+		h.logError(ctx, err, "video publication readiness failed")
+		h.writeVideoStatus(w, http.StatusServiceUnavailable, errorTypeServiceUnavailable, "Video storage capability is unverified. Check conditional publication support and retry.")
 	case errors.Is(err, jobs.ErrJobNotFound):
 		// A job another account owns reads the same way as one that never
 		// existed. Any other answer would report that the identifier is real,

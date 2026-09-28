@@ -29,8 +29,7 @@ func (o *ObjectStore) Publish(ctx context.Context, key string, r io.Reader) (Inf
 		IfNoneMatch: aws.String("*"), Metadata: map[string]string{"starport-retained": "live-v1"},
 	})
 	if err != nil {
-		var response *smithyhttp.ResponseError
-		if errors.As(err, &response) && response.HTTPStatusCode() == http.StatusPreconditionFailed {
+		if isPublicationConflict(err) {
 			return Info{}, ErrPublicationExists
 		}
 		return Info{}, uploadError(err)
@@ -101,4 +100,9 @@ func (o *ObjectStore) StatPublished(ctx context.Context, key string) (Info, erro
 		}
 	}
 	return Info{}, ErrCorruptPublication
+}
+
+func isPublicationConflict(err error) bool {
+	var response *smithyhttp.ResponseError
+	return errors.As(err, &response) && response.HTTPStatusCode() == http.StatusPreconditionFailed
 }

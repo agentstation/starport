@@ -25,6 +25,8 @@ const (
 // must not remove them while an earlier writer can resume. Payload quota does
 // not include these markers. Operators must budget for their retained storage.
 type PublicationStore interface {
+	// EnsurePublicationReady checks capability before new work needs durable bytes.
+	EnsurePublicationReady(context.Context) error
 	// Publish creates a complete object only under an unused identity.
 	// Publish never replaces existing live bytes or retirement markers.
 	Publish(context.Context, string, io.Reader) (Info, error)
