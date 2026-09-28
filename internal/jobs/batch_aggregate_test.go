@@ -68,6 +68,8 @@ func TestBatchAggregateRecoversLostPublicationWithoutReplay(t *testing.T) {
 			b, e := records.Get(t.Context(), "a", batch.ID)
 			return e == nil && b.State == jobs.JobStateFailed
 		}, 5*time.Second, 5*time.Millisecond)
+		// Restart recovery begins after the old worker releases its dependencies.
+		require.NoError(t, service.Close(t.Context()))
 		all, err := fileRecords.List(t.Context(), "a", 100)
 		require.NoError(t, err)
 		var original string
@@ -162,11 +164,16 @@ func retainedBatch(t *testing.T, kv storage.KVStore) (jobs.BatchRepository, *fil
 
 func retainedBatchAt(t *testing.T, kv storage.KVStore, root string, options ...files.Option) (jobs.BatchRepository, *files.Service, *storedbytes.StorageMeter, fileio.Store, jobs.Batch) {
 	t.Helper()
+	b, err := blob.NewFilesystem(root)
+	require.NoError(t, err)
+	return retainedBatchOn(t, kv, b, options...)
+}
+
+func retainedBatchOn(t *testing.T, kv storage.KVStore, b blob.Store, options ...files.Option) (jobs.BatchRepository, *files.Service, *storedbytes.StorageMeter, fileio.Store, jobs.Batch) {
+	t.Helper()
 	r, err := jobs.OpenBatchRepository(kv)
 	require.NoError(t, err)
 	fr, err := files.OpenRepository(kv)
-	require.NoError(t, err)
-	b, err := blob.NewFilesystem(root)
 	require.NoError(t, err)
 	meter, err := storedbytes.NewStorageMeter(kv)
 	require.NoError(t, err)
