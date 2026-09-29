@@ -231,3 +231,45 @@ These roles require their own recovery procedures. The command refuses unsupport
 The operation preserves accepted provider choices and the legacy default without resolving or using provider credentials.
 KV, SQL, and blob import barriers remain closed.
 File publication does not establish independent history, approve replica reuse, or permit inference.
+
+## Target configuration and local administrator access
+
+Keep the gateways stopped and all restore barriers closed during these steps.
+Select the target configuration and environment files explicitly before preparation.
+Keep current target storage endpoints, secret-manager references, and trust roots.
+Use the captured configuration as evidence for comparison. Do not copy its paths or credentials over the target configuration.
+Renew TLS keys and certificates through the deployment certificate procedure when necessary.
+
+Run these commands with the target service account and its path-selection environment:
+
+```sh
+starport config validate --json
+starport config paths --files --inspect --json
+starport auth status --json
+```
+
+Verify that the administrator token path in both reports names the intended target file.
+Resolve a mismatch before any credential write. Neither configuration validation nor filesystem inspection verifies remote trust or service reachability.
+The complete preparation and owner checks remain required.
+
+After preparation, keep the captured `local-token` and `local-token-lock` files in inactive recovery storage.
+Create a fresh target administrator credential through its owner:
+
+```sh
+starport auth rotate --no-secret --json
+starport auth status --json
+```
+
+The first command writes a new secret and reports its path, generation, and rotation time without printing it.
+It can create a credential when the target file is absent. It does not read the captured token or open recovery barriers.
+The old token and its signed console sessions do not authenticate against the new token.
+A running gateway retains its old in-memory token until restart. External fencing must therefore remain in place.
+
+Rotation is not an idempotent restore operation. Each successful call replaces the secret again.
+If output fails after rotation, inspect status before choosing whether to rotate again.
+Record the target token path, generation, and rotation time with the recovery incident. Do not record the secret.
+An exact preparation retry preserves the fresh target token and the inactive captured files.
+
+Repeat this procedure for each target replica with its own local token path.
+This step does not recover gateway API keys, provider credentials, or SSO account grants.
+Independent history reconciliation and controlled activation remain required before any gateway starts.

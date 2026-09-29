@@ -124,7 +124,10 @@ func newAuthCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.
 	}
 	rotate := &urfavecli.Command{
 		Name: "rotate", Usage: "Replace the local admin token with a new secret",
-		OnUsageError: usageError, Flags: []urfavecli.Flag{jsonFlag()},
+		OnUsageError: usageError, Flags: []urfavecli.Flag{
+			jsonFlag(),
+			&urfavecli.BoolFlag{Name: "no-secret", Usage: "Report rotation metadata without printing the secret"},
+		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
 			if err := rejectArguments(cmd); err != nil {
 				return err
@@ -137,8 +140,14 @@ func newAuthCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.
 			if err != nil {
 				return runtimeFailure{cause: err}
 			}
-			if err := writeAuthRotation(cmd.Writer, rotated, store.Path(), cmd.Bool(authFormatJSON)); err != nil {
-				return runtimeFailure{cause: fmt.Errorf("write the rotated local admin token: %w", err)}
+			var outputErr error
+			if cmd.Bool("no-secret") {
+				outputErr = writeAuthRotationMetadata(cmd.Writer, rotated, store.Path(), cmd.Bool(authFormatJSON))
+			} else {
+				outputErr = writeAuthRotation(cmd.Writer, rotated, store.Path(), cmd.Bool(authFormatJSON))
+			}
+			if outputErr != nil {
+				return runtimeFailure{cause: fmt.Errorf("write the rotated local admin token: %w", outputErr)}
 			}
 			return nil
 		},
