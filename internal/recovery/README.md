@@ -102,6 +102,23 @@ Recovery must reconcile permission withdrawals, acknowledged spending, and uncer
 Unknown history keeps affected access restricted.
 Restoring the SQL witness cannot restore permission to approve itself.
 
+### Catalog preparation before activation
+
+`catalog.PrepareFleetAdoption` validates and selects recovered catalog publications while the SQL recovery gate remains closed.
+It preserves publication contents and binds the selected heads to the replacement backend and epoch.
+An exact retry validates the retained preparation receipt.
+A changed operation, changed SQL boundary, or damaged publication causes refusal.
+An already open recovery gate also causes refusal.
+
+SQL restore clears the previous backend identity from its closed boundary.
+Catalog preparation accepts that closed boundary while requiring explicit source approval and a replacement backend identity.
+Ordinary catalog startup and budget authority remain unavailable until separate approval.
+
+`catalog.AdoptFleet` retains its complete catalog-only procedure and opens authority after catalog validation.
+Full deployment recovery must first reconcile independent history and activate the other storage components.
+Neither catalog operation releases SQL, KV, or blob import barriers.
+The complete activation command and its independent-history procedure remain required.
+
 ## Capture commands
 
 ### Unprefixed Valkey records

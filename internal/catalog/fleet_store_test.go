@@ -46,6 +46,12 @@ func fleetTestStores(t *testing.T) (storage.KVStore, *recovery.Witness, *sqlstor
 
 func fleetTestStore(t *testing.T) (*FleetStore, storage.KVStore, *recovery.Witness) {
 	t.Helper()
+	fleet, kv, witness, _ := fleetTestStoreWithSQL(t)
+	return fleet, kv, witness
+}
+
+func fleetTestStoreWithSQL(t *testing.T) (*FleetStore, storage.KVStore, *recovery.Witness, *sqlstore.DB) {
+	t.Helper()
 	kv, witness, db := fleetTestStores(t)
 	provider := kv.(storage.IncarnationProvider)
 	deployment := "fleet-test-" + rand.Text()
@@ -71,7 +77,7 @@ func fleetTestStore(t *testing.T) (*FleetStore, storage.KVStore, *recovery.Witne
 		require.NoError(t, err)
 		require.NoError(t, kv.BatchDelete(ctx, keys))
 	})
-	return fleet, kv, witness
+	return fleet, kv, witness, db
 }
 
 func fleetTestPublication(t *testing.T, grant runtime.Lease, previous runtime.FleetHead, name string) runtime.FleetPublication {

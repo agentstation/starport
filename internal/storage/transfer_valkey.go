@@ -35,6 +35,9 @@ return redis.call('SCAN', ARGV[2], 'MATCH', ARGV[3], 'COUNT', 256)`
 			if !ok || len(key) == 0 || len(key) > TransferMaxKeyBytes {
 				return ErrInvalidKey
 			}
+			if key == transferActivationCurrent {
+				continue
+			}
 			record, err := v.read(ctx, key)
 			if errors.Is(err, ErrNotFound) {
 				continue
@@ -95,6 +98,13 @@ func (v *valkeyTransfer) Claim(ctx context.Context, claim []byte) error {
 	if err := validateTransferClaim(claim); err != nil {
 		return err
 	}
+	_, _, err := v.bound.ReadWithLifetime(ctx, transferActivationCurrent, 256)
+	if err == nil {
+		return ErrConflict
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return err
+	}
 	current, ttl, err := v.bound.ReadWithLifetime(ctx, TransferBarrierKey, 4096)
 	if err == nil {
 		if ttl != 0 || !bytes.Equal(current, claim) {
@@ -111,7 +121,21 @@ func (v *valkeyTransfer) Claim(ctx context.Context, claim []byte) error {
 	if err != nil {
 		return err
 	}
-	return v.bound.CompareAndSwap(ctx, []CompareAndSwapMutation{{Key: TransferBarrierKey, NewValue: claim}})
+	const claimScript = valkeyApprovedIncarnation + `
+if redis.call('EXISTS', KEYS[1], KEYS[2]) ~= 0 then return 0 end
+redis.call('SET', KEYS[1], ARGV[2])
+return 1`
+	store := v.bound.store
+	result, err := store.do(ctx, store.client.B().Eval().Script(claimScript).Numkeys(2).
+		Key(store.prefix+TransferBarrierKey, store.prefix+transferActivationCurrent).
+		Arg(v.bound.identity, string(claim)).Build()).AsInt64()
+	if err != nil {
+		return transferValkeyError(err)
+	}
+	if result != 1 {
+		return ErrConflict
+	}
+	return nil
 }
 
 func (v *valkeyTransfer) Import(ctx context.Context, claim []byte, record TransferRecord) error {
@@ -122,7 +146,7 @@ func (v *valkeyTransfer) Import(ctx context.Context, claim []byte, record Transf
 		return err
 	}
 	const script = valkeyApprovedIncarnation + `
-if redis.call('GET', KEYS[1]) ~= ARGV[2] or redis.call('PTTL', KEYS[1]) ~= -1 then return 0 end
+if redis.call('EXISTS', KEYS[3]) ~= 0 or redis.call('GET', KEYS[1]) ~= ARGV[2] or redis.call('PTTL', KEYS[1]) ~= -1 then return 0 end
 local current = redis.call('GET', KEYS[2])
 local expected = tonumber(ARGV[4])
 if current then
@@ -140,7 +164,7 @@ else
 end
 return 1`
 	store := v.bound.store
-	result, err := store.do(ctx, store.client.B().Eval().Script(script).Numkeys(2).Key(store.prefix+TransferBarrierKey, store.prefix+record.Key).Arg(v.bound.identity, string(claim), string(record.Value), strconv.FormatInt(record.ExpiresAtMillis, 10)).Build()).AsInt64()
+	result, err := store.do(ctx, store.client.B().Eval().Script(script).Numkeys(3).Key(store.prefix+TransferBarrierKey, store.prefix+record.Key, store.prefix+transferActivationCurrent).Arg(v.bound.identity, string(claim), string(record.Value), strconv.FormatInt(record.ExpiresAtMillis, 10)).Build()).AsInt64()
 	if err != nil {
 		return transferValkeyError(err)
 	}

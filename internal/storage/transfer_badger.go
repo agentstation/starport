@@ -37,7 +37,7 @@ func (b *badgerTransfer) Enumerate(ctx context.Context, yield func(TransferRecor
 				return err
 			}
 			item := it.Item()
-			if item.IsDeletedOrExpired() {
+			if item.IsDeletedOrExpired() || bytes.Equal(item.Key(), []byte(transferActivationCurrent)) {
 				continue
 			}
 			if item.KeySize() > TransferMaxKeyBytes || item.ValueSize() > TransferMaxValueBytes || item.ExpiresAt() > uint64(transferMaxExpiry/1000) {
@@ -67,6 +67,9 @@ func (b *badgerTransfer) Claim(ctx context.Context, claim []byte) error {
 		return err
 	}
 	return b.update(ctx, func(txn *badger.Txn) error {
+		if err := inactiveBadgerImport(txn); err != nil {
+			return err
+		}
 		item, err := txn.Get([]byte(TransferBarrierKey))
 		if err == nil {
 			return matchingBadgerImport(item, claim)
@@ -107,6 +110,9 @@ func (b *badgerTransfer) Import(ctx context.Context, claim []byte, record Transf
 	}
 	expiry := uint64(record.ExpiresAtMillis / 1000) // #nosec G115 -- Validate rejects negative expiry.
 	return b.update(ctx, func(txn *badger.Txn) error {
+		if err := inactiveBadgerImport(txn); err != nil {
+			return err
+		}
 		barrier, err := txn.Get([]byte(TransferBarrierKey))
 		if err != nil {
 			return errors.Join(ErrImportRestricted, err)
@@ -158,4 +164,16 @@ func (b *badgerTransfer) update(ctx context.Context, write func(*badger.Txn) err
 		return ErrConflict
 	}
 	return err
+}
+
+// inactiveBadgerImport prevents completed operations from reclaiming a barrier.
+func inactiveBadgerImport(txn *badger.Txn) error {
+	_, err := txn.Get([]byte(transferActivationCurrent))
+	if err == nil {
+		return ErrConflict
+	}
+	if !errors.Is(err, badger.ErrKeyNotFound) {
+		return err
+	}
+	return nil
 }

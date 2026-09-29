@@ -18,6 +18,10 @@ func TestFleetAdoptionRequestRequiresBoundedRecoveryEvidence(t *testing.T) {
 			GenerationID: "generation", RecoveryChecksum: strings.Repeat("a", 64)},
 		BackendID: "replacement", OperationID: "restore", Evidence: "fenced-and-reconciled"}
 	require.NoError(t, request.validate())
+	restored := request
+	restored.Closed.BackendID = ""
+	restored.Closed.Evidence = "restore-prepared:verified-policy"
+	require.NoError(t, restored.validate(), "restored SQL deliberately removes the previous backend identity")
 	for _, scenario := range []struct {
 		name   string
 		change func(*FleetAdoptionRequest)
@@ -28,6 +32,10 @@ func TestFleetAdoptionRequestRequiresBoundedRecoveryEvidence(t *testing.T) {
 		{"unapproved-source", func(r *FleetAdoptionRequest) { r.SourceApproval.Open = false }},
 		{"missing-source-evidence", func(r *FleetAdoptionRequest) { r.SourceApproval.Evidence = "" }},
 		{"oversized-source-evidence", func(r *FleetAdoptionRequest) { r.SourceApproval.Evidence = strings.Repeat("a", 4097) }},
+		{"missing-source-backend", func(r *FleetAdoptionRequest) { r.SourceApproval.BackendID = "" }},
+		{"blank-closed-backend", func(r *FleetAdoptionRequest) { r.Closed.BackendID = " " }},
+		{"oversized-closed-backend", func(r *FleetAdoptionRequest) { r.Closed.BackendID = strings.Repeat("a", 257) }},
+		{"missing-closed-evidence", func(r *FleetAdoptionRequest) { r.Closed.Evidence = "" }},
 		{"foreign-source", func(r *FleetAdoptionRequest) { r.SourceApproval.BackendID = "other" }},
 		{"missing-operation", func(r *FleetAdoptionRequest) { r.OperationID = "" }},
 		{"missing-evidence", func(r *FleetAdoptionRequest) { r.Evidence = "" }},
