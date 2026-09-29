@@ -179,9 +179,10 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/storage",
 	)
 	// Recovery composes owner checks over captured state. Domain owners retain
-	// record interpretation. Recovery cannot import application or request orchestration.
+	// record interpretation and revision replacement. Recovery cannot import application or request orchestration.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/recovery"],
 		"github.com/agentstation/starport/internal/account",
+		"github.com/agentstation/starport/internal/authorization/revision",
 		"github.com/agentstation/starport/internal/apikey",
 		"github.com/agentstation/starport/internal/blob",
 		"github.com/agentstation/starport/internal/credentials",
