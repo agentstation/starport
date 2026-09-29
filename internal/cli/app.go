@@ -102,6 +102,7 @@ type Dependencies struct {
 	CaptureBackup       BackupCapturer
 	VerifyBackup        BackupVerifier
 	PrepareBackup       BackupPreparer
+	PublishBackupFiles  BackupFilePublisher
 	// Desktop reaches the operator's machine. It is not validated: a machine
 	// with no browser and no clipboard still runs every command, because each
 	// one prints the link it would otherwise have handed over.

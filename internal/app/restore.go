@@ -18,28 +18,14 @@ import (
 // PrepareBackup restores into the configured isolated targets without starting the gateway.
 // The operator must stop and fence all writers. Preparation does not approve activation.
 func PrepareBackup(ctx context.Context, cfg *config.Config, request recovery.PrepareRequest) (result recovery.PrepareResult, resultErr error) {
-	if err := request.Validate(); err != nil {
-		return result, err
-	}
-	encryption, err := backupEncryption(cfg)
+	source, filePlan, paths, err := inspectBackupRestore(ctx, cfg, request)
 	if err != nil {
 		return result, err
 	}
-	paths, err := restoreTargetPaths(cfg, request)
-	if err != nil {
-		return result, err
-	}
-	source, err := recovery.InspectRestoreSource(ctx, request.VerifyRequest, encryption)
-	if err != nil {
-		return result, err
-	}
-	if cfg.EffectivePaths().DeploymentID != source.DeploymentID() {
-		return result, errors.New("restore target deployment ID differs from the verified backup")
-	}
-	filePlan, err := planBackupFiles(ctx, cfg, source)
-	if err != nil {
-		return result, err
-	}
+	return prepareInspectedBackup(ctx, cfg, request, source, filePlan, paths)
+}
+
+func prepareInspectedBackup(ctx context.Context, cfg *config.Config, request recovery.PrepareRequest, source *recovery.RestoreSource, filePlan []recovery.FileDisposition, paths []string) (result recovery.PrepareResult, resultErr error) {
 	// Create private target parents only after the complete source passes verification.
 	for _, path := range paths {
 		if _, err := productfiles.NewDirectory(filepath.Dir(path)); err != nil {
@@ -74,6 +60,32 @@ func PrepareBackup(ctx context.Context, cfg *config.Config, request recovery.Pre
 		return result, err
 	}
 	return recovery.PrepareResult{Prepared: prepared, FilesDirectory: request.FilesDirectory, References: source.References(), FilePlan: filePlan}, nil
+}
+
+func inspectBackupRestore(ctx context.Context, cfg *config.Config, request recovery.PrepareRequest) (*recovery.RestoreSource, []recovery.FileDisposition, []string, error) {
+	if err := request.Validate(); err != nil {
+		return nil, nil, nil, err
+	}
+	encryption, err := backupEncryption(cfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	paths, err := restoreTargetPaths(cfg, request)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	source, err := recovery.InspectRestoreSource(ctx, request.VerifyRequest, encryption)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if cfg.EffectivePaths().DeploymentID != source.DeploymentID() {
+		return nil, nil, nil, errors.New("restore target deployment ID differs from the verified backup")
+	}
+	filePlan, err := planBackupFiles(ctx, cfg, source)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return source, filePlan, paths, nil
 }
 
 func restoreTargetPaths(cfg *config.Config, request recovery.PrepareRequest) ([]string, error) {

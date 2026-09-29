@@ -11,9 +11,12 @@ import (
 	"github.com/agentstation/starmap/pkg/sources"
 )
 
+// InferenceCredentialPolicyRole identifies the canonical inference selection policy tree.
+const InferenceCredentialPolicyRole = "inference-credential-policy"
+
 const (
 	fileRoleAcquisitionPolicy = "credential-policy"
-	fileRoleInferencePolicy   = "inference-credential-policy"
+	fileRoleInferencePolicy   = InferenceCredentialPolicyRole
 	fileRoleWorkspace         = "workspace"
 	fileKindPatterns          = "patterns"
 

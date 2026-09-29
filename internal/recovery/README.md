@@ -192,5 +192,37 @@ Selected files remain inactive, including saved operator tokens and runtime iden
 A command failure can follow completed restricted component imports.
 It does not prove rollback. Preserve the targets and retry the same operation after correcting the failure.
 Ordinary startup refuses imported stores while their barriers remain.
-Canonical file placement, independent-history reconciliation, and activation commands remain unfinished.
+
+Inference-policy publication has an explicit owner procedure below.
+Other file owners, independent-history reconciliation, and activation commands remain unfinished.
 Do not remove barriers manually or treat a preparation receipt as permission to start inference.
+
+
+## Canonical inference-policy publication
+
+Keep every source and target writer fenced after preparation.
+Use the same configured targets, deployment ID, replica ID, master key, and preparation fields.
+
+```sh
+starport backup publish-files \
+  --directory /private/recovery/capture-001 \
+  --manifest-sha256 "$RETAINED_MANIFEST_SHA256" \
+  --files-directory /private/recovery/prepared-001 \
+  --operation restore-001 \
+  --fencing-evidence incident-123/writer-fence \
+  --role inference-credential-policy \
+  --json
+```
+
+This command verifies or resumes restricted preparation before publishing the selected role.
+Current configuration selects the canonical destination. Backup paths cannot select a host destination.
+The credential owner validates every retained policy record and refuses another replica identity or a pending publication journal.
+
+The complete private tree publishes without replacement. An exact retry verifies the existing tree and confirms durability.
+A conflicting target remains unchanged. A failure can follow publication, so preserve the target for an exact retry.
+
+The result lists remaining file dispositions, including administrator credentials, configuration, trust, and runtime identity.
+These roles require their own recovery procedures. The command refuses unsupported roles.
+The operation preserves accepted provider choices and the legacy default without resolving or using provider credentials.
+KV, SQL, and blob import barriers remain closed.
+File publication does not establish independent history, approve replica reuse, or permit inference.

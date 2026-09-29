@@ -17,12 +17,12 @@ func newPrepareBackupCommand(deps Dependencies, usageError usageErrorHandler) *u
 	return &urfavecli.Command{
 		Name: "prepare", Usage: "Restore into isolated configured stores; does not approve admission", OnUsageError: usageError,
 		Flags: []urfavecli.Flag{
-			&urfavecli.StringFlag{Name: "directory", Required: true, Usage: "Absolute backup directory"},
-			&urfavecli.StringFlag{Name: "manifest-sha256", Required: true, Usage: "Manifest digest retained independently of the backup"},
-			&urfavecli.StringFlag{Name: "scratch", Usage: "Existing private scratch directory; defaults to the backup parent"},
+			&urfavecli.StringFlag{Name: flagBackupDirectory, Required: true, Usage: backupDirectoryUsage},
+			&urfavecli.StringFlag{Name: flagBackupManifestSHA256, Required: true, Usage: backupManifestDigestUsage},
+			&urfavecli.StringFlag{Name: flagBackupScratch, Usage: "Existing private scratch directory; defaults to the backup parent"},
 			&urfavecli.StringFlag{Name: "files-directory", Required: true, Usage: "Inactive directory for selected files and the preparation receipt"},
 			&urfavecli.StringFlag{Name: flagBackupOperation, Required: true, Usage: "Restore operation ID; retain it for exact retries"},
-			&urfavecli.StringFlag{Name: "fencing-evidence", Required: true, Usage: "Non-secret reference to proof that all source and target writers are fenced"},
+			&urfavecli.StringFlag{Name: flagBackupFencingEvidence, Required: true, Usage: "Non-secret reference to proof that all source and target writers are fenced"},
 			&urfavecli.BoolFlag{Name: flagStructuredJSON, Usage: jsonOutputUsage},
 		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
@@ -30,9 +30,9 @@ func newPrepareBackupCommand(deps Dependencies, usageError usageErrorHandler) *u
 				return err
 			}
 			request := recovery.PrepareRequest{
-				VerifyRequest:  recovery.VerifyRequest{Directory: cmd.String("directory"), ManifestSHA256: cmd.String("manifest-sha256"), ScratchDirectory: cmd.String("scratch")},
+				VerifyRequest:  recovery.VerifyRequest{Directory: cmd.String(flagBackupDirectory), ManifestSHA256: cmd.String(flagBackupManifestSHA256), ScratchDirectory: cmd.String(flagBackupScratch)},
 				FilesDirectory: cmd.String("files-directory"),
-				Operation:      recovery.RestoreOperation{ID: cmd.String(flagBackupOperation), FencingEvidence: cmd.String("fencing-evidence")},
+				Operation:      recovery.RestoreOperation{ID: cmd.String(flagBackupOperation), FencingEvidence: cmd.String(flagBackupFencingEvidence)},
 			}
 			if err := request.Validate(); err != nil {
 				return urfavecli.Exit(err.Error(), ExitCodeUsage)

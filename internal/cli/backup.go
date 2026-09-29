@@ -10,6 +10,15 @@ import (
 	urfavecli "github.com/urfave/cli/v3"
 )
 
+const (
+	flagBackupDirectory       = "directory"
+	flagBackupManifestSHA256  = "manifest-sha256"
+	flagBackupFencingEvidence = "fencing-evidence"
+	flagBackupScratch         = "scratch"
+	backupDirectoryUsage      = "Absolute backup directory"
+	backupManifestDigestUsage = "Manifest digest retained independently of the backup"
+)
+
 // BackupCloser closes recovery approval without starting a gateway.
 type BackupCloser func(context.Context, *config.Config) (recovery.Record, error)
 
@@ -22,6 +31,7 @@ type BackupVerifier func(context.Context, *config.Config, recovery.VerifyRequest
 func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.Command {
 	return &urfavecli.Command{Name: "backup", Usage: "Capture and verify a stopped deployment", Commands: []*urfavecli.Command{
 		newPrepareBackupCommand(deps, usageError),
+		newPublishBackupFilesCommand(deps, usageError),
 		{
 			Name: "close", Usage: "Close recovery approval; separately stop and fence all writers", OnUsageError: usageError,
 			Flags: []urfavecli.Flag{&urfavecli.BoolFlag{Name: flagStructuredJSON, Usage: jsonOutputUsage}},
@@ -52,7 +62,7 @@ func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 			Flags: []urfavecli.Flag{
 				&urfavecli.StringFlag{Name: "destination", Required: true, Usage: "New absolute directory under an existing private parent"},
 				&urfavecli.StringFlag{Name: flagBackupOperation, Required: true, Usage: "Backup operation ID"},
-				&urfavecli.StringFlag{Name: "fencing-evidence", Required: true, Usage: "Non-secret reference to proof that all writers are stopped and fenced"},
+				&urfavecli.StringFlag{Name: flagBackupFencingEvidence, Required: true, Usage: "Non-secret reference to proof that all writers are stopped and fenced"},
 				&urfavecli.StringFlag{Name: "key-reference", Required: true, Usage: "Recovery reference for the configured master key; never the key value"},
 				&urfavecli.IntFlag{Name: "entry-limit", Usage: "Maximum local file inspection entries; zero selects the default"},
 				&urfavecli.BoolFlag{Name: flagStructuredJSON, Usage: jsonOutputUsage},
@@ -61,7 +71,7 @@ func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 				if err := rejectArguments(cmd); err != nil {
 					return err
 				}
-				request := recovery.CaptureRequest{Destination: cmd.String("destination"), OperationID: cmd.String(flagBackupOperation), Build: deps.Build.Version, FencingEvidence: cmd.String("fencing-evidence"), KeyReference: cmd.String("key-reference"), EntryLimit: cmd.Int("entry-limit")}
+				request := recovery.CaptureRequest{Destination: cmd.String("destination"), OperationID: cmd.String(flagBackupOperation), Build: deps.Build.Version, FencingEvidence: cmd.String(flagBackupFencingEvidence), KeyReference: cmd.String("key-reference"), EntryLimit: cmd.Int("entry-limit")}
 				if err := request.Validate(); err != nil {
 					return urfavecli.Exit(err.Error(), ExitCodeUsage)
 				}
@@ -82,16 +92,16 @@ func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 		{
 			Name: "verify", Usage: "Check backup bytes, credentials, and references; does not approve recovery", OnUsageError: usageError,
 			Flags: []urfavecli.Flag{
-				&urfavecli.StringFlag{Name: "directory", Required: true, Usage: "Absolute backup directory"},
-				&urfavecli.StringFlag{Name: "scratch", Usage: "Existing private directory for verification copies; defaults to the backup parent"},
-				&urfavecli.StringFlag{Name: "manifest-sha256", Required: true, Usage: "Manifest digest retained independently of the backup"},
+				&urfavecli.StringFlag{Name: flagBackupDirectory, Required: true, Usage: backupDirectoryUsage},
+				&urfavecli.StringFlag{Name: flagBackupScratch, Usage: "Existing private directory for verification copies; defaults to the backup parent"},
+				&urfavecli.StringFlag{Name: flagBackupManifestSHA256, Required: true, Usage: backupManifestDigestUsage},
 				&urfavecli.BoolFlag{Name: flagStructuredJSON, Usage: jsonOutputUsage},
 			},
 			Action: func(ctx context.Context, cmd *urfavecli.Command) error {
 				if err := rejectArguments(cmd); err != nil {
 					return err
 				}
-				request := recovery.VerifyRequest{Directory: cmd.String("directory"), ManifestSHA256: cmd.String("manifest-sha256"), ScratchDirectory: cmd.String("scratch")}
+				request := recovery.VerifyRequest{Directory: cmd.String(flagBackupDirectory), ManifestSHA256: cmd.String(flagBackupManifestSHA256), ScratchDirectory: cmd.String(flagBackupScratch)}
 				if err := request.Validate(); err != nil {
 					return urfavecli.Exit(err.Error(), ExitCodeUsage)
 				}
