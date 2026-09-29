@@ -27,3 +27,12 @@ func (s Settings) InspectRetainedMigration(ctx context.Context, originalDirector
 	}
 	return runtime.InspectRetainedMigration(ctx, originalDirectory, s.directoryOwner(), parsed.SchedulerIdentity, read)
 }
+
+// RetainedFile identifies bytes in a verified runtime backup.
+type RetainedFile = runtime.RetainedFile
+
+// InspectRetainedPublications selects native staging evidence that must remain inactive.
+// The caller preserves the selected bytes and validates all remaining runtime records.
+func (s Settings) InspectRetainedPublications(ctx context.Context, files map[string]RetainedFile, read func(context.Context, string, int64) ([]byte, error)) ([]string, error) {
+	return runtime.InspectRetainedPublications(ctx, files, read)
+}

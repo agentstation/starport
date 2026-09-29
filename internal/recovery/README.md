@@ -281,8 +281,19 @@ runtime directory. The remaining files still require complete inventory and
 runtime validation. This permits restore at a new path without reusing old native
 migration authority. Exact retries preserve the same historical selection.
 
-Unknown files, corrupt records, incomplete references, pending native file
-publications, and incomplete or conflicting migration records cause refusal.
+Native publication journals require canonical records and an owned destination.
+The runtime owner checks their staging names against the recorded nonce and prefix.
+Any captured staging file must match the journal size and digest. The captured
+writer record must also be present and empty. Historical native identities do
+not authorize operations on the restore host.
+
+The command retains validated journals and staging bytes in the verified backup
+and inactive preparation. It reports `verified-staging` and omits these files from
+the active directory. It never promotes a staging file. Destination records still
+require their normal owner validation. Exact retries preserve the same selection.
+
+Unknown files, corrupt records, incomplete references, unowned or changed staging
+files, and incomplete or conflicting migration records cause refusal.
 Preserve those records for their separate owner recovery procedure. A pending
 semantic input publication can remain when all its references validate.
 Inspection does not apply or discard that transaction.

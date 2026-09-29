@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/recovery"
 )
@@ -27,15 +28,34 @@ func selectRuntimeRestoreFiles(ctx context.Context, cfg *config.Config, source *
 	for _, file := range tree.Files {
 		files[file.Relative] = file.ArtifactID
 	}
-	inactive, err := catalogSettings(cfg).InspectRetainedMigration(ctx, original, func(ctx context.Context, name string, limit int64) ([]byte, error) {
+	read := func(ctx context.Context, name string, limit int64) ([]byte, error) {
 		id, found := files[name]
 		if !found {
 			return nil, os.ErrNotExist
 		}
 		return source.SelectedFile(ctx, id, limit)
-	})
+	}
+	inactive, err := catalogSettings(cfg).InspectRetainedMigration(ctx, original, read)
 	if err != nil {
 		return tree, nil, err
+	}
+	artifacts := source.SelectedFileArtifacts()
+	retained := make(map[string]catalog.RetainedFile, len(files))
+	for name, id := range files {
+		artifact, found := artifacts[id]
+		if !found {
+			return tree, nil, errors.New("runtime file is absent from the verified backup")
+		}
+		retained[name] = catalog.RetainedFile{Size: artifact.Size, SHA256: artifact.SHA256}
+	}
+	publications, err := catalogSettings(cfg).InspectRetainedPublications(ctx, retained, read)
+	if err != nil {
+		return tree, nil, err
+	}
+	inactive = append(inactive, publications...)
+	publicationHistory := make(map[string]bool, len(publications))
+	for _, name := range publications {
+		publicationHistory[name] = true
 	}
 	keepInactive := make(map[string]bool, len(inactive))
 	for _, name := range inactive {
@@ -54,6 +74,10 @@ func selectRuntimeRestoreFiles(ctx context.Context, cfg *config.Config, source *
 		if file.Role == config.RuntimeEvidenceRole && keepInactive[file.Relative] {
 			file.Destination, file.Action = "", "verified-history"
 			file.Reason = "Completed migration records retain historical path identities. Preserve them in the verified backup and inactive preparation."
+			if publicationHistory[file.Relative] {
+				file.Action = "verified-staging"
+				file.Reason = "Native publication evidence remains in the verified backup and inactive preparation. Staging bytes never replace destination records."
+			}
 			remaining = append(remaining, file)
 		}
 	}

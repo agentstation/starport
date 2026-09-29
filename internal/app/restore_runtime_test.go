@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -68,6 +69,20 @@ func runtimePublicationFixture(t *testing.T, mode string) (*config.Config, recov
 	require.NoError(t, err)
 	if mode == "corrupt" {
 		require.NoError(t, os.WriteFile(filepath.Join(paths.RuntimeDir, "instance-seed"), []byte("invalid"), 0600))
+	}
+	if mode == "pending-publication" || mode == "changed-publication" {
+		parent := filepath.Join(paths.RuntimeDir, "catalog-runtime")
+		_, err := productfiles.CreateDirectory(filepath.Join(parent, ".record-publications"))
+		require.NoError(t, err)
+		journal, err := os.ReadFile("testdata/recovery-publication.jsonl")
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(parent, ".record-publications", strings.Repeat("A", 26)+".jsonl"), journal, 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(parent, ".record-publications", ".owner.lock"), nil, 0600))
+		stage := []byte("candidate")
+		if mode == "changed-publication" {
+			stage = []byte("changed candidate")
+		}
+		require.NoError(t, os.WriteFile(filepath.Join(parent, ".layer-"+strings.Repeat("A", 26)), stage, 0600))
 	}
 	_, err = CloseBackupBoundary(t.Context(), source)
 	require.NoError(t, err)
@@ -208,4 +223,43 @@ func TestRestorePublishRuntimeCannotHidePendingMoveBehindCompletedHistory(t *tes
 	require.Error(t, err)
 	require.NoDirExists(t, cfg.EffectivePaths().RuntimeDir)
 	requirePublicationBarriers(t, cfg)
+}
+
+func TestRestorePublishRuntimePreservesNativePublicationEvidence(t *testing.T) {
+	cfg, request, _ := runtimePublicationFixture(t, "pending-publication")
+	first, err := PublishBackupFiles(t.Context(), cfg, request)
+	require.NoError(t, err)
+	require.True(t, first.Tree.Published)
+	require.NoFileExists(t, filepath.Join(first.Tree.Destination, "catalog-runtime", "source.json"))
+	var count int
+	for _, file := range first.Remaining {
+		if file.Role != config.RuntimeEvidenceRole {
+			continue
+		}
+		count++
+		require.Equal(t, "verified-staging", file.Action)
+		require.Empty(t, file.Destination)
+		require.NoFileExists(t, filepath.Join(first.Tree.Destination, file.Relative))
+		original, err := os.ReadFile(filepath.Join(request.Directory, "files", filepath.FromSlash(file.ArtifactID)))
+		require.NoError(t, err)
+		prepared, err := os.ReadFile(filepath.Join(request.FilesDirectory, "files", filepath.FromSlash(file.ArtifactID)))
+		require.NoError(t, err)
+		require.Equal(t, original, prepared)
+	}
+	require.Equal(t, 2, count)
+	requirePublicationBarriers(t, cfg)
+	again, err := PublishBackupFiles(t.Context(), cfg, request)
+	require.NoError(t, err)
+	require.True(t, again.Tree.Reused)
+	require.Equal(t, first.Remaining, again.Remaining)
+	requirePublicationBarriers(t, cfg)
+}
+
+func TestRestorePublishRuntimeRejectsChangedNativeStagingBeforePreparation(t *testing.T) {
+	cfg, request, _ := runtimePublicationFixture(t, "changed-publication")
+	_, err := PublishBackupFiles(t.Context(), cfg, request)
+	require.ErrorContains(t, err, "staging bytes differ")
+	require.NoDirExists(t, cfg.EffectivePaths().RuntimeDir)
+	require.NoDirExists(t, cfg.EffectivePaths().BadgerDir)
+	require.NoFileExists(t, cfg.EffectivePaths().SQLiteFile)
 }

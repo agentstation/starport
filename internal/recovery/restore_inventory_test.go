@@ -31,6 +31,11 @@ func TestRestoreMetadataReadsOnlyVerifiedBoundedBytes(t *testing.T) {
 		_, err := verified.SelectedFile(t.Context(), name, bundleMaxManifestBytes)
 		require.Error(t, err)
 	}
+	artifacts := verified.SelectedFileArtifacts()
+	require.Equal(t, int64(len(expected)), artifacts[id].Size)
+	require.Equal(t, verified.SelectedFileHashes()[id], artifacts[id].SHA256)
+	delete(artifacts, id)
+	require.Contains(t, verified.SelectedFileArtifacts(), id)
 	hashes := verified.SelectedFileHashes()
 	hashes[id] = "changed by caller"
 	require.NotEqual(t, hashes, verified.SelectedFileHashes())
@@ -45,4 +50,5 @@ func TestRestoreMetadataReadsOnlyVerifiedBoundedBytes(t *testing.T) {
 	_, err = absent.SelectedFile(t.Context(), id, bundleMaxManifestBytes)
 	require.Error(t, err)
 	require.Empty(t, absent.SelectedFileHashes())
+	require.Empty(t, absent.SelectedFileArtifacts())
 }

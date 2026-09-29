@@ -53,6 +53,20 @@ func (s *RestoreSource) SelectedFile(ctx context.Context, id string, limit int64
 	return nil, errors.New("restore metadata is absent from the verified manifest")
 }
 
+// SelectedFileArtifacts returns a separate map of verified selected-file metadata.
+// The caller must verify file bytes again before publication.
+func (s *RestoreSource) SelectedFileArtifacts() map[string]BundleArtifact {
+	result := make(map[string]BundleArtifact)
+	if s != nil {
+		for _, artifact := range s.manifest.Artifacts {
+			if id, ok := strings.CutPrefix(artifact.Path, "files/"); ok {
+				result[id] = artifact
+			}
+		}
+	}
+	return result
+}
+
 // SelectedFileHashes returns a separate map of verified selected-file digests.
 func (s *RestoreSource) SelectedFileHashes() map[string]string {
 	result := make(map[string]string)
