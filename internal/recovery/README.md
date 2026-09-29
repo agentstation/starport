@@ -555,3 +555,22 @@ The KV mutation belongs in an ordered native replay step. The SQL mutation uses 
 Keep admission closed through replacement and final graph inspection.
 New authorization epochs start at sequence one. Previously cached permission cannot establish continuity after recovery.
 Complete independent-history acceptance and controlled activation remain required.
+
+## Operator inspection
+
+`starport backup inspect-import` checks the existing targets selected by the current configuration.
+Use the original backup manifest digest, restore operation, and fencing reference.
+Supply the exact expected closed boundary from preparation or the accepted epoch receipt.
+The command does not discover or approve a replacement boundary.
+
+Specify both replay sequences explicitly. Use zero before replay, or supply the sequence and digest from each last accepted native replay receipt.
+For Valkey, supply the independently recorded `run_id:master_replid` through `--valkey-incarnation`.
+The command checks that identity against the configured target. Badger does not use this flag.
+
+Choose a new output directory under an existing private parent for every attempt.
+The output includes native snapshots and `inspection.json`, which retains the complete request, its hash, and checked reference counts.
+Keep these files private and keep every writer fenced.
+An interrupted or failed inspection produces no successful receipt. Preserve its partial files for diagnosis and choose a new output directory.
+
+Use `starport backup inspect-import --help` for the required flags.
+Inspection leaves all import barriers closed. It does not complete migration or permit a gateway restart.
