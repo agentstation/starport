@@ -24,7 +24,12 @@ func ReadRecoveryFile(ctx context.Context, records RecoveryRecordReader, account
 	if err != nil {
 		return File{}, err
 	}
-	file, err := decodeFile(data)
+	var retained RecoveryFile
+	err = retained.UnmarshalJSON(data)
+	var file File
+	if err == nil {
+		file = retained.state.file
+	}
 	if err != nil || file.Account != account || file.ID != id {
 		return File{}, ErrCorruptRecord
 	}
@@ -54,7 +59,12 @@ func VerifyRecoveryRecord(ctx context.Context, key string, data []byte, source b
 	if err := ctx.Err(); err != nil {
 		return File{}, err
 	}
-	file, err := decodeFile(data)
+	var retained RecoveryFile
+	err := retained.UnmarshalJSON(data)
+	var file File
+	if err == nil {
+		file = retained.state.file
+	}
 	if err != nil || key != storageKey(file.Account, file.ID) || source == nil || capturedAt.IsZero() {
 		return File{}, ErrCorruptRecord
 	}

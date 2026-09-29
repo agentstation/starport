@@ -15,11 +15,11 @@ import (
 
 func inspectionArgs(t *testing.T) []string {
 	t.Helper()
-	return []string{"starport", "backup", "inspect-import", "--directory", t.TempDir(), "--manifest-sha256", strings.Repeat("a", 64), "--destination", filepath.Join(t.TempDir(), "inspection"), "--operation", "restore", "--fencing-evidence", "fenced", "--expected-deployment", "fixture", "--expected-recovery-epoch", "2", "--expected-recovery-evidence", "prepared", "--kv-replay-sequence", "0", "--sql-replay-sequence", "0"}
+	return []string{"starport", "backup", "inspect-import", "--directory", t.TempDir(), "--manifest-sha256", strings.Repeat("a", 64), "--destination", filepath.Join(t.TempDir(), "inspection"), "--operation", "restore", "--fencing-evidence", "fenced", "--expected-deployment", "fixture", "--expected-recovery-epoch", "2", "--expected-recovery-evidence", "prepared", "--kv-replay-sequence", "0", "--sql-replay-sequence", "0", "--blob-replay-sequence", "0"}
 }
 
 func TestInspectImportCommandRefusesIncompleteRequestBeforeConfiguration(t *testing.T) {
-	for _, mode := range []string{"missing-kv", "missing-sql", "negative", "missing-digest", "initial-digest", "bad-digest", "relative-output", "extra-argument"} {
+	for _, mode := range []string{"missing-kv", "missing-sql", "missing-blob", "negative", "missing-digest", "initial-digest", "bad-digest", "relative-output", "extra-argument"} {
 		t.Run(mode, func(t *testing.T) {
 			deps, _, _ := testDependencies()
 			deps.LoadConfig = func(context.Context) (*config.Config, error) {
@@ -28,7 +28,7 @@ func TestInspectImportCommandRefusesIncompleteRequestBeforeConfiguration(t *test
 			}
 			args := inspectionArgs(t)
 			for i := 3; i < len(args); i += 2 {
-				if mode == "missing-kv" && args[i] == "--kv-replay-sequence" || mode == "missing-sql" && args[i] == "--sql-replay-sequence" {
+				if mode == "missing-kv" && args[i] == "--kv-replay-sequence" || mode == "missing-sql" && args[i] == "--sql-replay-sequence" || mode == "missing-blob" && args[i] == "--blob-replay-sequence" {
 					args = append(args[:i], args[i+2:]...)
 					break
 				}

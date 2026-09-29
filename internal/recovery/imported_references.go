@@ -38,6 +38,7 @@ type ImportedReferenceRequest struct {
 	SQLIdentity   sqlstore.RelationalImportIdentity `json:"sql_identity"`
 	SQLPosition   sqlstore.RelationalReplayPosition `json:"sql_position"`
 	BlobOperation string                            `json:"blob_operation"`
+	BlobPosition  blob.ImportReplayPosition         `json:"blob_position"`
 	BlobOriginal  blob.Snapshot                     `json:"blob_original"`
 }
 
@@ -93,7 +94,7 @@ func InspectImportedReferences(ctx context.Context, sources ImportedReferenceSou
 		return result, err
 	}
 	result.SQL = sqlResult.Snapshot
-	result.Blobs, err = sources.Blobs.SnapshotImport(ctx, blobPath, request.BlobOperation, request.BlobOriginal)
+	result.Blobs, err = snapshotImportedBlobs(ctx, sources.Blobs, blobPath, request)
 	if err != nil {
 		return result, err
 	}
@@ -107,7 +108,8 @@ func InspectImportedReferences(ctx context.Context, sources ImportedReferenceSou
 	if err := inspectReferenceBoundary(ctx, sources.SQL, sources.SQL.Bind(referenceBoundaryQuery), request.Boundary); err != nil {
 		return result, err
 	}
-	if err := sources.Blobs.CheckImport(ctx, request.BlobOperation, request.BlobOriginal); err != nil {
+	err = checkImportedBlobs(ctx, sources.Blobs, request)
+	if err != nil {
 		return result, err
 	}
 	if err := sources.KV.InspectImport(ctx, request.KVClaim, request.KVPosition, func(storage.TransferRecord) error { return nil }); err != nil {
@@ -151,4 +153,23 @@ type importedKVSource struct {
 
 func (s importedKVSource) Enumerate(ctx context.Context, visit func(storage.TransferRecord) error) error {
 	return s.owner.InspectImport(ctx, s.claim, s.position, visit)
+}
+
+func snapshotImportedBlobs(ctx context.Context, owner blob.ImportInspector, path string, request ImportedReferenceRequest) (blob.Snapshot, error) {
+	if inspector, ok := owner.(blob.ImportReplayInspector); ok {
+		return inspector.SnapshotImportAt(ctx, path, request.BlobOperation, request.BlobOriginal, request.BlobPosition)
+	}
+	if request.BlobPosition != (blob.ImportReplayPosition{}) {
+		return blob.Snapshot{}, blob.ErrImportRestricted
+	}
+	return owner.SnapshotImport(ctx, path, request.BlobOperation, request.BlobOriginal)
+}
+func checkImportedBlobs(ctx context.Context, owner blob.ImportInspector, request ImportedReferenceRequest) error {
+	if inspector, ok := owner.(blob.ImportReplayInspector); ok {
+		return inspector.CheckImportPosition(ctx, request.BlobOperation, request.BlobOriginal, request.BlobPosition)
+	}
+	if request.BlobPosition != (blob.ImportReplayPosition{}) {
+		return blob.ErrImportRestricted
+	}
+	return owner.CheckImport(ctx, request.BlobOperation, request.BlobOriginal)
 }

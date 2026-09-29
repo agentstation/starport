@@ -165,7 +165,7 @@ func inspectConfiguredImport(ctx context.Context, cfg *config.Config, request re
 	if !ok {
 		return result, errors.New("configured blob target does not support closed import inspection")
 	}
-	native := recovery.ImportedReferenceRequest{Boundary: request.ExpectedBoundary, CapturedAt: time.Now().UTC(), KVClaim: identity.KVClaim, KVPosition: request.KVPosition, SQLOriginal: identity.SQLOriginal, SQLIdentity: identity.SQL, SQLPosition: request.SQLPosition, BlobOperation: identity.ComponentOperation, BlobOriginal: identity.BlobOriginal}
+	native := recovery.ImportedReferenceRequest{Boundary: request.ExpectedBoundary, CapturedAt: time.Now().UTC(), KVClaim: identity.KVClaim, KVPosition: request.KVPosition, SQLOriginal: identity.SQLOriginal, SQLIdentity: identity.SQL, SQLPosition: request.SQLPosition, BlobOperation: identity.ComponentOperation, BlobPosition: request.BlobPosition, BlobOriginal: identity.BlobOriginal}
 	scratch := request.ScratchDirectory
 	if scratch == "" {
 		scratch = filepath.Dir(request.Directory)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/sqlstore"
@@ -34,6 +35,8 @@ func newInspectImportedBackupCommand(deps Dependencies, usageError usageErrorHan
 			&urfavecli.StringFlag{Name: "kv-replay-sha256", Usage: "KV receipt digest; required when its sequence is positive"},
 			&urfavecli.Int64Flag{Name: "sql-replay-sequence", Required: true, Usage: "Last accepted SQL replay sequence; explicitly use 0 before replay"},
 			&urfavecli.StringFlag{Name: "sql-replay-sha256", Usage: "SQL receipt digest; required when its sequence is positive"},
+			&urfavecli.Int64Flag{Name: "blob-replay-sequence", Required: true, Usage: "Last completed blob replay sequence; explicitly use 0 before replay"},
+			&urfavecli.StringFlag{Name: "blob-replay-sha256", Usage: "Blob receipt digest; required when its sequence is positive"},
 			&urfavecli.StringFlag{Name: "valkey-incarnation", Usage: "Recorded run_id:master_replid identity for configured Valkey; omit for Badger"},
 			&urfavecli.BoolFlag{Name: flagStructuredJSON, Usage: jsonOutputUsage},
 		},
@@ -47,6 +50,7 @@ func newInspectImportedBackupCommand(deps Dependencies, usageError usageErrorHan
 				ExpectedBoundary:  recovery.Record{DeploymentID: cmd.String("expected-deployment"), Epoch: cmd.Int64("expected-recovery-epoch"), Evidence: cmd.String("expected-recovery-evidence"), BackendID: cmd.String("expected-recovery-backend")},
 				KVPosition:        storage.ImportReplayPosition{Sequence: cmd.Int64("kv-replay-sequence"), ReceiptSHA256: cmd.String("kv-replay-sha256")},
 				SQLPosition:       sqlstore.RelationalReplayPosition{Sequence: cmd.Int64("sql-replay-sequence"), ReceiptSHA256: cmd.String("sql-replay-sha256")},
+				BlobPosition:      blob.ImportReplayPosition{Sequence: cmd.Int64("blob-replay-sequence"), ReceiptSHA256: cmd.String("blob-replay-sha256")},
 				ValkeyIncarnation: cmd.String("valkey-incarnation"), Destination: cmd.String("destination"),
 			}
 			if err := request.Validate(); err != nil {

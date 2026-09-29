@@ -14,11 +14,20 @@ import (
 type objectActivation struct{ store *ObjectStore }
 
 func (t objectRestoreTarget) ActivateImport(ctx context.Context, operation string, expected Snapshot, decisionSHA256 string) error {
+	return t.ActivateImportAt(ctx, operation, expected, ImportReplayPosition{}, decisionSHA256)
+}
+func (t objectRestoreTarget) ActivateImportAt(ctx context.Context, operation string, expected Snapshot, position ImportReplayPosition, decisionSHA256 string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	claim, err := makeBlobClaim(operation, expected)
 	if err != nil {
+		return err
+	}
+	if t.store == nil {
+		return ErrImportRestricted
+	}
+	if err := checkReplayPosition(ctx, objectActivation(t), claim, position); err != nil {
 		return err
 	}
 	return activateBlobImport(ctx, objectActivation(t), claim, decisionSHA256)

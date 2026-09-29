@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -20,6 +21,7 @@ type InspectImportRequest struct {
 	ExpectedBoundary  Record
 	KVPosition        storage.ImportReplayPosition
 	SQLPosition       sqlstore.RelationalReplayPosition
+	BlobPosition      blob.ImportReplayPosition
 	ValkeyIncarnation string
 	Destination       string
 }
@@ -63,7 +65,7 @@ func (r InspectImportRequest) Validate() error {
 	if strings.TrimSpace(r.ExpectedBoundary.Evidence) == "" {
 		return errors.New("import inspection requires the expected recovery evidence reference")
 	}
-	if !validInspectionPosition(r.KVPosition.Sequence, r.KVPosition.ReceiptSHA256) || !validInspectionPosition(r.SQLPosition.Sequence, r.SQLPosition.ReceiptSHA256) {
+	if !validInspectionPosition(r.BlobPosition.Sequence, r.BlobPosition.ReceiptSHA256) || !validInspectionPosition(r.KVPosition.Sequence, r.KVPosition.ReceiptSHA256) || !validInspectionPosition(r.SQLPosition.Sequence, r.SQLPosition.ReceiptSHA256) {
 		return errors.New("import inspection requires exact replay sequences and matching receipt digests")
 	}
 	if !filepath.IsAbs(r.Destination) || filepath.Clean(r.Destination) != r.Destination {

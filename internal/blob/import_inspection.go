@@ -9,8 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-
-	"github.com/agentstation/starmap/pkg/productfiles"
 )
 
 // ImportInspector captures imported bytes while their startup barrier remains closed.
@@ -45,41 +43,17 @@ func checkBlobImport(ctx context.Context, records activationRecords, operation s
 }
 
 func (t filesystemRestoreTarget) CheckImport(ctx context.Context, operation string, original Snapshot) error {
-	if ctx == nil {
-		return ErrImportRestricted
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	directory, err := productfiles.ExistingDirectory(t.destination)
-	if err != nil {
-		return err
-	}
-	control, err := directory.ExistingChild(".starport")
-	if err != nil {
-		return err
-	}
-	if err := control.CheckNoPendingPublications(ctx); err != nil {
-		return err
-	}
-	return checkBlobImport(ctx, filesystemActivation{directory: control}, operation, original)
+	return t.CheckImportPosition(ctx, operation, original, ImportReplayPosition{})
 }
-
 func (t objectRestoreTarget) CheckImport(ctx context.Context, operation string, original Snapshot) error {
-	if t.store == nil || ctx == nil {
-		return ErrImportRestricted
-	}
-	if err := checkBlobImport(ctx, objectActivation(t), operation, original); err != nil {
-		return err
-	}
-	if err := t.store.readLayout(ctx); err != nil && !isAbsent(err) {
-		return err
-	}
-	return ctx.Err()
+	return t.CheckImportPosition(ctx, operation, original, ImportReplayPosition{})
 }
 
 func (t filesystemRestoreTarget) SnapshotImport(ctx context.Context, destination, operation string, original Snapshot) (Snapshot, error) {
-	guard := func(ctx context.Context) error { return t.CheckImport(ctx, operation, original) }
+	return t.SnapshotImportAt(ctx, destination, operation, original, ImportReplayPosition{})
+}
+func (t filesystemRestoreTarget) SnapshotImportAt(ctx context.Context, destination, operation string, original Snapshot, position ImportReplayPosition) (Snapshot, error) {
+	guard := func(ctx context.Context) error { return t.CheckImportPosition(ctx, operation, original, position) }
 	if err := guard(ctx); err != nil {
 		return Snapshot{}, err
 	}
@@ -116,7 +90,10 @@ func checkInspectionDestination(source, destination string) error {
 }
 
 func (t objectRestoreTarget) SnapshotImport(ctx context.Context, destination, operation string, original Snapshot) (Snapshot, error) {
-	guard := func(ctx context.Context) error { return t.CheckImport(ctx, operation, original) }
+	return t.SnapshotImportAt(ctx, destination, operation, original, ImportReplayPosition{})
+}
+func (t objectRestoreTarget) SnapshotImportAt(ctx context.Context, destination, operation string, original Snapshot, position ImportReplayPosition) (Snapshot, error) {
+	guard := func(ctx context.Context) error { return t.CheckImportPosition(ctx, operation, original, position) }
 	if err := guard(ctx); err != nil {
 		return Snapshot{}, err
 	}
