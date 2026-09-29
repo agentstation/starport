@@ -232,6 +232,26 @@ The operation preserves accepted provider choices and the legacy default without
 KV, SQL, and blob import barriers remain closed.
 File publication does not establish independent history, approve replica reuse, or permit inference.
 
+## Canonical baseline export publication
+
+After restricted preparation, use the same publication command with `--role baseline`.
+The current configuration selects the baseline directory. Starmap validates the completed exports before publication.
+
+Each export must contain exactly its manifest and payload under its generation-derived directory name.
+The validator checks payload integrity, schema agreement, catalog semantics, and source membership evidence.
+It accepts older generations that satisfy the current reader contract. It does not require equality with the installed binary.
+
+Publication retains the existing KV, SQL, and blob barriers. It does not change the accepted catalog or grant authority.
+
+Captured baseline recovery journals remain inactive in the preparation directory and appear in the remaining file dispositions.
+They bind filesystem identities from the source machine. Do not copy them into the active baseline directory.
+An unfinished export stage causes refusal and requires separate owner recovery. The source backup remains unchanged.
+
+A conflicting target remains unchanged. Retry with the same inputs while writers remain fenced.
+After controlled activation, the installed binary verifies or adds its own export and creates fresh journal ownership.
+That later startup can change the export inventory. Do not use publication retry to replace that inventory.
+Independent later history and controlled activation remain required before inference.
+
 ## Target configuration and local administrator access
 
 Keep the gateways stopped and all restore barriers closed during these steps.
