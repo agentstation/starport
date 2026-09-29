@@ -17,6 +17,9 @@ const InferenceCredentialPolicyRole = "inference-credential-policy"
 // BaselineRole identifies completed catalog baseline exports.
 const BaselineRole = pathRoleBaseline
 
+// RuntimeEvidenceRole identifies private runtime identity and retained catalog inputs.
+const RuntimeEvidenceRole = fileRoleRuntimeEvidence
+
 // AcquisitionPolicyRole identifies the canonical catalog credential selection policy tree.
 const AcquisitionPolicyRole = "credential-policy"
 

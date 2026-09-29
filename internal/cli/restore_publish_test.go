@@ -61,7 +61,7 @@ func TestRestorePublishFilesErrorDoesNotPrintSuccessReceipt(t *testing.T) {
 }
 
 func TestRestorePublishFilesForwardsCatalogRoles(t *testing.T) {
-	for _, role := range []string{config.AcquisitionPolicyRole, config.BaselineRole} {
+	for _, role := range []string{config.AcquisitionPolicyRole, config.BaselineRole, config.RuntimeEvidenceRole} {
 		t.Run(role, func(t *testing.T) {
 			deps, output, _ := testDependencies()
 			called := false

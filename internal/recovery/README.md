@@ -252,6 +252,30 @@ After controlled activation, the installed binary verifies or adds its own expor
 That later startup can change the export inventory. Do not use publication retry to replace that inventory.
 Independent later history and controlled activation remain required before inference.
 
+## Retained runtime files
+
+Use `starport backup publish-files --role runtime-evidence` with the same backup,
+manifest digest, preparation directory, operation, and fencing evidence.
+The target must select the captured deployment and replica. A new replica needs
+a distinct identity and its own recovery procedure.
+
+The runtime owner compares the owner record and configured scheduler identity.
+It checks the retained instance seed, source and provider inputs, manual history,
+removal policy, generation pin, permission checkpoint, and pending input references.
+The GitHub source owner checks saved discovery records and replay sequences.
+Inspection preserves these bytes and does not start a runtime or contact a provider.
+
+The command publishes the complete private tree at the configured runtime path.
+An exact retry verifies the same content without replacement. All storage barriers
+remain closed. The result does not establish current permission, accepted catalog
+consistency, safe replica reuse, or independent post-backup history.
+
+Unknown files, corrupt records, incomplete references, pending native file
+publications, and path-bound migration records cause refusal. Preserve those
+records for their separate owner recovery procedure. A pending semantic input
+publication can remain in the tree when all its references validate. Inspection
+does not apply or discard that transaction.
+
 ## Target configuration and local administrator access
 
 Keep the gateways stopped and all restore barriers closed during these steps.

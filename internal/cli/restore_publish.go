@@ -23,7 +23,7 @@ func newPublishBackupFilesCommand(deps Dependencies, usageError usageErrorHandle
 			&urfavecli.StringFlag{Name: "files-directory", Required: true, Usage: "Inactive directory from the matching preparation operation"},
 			&urfavecli.StringFlag{Name: flagBackupOperation, Required: true, Usage: "Original restore operation ID"},
 			&urfavecli.StringFlag{Name: flagBackupFencingEvidence, Required: true, Usage: "Original evidence that all source and target writers remain fenced"},
-			&urfavecli.StringFlag{Name: "role", Required: true, Usage: "Canonical role: baseline, inference-credential-policy, or credential-policy"},
+			&urfavecli.StringFlag{Name: "role", Required: true, Usage: "Canonical role: baseline, runtime-evidence, inference-credential-policy, or credential-policy"},
 			&urfavecli.BoolFlag{Name: flagStructuredJSON, Usage: jsonOutputUsage},
 		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
@@ -38,7 +38,7 @@ func newPublishBackupFilesCommand(deps Dependencies, usageError usageErrorHandle
 			if err := request.Validate(); err != nil {
 				return urfavecli.Exit(err.Error(), ExitCodeUsage)
 			}
-			if request.Role != config.InferenceCredentialPolicyRole && request.Role != config.AcquisitionPolicyRole && request.Role != config.BaselineRole {
+			if request.Role != config.InferenceCredentialPolicyRole && request.Role != config.AcquisitionPolicyRole && request.Role != config.BaselineRole && request.Role != config.RuntimeEvidenceRole {
 				return urfavecli.Exit("unsupported file role for publication", ExitCodeUsage)
 			}
 			if deps.PublishBackupFiles == nil {

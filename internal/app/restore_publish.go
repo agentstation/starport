@@ -19,7 +19,7 @@ func PublishBackupFiles(ctx context.Context, cfg *config.Config, request recover
 	if err := request.Validate(); err != nil {
 		return result, err
 	}
-	if request.Role != config.InferenceCredentialPolicyRole && request.Role != config.AcquisitionPolicyRole && request.Role != config.BaselineRole {
+	if request.Role != config.InferenceCredentialPolicyRole && request.Role != config.AcquisitionPolicyRole && request.Role != config.BaselineRole && request.Role != config.RuntimeEvidenceRole {
 		return result, errors.New("this file role requires a separate owner recovery procedure")
 	}
 	source, plan, targets, err := inspectBackupRestore(ctx, cfg, request.PrepareRequest)
@@ -48,6 +48,9 @@ func PublishBackupFiles(ctx context.Context, cfg *config.Config, request recover
 	paths := cfg.EffectivePaths()
 	owner := credentials.SelectionPolicyOwner{Product: "starport", Deployment: paths.DeploymentID, Instance: paths.InstanceID}
 	result.Tree, err = source.PublishFileTree(ctx, tree, func(ctx context.Context, directory string) error {
+		if request.Role == config.RuntimeEvidenceRole {
+			return catalogSettings(cfg).InspectRetainedDirectory(ctx, directory)
+		}
 		if request.Role == config.BaselineRole {
 			return catalog.InspectBaselineExports(ctx, directory)
 		}
@@ -65,6 +68,9 @@ func canonicalFileRestoreSelection(cfg *config.Config, role string, plan []recov
 	action := "owner-recovery"
 	if role == config.BaselineRole {
 		tree.Destination, action = cfg.EffectivePaths().BaselineDir, "verified-copy"
+	}
+	if role == config.RuntimeEvidenceRole {
+		tree.Destination = cfg.EffectivePaths().RuntimeDir
 	}
 	if role == config.AcquisitionPolicyRole {
 		tree.Destination = cfg.CatalogCredentialPolicyDirectory()
