@@ -249,16 +249,20 @@ func (m *fleetMaintenance) read(ctx context.Context, blob fleetBlob) (runtime.Fl
 	if err != nil {
 		return runtime.FleetSnapshot{}, err
 	}
+	return decodeFleetBlob(data, blob)
+}
+
+func decodeFleetBlob(data []byte, blob fleetBlob) (runtime.FleetSnapshot, error) {
 	var snapshot runtime.FleetSnapshot
-	if err = json.Unmarshal(data, &snapshot); err != nil {
+	if err := json.Unmarshal(data, &snapshot); err != nil {
 		return snapshot, err
 	}
-	if err = snapshot.Validate(); err != nil {
+	if err := snapshot.Validate(); err != nil {
 		return snapshot, err
 	}
 	if blob.Adoption != nil {
 		snapshot.Head, snapshot.Adoption = blob.Head, blob.Adoption
-		if err = snapshot.Validate(); err != nil {
+		if err := snapshot.Validate(); err != nil {
 			return snapshot, err
 		}
 	}

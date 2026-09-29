@@ -46,7 +46,14 @@ func (m *fleetMaintenance) stageBlob(ctx context.Context, snapshot runtime.Fleet
 }
 
 func (s *FleetStore) readBlob(ctx context.Context, blob fleetBlob) ([]byte, error) {
-	encoded, _, err := s.store.ReadWithLifetime(ctx, s.publicationKey(blob.Head), fleetDescriptorMaxBytes)
+	return readFleetBlob(ctx, s.prefix, blob, func(ctx context.Context, key string, limit int) ([]byte, error) {
+		data, _, err := s.store.ReadWithLifetime(ctx, key, limit)
+		return data, err
+	})
+}
+
+func readFleetBlob(ctx context.Context, prefix string, blob fleetBlob, read func(context.Context, string, int) ([]byte, error)) ([]byte, error) {
+	encoded, err := read(ctx, fleetPublicationKey(prefix, blob.Head), fleetDescriptorMaxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read retained fleet receipt: %w", err)
 	}
@@ -65,7 +72,7 @@ func (s *FleetStore) readBlob(ctx context.Context, blob fleetBlob) ([]byte, erro
 		if len(digest) != 64 {
 			return nil, errors.New("invalid fleet chunk digest")
 		}
-		chunk, _, err := s.store.ReadWithLifetime(ctx, s.prefix+"blob:"+blob.ID+":"+digest, generationChunkSize)
+		chunk, err := read(ctx, prefix+"blob:"+blob.ID+":"+digest, generationChunkSize)
 		if err != nil {
 			return nil, fmt.Errorf("read selected fleet chunk: %w", err)
 		}

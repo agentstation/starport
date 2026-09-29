@@ -38,14 +38,14 @@ type RestoreSource struct {
 
 // InspectRestoreSource checks the complete bundle, retained references, and encryption-key access.
 // It opens no target and grants no admission permission.
-func InspectRestoreSource(ctx context.Context, request VerifyRequest, encryption *credentials.EncryptionService) (*RestoreSource, error) {
+func InspectRestoreSource(ctx context.Context, request VerifyRequest, encryption *credentials.EncryptionService, inspectors ...CapturedKVInspector) (*RestoreSource, error) {
 	if err := request.Validate(); err != nil {
 		return nil, err
 	}
 	if request.ScratchDirectory == "" {
 		request.ScratchDirectory = filepath.Dir(request.Directory)
 	}
-	manifest, references, err := InspectBundleReferences(ctx, request.Directory, request.ManifestSHA256, request.ScratchDirectory, encryption)
+	manifest, references, err := InspectBundleReferences(ctx, request.Directory, request.ManifestSHA256, request.ScratchDirectory, encryption, inspectors...)
 	if err != nil {
 		return nil, err
 	}

@@ -45,18 +45,22 @@ type ReferenceReport struct {
 	MissingBatchFiles             int64                    `json:"missing_batch_files"`
 }
 
+// CapturedKVInspector checks domain records in a verified image at its closed recovery boundary.
+// The view remains valid only during the call. Inspection grants no admission permission.
+type CapturedKVInspector func(context.Context, *KVSnapshotView, Record) error
+
 // InspectBundleReferences verifies a bundle, then checks private copies through domain owners.
 // Scratch must be an existing private directory. Live stores and providers are never opened.
-func InspectBundleReferences(ctx context.Context, directory, digest, scratch string, encryption *credentials.EncryptionService) (BundleManifest, ReferenceReport, error) {
+func InspectBundleReferences(ctx context.Context, directory, digest, scratch string, encryption *credentials.EncryptionService, inspectors ...CapturedKVInspector) (BundleManifest, ReferenceReport, error) {
 	manifest, err := VerifyBundle(ctx, directory, digest, encryption)
 	if err != nil {
 		return BundleManifest{}, ReferenceReport{}, err
 	}
-	report, err := inspectVerifiedBundleReferences(ctx, directory, scratch, manifest, encryption)
+	report, err := inspectVerifiedBundleReferences(ctx, directory, scratch, manifest, encryption, inspectors...)
 	return manifest, report, err
 }
 
-func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch string, manifest BundleManifest, encryption *credentials.EncryptionService) (report ReferenceReport, resultErr error) {
+func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch string, manifest BundleManifest, encryption *credentials.EncryptionService, inspectors ...CapturedKVInspector) (report ReferenceReport, resultErr error) {
 	records, err := OpenKVSnapshot(ctx, filepath.Join(directory, bundleKVFile), scratch, manifest.KV)
 	if err != nil {
 		return report, err
@@ -139,11 +143,33 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 		}
 		return nil
 	})
-	if err == nil && (correctionKinds["intent"] != report.JobCorrections.Intents || correctionKinds["history-next"] != report.JobCorrections.Intents || correctionKinds["applied"] != report.JobCorrections.Applied || correctionKinds["applied-next"] != report.JobCorrections.Applied || correctionKinds["reported"] != report.JobCorrections.Reported) {
-		err = jobs.ErrCorruptRecord
+	if err == nil {
+		err = verifyCorrectionCounts(correctionKinds, report)
 	}
 	if err == nil {
 		report.BudgetWindows, err = accounting.Verify(ctx)
 	}
+	if err == nil {
+		err = inspectCapturedDomains(ctx, records, manifest.Request.Boundary, inspectors)
+	}
 	return report, err
+}
+
+func inspectCapturedDomains(ctx context.Context, records *KVSnapshotView, boundary Record, inspectors []CapturedKVInspector) error {
+	for _, inspect := range inspectors {
+		if inspect == nil {
+			return errors.New("backup record inspector is required")
+		}
+		if err := inspect(ctx, records, boundary); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func verifyCorrectionCounts(correctionKinds map[string]int64, report ReferenceReport) error {
+	if correctionKinds["intent"] != report.JobCorrections.Intents || correctionKinds["history-next"] != report.JobCorrections.Intents || correctionKinds["applied"] != report.JobCorrections.Applied || correctionKinds["applied-next"] != report.JobCorrections.Applied || correctionKinds["reported"] != report.JobCorrections.Reported {
+		return jobs.ErrCorruptRecord
+	}
+	return nil
 }

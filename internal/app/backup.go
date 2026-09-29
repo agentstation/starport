@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/agentstation/starmap/pkg/productfiles"
+	"github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/recovery"
@@ -111,7 +112,7 @@ func CaptureBackup(ctx context.Context, cfg *config.Config, request recovery.Cap
 	if err != nil {
 		return result, err
 	}
-	_, references, err := recovery.InspectBundleReferences(ctx, request.Destination, digest, filepath.Dir(request.Destination), encryption)
+	_, references, err := recovery.InspectBundleReferences(ctx, request.Destination, digest, filepath.Dir(request.Destination), encryption, catalog.InspectCapturedCatalog)
 	if err != nil {
 		return result, err
 	}
@@ -131,7 +132,7 @@ func VerifyBackup(ctx context.Context, cfg *config.Config, request recovery.Veri
 	if scratch == "" {
 		scratch = filepath.Dir(request.Directory)
 	}
-	manifest, references, err := recovery.InspectBundleReferences(ctx, request.Directory, request.ManifestSHA256, scratch, encryption)
+	manifest, references, err := recovery.InspectBundleReferences(ctx, request.Directory, request.ManifestSHA256, scratch, encryption, catalog.InspectCapturedCatalog)
 	if err != nil {
 		return recovery.CaptureResult{}, err
 	}

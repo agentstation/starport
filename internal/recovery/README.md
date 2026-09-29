@@ -148,7 +148,13 @@ starport backup verify \
 ```
 
 Verification checks captured bytes, retained credentials, files, jobs, batches, and execution claims.
-It uses private snapshot copies and streams large payloads.
+It also checks catalog pointers, generation chunks, acceptance history, and retained fleet publications.
+Catalog checks bind deployment identity, publication receipts, recovery inputs, and adoption records to the captured state.
+Incomplete fleet uploads remain inactive when their retained bytes match the pending ownership record.
+A damaged catalog causes refusal before target creation.
+These checks do not grant catalog permission or replace replay validation during activation.
+
+Verification uses private snapshot copies and streams large payloads.
 The `--scratch` option selects an existing private directory for these copies.
 The default is the backup directory's parent.
 The command reports unfinished work, missing owner references, held reservations, and unknown budget histories.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/productfiles"
 	"github.com/agentstation/starport/internal/blob"
+	"github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/sqlstore"
@@ -74,7 +75,7 @@ func inspectBackupRestore(ctx context.Context, cfg *config.Config, request recov
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	source, err := recovery.InspectRestoreSource(ctx, request.VerifyRequest, encryption)
+	source, err := recovery.InspectRestoreSource(ctx, request.VerifyRequest, encryption, catalog.InspectCapturedCatalog)
 	if err != nil {
 		return nil, nil, nil, err
 	}
