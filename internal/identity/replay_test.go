@@ -145,6 +145,16 @@ func TestIdentityReplayCanonicalPrivatePayload(t *testing.T) {
 		require.NotContains(t, fmt.Sprintf(format, first), "private@example.com")
 		require.Contains(t, fmt.Sprintf(format, first), "recovery transition")
 	}
+	// fmt bypasses Formatter for a mismatched pointer verb on a value struct.
+	// Pointer fields must still hide private identity values in that diagnostic.
+	for _, value := range []any{first, &first} {
+		for _, format := range []string{"%p", "%+p", "%#p"} {
+			printed := fmt.Sprintf(format, value)
+			require.NotContains(t, printed, "private@example.com")
+			require.NotContains(t, printed, "provider:private-subject")
+			require.NotContains(t, printed, "person")
+		}
+	}
 	data, err := json.Marshal(first)
 	require.NoError(t, err)
 	var decoded RecoveryTransition

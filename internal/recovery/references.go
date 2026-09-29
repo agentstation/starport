@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
@@ -18,6 +19,7 @@ import (
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/agentstation/starport/internal/limits/reservation"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -68,14 +70,23 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 		return report, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, records.Close()) }()
-	if err := inspectIdentityReferences(ctx, directory, scratch, manifest, records, &report); err != nil {
+	image, err := sqlstore.OpenRelationalSnapshot(ctx, filepath.Join(directory, bundleSQLFile), manifest.SQL, scratch)
+	if err != nil {
 		return report, err
 	}
+	defer func() { resultErr = errors.Join(resultErr, image.Close()) }()
 	blobs, err := blob.OpenSnapshot(ctx, filepath.Join(directory, bundleBlobFile), scratch, manifest.Blobs)
 	if err != nil {
 		return report, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, blobs.Close()) }()
+	return inspectCapturedReferences(ctx, records, image, blobs, manifest.Request.Boundary, manifest.StartedAt, encryption, inspectors...)
+}
+
+func inspectCapturedReferences(ctx context.Context, records *KVSnapshotView, image *sqlstore.RelationalSnapshotView, blobs blob.SnapshotView, boundary Record, capturedAt time.Time, encryption *credentials.EncryptionService, inspectors ...CapturedKVInspector) (report ReferenceReport, resultErr error) {
+	if err := inspectCapturedIdentity(ctx, image, boundary, records, &report); err != nil {
+		return report, err
+	}
 	accounting, err := openBackupAccountingIndex(ctx, records)
 	if err != nil {
 		return report, err
@@ -100,7 +111,7 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 
 		case strings.HasPrefix(record.Key, account.StoragePrefix):
 			var owner account.Record
-			owner, checkErr = account.VerifyRecoveryRecord(record.Key, record.Value)
+			owner, checkErr = verifyCapturedAccount(record)
 			if checkErr == nil {
 				var unknown int64
 				unknown, checkErr = reservation.CheckBackupLimits(ctx, records, limits.ScopeAccount, owner.Account.ID, owner.Account.Limits)
@@ -111,13 +122,13 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 			}
 		case strings.HasPrefix(record.Key, credentials.ProviderCredentialStoragePrefix):
 			var count int
-			count, checkErr = credentials.VerifyRecoveryRecord(ctx, record.Key, record.Value, encryption)
+			count, checkErr = verifyCapturedCredential(ctx, record, encryption)
 			if checkErr == nil {
 				report.CredentialRecords++
 				report.CredentialValues += int64(count)
 			}
 		case strings.HasPrefix(record.Key, files.StoragePrefix):
-			_, checkErr = files.VerifyRecoveryRecord(ctx, record.Key, record.Value, blobs, manifest.StartedAt)
+			_, checkErr = files.VerifyRecoveryRecord(ctx, record.Key, record.Value, blobs, capturedAt)
 			if checkErr == nil {
 				report.FileRecords++
 			}
@@ -144,7 +155,7 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 				correctionKinds[kind]++
 			}
 		case strings.HasPrefix(record.Key, jobs.StoragePrefix):
-			checkErr = inspectJobExecution(ctx, records, blobs, manifest, record, &report, slots)
+			checkErr = inspectJobExecution(ctx, records, blobs, capturedAt, record, &report, slots)
 		}
 		if checkErr != nil {
 			return fmt.Errorf("recovery reference check failed for record %x: %w", sha256.Sum256([]byte(record.Key)), checkErr)
@@ -161,7 +172,7 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 		report.JobSlots, err = slots.Verify(ctx)
 	}
 	if err == nil {
-		err = inspectCapturedDomains(ctx, records, manifest.Request.Boundary, inspectors)
+		err = inspectCapturedDomains(ctx, records, boundary, inspectors)
 	}
 	return report, err
 }
@@ -183,4 +194,26 @@ func verifyCorrectionCounts(correctionKinds map[string]int64, report ReferenceRe
 		return jobs.ErrCorruptRecord
 	}
 	return nil
+}
+
+func verifyCapturedAccount(record storage.TransferRecord) (account.Record, error) {
+	var strict account.RecoveryRecord
+	if record.ExpiresAtMillis != 0 {
+		return account.Record{}, account.ErrCorruptRecord
+	}
+	if err := strict.UnmarshalJSON(record.Value); err != nil {
+		return account.Record{}, err
+	}
+	return account.VerifyRecoveryRecord(record.Key, record.Value)
+}
+
+func verifyCapturedCredential(ctx context.Context, record storage.TransferRecord, encryption *credentials.EncryptionService) (int, error) {
+	var strict credentials.RecoveryRecord
+	if record.ExpiresAtMillis != 0 {
+		return 0, credentials.ErrCorruptRecord
+	}
+	if err := strict.UnmarshalJSON(record.Value); err != nil {
+		return 0, err
+	}
+	return credentials.VerifyRecoveryRecord(ctx, record.Key, record.Value, encryption)
 }

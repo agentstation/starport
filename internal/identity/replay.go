@@ -80,7 +80,7 @@ func (RecoveryTransition) String() string { return "<private identity recovery t
 // GoString prevents diagnostic formatting from exposing private evidence.
 func (RecoveryTransition) GoString() string { return "<private identity recovery transition>" }
 
-// Format redacts every formatting verb, including pointer diagnostics.
+// Format redacts supported diagnostic formatting.
 func (RecoveryTransition) Format(state fmt.State, _ rune) {
 	_, _ = state.Write([]byte("<private identity recovery transition>"))
 }

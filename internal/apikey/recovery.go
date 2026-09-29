@@ -2,6 +2,7 @@ package apikey
 
 import (
 	"context"
+	"encoding/json/v2"
 	"errors"
 	"strings"
 
@@ -42,6 +43,9 @@ func VerifyRecoverySnapshot(ctx context.Context, source RecoverySource, checkOwn
 		}
 		if record.ExpiresAtMillis != 0 || len(record.Value) > policyrecord.MaxBytes {
 			return ErrCorruptRecord
+		}
+		if err := validateRecoverySchema(record); err != nil {
+			return err
 		}
 		switch {
 		case strings.HasPrefix(record.Key, apiKeyPrefix):
@@ -156,4 +160,25 @@ func verifyRecoveryKeyIndex(ctx context.Context, source RecoverySource, record s
 		return APIKey{}, ErrCorruptRecord
 	}
 	return key, nil
+}
+
+// validateRecoverySchema rejects fields whose permission meaning is unknown to this binary.
+func validateRecoverySchema(record storage.TransferRecord) error {
+	var target any
+	switch {
+	case strings.HasPrefix(record.Key, apiKeyPrefix):
+		target = new(apiKeyRecord)
+	case strings.HasPrefix(record.Key, hashKeyPrefix):
+		target = new(hashRecord)
+	case record.Key == collectionKey:
+		target = new(apiKeyCollectionRecord)
+	case record.Key == initialKey:
+		target = new(initialAPIKeyRecord)
+	default:
+		return ErrCorruptRecord
+	}
+	if json.Unmarshal(record.Value, target, json.RejectUnknownMembers(true)) != nil {
+		return ErrCorruptRecord
+	}
+	return nil
 }

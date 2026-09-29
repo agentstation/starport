@@ -2,6 +2,7 @@ package recovery
 
 import (
 	"context"
+	"time"
 
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/jobs"
@@ -33,10 +34,10 @@ func inspectBudgetExecution(ctx context.Context, records *KVSnapshotView, accoun
 	return checkErr
 }
 
-func inspectJobExecution(ctx context.Context, records *KVSnapshotView, blobs blob.SnapshotView, manifest BundleManifest, record storage.TransferRecord, report *ReferenceReport, slots *backupJobSlotIndex) error {
+func inspectJobExecution(ctx context.Context, records *KVSnapshotView, blobs blob.SnapshotView, capturedAt time.Time, record storage.TransferRecord, report *ReferenceReport, slots *backupJobSlotIndex) error {
 	var checkErr error
 	var job jobs.Job
-	job, checkErr = jobs.VerifyRecoveryRecord(ctx, record.Key, record.Value, blobs, manifest.StartedAt)
+	job, checkErr = jobs.VerifyRecoveryRecord(ctx, record.Key, record.Value, blobs, capturedAt)
 	if checkErr == nil && record.ExpiresAtMillis != 0 {
 		checkErr = jobs.ErrCorruptRecord
 	}
