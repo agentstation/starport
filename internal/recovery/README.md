@@ -563,7 +563,7 @@ Use the original backup manifest digest, restore operation, and fencing referenc
 Supply the exact expected closed boundary from preparation or the accepted epoch receipt.
 The command does not discover or approve a replacement boundary.
 
-Specify both replay sequences explicitly. Use zero before replay, or supply the sequence and digest from each last accepted native replay receipt.
+Specify the KV, SQL, and blob replay sequences explicitly. Use zero before replay, or supply the sequence and digest from each last accepted native replay receipt.
 For Valkey, supply the independently recorded `run_id:master_replid` through `--valkey-incarnation`.
 The command checks that identity against the configured target. Badger does not use this flag.
 
@@ -604,3 +604,22 @@ After SQL accepts the artifact, recovery refuses a missing journal instead of ge
 These library operations do not provide an operator replay or activation command.
 Typed owner validation, ordered native replay, complete graph inspection, and controlled activation remain required.
 Keep the accepted journal, original evidence package, and external fencing controls throughout recovery.
+
+
+## Retained file and asset replay
+
+`files.PrepareRecoveryReplay` preserves private file identities, expiry, output lineage, and exact prior bytes.
+A deletion requires positive blob retirement evidence. Missing bytes do not establish retirement.
+`storedbytes.PrepareAccountReplay` stages at most 64 claims per native step.
+Its final census must include every retained claim and the exact account total.
+Final graph inspection refuses unfinished byte-account reconstruction and inconsistent file-to-claim references.
+
+`blob.ReplayPublication` binds each asset publication or retirement to the original import claim and an ordered evidence receipt.
+Independent asset bytes have a 1 GiB per-asset limit and must match their declared size and digest.
+A durable pending cursor prevents inspection or activation until replay completes.
+An exact retry never republishes an older asset after later retirement.
+
+After blob replay, use the position-aware inspection and activation methods.
+The zero-position methods refuse a nonzero or incomplete replay chain.
+Operator inspection requires `--blob-replay-sequence`, with `--blob-replay-sha256` when the sequence is positive.
+These owner operations keep ordinary startup restricted. They do not establish complete history or authorize activation.

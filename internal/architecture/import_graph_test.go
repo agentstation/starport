@@ -191,6 +191,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/limits",
 		"github.com/agentstation/starport/internal/limits/jobslots",
 		"github.com/agentstation/starport/internal/limits/reservation",
+		"github.com/agentstation/starport/internal/limits/storedbytes",
 		"github.com/agentstation/starport/internal/sqlstore",
 		"github.com/agentstation/starport/internal/storage",
 	)
@@ -222,11 +223,12 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"net/url",
 	)
 	// Files owns the record that gives a stored object a name, an owner, and a
-	// lifetime. It reaches the two stores it writes to and nothing else. A
+	// lifetime. It reaches its stores and retained byte-claim vocabulary. A
 	// dependency on routing, execution, or a protocol codec would let the
 	// meaning of a request decide what a stored file is.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/files"],
 		"github.com/agentstation/starport/internal/blob",
+		"github.com/agentstation/starport/internal/limits/storedbytes",
 		"github.com/agentstation/starport/internal/storage",
 	)
 	// Jobs owns work that outlives its request. It reads operation vocabulary,
