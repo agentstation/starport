@@ -67,7 +67,7 @@ def validate_platform(directory, proof, system, tests):
     if not isinstance(system, str) or system not in RUNNERS or not isinstance(tests, list) or not tests:
         raise ValueError("Native qualification requires a supported platform and named tests.")
     run = proof["run"]
-    if proof.get("format", 1) not in {1, 2}:
+    if proof.get("format", 1) not in {1, 2, 3}:
         raise ValueError("Unsupported native evidence format.")
     validate_run(run)
     if not isinstance(run.get("jobs"), list) or any(not isinstance(job, dict) for job in run["jobs"]):
@@ -86,7 +86,7 @@ def validate_platform(directory, proof, system, tests):
         events = [json.loads(line) for line in raw.splitlines() if line.strip()]
         if not events or any(not isinstance(event, dict) or event.get("Action") == "fail" for event in events):
             raise ValueError("Native test evidence is empty or contains failed tests.")
-        if runner == "windows-2025" and proof.get("format", 1) == 2:
+        if runner == "windows-2025" and proof.get("format", 1) in {2, 3}:
             for index in range(app_shards.SHARDS):
                 name = f"App test ({runner}, {index})"
                 shard_jobs = [job for job in run["jobs"] if job.get("name") == name]
@@ -99,6 +99,20 @@ def validate_platform(directory, proof, system, tests):
             if any(event.get("Package") == app_shards.PACKAGE for event in events):
                 raise ValueError("Sharded application evidence overlaps the remaining native suite.")
             events.extend(app_events)
+        if system == "windows" and proof.get("format", 1) == 3:
+            for index in range(app_shards.SHARDS):
+                name = f"Recovery test ({runner}, {index})"
+                shard_jobs = [job for job in run["jobs"] if job.get("name") == name]
+                if len(shard_jobs) != 1 or shard_jobs[0].get("status") != "completed" or shard_jobs[0].get("conclusion") != "success":
+                    raise ValueError("A required native recovery shard job did not pass.")
+            recovery_events, recovery_toolchain = app_shards.verify_shards(lambda index, name: read_bound_file(
+                directory, f"native-catalog-recovery-{runner}-{index}/{name}", proof["sha256"]),
+                expected_head=run["headSha"], package=app_shards.RECOVERY_PACKAGE)
+            if recovery_toolchain.splitlines() != toolchain:
+                raise ValueError("Recovery shards differ from the native platform toolchain.")
+            if any(event.get("Package") == app_shards.RECOVERY_PACKAGE for event in events):
+                raise ValueError("Sharded recovery evidence overlaps the remaining native suite.")
+            events.extend(recovery_events)
         for test in tests:
             if not isinstance(test, dict):
                 raise ValueError("Native qualification has an invalid test record.")
@@ -148,11 +162,20 @@ def capture(root, run_id, directory):
         for name in ("roster.json", "tests.jsonl", "toolchain.txt"):
             path = f"native-catalog-app-windows-2025-{index}/{name}"
             digests[path] = hashlib.sha256((directory / path).read_bytes()).hexdigest()
-    proof = {"format": 2, "run": run, "sha256": digests}
+    format_version = 3 if any(job.get("name", "").startswith("Recovery test (") for job in run["jobs"]) else 2
+    if format_version == 3:
+        for runner in RUNNERS["windows"].values():
+            for index in range(app_shards.SHARDS):
+                for name in ("roster.json", "tests.jsonl", "toolchain.txt"):
+                    path = f"native-catalog-recovery-{runner}-{index}/{name}"
+                    digests[path] = hashlib.sha256((directory / path).read_bytes()).hexdigest()
+    proof = {"format": format_version, "run": run, "sha256": digests}
     # Check completeness before retaining a capture. Individual skipped contracts
     # remain unqualified when callers request them later.
     app_shards.verify_shards(lambda index, name: read_bound_file(
         directory, f"native-catalog-app-windows-2025-{index}/{name}", digests), expected_head=run["headSha"])
+    if format_version == 3:
+        validate_platform(directory, proof, "windows", [{"package": app_shards.RECOVERY_PACKAGE, "test": "TestRecoveryWitnessTransitions"}])
     (directory / "capture.json").write_text(json.dumps(proof, indent=2) + "\n")
 
 
