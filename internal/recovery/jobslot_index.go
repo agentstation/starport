@@ -112,12 +112,15 @@ func (i *backupJobSlotIndex) verifyTotals(ctx context.Context) (resultErr error)
 }
 
 func (i *backupJobSlotIndex) verifyAttachments(ctx context.Context) (resultErr error) {
+	// Validate both references even when a work row names an existing claim.
+	// That claim can point to different work and still appear safely unattached.
+
 	rows, err := i.tx.QueryContext(ctx, `SELECT c.record,a.record FROM slot_claims c
  LEFT JOIN slot_attachments a ON a.account=c.account AND a.kind=c.kind AND a.job=c.job
  UNION ALL
- SELECT NULL,a.record FROM slot_attachments a
+ SELECT c.record,a.record FROM slot_attachments a
  LEFT JOIN slot_claims c ON c.account=a.account AND c.id=a.id
- WHERE a.id<>'' AND c.id IS NULL`)
+ WHERE a.id<>''`)
 	if err != nil {
 		return err
 	}

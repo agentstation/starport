@@ -60,7 +60,7 @@ func TestBackupJobSlotsRejectLostAttachment(t *testing.T) {
 func TestBackupJobSlotOwnership(t *testing.T) {
 	for _, backend := range []string{storage.StorageTypeBadger, storage.StorageTypeValkey} {
 		t.Run(backend, func(t *testing.T) {
-			for _, mode := range []string{"active", "pending", "released-without-job", "release-ack-pending", "missing-counter", "missing-history", "low-counter", "high-counter", "missing-claim", "missing-job", "wrong-job", "wrong-kind", "released-active", "expiring-claim"} {
+			for _, mode := range []string{"active", "pending", "released-without-job", "release-ack-pending", "missing-counter", "missing-history", "low-counter", "high-counter", "missing-claim", "missing-job", "wrong-job", "wrong-kind", "pending-wrong-job", "pending-wrong-kind", "released-active", "expiring-claim"} {
 				t.Run(mode, func(t *testing.T) {
 					source, request, destination := backupBundleFixture(t)
 					kv, transfer, _ := kvTransferStores(t, backend)
@@ -105,14 +105,15 @@ func TestBackupJobSlotOwnership(t *testing.T) {
 						require.NoError(t, kv.Set(t.Context(), limits.OutstandingJobsPrefix+job.Account, []byte(fmt.Sprintf(`{"version":3,"total":%d}`, total))))
 					case "missing-claim":
 						require.NoError(t, kv.Delete(t.Context(), attachment.Key))
-					case "wrong-job", "wrong-kind":
+					case "wrong-job", "wrong-kind", "pending-wrong-job", "pending-wrong-kind":
 						var claim jobslots.Claim
 						require.NoError(t, json.Unmarshal(attachment.NewValue, &claim))
-						if mode == "wrong-job" {
+						if strings.HasSuffix(mode, "wrong-job") {
 							claim.JobID = "another"
 						} else {
 							claim.Kind = "batch"
 						}
+						claim.Attached = !strings.HasPrefix(mode, "pending-")
 						data, err := json.Marshal(claim)
 						require.NoError(t, err)
 						require.NoError(t, kv.Set(t.Context(), attachment.Key, data))
