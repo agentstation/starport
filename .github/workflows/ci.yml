@@ -283,9 +283,16 @@ jobs:
   durable-work-recovery:
     name: Durable Work Recovery
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       valkey:
+        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        ports:
+          - 6379/tcp
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      valkey-replacement:
         image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
         ports:
           - 6379/tcp
@@ -302,6 +309,17 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres -d starport_test"
           --health-interval 5s --health-timeout 3s --health-retries 10
+      mysql:
+        image: mysql@sha256:3466ba4a4828aa8d46fb7c3bc16b67b781c98413cf4ea0fac6feaa6e881faa26
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_ROOT_HOST: '%'
+          MYSQL_DATABASE: starport_test
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval 5s --health-timeout 3s --health-retries 20
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -318,11 +336,13 @@ jobs:
         run: |
           go install github.com/minio/minio@v0.0.0-20250907161309-07c3a429bfed
           go version -m "$GOBIN/minio" > recovery-objectstore-build.txt
-      - name: Verify durable reservations and batch recovery
+      - name: Verify durable work and complete backup storage
         shell: bash
         env:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+          TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
           TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
+          TEST_MYSQL_DSN: root@tcp(127.0.0.1:${{ job.services.mysql.ports['3306'] }})/starport_test?parseTime=true
           TEST_BLOB_S3_ENDPOINT: http://127.0.0.1:9000
           MINIO_ROOT_USER: starport-test
           MINIO_ROOT_PASSWORD: starport-local-test-only
@@ -335,6 +355,13 @@ jobs:
           curl --fail --silent --show-error --retry 15 --retry-connrefused \
             --retry-delay 1 --max-time 3 "$TEST_BLOB_S3_ENDPOINT/minio/health/live"
           go test -json -race -count=1 -timeout 5m ./internal/limits/reservation ./internal/jobs > fleet-reservation-jobs.jsonl
+          # Separate the full runtime from transfer adapters to bound peak memory.
+          go test -json -race -count=1 -p 1 -timeout 10m \
+            ./internal/storage ./internal/sqlstore ./internal/blob ./internal/recovery > backup-storage.jsonl
+          go test -json -race -count=1 -timeout 7m ./internal/catalog \
+            -run '^TestCapturedFleetCatalogNativeReferences$' > backup-catalog.jsonl
+          go test -json -race -count=1 -timeout 5m ./internal/app \
+            -run '^(TestRestoreApplicationSharedRecipe|TestRestorePublishFilesSharedRecipe)$' > backup-application.jsonl
       - name: Retain durable work evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -342,6 +369,9 @@ jobs:
           name: durable-work-recovery
           path: |
             fleet-reservation-jobs.jsonl
+            backup-storage.jsonl
+            backup-catalog.jsonl
+            backup-application.jsonl
             recovery-objectstore-build.txt
             recovery-objectstore.log
           retention-days: 7

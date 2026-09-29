@@ -98,10 +98,12 @@ release: console-build ## Build optimized production binary
 ##@ Testing & Quality
 ### Run 'make check' for all quality checks
 
+# The complete application suite shares the native CI package allowance.
+# Individual contract deadlines remain unchanged.
 .PHONY: test
 test: ## Run all tests
 	@echo "Running tests..."
-	$(GO) test $(GOFLAGS) ./...
+	$(GO) test -timeout 30m $(GOFLAGS) ./...
 
 .PHONY: test-authorization-capacity
 test-authorization-capacity: ## Measure authorization heap during concurrent tenant churn
@@ -113,12 +115,12 @@ tests: test ## Alias for test
 .PHONY: test-race
 test-race: ## Run tests with race detector
 	@echo "Running tests with race detector..."
-	$(GO) test -race $(GOFLAGS) ./...
+	$(GO) test -race -timeout 30m $(GOFLAGS) ./...
 
 .PHONY: test-coverage
 test-coverage: ## Run tests with coverage report
 	@echo "Running tests with coverage..."
-	$(GO) test -coverprofile=coverage.out ./...
+	$(GO) test -timeout 30m -coverprofile=coverage.out ./...
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 	@$(GO) tool cover -func=coverage.out | grep total | awk '{print "Total coverage: " $$3}'
