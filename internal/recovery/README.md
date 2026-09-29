@@ -517,3 +517,17 @@ It repeats those checks after the final callback.
 Changed control state causes refusal. Inspection hides native control records and preserves historical receipts.
 
 It grants no write or admission authority. Ordinary backup enumeration still refuses imported stores.
+
+## Closed SQL and blob inspection
+
+`sqlstore.SnapshotRelationalImport` captures an exact import claim and replay position under the native migration owner.
+The owner checks the retained barrier and replay receipt before and after the consistent read.
+The resulting private SQL image retains its control records for validation.
+
+`blob.ImportInspector` captures filesystem or object-storage bytes under their exact import claim.
+It refuses any activation for that claim and checks controls during and after capture.
+The filesystem target refuses an output path inside its imported directory.
+Portable blob images omit current native controls and retain historical activation receipts.
+
+Both owners expose a final read-only guard for checks across stores.
+External fencing remains required throughout inspection. A successful capture does not authorize activation.

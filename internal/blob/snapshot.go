@@ -163,12 +163,16 @@ func inspectBlobEnvelope(address string, size int64, input io.Reader) (io.Reader
 }
 
 func (f *Filesystem) walkObjects(ctx context.Context, yield blobObjectVisitor) (resultErr error) {
+	return f.walkObjectsChecked(ctx, func(ctx context.Context) error { return checkFilesystemActivation(ctx, f.root) }, yield)
+}
+
+func (f *Filesystem) walkObjectsChecked(ctx context.Context, guard func(context.Context) error, yield blobObjectVisitor) (resultErr error) {
 	root, err := os.OpenRoot(f.root)
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
-	if err := checkFilesystemActivation(ctx, f.root); err != nil {
+	if err := guard(ctx); err != nil {
 		return err
 	}
 	for _, namespace := range []string{objectsDir, retainedDir, ".starport"} {
