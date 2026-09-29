@@ -1,6 +1,8 @@
 package recovery
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json/v2"
 	"fmt"
 	"strings"
@@ -14,6 +16,29 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBackupRejectsUnfinishedSlotReplay(t *testing.T) {
+	empty := sha256.Sum256([]byte("starport-jobslots-account-v1"))
+	valid := fmt.Sprintf(`{"version":3,"account":"owner","claims":0,"held":0,"sha256":"%x"}`, empty)
+	for _, backend := range []string{storage.StorageTypeBadger, storage.StorageTypeValkey} {
+		t.Run(backend, func(t *testing.T) {
+			for name, value := range map[string]string{"valid": valid, "malformed": "invalid"} {
+				t.Run(name, func(t *testing.T) {
+					source, request, destination := backupBundleFixture(t)
+					kv, transfer, _ := kvTransferStores(t, backend)
+					source.KV = transfer
+					key := jobslots.ReplayStoragePrefix + base64.RawURLEncoding.EncodeToString([]byte("owner"))
+					require.NoError(t, kv.Set(t.Context(), key, []byte(value)))
+					_, err := inspectReferenceFixture(t, source, request, destination)
+					require.ErrorIs(t, err, jobslots.ErrHistoryUnknown)
+					retained, err := kv.Get(t.Context(), key)
+					require.NoError(t, err)
+					require.Equal(t, []byte(value), retained)
+				})
+			}
+		})
+	}
+}
 
 func TestBackupJobSlotsRejectLostAttachment(t *testing.T) {
 	for _, lostSlot := range []bool{false, true} {
