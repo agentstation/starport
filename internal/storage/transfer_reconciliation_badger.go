@@ -44,7 +44,7 @@ func (b *badgerTransfer) ReconcileImport(ctx context.Context, claim []byte, sequ
 		}
 		if len(plan.writes) > 0 {
 			for _, mutation := range mutations {
-				current, err := readBadgerReconciliation(txn, mutation.Key, reconciliationMaxBytes)
+				current, err := readBadgerReconciliation(txn, mutation.Key, ImportReplayMaxBytes)
 				if err != nil {
 					return err
 				}

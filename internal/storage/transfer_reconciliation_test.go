@@ -113,7 +113,7 @@ func TestImportReconciliationInvalidInputs(t *testing.T) {
 					case "reserved":
 						mutations = []CompareAndSwapMutation{{Key: TransferBarrierKey}}
 					case "large":
-						mutations = []CompareAndSwapMutation{{Key: "data", NewValue: make([]byte, reconciliationMaxBytes+1)}}
+						mutations = []CompareAndSwapMutation{{Key: "data", NewValue: make([]byte, ImportReplayMaxBytes+1)}}
 					case "ttl":
 						mutations = []CompareAndSwapMutation{{Key: "data", TTL: time.Minute}}
 					case "absent-key":

@@ -91,6 +91,8 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 		switch {
 		case strings.HasPrefix(record.Key, jobslots.ReplayStoragePrefix):
 			checkErr = jobslots.ErrHistoryUnknown
+		case strings.HasPrefix(record.Key, reservation.WindowReplayPrefix):
+			checkErr = reservation.ErrHistoryUnknown
 		case strings.HasPrefix(record.Key, jobslots.ClaimStoragePrefix), strings.HasPrefix(record.Key, limits.OutstandingJobsPrefix):
 			checkErr = slots.Add(ctx, record)
 		case strings.HasPrefix(record.Key, reservation.StoragePrefix):

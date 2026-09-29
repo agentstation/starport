@@ -13,8 +13,9 @@ import (
 const (
 	transferReconciliationPrefix  = "storage:reconciliation:v1:"
 	transferReconciliationCurrent = "storage:reconciliation-current:v1"
-	reconciliationMaxBytes        = 4 << 20
-	reconciliationMaxMutations    = 128
+	// ImportReplayMaxBytes bounds total keys, preimages, and new values in one native replay step.
+	ImportReplayMaxBytes       = 4 << 20
+	reconciliationMaxMutations = 128
 )
 
 // ImportReconciler commits ordered owner mutations and their receipt under an import barrier.
@@ -68,7 +69,7 @@ func newReconciliationReceipt(claim []byte, sequence int64, previous, evidence s
 			return reconciliationReceipt{}, nil, ErrInvalidMutation
 		}
 		total += len(mutation.Key) + len(mutation.ExpectedValue) + len(mutation.NewValue)
-		if total > reconciliationMaxBytes {
+		if total > ImportReplayMaxBytes {
 			return reconciliationReceipt{}, nil, ErrValueTooLarge
 		}
 	}
