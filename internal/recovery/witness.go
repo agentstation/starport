@@ -45,12 +45,20 @@ func New(db *sqlstore.DB) (*Witness, error) {
 
 // Current reads the recovery record. Missing records confer no permission.
 func (w *Witness) Current(ctx context.Context, deployment string) (Record, error) {
+	return w.currentWith(ctx, w.db, deployment)
+}
+
+type recoveryReader interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func (w *Witness) currentWith(ctx context.Context, reader recoveryReader, deployment string) (Record, error) {
 	if err := validDeployment(deployment); err != nil {
 		return Record{}, err
 	}
 	r := Record{DeploymentID: deployment}
 	var opened int
-	err := w.db.QueryRowContext(ctx, w.db.Bind(`SELECT epoch, gate_open, backend_id, evidence
+	err := reader.QueryRowContext(ctx, w.db.Bind(`SELECT epoch, gate_open, backend_id, evidence
 FROM catalog_recovery WHERE deployment_id = ?`), deployment).Scan(&r.Epoch, &opened, &r.BackendID, &r.Evidence)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Record{}, ErrClosed
@@ -121,10 +129,18 @@ func (w *Witness) Approve(ctx context.Context, expected Record, backend, evidenc
 }
 
 func (w *Witness) replace(ctx context.Context, expected, next Record) (Record, error) {
+	return w.replaceWith(ctx, w.db, expected, next)
+}
+
+type recoveryWriter interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func (w *Witness) replaceWith(ctx context.Context, writer recoveryWriter, expected, next Record) (Record, error) {
 	if err := validDeployment(expected.DeploymentID); err != nil {
 		return Record{}, err
 	}
-	result, err := w.db.ExecContext(ctx, w.db.Bind(`UPDATE catalog_recovery
+	result, err := writer.ExecContext(ctx, w.db.Bind(`UPDATE catalog_recovery
 SET epoch = ?, gate_open = ?, backend_id = ?, evidence = ?, bootstrap_allowed = 0
 WHERE deployment_id = ? AND epoch = ? AND gate_open = ? AND backend_id = ? AND evidence = ?`),
 		next.Epoch, gateValue(next.Open), next.BackendID, next.Evidence,

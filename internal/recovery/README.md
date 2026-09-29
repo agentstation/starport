@@ -114,6 +114,13 @@ SQL restore clears the previous backend identity from its closed boundary.
 Catalog preparation accepts that closed boundary while requiring explicit source approval and a replacement backend identity.
 Ordinary catalog startup and budget authority remain unavailable until separate approval.
 
+`Witness.ApproveImportedAuthority` installs the native authority under the SQL activation transaction.
+It then commits SQL approval, completion receipts, and SQL barrier removal together.
+A lost native reply leaves SQL closed and permits an exact retry.
+Retries cannot restore permission after a later withdrawal.
+The coordinator must first prepare the catalog, reconcile history, and activate the other components.
+This method does not verify those external steps.
+
 `catalog.AdoptFleet` retains its complete catalog-only procedure and opens authority after catalog validation.
 Full deployment recovery must first reconcile independent history and activate the other storage components.
 Neither catalog operation releases SQL, KV, or blob import barriers.
