@@ -44,9 +44,7 @@ func NewFilesystem(root string) (*Filesystem, error) {
 	if err != nil {
 		return nil, fmt.Errorf("blob: resolve the filesystem root: %w", err)
 	}
-	if _, err := os.Lstat(filepath.Join(absolute, filepath.FromSlash(blobImportKey))); err == nil {
-		return nil, ErrImportRestricted
-	} else if !errors.Is(err, fs.ErrNotExist) {
+	if err := checkFilesystemActivation(context.Background(), absolute); err != nil {
 		return nil, err
 	}
 	// Record the first existing ancestor before creating paths. Its directory

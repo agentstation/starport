@@ -30,11 +30,7 @@ func (o *ObjectStore) ensureLayout(ctx context.Context) error {
 }
 
 func (o *ObjectStore) probeLayout(ctx context.Context) error {
-	_, err := o.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(blobImportKey))})
-	if err == nil {
-		return ErrImportRestricted
-	}
-	if !isAbsent(err) {
+	if err := checkActivationBarrier(ctx, objectActivation{store: o}); err != nil {
 		return err
 	}
 	if err := o.readLayout(ctx); !isAbsent(err) {

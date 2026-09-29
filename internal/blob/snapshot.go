@@ -20,8 +20,9 @@ import (
 
 const blobSnapshotFormat = "starport-blob-tar-v1"
 
-// Snapshot identifies committed bytes and permanent retirement markers.
-// It excludes incomplete uploads and noncurrent object versions.
+// Snapshot identifies committed bytes, retirement markers, and activation history.
+// Objects counts archive entries, including historical activation receipts.
+// It excludes incomplete uploads, native activation authority, and noncurrent versions.
 type Snapshot struct {
 	Format  string `json:"format"`
 	Size    int64  `json:"size"`
@@ -135,6 +136,9 @@ func writeBlobSnapshot(ctx context.Context, destination string, walk blobObjectW
 }
 
 func inspectBlobEnvelope(address string, size int64, input io.Reader) (io.Reader, bool, error) {
+	if validActivationAddress(address) {
+		return inspectActivationHistory(address, size, input)
+	}
 	if strings.HasPrefix(address, objectsDir+"/") {
 		return input, false, nil
 	}
@@ -164,12 +168,10 @@ func (f *Filesystem) walkObjects(ctx context.Context, yield blobObjectVisitor) (
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
-	if _, err := root.Lstat(blobImportKey); err == nil {
-		return ErrImportRestricted
-	} else if !errors.Is(err, fs.ErrNotExist) {
+	if err := checkFilesystemActivation(ctx, f.root); err != nil {
 		return err
 	}
-	for _, namespace := range []string{objectsDir, retainedDir} {
+	for _, namespace := range []string{objectsDir, retainedDir, ".starport"} {
 		if _, err := root.Lstat(namespace); errors.Is(err, fs.ErrNotExist) {
 			continue
 		} else if err != nil {
@@ -185,6 +187,17 @@ func (f *Filesystem) walkObjects(ctx context.Context, yield blobObjectVisitor) (
 			if entry.IsDir() {
 				return nil
 			}
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			skip, err := backupControlEntry(address, info)
+			if err != nil {
+				return err
+			}
+			if skip {
+				return nil
+			}
 			if !entry.Type().IsRegular() || !validBlobAddress(address) {
 				return errors.New("blob: backup refuses an unexpected filesystem entry")
 			}
@@ -192,7 +205,7 @@ func (f *Filesystem) walkObjects(ctx context.Context, yield blobObjectVisitor) (
 			if err != nil {
 				return err
 			}
-			info, err := file.Stat()
+			info, err = file.Stat()
 			if err != nil {
 				return errors.Join(err, file.Close())
 			}
@@ -220,7 +233,7 @@ func (o *ObjectStore) walkObjects(ctx context.Context, legacy bool, yield blobOb
 			if !ok {
 				return errors.New("blob: listing escaped the selected prefix")
 			}
-			if !legacy && name == blobLayoutKey {
+			if !legacy && (name == blobLayoutKey || name == blobActivationCurrent || name == blobImportKey) {
 				continue
 			}
 			if name == blobImportKey {
