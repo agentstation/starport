@@ -64,16 +64,7 @@ func TestFleetAdoptionRecoversLostSelectionResponse(t *testing.T) {
 	provider := kv.(storage.IncarnationProvider)
 	settings := identityTestSettings(filepath.Join(t.TempDir(), "state"), "", "127.0.0.1:0")
 	settings.DeploymentID = fleet.identity.DeploymentID
-	connected, err := openRuntime(ctx, kv, settings, runtimeCollectors{fleet: fleet})
-	require.NoError(t, err)
-	_, err = connected.runtime.RefreshSource(ctx)
-	require.NoError(t, err)
-	candidate, err := connected.CurrentCandidate(ctx)
-	require.NoError(t, err)
-	require.NoError(t, connected.Accept(ctx, candidate))
-	require.NoError(t, connected.Close(ctx))
-	original, err := fleet.CurrentPublication(ctx)
-	require.NoError(t, err)
+	original := seedFleetAdoptionCatalog(t, fleet)
 	// Keep an older input revision outside both selected heads.
 	// Recovery must validate it before opening admission after an interruption.
 	grant, err := fleet.AcquireLease(ctx, "fixture-publisher", time.Minute)
