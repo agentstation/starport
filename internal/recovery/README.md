@@ -574,3 +574,33 @@ An interrupted or failed inspection produces no successful receipt. Preserve its
 
 Use `starport backup inspect-import --help` for the required flags.
 Inspection leaves all import barriers closed. It does not complete migration or permit a gateway restart.
+
+## Independent history acceptance
+
+`RestoreSource.VerifyHistoryPackage` reads a private `history.json` and its declared JSON payloads.
+The caller supplies the independently retained manifest digest and the selected target-identity digest.
+The manifest binds the backup, deployment, operation, fencing reference, and prepared component identities.
+It also records the reviewed interval, evidence references, highest known epoch, and ordered typed steps.
+Verification proves byte integrity and format bounds. It does not prove that external evidence is complete.
+
+The manifest limit is 1 MiB. It permits at most 4,096 evidence sources and 4,096 ordered steps.
+Each JSON payload has an 8 MiB limit. Their combined limit is 64 MiB.
+
+Paths must follow `payloads/000001.json` in consecutive order.
+Unknown kinds, duplicate members, unknown fields, and changed digests fail verification.
+The verified package retains private immutable copies of its JSON payloads.
+
+`Witness.AcceptImportedHistory` requires explicit operator attestations for external fencing and previously admitted work.
+A `replay_complete` disposition also requires the operator to accept complete interval coverage explicitly.
+An empty step list cannot establish that coverage.
+Missing coverage permits only `remain_restricted`. It grants no activation permission.
+
+Acceptance first publishes a private immutable `acceptance.json` in an existing journal directory.
+It then binds that artifact's digest through the native SQL reconciliation receipt and a new closed epoch.
+The epoch exceeds the independently reported highest epoch.
+Exact retries require the same artifact, import claim, and current closed boundary.
+After SQL accepts the artifact, recovery refuses a missing journal instead of generating another one.
+
+These library operations do not provide an operator replay or activation command.
+Typed owner validation, ordered native replay, complete graph inspection, and controlled activation remain required.
+Keep the accepted journal, original evidence package, and external fencing controls throughout recovery.
