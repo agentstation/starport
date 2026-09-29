@@ -12,6 +12,10 @@ import (
 // The caller must stop cross-store writes and retain the result in the deployment manifest.
 // This method does not change the source schema or approve recovered permissions.
 func (db *DB) SnapshotRelational(ctx context.Context, destination string) (SQLiteSnapshotResult, error) {
+	return db.snapshotRelational(ctx, destination, nil)
+}
+
+func (db *DB) snapshotRelational(ctx context.Context, destination string, guard func(context.Context, *sql.Conn) error) (SQLiteSnapshotResult, error) {
 	if db == nil || db.DB == nil {
 		return SQLiteSnapshotResult{}, ErrClosed
 	}
@@ -30,7 +34,7 @@ func (db *DB) SnapshotRelational(ctx context.Context, destination string) (SQLit
 		if err := candidate.Migrate(ctx); err != nil {
 			return SQLiteSnapshot{}, errors.Join(err, candidate.Close())
 		}
-		copyErr := db.exportRelational(ctx, candidate)
+		copyErr := db.exportRelational(ctx, candidate, guard)
 		if err := errors.Join(copyErr, candidate.Close()); err != nil {
 			return SQLiteSnapshot{}, err
 		}
@@ -39,12 +43,17 @@ func (db *DB) SnapshotRelational(ctx context.Context, destination string) (SQLit
 	})
 }
 
-func (db *DB) exportRelational(ctx context.Context, candidate *DB) (resultErr error) {
+func (db *DB) exportRelational(ctx context.Context, candidate *DB, guard func(context.Context, *sql.Conn) error) (resultErr error) {
 	owner, err := db.acquireMigrationOwner(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, owner.close()) }()
+	if guard != nil {
+		if err := guard(ctx, owner.conn); err != nil {
+			return err
+		}
+	}
 	cleanup, err := prepareMySQLTransfer(ctx, owner)
 	if err != nil {
 		return err
@@ -82,6 +91,11 @@ func (db *DB) exportRelational(ctx context.Context, candidate *DB) (resultErr er
 	}
 	if err := source.Commit(); err != nil {
 		return err
+	}
+	if guard != nil {
+		if err := guard(ctx, owner.conn); err != nil {
+			return err
+		}
 	}
 	return target.Commit()
 }

@@ -2,9 +2,11 @@ package recovery
 
 import (
 	"context"
+	"time"
 
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -32,12 +34,15 @@ func inspectBudgetExecution(ctx context.Context, records *KVSnapshotView, accoun
 	return checkErr
 }
 
-func inspectJobExecution(ctx context.Context, records *KVSnapshotView, blobs blob.SnapshotView, manifest BundleManifest, record storage.TransferRecord, report *ReferenceReport) error {
+func inspectJobExecution(ctx context.Context, records *KVSnapshotView, blobs blob.SnapshotView, capturedAt time.Time, record storage.TransferRecord, report *ReferenceReport, slots *backupJobSlotIndex) error {
 	var checkErr error
 	var job jobs.Job
-	job, checkErr = jobs.VerifyRecoveryRecord(ctx, record.Key, record.Value, blobs, manifest.StartedAt)
+	job, checkErr = jobs.VerifyRecoveryRecord(ctx, record.Key, record.Value, blobs, capturedAt)
 	if checkErr == nil && record.ExpiresAtMillis != 0 {
 		checkErr = jobs.ErrCorruptRecord
+	}
+	if checkErr == nil {
+		checkErr = slots.Attach(ctx, jobslots.RecoveryAttachment{Account: job.Account, ClaimID: job.SlotID, JobID: job.ID, Kind: "video", Released: job.SlotReleased, Finished: job.State.Terminal()})
 	}
 	if checkErr == nil {
 		var execution jobs.RecoveryExecution
@@ -59,4 +64,20 @@ func inspectJobExecution(ctx context.Context, records *KVSnapshotView, blobs blo
 		}
 	}
 	return checkErr
+}
+
+func inspectBatchExecution(ctx context.Context, records *KVSnapshotView, record storage.TransferRecord, report *ReferenceReport, slots *backupJobSlotIndex) error {
+	batch, missing, err := jobs.VerifyRecoveryBatch(ctx, record.Key, record.Value, records)
+	if err != nil {
+		return err
+	}
+	if record.ExpiresAtMillis != 0 {
+		return jobs.ErrCorruptBatchRecord
+	}
+	if err := slots.Attach(ctx, jobslots.RecoveryAttachment{Account: batch.Account, ClaimID: batch.SlotID, JobID: batch.ID, Kind: "batch", Released: batch.SlotReleased, Finished: batch.RunFinished}); err != nil {
+		return err
+	}
+	report.BatchRecords++
+	report.MissingBatchFiles += missing
+	return nil
 }

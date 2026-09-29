@@ -9,12 +9,13 @@ import (
 
 // CaptureRequest selects an explicit backup destination and operator evidence.
 type CaptureRequest struct {
-	Destination     string
-	OperationID     string
-	Build           string
-	FencingEvidence string
-	KeyReference    string
-	EntryLimit      int
+	Destination      string
+	OperationID      string
+	Build            string
+	FencingEvidence  string
+	KeyReference     string
+	EntryLimit       int
+	UnprefixedValkey bool
 }
 
 // Validate refuses incomplete requests before any storage operation.
@@ -58,10 +59,12 @@ func (r VerifyRequest) Validate() error {
 // CaptureResult contains the receipt an operator retains outside the bundle.
 // It contains no secret values or credential references.
 type CaptureResult struct {
-	Directory      string          `json:"directory"`
-	ManifestSHA256 string          `json:"manifest_sha256"`
-	DeploymentID   string          `json:"deployment_id"`
-	RecoveryEpoch  int64           `json:"recovery_epoch"`
-	Artifacts      int             `json:"artifacts"`
-	References     ReferenceReport `json:"references"`
+	Directory        string          `json:"directory"`
+	ManifestSHA256   string          `json:"manifest_sha256"`
+	DeploymentID     string          `json:"deployment_id"`
+	RecoveryEpoch    int64           `json:"recovery_epoch"`
+	Artifacts        int             `json:"artifacts"`
+	KVRecords        int64           `json:"kv_records"`
+	UnprefixedValkey bool            `json:"unprefixed_valkey,omitzero"`
+	References       ReferenceReport `json:"references"`
 }

@@ -120,6 +120,26 @@ func (a *Authority) CompareAndSwapInWindow(ctx context.Context, mutations []stor
 // history. This operation does not execute or verify those external steps.
 // Partial results stay closed. An exact retry can finish the same operation.
 func (w *Witness) ApproveAuthority(ctx context.Context, backend storage.IncarnationProvider, expected Record, identity, evidence, operation string) (Record, error) {
+	next, err := w.prepareAuthority(ctx, backend, expected, identity, evidence, operation)
+	if err != nil {
+		return Record{}, err
+	}
+	current, err := w.Current(ctx, expected.DeploymentID)
+	if err != nil {
+		return Record{}, err
+	}
+	if current == next {
+		return next, nil
+	}
+	return w.Approve(ctx, expected, identity, evidence)
+}
+
+// prepareAuthority installs the native record without opening SQL approval.
+func (w *Witness) prepareAuthority(ctx context.Context, backend storage.IncarnationProvider, expected Record, identity, evidence, operation string) (Record, error) {
+	return w.prepareAuthorityWith(ctx, w.db, backend, expected, identity, evidence, operation)
+}
+
+func (w *Witness) prepareAuthorityWith(ctx context.Context, reader recoveryReader, backend storage.IncarnationProvider, expected Record, identity, evidence, operation string) (Record, error) {
 	if backend == nil || expected.Open || expected.Epoch <= 0 || (FreshRequest{OperationID: operation, Evidence: evidence}).Validate() != nil {
 		return Record{}, ErrConflict
 	}
@@ -129,7 +149,7 @@ func (w *Witness) ApproveAuthority(ctx context.Context, backend storage.Incarnat
 	if err != nil {
 		return Record{}, err
 	}
-	current, err := w.Current(ctx, expected.DeploymentID)
+	current, err := w.currentWith(ctx, reader, expected.DeploymentID)
 	if err != nil {
 		return Record{}, err
 	}
@@ -165,7 +185,7 @@ func (w *Witness) ApproveAuthority(ctx context.Context, backend storage.Incarnat
 			return Record{}, err
 		}
 	}
-	return w.Approve(ctx, expected, identity, evidence)
+	return next, nil
 }
 
 var _ storage.TimeBoundStore = (*Authority)(nil)

@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentstation/starmap/acquisition"
 	"github.com/agentstation/starmap/runtime"
 	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/storage"
@@ -53,10 +52,15 @@ func (r FleetAdoptionRequest) validate() error {
 	}
 	for _, record := range []recovery.Record{r.SourceApproval, r.Closed} {
 		if strings.TrimSpace(record.DeploymentID) == "" || len(record.DeploymentID) > 128 ||
-			strings.TrimSpace(record.BackendID) == "" || len(record.BackendID) > 256 ||
+			len(record.BackendID) > 256 || (record.BackendID != "" && strings.TrimSpace(record.BackendID) == "") ||
 			strings.TrimSpace(record.Evidence) == "" || len(record.Evidence) > 4096 {
 			return recovery.ErrConflict
 		}
+	}
+	// SQL restore clears the closed record's former backend identity. The source
+	// approval and selected replacement still require their own identities.
+	if r.SourceApproval.BackendID == "" {
+		return recovery.ErrConflict
 	}
 	if r.Closed.Open || r.Closed.Epoch <= 0 || r.Head == (runtime.FleetHead{}) || strings.TrimSpace(r.BackendID) == "" || len(r.BackendID) > 256 ||
 		r.Head.Identity.DeploymentID != r.Closed.DeploymentID || !r.SourceApproval.Open || r.SourceApproval.DeploymentID != r.Head.Identity.DeploymentID ||
@@ -89,27 +93,11 @@ func AdoptFleet(ctx context.Context, backend storage.IncarnationProvider, witnes
 	if settings.DeploymentID != request.Closed.DeploymentID {
 		return recovery.Record{}, recovery.ErrConflict
 	}
-	options, err := settings.starmapOptions()
+	options, closeSource, err := fleetAdoptionOptions(ctx, settings)
 	if err != nil {
 		return recovery.Record{}, err
 	}
-	providers, err := acquisition.NewAcquirer()
-	if err != nil {
-		return recovery.Record{}, err
-	}
-	metadata, err := settings.metadataCollector()
-	if err != nil {
-		return recovery.Record{}, err
-	}
-	options = append(options, runtime.WithAcquirer(providers), runtime.WithSourceAcquirer(metadata))
-	if settings.Source == string(runtime.SourceStarmap) {
-		source, err := settings.cascadeSource(ctx)
-		if err != nil {
-			return recovery.Record{}, err
-		}
-		defer func() { _ = source.Close() }()
-		options = append(options, runtime.WithSource(source))
-	}
+	defer closeSource()
 	return adoptFleet(ctx, backend, witness, request, options)
 }
 
@@ -122,6 +110,15 @@ func adoptFleet(ctx context.Context, backend storage.IncarnationProvider, witnes
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
+	if _, err := selectFleetAdoption(ctx, backend, witness, request, options); err != nil {
+		return recovery.Record{}, err
+	}
+	return witness.ApproveAuthority(ctx, backend, request.Closed, request.BackendID, request.Evidence, request.OperationID)
+}
+
+// selectFleetAdoption changes catalog selection without opening recovery authority.
+// Exact retries on an already approved deployment retain the existing selection.
+func selectFleetAdoption(ctx context.Context, backend storage.IncarnationProvider, witness *recovery.Witness, request FleetAdoptionRequest, options []runtime.Option) (recovery.Record, error) {
 	bound, err := backend.BindIncarnation(ctx, request.BackendID)
 	if err != nil {
 		return recovery.Record{}, err
@@ -160,7 +157,7 @@ func adoptFleet(ctx context.Context, backend storage.IncarnationProvider, witnes
 				return recovery.Record{}, err
 			}
 		}
-		return witness.ApproveAuthority(ctx, backend, request.Closed, request.BackendID, request.Evidence, request.OperationID)
+		return request.approval(), nil
 	}
 	if !errors.Is(readErr, storage.ErrNotFound) {
 		return recovery.Record{}, readErr
@@ -168,10 +165,10 @@ func adoptFleet(ctx context.Context, backend storage.IncarnationProvider, witnes
 	if current != request.Closed {
 		return recovery.Record{}, recovery.ErrConflict
 	}
-	return commitFleetAdoption(ctx, backend, witness, request, options, bound, prefix, operationKey)
+	return commitFleetAdoption(ctx, witness, request, options, bound, prefix, operationKey)
 }
 
-func commitFleetAdoption(ctx context.Context, backend storage.IncarnationProvider, witness *recovery.Witness, request FleetAdoptionRequest, options []runtime.Option, bound storage.IncarnationStore, prefix, operationKey string) (recovery.Record, error) {
+func commitFleetAdoption(ctx context.Context, witness *recovery.Witness, request FleetAdoptionRequest, options []runtime.Option, bound storage.IncarnationStore, prefix, operationKey string) (recovery.Record, error) {
 	gate := &closedFleetWitness{witness: witness, expected: request.Closed, approval: request.SourceApproval}
 	guarded := &closedFleetStore{IncarnationStore: bound, gate: gate}
 	source := &FleetStore{store: guarded, witness: gate, approval: gate.approval, identity: request.Head.Identity, prefix: prefix, session: rand.Text()}
@@ -268,7 +265,7 @@ func commitFleetAdoption(ctx context.Context, backend storage.IncarnationProvide
 	if err := guarded.CompareAndSwap(ctx, mutations, prefix+"maintenance"); err != nil {
 		return recovery.Record{}, err
 	}
-	return witness.ApproveAuthority(ctx, backend, request.Closed, request.BackendID, request.Evidence, request.OperationID)
+	return request.approval(), nil
 }
 
 func validateAdoptionInputs(ctx context.Context, maintenance *fleetMaintenance, selected runtime.FleetHead, accepted fleetAcceptance, options []runtime.Option) error {

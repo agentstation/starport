@@ -29,7 +29,7 @@ type TransferRecord struct {
 
 // Validate checks portable representation without changing a record.
 func (r TransferRecord) Validate() error {
-	if len(r.Key) == 0 || len(r.Key) > TransferMaxKeyBytes || r.Key == TransferBarrierKey || strings.HasPrefix(r.Key, "!badger!") {
+	if len(r.Key) == 0 || len(r.Key) > TransferMaxKeyBytes || r.Key == TransferBarrierKey || r.Key == transferActivationCurrent || r.Key == transferReconciliationCurrent || strings.HasPrefix(r.Key, "!badger!") {
 		return ErrInvalidKey
 	}
 	if len(r.Value) > TransferMaxValueBytes {
@@ -38,7 +38,10 @@ func (r TransferRecord) Validate() error {
 	if r.ExpiresAtMillis < 0 || r.ExpiresAtMillis > transferMaxExpiry {
 		return ErrInvalidMutation
 	}
-	return nil
+	if err := validateActivationHistory(r); err != nil {
+		return err
+	}
+	return validateReconciliationHistory(r)
 }
 
 // RecordSource enumerates durable records without exposing writes.

@@ -49,7 +49,12 @@ func OpenSnapshotSource(ctx context.Context, config Config) (SnapshotSource, err
 	if err != nil {
 		return nil, err
 	}
+	return snapshotSourceForStore(ctx, store)
+}
+
+func snapshotSourceForStore(ctx context.Context, store KVStore) (SnapshotSource, error) {
 	identity := ""
+	var err error
 	if provider, ok := store.(IncarnationProvider); ok {
 		identity, err = provider.ObserveIncarnation(ctx)
 		if err != nil {

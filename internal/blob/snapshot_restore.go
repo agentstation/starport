@@ -66,7 +66,7 @@ func restoreFilesystem(ctx context.Context, destination, source, operation strin
 		result.Published = true
 		return result, productfiles.SyncDirectory(image.parent)
 	}
-	control, err := image.directory.CreateChild(".starport")
+	control, err := image.directory.Child(".starport")
 	if err != nil {
 		return result, err
 	}
@@ -154,6 +154,13 @@ func (o *ObjectStore) claimImport(ctx context.Context, claim []byte) error {
 }
 
 func (o *ObjectStore) verifyImportClaim(ctx context.Context, claim []byte) error {
+	_, err := o.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(blobActivationCurrent))})
+	if err == nil {
+		return ErrActivationConflict
+	}
+	if !isAbsent(err) {
+		return err
+	}
 	result, err := o.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(o.bucket), Key: aws.String(o.objectKey(blobImportKey))})
 	if err != nil {
 		return err

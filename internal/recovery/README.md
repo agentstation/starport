@@ -36,6 +36,17 @@ Native response receipts retain unconfirmed submissions without repeating provid
 Batch validation requires every recorded execution claim and its parent batch.
 Missing batch files remain visible for reconciliation.
 
+Slot checks compare every account counter with its unreleased claims and require the retained history marker.
+A private on-disk index checks claim attachments in both directions against owner-validated jobs and batches.
+Missing claims, lost attachment flags, expiring slot state, and inconsistent totals cause refusal.
+Terminal batches still hold capacity until their runs finish.
+
+An interrupted release acknowledgement can retain a finished job beside its released claim.
+Released claims can outlive deleted jobs. Unattached claims remain held, regardless of age.
+The report counts pending claims without proving that later attachment history is complete.
+The slot owner exposes read-only record, total, and attachment checks for captured or reconciled views.
+These checks do not release capacity or grant activation permission.
+
 SQL identity checks verify users, teams, memberships, account grants, and templates through their owners.
 The captured SQL recovery boundary must match the manifest and remain closed.
 Grants can retain deleted-account references, which verification reports without restoring access.
@@ -102,7 +113,80 @@ Recovery must reconcile permission withdrawals, acknowledged spending, and uncer
 Unknown history keeps affected access restricted.
 Restoring the SQL witness cannot restore permission to approve itself.
 
+### Catalog preparation before activation
+
+`Witness.PrepareImportedEpoch` binds an imported SQL boundary to independently retained epoch evidence.
+The evidence names the highest epoch, its source digest, the external reference, and the accepting operator.
+Starport checks this binding. The operator must establish the external record's completeness.
+
+The resulting epoch exceeds the retained highest epoch and preserves capacity for a later withdrawal.
+Unknown, older, or exhausted epoch evidence causes refusal.
+The SQL change and immutable receipt commit together while admission and the import barrier remain closed.
+An exact retry preserves the selected epoch. Conflicting evidence or a later boundary causes refusal.
+
+This step must precede catalog preparation. It does not reconcile lost permissions, spending, or execution history.
+
+`catalog.PrepareFleetAdoption` validates and selects recovered catalog publications while the SQL recovery gate remains closed.
+It preserves publication contents and binds the selected heads to the replacement backend and epoch.
+An exact retry validates the retained preparation receipt.
+A changed operation, changed SQL boundary, or damaged publication causes refusal.
+An already open recovery gate also causes refusal.
+
+SQL restore clears the previous backend identity from its closed boundary.
+Catalog preparation accepts that closed boundary while requiring explicit source approval and a replacement backend identity.
+Ordinary catalog startup and budget authority remain unavailable until separate approval.
+
+`Witness.ApproveImportedAuthority` installs the native authority under the SQL activation transaction.
+It then commits SQL approval, completion receipts, and SQL barrier removal together.
+A lost native reply leaves SQL closed and permits an exact retry.
+Retries cannot restore permission after a later withdrawal.
+The coordinator must first prepare the catalog, reconcile history, and activate the other components.
+This method does not verify those external steps.
+
+`catalog.AdoptFleet` retains its complete catalog-only procedure and opens authority after catalog validation.
+Full deployment recovery must first reconcile independent history and activate the other storage components.
+Neither catalog operation releases SQL, KV, or blob import barriers.
+The complete activation command and its independent-history procedure remain required.
+
 ## Capture commands
+
+### Unprefixed Valkey records
+
+Ordinary gateway startup and backup capture use the canonical deployment namespace.
+They never read unprefixed records as a fallback.
+An explicit migration can capture unprefixed records from a dedicated Valkey database.
+Close the recovery gate and stop every source writer before capture.
+The configured deployment ID assigns the source records to that deployment.
+The selected database must belong exclusively to that deployment.
+
+```sh
+starport backup create --destination /private/backup/namespace-migration \
+  --operation namespace-migration --fencing-evidence incident/source-writers-fenced \
+  --key-reference recovery/master-key --unprefixed-valkey --json
+```
+
+Capture refuses a database that also contains canonical deployment namespaces.
+An import barrier, unknown backend identity, or unsupported cluster mode also causes refusal.
+
+The source connection exposes record enumeration only.
+Capture preserves record bytes and absolute expiration times without changing the source.
+The manifest records the explicit source layout. The command reports the captured record count and reference checks.
+Invalid account, credential, budget, file, or catalog references still cause refusal.
+
+Use separate, empty target stores for `backup prepare` with the independently retained manifest digest.
+Preparation imports logical records into the target's canonical namespace and retains startup barriers.
+Compare processed record counts with the manifest. An expired record remains expired.
+Exact retries preserve the operation and restrictions. The source remains available for diagnosis.
+
+This operation does not dual-write, delete the old namespace, or switch running gateways.
+Keep both deployments fenced until independent history reconciliation and controlled activation complete.
+Those activation procedures remain required before the migration can serve traffic.
+
+The native test fixture uses database 13 for unprefixed source records and database 14 for the target.
+Set `TEST_UNPREFIXED_VALKEY_URL` to the dedicated test service with the `/13` suffix.
+These database numbers are test conventions, not product settings.
+
+### Configured deployment capture
 
 The configured deployment must already contain initialized persistent stores.
 Capture does not create a missing store or migrate its schema.
@@ -366,3 +450,127 @@ Matching stages remain in the backup and inactive preparation with `verified-sta
 Validated journal files retain `verified-history` status. Neither status gives a file an active destination.
 The procedure never promotes a staged catalog. Unknown, partial, or changed staging evidence stops publication before target preparation.
 Publication leaves catalog and inference admission closed.
+
+## Accounting replay preparation
+
+`reservation.PrepareAccountingReplay` accepts later attempt records and their new correction receipts.
+Its source must retain the immutable snapshot from before that replay step, including each original budget window.
+Every exact retry uses that same snapshot. The function returns conditional writes without changing storage or granting dispatch permission.
+
+The accounting owner preserves pinned prices, original windows, seed consumption, other attempts, and the first settlement time.
+Uncertain attempts retain their reservations. A changed charge requires its correction ancestry.
+Missing windows and saturated captured totals remain restricted. This operation cannot establish missing history or infer zero consumption.
+
+The coordinator must verify independent interval coverage and combine linked execution changes before native replay.
+A record or a digest alone does not prove complete history.
+After native replay starts, resume its ordered receipts instead of repeating snapshot import.
+Complete recovery coordination and activation remain required before admission opens.
+
+## Batch execution replay
+
+`jobs.PrepareBatchReplay` stages at most 127 retained line records per native step.
+The batch record remains unchanged during staging. Final publication requires every claimed line and its retained result references to validate.
+This supports histories larger than one native transaction without making partial state available to workers.
+
+Replay preserves input digests, request identities, results, authorization evidence, and terminal times.
+It cannot reduce the claimed-line count or make a completed result uncertain again.
+A retained claim still refuses another execution, including after repository reconstruction.
+The coordinator must validate the complete closed view before activation, including staged lines without matching parents.
+Independent interval coverage must establish which remaining lines never started.
+
+## Original budget windows
+
+The reservation owner exposes three operations:
+
+- `CaptureWindowReplayState` validates complete independent history for an original budget window.
+- `PrepareWindowReplay` stages retained attempts and corrections under a window marker.
+- `FinalizeWindowReplay` checks the complete census before it publishes the balance and history head.
+
+These operations can reconstruct missing windows and saturated totals without inferring zero consumption.
+
+Replay preserves seed consumption, history identity, pinned prices, uncertainty, and the first settlement time.
+A total that still overflows remains restricted. Final inspection refuses unfinished window and slot markers.
+The coordinator must also validate other windows and every linked execution record before activation.
+
+## Ordered SQL replay
+
+`sqlstore.ReplayRelationalImport` commits a typed domain transition and its ordered receipt in one transaction.
+The domain owner derives the transition digest from the complete canonical input.
+Each receipt binds the import claim, sequence, previous receipt, and independent evidence digest.
+Exact retries return the existing receipt without repeating earlier mutations.
+
+The callback must use the supplied connection and preserve recovery controls.
+Callback failure rolls back its writes and receipt together. Import and admission barriers remain closed.
+A later import preserves historical receipts and removes the source replay cursor.
+Final domain checks and independent interval coverage remain required.
+
+## Closed KV inspection
+
+`storage.ImportInspector` reads imported records at an exact claim and replay position while the startup barrier remains closed.
+Use the result to build an immutable private snapshot for owner checks.
+Discard every yielded record if inspection fails. Keep all writers fenced during inspection.
+Valkey can yield identical records more than once. The KV snapshot owner removes identical repeats before it checks counts.
+
+Badger reads a native snapshot and checks its control records again after the read.
+Valkey checks the selected backend, claim, and cursor during each scan and record read.
+It repeats those checks after the final callback.
+Changed control state causes refusal. Inspection hides native control records and preserves historical receipts.
+
+It grants no write or admission authority. Ordinary backup enumeration still refuses imported stores.
+
+## Closed SQL and blob inspection
+
+`sqlstore.SnapshotRelationalImport` captures an exact import claim and replay position under the native migration owner.
+The owner checks the retained barrier and replay receipt before and after the consistent read.
+The resulting private SQL image retains its control records for validation.
+
+`blob.ImportInspector` captures filesystem or object-storage bytes under their exact import claim.
+It refuses any activation for that claim and checks controls during and after capture.
+The filesystem target refuses an output path inside its imported directory.
+Portable blob images omit current native controls and retain historical activation receipts.
+
+Both owners expose a final read-only guard for checks across stores.
+External fencing remains required throughout inspection. A successful capture does not authorize activation.
+
+## Final imported graph
+
+`InspectImportedReferences` checks the complete imported KV, SQL, and blob graph while all native import barriers remain closed.
+The request binds exact component claims, replay positions, and the expected closed SQL witness.
+The coordinator supplies the current validation time. Recovery evidence cannot choose that time.
+
+Inspection rejects unknown permission fields, policy records with expiry, unfinished replay stages, and unknown budget history.
+It validates retained references through their domain owners and preserves uncertain monetary reservations.
+Deleted historical owners can remain in diagnostics when the domain contract permits their retained execution records.
+
+After graph validation, inspection rechecks native positions and the live SQL witness.
+Failure returns no checked graph receipt. Partial files remain diagnostic artifacts.
+The receipt binds the request and captured bytes. It does not prove external fencing or complete post-backup history.
+
+## Authorization revision replacement
+
+After policy replay, replace KV and SQL authorization epochs through `revision.PrepareKVRecovery` and `revision.ApplySQLRecovery`.
+Both operations require explicit replacement authority and exact expected prior state.
+The KV mutation belongs in an ordered native replay step. The SQL mutation uses its supplied replay transaction.
+
+Keep admission closed through replacement and final graph inspection.
+New authorization epochs start at sequence one. Previously cached permission cannot establish continuity after recovery.
+Complete independent-history acceptance and controlled activation remain required.
+
+## Operator inspection
+
+`starport backup inspect-import` checks the existing targets selected by the current configuration.
+Use the original backup manifest digest, restore operation, and fencing reference.
+Supply the exact expected closed boundary from preparation or the accepted epoch receipt.
+The command does not discover or approve a replacement boundary.
+
+Specify both replay sequences explicitly. Use zero before replay, or supply the sequence and digest from each last accepted native replay receipt.
+For Valkey, supply the independently recorded `run_id:master_replid` through `--valkey-incarnation`.
+The command checks that identity against the configured target. Badger does not use this flag.
+
+Choose a new output directory under an existing private parent for every attempt.
+The output includes native snapshots and `inspection.json`, which retains the complete request, its hash, and checked reference counts.
+Keep these files private and keep every writer fenced.
+An interrupted or failed inspection produces no successful receipt. Preserve its partial files for diagnosis and choose a new output directory.
+
+Use `starport backup inspect-import --help` for the required flags.
+Inspection leaves all import barriers closed. It does not complete migration or permit a gateway restart.

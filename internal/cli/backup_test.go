@@ -81,3 +81,16 @@ func TestBackupVerificationReportsRestrictedHistory(t *testing.T) {
 	require.Contains(t, output.String(), "Reservations with missing jobs: 3")
 	require.Contains(t, output.String(), "Missing jobs do not release reservations")
 }
+
+func TestBackupCommandExplicitUnprefixedValkeyCapture(t *testing.T) {
+	deps, _, _ := testDependencies()
+	called := false
+	deps.CaptureBackup = func(_ context.Context, _ *config.Config, request recovery.CaptureRequest) (recovery.CaptureResult, error) {
+		called = true
+		require.True(t, request.UnprefixedValkey)
+		return recovery.CaptureResult{}, nil
+	}
+	err := Run(t.Context(), []string{"starport", "backup", "create", "--destination", filepath.Join(t.TempDir(), "backup"), "--operation", "namespace-migration", "--fencing-evidence", "incident/dedicated-source-fenced", "--key-reference", "key", "--unprefixed-valkey", "--json"}, deps)
+	require.NoError(t, err)
+	require.True(t, called)
+}

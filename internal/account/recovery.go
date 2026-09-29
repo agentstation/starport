@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"encoding/json/v2"
 	"errors"
 
 	"github.com/agentstation/starport/internal/policyrecord"
@@ -49,6 +50,10 @@ const RecoveryTemplateMaxBytes = storage.TransferMaxValueBytes
 func VerifyRecoveryTemplate(id string, revision uint64, data string) error {
 	if len(data) > RecoveryTemplateMaxBytes {
 		return storage.ErrValueTooLarge
+	}
+	var strict templateRecord
+	if json.Unmarshal([]byte(data), &strict, json.RejectUnknownMembers(true)) != nil {
+		return ErrCorruptTemplate
 	}
 	stored, err := decodeTemplate(data)
 	if err != nil || stored.Template.ID != id || stored.Revision != revision {

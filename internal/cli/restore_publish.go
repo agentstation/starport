@@ -19,7 +19,7 @@ func newPublishBackupFilesCommand(deps Dependencies, usageError usageErrorHandle
 		Flags: []urfavecli.Flag{
 			&urfavecli.StringFlag{Name: flagBackupDirectory, Required: true, Usage: backupDirectoryUsage},
 			&urfavecli.StringFlag{Name: flagBackupManifestSHA256, Required: true, Usage: backupManifestDigestUsage},
-			&urfavecli.StringFlag{Name: flagBackupScratch, Usage: "Existing private scratch directory; defaults to the backup parent"},
+			&urfavecli.StringFlag{Name: flagBackupScratch, Usage: backupScratchUsage},
 			&urfavecli.StringFlag{Name: "files-directory", Required: true, Usage: "Inactive directory from the matching preparation operation"},
 			&urfavecli.StringFlag{Name: flagBackupOperation, Required: true, Usage: "Original restore operation ID"},
 			&urfavecli.StringFlag{Name: flagBackupFencingEvidence, Required: true, Usage: "Original evidence that all source and target writers remain fenced"},

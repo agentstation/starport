@@ -109,6 +109,27 @@ MySQL cannot preserve an exhausted signed audit counter.
 Import refuses that target before copying records. SQLite and PostgreSQL retain
 the exhausted state.
 
+## Import activation
+
+`ReconcileRelationalImport` applies one domain repair while the exact import barrier remains present.
+It commits the repair and its evidence receipt in one transaction under native migration ownership.
+The callback must use the supplied connection and keep admission closed.
+An exact retry verifies the receipt without repeating the repair.
+The domain owner must also check the resulting current state.
+Changed evidence, another import, or completed activation causes refusal.
+
+`ActivateRelationalImport` binds a prepared import to its snapshot, operation, restriction policy, and accepted recovery decision digest.
+It runs the domain approval callback, retains completion receipts, and removes the import barrier in one transaction.
+The callback must use the supplied connection for SQL writes.
+It must not commit the transaction or change the schema.
+The recovery coordinator must first verify independent history, external fencing, and other component releases.
+
+A failed callback rolls back SQL approval and retains the barrier.
+An exact retry verifies completion without repeating approval or changing later records.
+A changed decision or import identity causes refusal.
+Historical receipts survive later backups and imports.
+Import clears the former native completion marker, so those receipts cannot approve the new deployment.
+
 ## Tests
 
 `go test ./internal/sqlstore/...` always proves the embedded backend. The

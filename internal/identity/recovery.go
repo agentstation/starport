@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"database/sql"
+	"encoding/json/v2"
 	"errors"
 	"strings"
 	"time"
@@ -64,6 +65,10 @@ func verifyRecoveryUsers(ctx context.Context, source *sqlstore.RelationalSnapsho
 		if !data.Valid {
 			return count, policyrecord.ErrTooLarge
 		}
+		var strict userRecord
+		if json.Unmarshal([]byte(data.String), &strict, json.RejectUnknownMembers(true)) != nil {
+			return count, ErrRecoveryReference
+		}
 		stored, err := decodeUser(data.String)
 		if err != nil || stored.User.ID != id || stored.User.Subject != subject || stored.Revision != revision {
 			return count, ErrRecoveryReference
@@ -88,6 +93,10 @@ func verifyRecoveryTeams(ctx context.Context, source *sqlstore.RelationalSnapsho
 		}
 		if !data.Valid {
 			return count, unknown, policyrecord.ErrTooLarge
+		}
+		var strict teamRecord
+		if json.Unmarshal([]byte(data.String), &strict, json.RejectUnknownMembers(true)) != nil {
+			return count, unknown, ErrRecoveryReference
 		}
 		stored, err := decodeTeam(data.String)
 		if err != nil || stored.Team.ID != id || stored.Revision != revision || !origin.Valid {

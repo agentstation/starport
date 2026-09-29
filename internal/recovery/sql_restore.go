@@ -2,12 +2,8 @@ package recovery
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
-	"encoding/json/v2"
 	"errors"
-	"math"
 	"path/filepath"
 
 	"github.com/agentstation/starport/internal/credentials"
@@ -42,25 +38,13 @@ func PrepareSQLRestore(ctx context.Context, target *sqlstore.DB, request VerifyR
 
 func prepareVerifiedSQLRestore(ctx context.Context, target *sqlstore.DB, request VerifyRequest, operation, scratch string, manifest BundleManifest, references ReferenceReport) (result SQLRestoreResult, err error) {
 	original := manifest.Request.Boundary
-	if original.Epoch == math.MaxInt64 {
-		return result, ErrConflict
-	}
-	policy, err := json.Marshal(struct {
-		Version   string
-		Operation string
-		Manifest  string
-		Boundary  Record
-	}{"sql-restore-closed-v1", operation, request.ManifestSHA256, original})
+	identity, expected, err := sqlRestoreIdentity(operation, request.ManifestSHA256, original)
 	if err != nil {
 		return result, err
 	}
-	digest := sha256.Sum256(policy)
-	policyID := hex.EncodeToString(digest[:])
-	expected := Record{DeploymentID: original.DeploymentID, Epoch: original.Epoch + 1, Evidence: "restore-prepared:" + policyID}
 	restrict := func(ctx context.Context, conn *sql.Conn) error {
 		return restrictRestoredSQL(ctx, target, conn, original, expected)
 	}
-	identity := sqlstore.RelationalImportIdentity{OperationID: operation, RestrictionID: policyID}
 	if err := target.ImportRelationalOnce(ctx, filepath.Join(request.Directory, bundleSQLFile), manifest.SQL, scratch, identity, restrict); err != nil {
 		return result, err
 	}

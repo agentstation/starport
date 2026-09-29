@@ -98,6 +98,9 @@ func verifyFilesystemImport(ctx context.Context, destination string, image *blob
 }
 
 func verifyFilesystemImportReceipt(control *productfiles.Directory, claim []byte) error {
+	if _, err := control.ReadFile("activation-current", blobActivationLimit); !errors.Is(err, os.ErrNotExist) {
+		return errors.Join(ErrImportRestricted, err)
+	}
 	value, err := control.ReadFile("import", int64(len(claim)+1))
 	if err != nil || string(value) != string(claim) {
 		return errors.Join(ErrImportRestricted, err)

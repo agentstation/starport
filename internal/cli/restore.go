@@ -19,7 +19,7 @@ func newPrepareBackupCommand(deps Dependencies, usageError usageErrorHandler) *u
 		Flags: []urfavecli.Flag{
 			&urfavecli.StringFlag{Name: flagBackupDirectory, Required: true, Usage: backupDirectoryUsage},
 			&urfavecli.StringFlag{Name: flagBackupManifestSHA256, Required: true, Usage: backupManifestDigestUsage},
-			&urfavecli.StringFlag{Name: flagBackupScratch, Usage: "Existing private scratch directory; defaults to the backup parent"},
+			&urfavecli.StringFlag{Name: flagBackupScratch, Usage: backupScratchUsage},
 			&urfavecli.StringFlag{Name: "files-directory", Required: true, Usage: "Inactive directory for selected files and the preparation receipt"},
 			&urfavecli.StringFlag{Name: flagBackupOperation, Required: true, Usage: "Restore operation ID; retain it for exact retries"},
 			&urfavecli.StringFlag{Name: flagBackupFencingEvidence, Required: true, Usage: "Non-secret reference to proof that all source and target writers are fenced"},

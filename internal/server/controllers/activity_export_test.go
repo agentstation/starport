@@ -17,7 +17,7 @@ import (
 
 func TestActivityExportStreamsNDJSONMatchingStoredRecords(t *testing.T) {
 	repository := newActivityTestRepository(t)
-	base := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	base := time.Now().UTC().Add(-time.Minute)
 	seedActivityRecords(t, repository,
 		activityTestRecord("key-a", "req-1", "openai/gpt-4o", "openai", usage.StatusOK, base),
 		activityTestRecord("key-a", "req-2", "openai/gpt-4o", "openai", usage.StatusOK, base.Add(time.Second)),
@@ -53,7 +53,7 @@ func TestActivityExportStreamsNDJSONMatchingStoredRecords(t *testing.T) {
 
 func TestActivityExportServesCSV(t *testing.T) {
 	repository := newActivityTestRepository(t)
-	base := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	base := time.Now().UTC().Add(-time.Minute)
 	seedActivityRecords(t, repository,
 		activityTestRecord("key-a", "req-1", "openai/gpt-4o", "openai", usage.StatusOK, base),
 	)
@@ -96,7 +96,7 @@ func TestActivityExportRequiresAuthentication(t *testing.T) {
 
 func TestAdminExportSpansKeysAndNarrowsToOne(t *testing.T) {
 	repository := newActivityTestRepository(t)
-	base := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	base := time.Now().UTC().Add(-time.Minute)
 	seedActivityRecords(t, repository,
 		activityTestRecord("key-a", "req-1", "openai/gpt-4o", "openai", usage.StatusOK, base),
 		activityTestRecord("key-a", "req-2", "openai/gpt-4o", "openai", usage.StatusOK, base.Add(time.Second)),
@@ -122,7 +122,7 @@ func TestAdminExportSpansKeysAndNarrowsToOne(t *testing.T) {
 
 func TestActivityExportCarriesCacheAndGuardrailColumns(t *testing.T) {
 	repository := newActivityTestRepository(t)
-	base := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	base := time.Now().UTC().Add(-time.Minute)
 	refused := activityTestRecord("key-a", "req-1", "openai/gpt-4o", "openai", usage.StatusError, base)
 	refused.GuardrailVerdict = "refuse"
 	refused.GuardrailCheck = "prompt-injection"

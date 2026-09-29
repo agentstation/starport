@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"path/filepath"
 	"strings"
 
 	"github.com/agentstation/starport/internal/account"
@@ -16,18 +15,11 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-func inspectIdentityReferences(ctx context.Context, directory, scratch string, manifest BundleManifest, records *KVSnapshotView, report *ReferenceReport) (resultErr error) {
-	image, err := sqlstore.OpenRelationalSnapshot(ctx, filepath.Join(directory, bundleSQLFile), manifest.SQL, scratch)
-	if err != nil {
+func inspectCapturedIdentity(ctx context.Context, image *sqlstore.RelationalSnapshotView, expected Record, records *KVSnapshotView, report *ReferenceReport) error {
+	if err := inspectReferenceBoundary(ctx, image, referenceBoundaryQuery, expected); err != nil {
 		return err
 	}
-	defer func() { resultErr = errors.Join(resultErr, image.Close()) }()
-	boundary := Record{DeploymentID: manifest.Request.Boundary.DeploymentID}
-	var opened, bootstrap int
-	err = image.QueryRowContext(ctx, `SELECT epoch,gate_open,backend_id,evidence,bootstrap_allowed FROM catalog_recovery WHERE deployment_id=?`, boundary.DeploymentID).Scan(&boundary.Epoch, &opened, &boundary.BackendID, &boundary.Evidence, &bootstrap)
-	if err != nil || opened != 0 || bootstrap != 0 || boundary != manifest.Request.Boundary {
-		return errors.Join(ErrConflict, err)
-	}
+	var err error
 	exists := func(ctx context.Context, id string) (bool, error) {
 		_, err := account.ReadRecoveryAccount(ctx, records, id)
 		if errors.Is(err, account.ErrNotFound) {
@@ -109,4 +101,16 @@ func inspectTeamBudgetReceipts(ctx context.Context, image *sqlstore.RelationalSn
 		}
 		return nil
 	})
+}
+
+const referenceBoundaryQuery = `SELECT epoch,gate_open,backend_id,evidence,bootstrap_allowed FROM catalog_recovery WHERE deployment_id=?`
+
+func inspectReferenceBoundary(ctx context.Context, source recoveryReader, query string, expected Record) error {
+	boundary := Record{DeploymentID: expected.DeploymentID}
+	var opened, bootstrap int
+	err := source.QueryRowContext(ctx, query, boundary.DeploymentID).Scan(&boundary.Epoch, &opened, &boundary.BackendID, &boundary.Evidence, &bootstrap)
+	if err != nil || opened != 0 || bootstrap != 0 || boundary != expected {
+		return errors.Join(ErrConflict, err)
+	}
+	return nil
 }

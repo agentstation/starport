@@ -30,16 +30,20 @@ type relationalImportReceipt struct {
 // Exact retries validate the source and receipt without repeating restrictions.
 // The caller must fence target writers. A receipt does not verify later target mutations.
 func (db *DB) ImportRelationalOnce(ctx context.Context, source string, expected SQLiteSnapshot, scratch string, identity RelationalImportIdentity, restrict func(context.Context, *sql.Conn) error) error {
-	for _, value := range []string{identity.OperationID, identity.RestrictionID} {
-		if strings.TrimSpace(value) == "" || len(value) > 256 || strings.IndexFunc(value, func(r rune) bool { return r < 32 || r == 127 }) >= 0 {
-			return errors.New("relational import requires bounded operation and restriction identifiers")
-		}
-	}
-	claim, err := json.Marshal(relationalImportReceipt{Version: 1, Identity: identity, Snapshot: expected})
+	claim, err := relationalImportClaim(expected, identity)
 	if err != nil {
 		return err
 	}
 	return db.importRelationalImage(ctx, source, expected, scratch, restrict, claim)
+}
+
+func relationalImportClaim(expected SQLiteSnapshot, identity RelationalImportIdentity) ([]byte, error) {
+	for _, value := range []string{identity.OperationID, identity.RestrictionID} {
+		if strings.TrimSpace(value) == "" || len(value) > 256 || strings.IndexFunc(value, func(r rune) bool { return r < 32 || r == 127 }) >= 0 {
+			return nil, errors.New("relational import requires bounded operation and restriction identifiers")
+		}
+	}
+	return json.Marshal(relationalImportReceipt{Version: 1, Identity: identity, Snapshot: expected})
 }
 
 func readRelationalImport(ctx context.Context, source relationalQuery) (string, error) {
