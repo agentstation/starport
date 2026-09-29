@@ -9,8 +9,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/agentstation/starport/internal/limits/reservation"
-
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -75,7 +73,7 @@ type RecoveryChange struct {
 	Next           *RecoveryRecord `json:"next"`
 }
 
-func readReplayRecord(ctx context.Context, source reservation.BackupReader, key string) (storage.TransferRecord, *RecoveryRecord, error) {
+func readReplayRecord(ctx context.Context, source RecoveryReader, key string) (storage.TransferRecord, *RecoveryRecord, error) {
 	original, err := source.ReadCaptured(ctx, key, storage.TransferMaxValueBytes)
 	if errors.Is(err, storage.ErrNotFound) {
 		return storage.TransferRecord{Key: key}, nil, nil

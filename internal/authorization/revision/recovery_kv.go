@@ -7,9 +7,14 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/storage"
 )
+
+// KVRecoveryReader reads bounded immutable authority records with their original expiration.
+// Reading an absent record does not initialize replacement authority.
+type KVRecoveryReader interface {
+	ReadCaptured(context.Context, string, int) (storage.TransferRecord, error)
+}
 
 type kvRecoveryPayload struct {
 	Version        int               `json:"version"`
@@ -65,7 +70,7 @@ func (r KVRecoveryTransition) Digest() (string, error) {
 
 // CaptureKVRecovery reads a complete marker and its exact byte digest without initializing authority.
 // A nil stamp and empty digest mean that the immutable source contains no marker.
-func CaptureKVRecovery(ctx context.Context, source reservation.BackupReader) (*Stamp, string, error) {
+func CaptureKVRecovery(ctx context.Context, source KVRecoveryReader) (*Stamp, string, error) {
 	stamp, raw, err := readKVRecovery(ctx, source)
 	if err != nil || stamp == nil {
 		return stamp, "", err
@@ -73,7 +78,7 @@ func CaptureKVRecovery(ctx context.Context, source reservation.BackupReader) (*S
 	return stamp, recoveryDigest(raw), nil
 }
 
-func readKVRecovery(ctx context.Context, source reservation.BackupReader) (*Stamp, []byte, error) {
+func readKVRecovery(ctx context.Context, source KVRecoveryReader) (*Stamp, []byte, error) {
 	if ctx == nil || source == nil {
 		return nil, nil, ErrRecoveryConflict
 	}
@@ -98,7 +103,7 @@ func readKVRecovery(ctx context.Context, source reservation.BackupReader) (*Stam
 // The coordinator combines it with domain mutations under its barrier and evidence receipt.
 // It must use the same immutable pre-step source for retries and keep admission closed.
 // Run this final replacement once before activation, after all policy replay.
-func PrepareKVRecovery(ctx context.Context, source reservation.BackupReader, transition KVRecoveryTransition) (storage.CompareAndSwapMutation, error) {
+func PrepareKVRecovery(ctx context.Context, source KVRecoveryReader, transition KVRecoveryTransition) (storage.CompareAndSwapMutation, error) {
 	if _, err := transition.Digest(); err != nil {
 		return storage.CompareAndSwapMutation{}, err
 	}

@@ -189,6 +189,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/identity",
 		"github.com/agentstation/starport/internal/jobs",
 		"github.com/agentstation/starport/internal/limits",
+		"github.com/agentstation/starport/internal/limits/jobslots",
 		"github.com/agentstation/starport/internal/limits/reservation",
 		"github.com/agentstation/starport/internal/sqlstore",
 		"github.com/agentstation/starport/internal/storage",

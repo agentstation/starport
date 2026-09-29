@@ -5,12 +5,17 @@ import (
 	"context"
 	"slices"
 
-	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/storage"
 )
 
+// RecoveryReader reads bounded immutable credential records with their original expiration.
+// Replay preparation never changes the source or infers missing credential history.
+type RecoveryReader interface {
+	ReadCaptured(context.Context, string, int) (storage.TransferRecord, error)
+}
+
 // CaptureRecoveryRecord retains encrypted credential evidence without reaching a provider.
-func CaptureRecoveryRecord(ctx context.Context, source reservation.BackupReader, scope, provider string, encryption *EncryptionService) (RecoveryRecord, error) {
+func CaptureRecoveryRecord(ctx context.Context, source RecoveryReader, scope, provider string, encryption *EncryptionService) (RecoveryRecord, error) {
 	if ctx == nil || source == nil || validateIdentity(scope, provider) != nil {
 		return RecoveryRecord{}, ErrRecoveryCredential
 	}
@@ -31,7 +36,7 @@ func CaptureRecoveryRecord(ctx context.Context, source reservation.BackupReader,
 // PrepareRecoveryReplay prepares typed credential changes while admission remains closed.
 // The source must remain the immutable pre-step snapshot for every exact retry.
 // Ciphertext stays encrypted. Grant lists and retained credential configuration remain complete.
-func PrepareRecoveryReplay(ctx context.Context, source reservation.BackupReader, encryption *EncryptionService, changes []RecoveryChange) ([]storage.CompareAndSwapMutation, error) {
+func PrepareRecoveryReplay(ctx context.Context, source RecoveryReader, encryption *EncryptionService, changes []RecoveryChange) ([]storage.CompareAndSwapMutation, error) {
 	if ctx == nil || source == nil || encryption == nil || len(changes) == 0 || len(changes) > 16 {
 		return nil, ErrRecoveryCredential
 	}
