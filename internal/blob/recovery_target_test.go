@@ -1,6 +1,7 @@
 package blob
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,7 +31,8 @@ func TestRecoveryTargetBindsBlobScopeWithoutCredentials(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, before, after)
 	}
-	for _, endpoint := range []string{"https://user:secret@objects.example", "https://objects.example?secret=value", "ftp://objects.example"} {
+	credentialURL := url.URL{Scheme: "https", Host: "objects.example", User: url.UserPassword("user", "secret")}
+	for _, endpoint := range []string{credentialURL.String(), "https://objects.example?secret=value", "ftp://objects.example"} {
 		_, err = makeTarget("one", endpoint, "bucket", "one").RecoveryTargetSHA256()
 		require.Error(t, err)
 		require.NotContains(t, err.Error(), "secret")
