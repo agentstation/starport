@@ -477,3 +477,43 @@ It cannot reduce the claimed-line count or make a completed result uncertain aga
 A retained claim still refuses another execution, including after repository reconstruction.
 The coordinator must validate the complete closed view before activation, including staged lines without matching parents.
 Independent interval coverage must establish which remaining lines never started.
+
+## Original budget windows
+
+The reservation owner exposes three operations:
+
+- `CaptureWindowReplayState` validates complete independent history for an original budget window.
+- `PrepareWindowReplay` stages retained attempts and corrections under a window marker.
+- `FinalizeWindowReplay` checks the complete census before it publishes the balance and history head.
+
+These operations can reconstruct missing windows and saturated totals without inferring zero consumption.
+
+Replay preserves seed consumption, history identity, pinned prices, uncertainty, and the first settlement time.
+A total that still overflows remains restricted. Final inspection refuses unfinished window and slot markers.
+The coordinator must also validate other windows and every linked execution record before activation.
+
+## Ordered SQL replay
+
+`sqlstore.ReplayRelationalImport` commits a typed domain transition and its ordered receipt in one transaction.
+The domain owner derives the transition digest from the complete canonical input.
+Each receipt binds the import claim, sequence, previous receipt, and independent evidence digest.
+Exact retries return the existing receipt without repeating earlier mutations.
+
+The callback must use the supplied connection and preserve recovery controls.
+Callback failure rolls back its writes and receipt together. Import and admission barriers remain closed.
+A later import preserves historical receipts and removes the source replay cursor.
+Final domain checks and independent interval coverage remain required.
+
+## Closed KV inspection
+
+`storage.ImportInspector` reads imported records at an exact claim and replay position while the startup barrier remains closed.
+Use the result to build an immutable private snapshot for owner checks.
+Discard every yielded record if inspection fails. Keep all writers fenced during inspection.
+Valkey can yield identical records more than once. The KV snapshot owner removes identical repeats before it checks counts.
+
+Badger reads a native snapshot and checks its control records again after the read.
+Valkey checks the selected backend, claim, and cursor during each scan and record read.
+It repeats those checks after the final callback.
+Changed control state causes refusal. Inspection hides native control records and preserves historical receipts.
+
+It grants no write or admission authority. Ordinary backup enumeration still refuses imported stores.
