@@ -137,7 +137,7 @@ func TestBlobPublicationReplayCrashCutsKeepBarrierAndResume(t *testing.T) {
 					if cut != "before-intent" {
 						require.Error(t, target.(ImportActivator).ActivateImport(t.Context(), "operation", original, strings.Repeat("b", 64)), "pending or completed nonzero replay cannot use an unbound activation")
 					}
-					// Before the intent write, the zero position remains valid, but no activation is attempted.
+					// Before the intent write, the zero position remains valid. The test does not attempt activation.
 					if cut == "before-intent" {
 						require.NoError(t, target.(ImportInspector).CheckImport(t.Context(), "operation", original))
 					}

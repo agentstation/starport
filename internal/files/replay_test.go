@@ -119,7 +119,7 @@ func TestFileReplayRequiresRetirementForDeletionAndRealBytesForReady(t *testing.
 	changes, err := PrepareRecoveryReplay(t.Context(), source, assets, at, []RecoveryChange{deletion})
 	require.NoError(t, err)
 	require.Nil(t, changes[0].NewValue)
-	// Expired and pending records retain their original state; recovery never makes them readable.
+	// Expired and pending records retain their original state. Recovery never makes them readable.
 	file.ExpiresAt = at
 	expired := recoveryFileEvidence(t, file)
 	_, err = PrepareRecoveryReplay(t.Context(), fileReplaySource{}, assets, at, []RecoveryChange{{Account: file.Account, ID: file.ID, After: &expired}})
