@@ -59,3 +59,16 @@ func TestRestorePublishFilesErrorDoesNotPrintSuccessReceipt(t *testing.T) {
 	require.Equal(t, ExitCodeRuntime, ExitCode(err))
 	require.Empty(t, output.String())
 }
+
+func TestRestorePublishFilesForwardsAcquisitionRole(t *testing.T) {
+	deps, output, _ := testDependencies()
+	called := false
+	deps.PublishBackupFiles = func(_ context.Context, _ *config.Config, request recovery.PublishFilesRequest) (recovery.PublishFilesResult, error) {
+		called = true
+		require.Equal(t, config.AcquisitionPolicyRole, request.Role)
+		return recovery.PublishFilesResult{Role: request.Role}, nil
+	}
+	require.NoError(t, Run(t.Context(), []string{"starport", "backup", "publish-files", "--directory", t.TempDir(), "--manifest-sha256", strings.Repeat("a", 64), "--files-directory", filepath.Join(t.TempDir(), "prepared"), "--operation", "restore", "--fencing-evidence", "proof", "--role", config.AcquisitionPolicyRole, "--json"}, deps))
+	require.True(t, called)
+	require.Contains(t, output.String(), config.AcquisitionPolicyRole)
+}

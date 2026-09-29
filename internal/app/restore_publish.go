@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/agentstation/starmap/pkg/productfiles"
+	"github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/recovery"
@@ -18,14 +19,14 @@ func PublishBackupFiles(ctx context.Context, cfg *config.Config, request recover
 	if err := request.Validate(); err != nil {
 		return result, err
 	}
-	if request.Role != config.InferenceCredentialPolicyRole {
+	if request.Role != config.InferenceCredentialPolicyRole && request.Role != config.AcquisitionPolicyRole {
 		return result, errors.New("this file role requires a separate owner recovery procedure")
 	}
 	source, plan, targets, err := inspectBackupRestore(ctx, cfg, request.PrepareRequest)
 	if err != nil {
 		return result, err
 	}
-	tree, remaining, err := inferencePolicyRestoreSelection(cfg, request.Role, plan)
+	tree, remaining, err := credentialPolicyRestoreSelection(cfg, request.Role, plan)
 	if err != nil {
 		return result, err
 	}
@@ -47,13 +48,20 @@ func PublishBackupFiles(ctx context.Context, cfg *config.Config, request recover
 	paths := cfg.EffectivePaths()
 	owner := credentials.SelectionPolicyOwner{Product: "starport", Deployment: paths.DeploymentID, Instance: paths.InstanceID}
 	result.Tree, err = source.PublishFileTree(ctx, tree, func(ctx context.Context, directory string) error {
+		if request.Role == config.AcquisitionPolicyRole {
+			settings := catalog.Settings{DeploymentID: paths.DeploymentID, InstanceID: paths.InstanceID}
+			return settings.InspectCredentialPolicy(ctx, directory)
+		}
 		return credentials.InspectSelectionPolicyDirectory(ctx, directory, owner)
 	})
 	return result, err
 }
 
-func inferencePolicyRestoreSelection(cfg *config.Config, role string, plan []recovery.FileDisposition) (recovery.FileTreeRequest, []recovery.FileDisposition, error) {
+func credentialPolicyRestoreSelection(cfg *config.Config, role string, plan []recovery.FileDisposition) (recovery.FileTreeRequest, []recovery.FileDisposition, error) {
 	tree := recovery.FileTreeRequest{Destination: cfg.InferenceCredentialPolicyDirectory()}
+	if role == config.AcquisitionPolicyRole {
+		tree.Destination = cfg.CatalogCredentialPolicyDirectory()
+	}
 	remaining := make([]recovery.FileDisposition, 0, len(plan))
 	for _, file := range plan {
 		if file.Role != role {
@@ -61,16 +69,16 @@ func inferencePolicyRestoreSelection(cfg *config.Config, role string, plan []rec
 			continue
 		}
 		if file.Action != "owner-recovery" || file.Destination == "" || tree.Destination == "" {
-			return tree, nil, errors.New("inference policy publication requires the captured deployment and replica identity")
+			return tree, nil, errors.New("credential policy publication requires the captured deployment and replica identity")
 		}
 		relative, err := filepath.Localize(file.Relative)
 		if err != nil || filepath.Join(tree.Destination, relative) != file.Destination {
-			return tree, nil, errors.New("inference policy destination differs from its canonical location")
+			return tree, nil, errors.New("credential policy destination differs from its canonical location")
 		}
 		tree.Files = append(tree.Files, recovery.FileTreeFile{ArtifactID: file.ArtifactID, Relative: file.Relative})
 	}
 	if len(tree.Files) == 0 {
-		return tree, nil, errors.New("backup has no inference selection policy to publish")
+		return tree, nil, errors.New("backup has no credential selection policy to publish")
 	}
 	return tree, remaining, nil
 }

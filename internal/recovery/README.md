@@ -193,12 +193,12 @@ A command failure can follow completed restricted component imports.
 It does not prove rollback. Preserve the targets and retry the same operation after correcting the failure.
 Ordinary startup refuses imported stores while their barriers remain.
 
-Inference-policy publication has an explicit owner procedure below.
+Credential-policy publication has an explicit owner procedure below.
 Other file owners, independent-history reconciliation, and activation commands remain unfinished.
 Do not remove barriers manually or treat a preparation receipt as permission to start inference.
 
 
-## Canonical inference-policy publication
+## Canonical credential-policy publication
 
 Keep every source and target writer fenced after preparation.
 Use the same configured targets, deployment ID, replica ID, master key, and preparation fields.
@@ -217,6 +217,11 @@ starport backup publish-files \
 This command verifies or resumes restricted preparation before publishing the selected role.
 Current configuration selects the canonical destination. Backup paths cannot select a host destination.
 The credential owner validates every retained policy record and refuses another replica identity or a pending publication journal.
+
+Use `--role credential-policy` to publish the separate catalog-acquisition policy tree.
+Starmap validates that tree through the catalog owner without resolving credentials or starting acquisition.
+Both roles preserve their retained legacy default and accepted provider decisions.
+Neither operation creates a missing policy default.
 
 The complete private tree publishes without replacement. An exact retry verifies the existing tree and confirms durability.
 A conflicting target remains unchanged. A failure can follow publication, so preserve the target for an exact retry.

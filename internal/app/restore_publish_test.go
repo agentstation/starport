@@ -3,6 +3,8 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json/v2"
 	"os"
 	"path/filepath"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/productfiles"
 	"github.com/agentstation/starport/internal/blob"
+	"github.com/agentstation/starport/internal/catalog"
 	starportcli "github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
@@ -23,16 +26,25 @@ import (
 
 func policyPublicationFixture(t *testing.T, wrongOwner bool) (*config.Config, recovery.PublishFilesRequest) {
 	t.Helper()
+	return policyPublicationRoleFixture(t, config.InferenceCredentialPolicyRole, wrongOwner)
+}
+
+func policyPublicationRoleFixture(t *testing.T, role string, wrongOwner bool) (*config.Config, recovery.PublishFilesRequest) {
+	t.Helper()
 	source, capture := backupApplicationFixture(t)
 	paths := source.EffectivePaths()
 	owner := credentials.SelectionPolicyOwner{Product: "starport", Deployment: paths.DeploymentID, Instance: paths.InstanceID}
 	if wrongOwner {
 		owner.Instance = "another-replica"
 	}
-	store, err := credentials.OpenSelectionPolicyStore(t.Context(), source.InferenceCredentialPolicyDirectory(), owner, true)
-	require.NoError(t, err)
-	require.NoError(t, store.Accept(t.Context(), "openai"))
-	_, err = CloseBackupBoundary(t.Context(), source)
+	if role == config.AcquisitionPolicyRole {
+		seedAcquisitionPolicy(t, source.CatalogCredentialPolicyDirectory(), owner)
+	} else {
+		store, err := credentials.OpenSelectionPolicyStore(t.Context(), source.InferenceCredentialPolicyDirectory(), owner, true)
+		require.NoError(t, err)
+		require.NoError(t, store.Accept(t.Context(), "openai"))
+	}
+	_, err := CloseBackupBoundary(t.Context(), source)
 	require.NoError(t, err)
 	receipt, err := CaptureBackup(t.Context(), source, capture)
 	require.NoError(t, err)
@@ -46,7 +58,62 @@ func policyPublicationFixture(t *testing.T, wrongOwner bool) (*config.Config, re
 	return target, recovery.PublishFilesRequest{PrepareRequest: recovery.PrepareRequest{
 		VerifyRequest:  recovery.VerifyRequest{Directory: receipt.Directory, ManifestSHA256: receipt.ManifestSHA256},
 		FilesDirectory: filepath.Join(parent, "prepared"), Operation: recovery.RestoreOperation{ID: "restore-policy", FencingEvidence: "incident/fenced-writers"},
-	}, Role: config.InferenceCredentialPolicyRole}
+	}, Role: role}
+}
+
+func seedAcquisitionPolicy(t *testing.T, path string, owner credentials.SelectionPolicyOwner) {
+	t.Helper()
+	directory, err := productfiles.NewDirectory(path)
+	require.NoError(t, err)
+	for _, provider := range []string{"", "openai"} {
+		name, policy := "policy.json", "starport-catalog-v1"
+		if provider != "" {
+			digest := sha256.Sum256([]byte(provider))
+			name, policy = "provider-"+hex.EncodeToString(digest[:])+".json", "starport-catalog-v2"
+		}
+		body, err := json.Marshal(struct {
+			Schema   int                              `json:"schema_version"`
+			Owner    credentials.SelectionPolicyOwner `json:"owner"`
+			Provider string                           `json:"provider,omitempty"`
+			Policy   string                           `json:"policy"`
+		}{1, owner, provider, policy})
+		require.NoError(t, err)
+		require.NoError(t, directory.CompareAndPublish(t.Context(), name, nil, body))
+	}
+}
+
+func TestRestorePublishAcquisitionPolicyRetainsDefaultAndAcceptedProvider(t *testing.T) {
+	cfg, request := policyPublicationRoleFixture(t, config.AcquisitionPolicyRole, false)
+	first, err := PublishBackupFiles(t.Context(), cfg, request)
+	require.NoError(t, err)
+	require.True(t, first.Tree.Published)
+	require.Equal(t, cfg.CatalogCredentialPolicyDirectory(), first.Tree.Destination)
+	require.Len(t, first.Remaining, 1)
+	require.Equal(t, "operator-credential", first.Remaining[0].Action)
+	requirePublicationBarriers(t, cfg)
+	require.NoDirExists(t, cfg.InferenceCredentialPolicyDirectory())
+	settings := catalog.Settings{DeploymentID: cfg.EffectivePaths().DeploymentID, InstanceID: cfg.EffectivePaths().InstanceID}
+	require.NoError(t, settings.InspectCredentialPolicy(t.Context(), first.Tree.Destination))
+	body, err := os.ReadFile(filepath.Join(first.Tree.Destination, "policy.json"))
+	require.NoError(t, err)
+	require.Contains(t, string(body), "starport-catalog-v1")
+	digest := sha256.Sum256([]byte("openai"))
+	body, err = os.ReadFile(filepath.Join(first.Tree.Destination, "provider-"+hex.EncodeToString(digest[:])+".json"))
+	require.NoError(t, err)
+	require.Contains(t, string(body), "starport-catalog-v2")
+	again, err := PublishBackupFiles(t.Context(), cfg, request)
+	require.NoError(t, err)
+	require.True(t, again.Tree.Reused)
+	require.Equal(t, first.Tree.DirectoryIdentity, again.Tree.DirectoryIdentity)
+	requirePublicationBarriers(t, cfg)
+}
+
+func TestRestorePublishAcquisitionPolicyRefusesDifferentOwner(t *testing.T) {
+	cfg, request := policyPublicationRoleFixture(t, config.AcquisitionPolicyRole, true)
+	_, err := PublishBackupFiles(t.Context(), cfg, request)
+	require.Error(t, err)
+	require.NoDirExists(t, cfg.CatalogCredentialPolicyDirectory())
+	requirePublicationBarriers(t, cfg)
 }
 
 func requirePublicationBarriers(t *testing.T, cfg *config.Config) {
@@ -186,11 +253,18 @@ func TestRestorePublishFilesRejectsInvalidOwnerAndChangedOperation(t *testing.T)
 }
 
 func TestRestorePublishFilesSharedRecipe(t *testing.T) {
+	for _, role := range []string{config.InferenceCredentialPolicyRole, config.AcquisitionPolicyRole} {
+		t.Run(role, func(t *testing.T) { testRestorePublishSharedRole(t, role) })
+	}
+}
+
+func testRestorePublishSharedRole(t *testing.T, role string) {
+	t.Helper()
 	valkey, postgres, endpoint := os.Getenv("TEST_VALKEY_URL"), os.Getenv("TEST_POSTGRES_URL"), os.Getenv("TEST_BLOB_S3_ENDPOINT")
 	if valkey == "" || postgres == "" || endpoint == "" {
 		t.Skip("UNVERIFIED: shared publication requires Valkey, PostgreSQL, and object storage")
 	}
-	cfg, request := policyPublicationFixture(t, false)
+	cfg, request := policyPublicationRoleFixture(t, role, false)
 	configureSharedRestore(t, cfg, valkey, postgres, endpoint)
 	first, err := PublishBackupFiles(t.Context(), cfg, request)
 	require.NoError(t, err)

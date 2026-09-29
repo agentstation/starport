@@ -14,8 +14,11 @@ import (
 // InferenceCredentialPolicyRole identifies the canonical inference selection policy tree.
 const InferenceCredentialPolicyRole = "inference-credential-policy"
 
+// AcquisitionPolicyRole identifies the canonical catalog credential selection policy tree.
+const AcquisitionPolicyRole = "credential-policy"
+
 const (
-	fileRoleAcquisitionPolicy = "credential-policy"
+	fileRoleAcquisitionPolicy = AcquisitionPolicyRole
 	fileRoleInferencePolicy   = InferenceCredentialPolicyRole
 	fileRoleWorkspace         = "workspace"
 	fileKindPatterns          = "patterns"
