@@ -45,6 +45,7 @@ type historyManifest struct {
 	HighestEpoch   EpochEvidence     `json:"highest_epoch"`
 	Evidence       []historyEvidence `json:"evidence_sources"`
 	Steps          []historyStep     `json:"steps"`
+	Assets         []historyAsset    `json:"assets,omitempty"`
 }
 
 type historyInterval struct {
@@ -72,6 +73,7 @@ type verifiedHistoryState struct {
 	manifest historyManifest
 	digest   string
 	payloads [][]byte
+	assets   *productfiles.Directory
 }
 
 // VerifiedHistory retains an immutable private copy of a bound history package.
@@ -139,6 +141,9 @@ func (s *RestoreSource) VerifyHistoryPackage(ctx context.Context, request Histor
 		return nil, err
 	}
 	state := &verifiedHistoryState{manifest: manifest, digest: request.ManifestSHA256}
+	if err := verifyHistoryAssets(ctx, directory, state); err != nil {
+		return nil, err
+	}
 	if len(manifest.Steps) != 0 {
 		payloads, err := directory.ExistingChild("payloads")
 		if err != nil {
@@ -180,6 +185,9 @@ func (m historyManifest) validate(source *RestoreSource, request HistoryPackageR
 	}
 	evidence, err := m.evidenceIndex()
 	if err != nil {
+		return err
+	}
+	if err := m.validateAssets(evidence); err != nil {
 		return err
 	}
 	return m.validateSteps(evidence)
@@ -224,7 +232,7 @@ func (m historyManifest) validateSteps(evidence map[string]bool) error {
 
 func historyStepKind(kind string) bool {
 	switch kind {
-	case "kv_domain", "window_stage", "window_finalize", "slot_stage", "slot_finalize", "sql_identity", "kv_authorization_final", "sql_authorization_final":
+	case "kv_domain", "window_stage", "window_finalize", "slot_stage", "slot_finalize", "storedbytes_stage", "storedbytes_finalize", "blob_publication", "sql_identity", "kv_authorization_final", "sql_authorization_final":
 		return true
 	default:
 		return false

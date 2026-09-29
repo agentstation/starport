@@ -590,6 +590,12 @@ Paths must follow `payloads/000001.json` in consecutive order.
 Unknown kinds, duplicate members, unknown fields, and changed digests fail verification.
 The verified package retains private immutable copies of its JSON payloads.
 
+Asset descriptors use consecutive `assets/000001.bin` paths and explicit evidence-source references.
+Assets have separate bounds: 4,096 entries, 1 GiB per asset, and 16 GiB combined.
+Verification streams their private files without loading them into memory.
+Every later copy rechecks the declared bytes and the original directory identity.
+A failed copy requires the caller to discard its partial output.
+
 `Witness.AcceptImportedHistory` requires explicit operator attestations for external fencing and previously admitted work.
 A `replay_complete` disposition also requires the operator to accept complete interval coverage explicitly.
 An empty step list cannot establish that coverage.
