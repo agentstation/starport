@@ -2,6 +2,10 @@
 # Windows checkout does not convert them to CRLF and break the comparison.
 *.golden.json text eol=lf
 
+# Recovery journals require canonical bytes, including LF record terminators.
+internal/app/testdata/baseline-publication.json text eol=lf
+internal/app/testdata/recovery-publication.jsonl text eol=lf
+
 # PDF fixtures are parsed by byte offset. A PDF small enough to carry no NUL
 # byte in its first 8000 reads as text to git, so a checkout that converts line
 # endings rewrites it and breaks every offset in its cross reference table.
