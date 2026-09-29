@@ -2,9 +2,6 @@ package recovery
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json/v2"
 	"errors"
 	"os"
 	"path/filepath"
@@ -81,16 +78,11 @@ func (s *RestoreSource) Prepare(ctx context.Context, target BundleTargets, opera
 	request, manifest, references := s.request, s.manifest, s.references
 	scratch := request.ScratchDirectory
 	// Bind each adapter's import claim to the entire bundle, including selected files.
-	identity, err := json.Marshal(struct {
-		Version             int
-		Operation, Manifest string
-		FencingEvidence     string `json:",omitempty"`
-	}{1, operation.ID, request.ManifestSHA256, operation.FencingEvidence})
+	identity, err := s.ImportIdentity(operation)
 	if err != nil {
 		return result, err
 	}
-	digest := sha256.Sum256(identity)
-	componentOperation := hex.EncodeToString(digest[:])
+	componentOperation := identity.ComponentOperation
 	sql, err := prepareVerifiedSQLRestore(ctx, target.SQL, request, componentOperation, scratch, manifest, references)
 	if err != nil {
 		return result, err
