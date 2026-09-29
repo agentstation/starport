@@ -8,9 +8,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/gofrs/flock"
 )
 
 func TestInferencePolicyUpgradeComparisonAndRestart(t *testing.T) {
@@ -123,33 +125,35 @@ func TestInferencePolicyStoreRefusesCorruptionAndOwnerMismatch(t *testing.T) {
 }
 
 func TestInferencePolicyConcurrentAcceptance(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "policy")
-	owner := SelectionPolicyOwner{"starport", "team", "one"}
-	left, err := OpenSelectionPolicyStore(t.Context(), path, owner, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	right, err := OpenSelectionPolicyStore(t.Context(), path, owner, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var group sync.WaitGroup
-	for i := range 8 {
-		group.Go(func() {
-			store := left
-			if i%2 == 1 {
-				store = right
-			}
-			if err := store.Accept(t.Context(), "openai"); err != nil {
-				t.Error(err)
-			}
-		})
-	}
-	group.Wait()
-	policy, err := left.Policy(t.Context(), "openai")
-	if err != nil || policy != InferencePolicyCurrent {
-		t.Fatal("concurrent acceptance did not retain current policy")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "policy")
+		owner := SelectionPolicyOwner{"starport", "team", "one"}
+		left, err := OpenSelectionPolicyStore(t.Context(), path, owner, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		right, err := OpenSelectionPolicyStore(t.Context(), path, owner, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var group sync.WaitGroup
+		for i := range 8 {
+			group.Go(func() {
+				store := left
+				if i%2 == 1 {
+					store = right
+				}
+				if err := store.Accept(t.Context(), "openai"); err != nil {
+					t.Error(err)
+				}
+			})
+		}
+		group.Wait()
+		policy, err := left.Policy(t.Context(), "openai")
+		if err != nil || policy != InferencePolicyCurrent {
+			t.Fatal("concurrent acceptance did not retain current policy")
+		}
+	})
 }
 
 func TestInferenceCachedMaterialDoesNotReadPolicyOrEnvironment(t *testing.T) {
@@ -214,4 +218,40 @@ func TestInferenceSourceSnapshotRejectsMixedVersions(t *testing.T) {
 	if _, err := snapshot.Resolve(t.Context(), second); !IsSourceError(err, SourceErrorUnavailable) {
 		t.Fatalf("mixed source versions accepted: %v", err)
 	}
+}
+
+// A held native publication lock must exhaust the existing write deadline.
+func TestInferencePolicyPublicationDeadline(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "policy")
+		store, err := OpenSelectionPolicyStore(t.Context(), path, SelectionPolicyOwner{"starport", "team", "one"}, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lock := flock.New(filepath.Join(path, ".record-publications", ".owner.lock"))
+		defer func() { _ = lock.Close() }()
+		held, err := lock.TryLock()
+		if err != nil || !held {
+			t.Fatalf("hold real publication lock: held=%v, error=%v", held, err)
+		}
+		start := time.Now()
+		err = store.Accept(t.Context(), "openai")
+		if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) != selectionPolicyWriteTimeout {
+			t.Fatalf("publication deadline: elapsed=%v, error=%v", time.Since(start), err)
+		}
+		policy, err := store.Policy(t.Context(), "openai")
+		if err != nil || policy != InferencePolicyLegacy {
+			t.Fatalf("failed publication changed policy: policy=%v, error=%v", policy, err)
+		}
+		if err := lock.Unlock(); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.Accept(t.Context(), "openai"); err != nil {
+			t.Fatalf("publication after lock release: %v", err)
+		}
+		policy, err = store.Policy(t.Context(), "openai")
+		if err != nil || policy != InferencePolicyCurrent {
+			t.Fatalf("accepted policy: policy=%v, error=%v", policy, err)
+		}
+	})
 }
