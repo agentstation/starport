@@ -100,8 +100,10 @@ func (db *DB) importRelational(ctx context.Context, source relationalQuery, high
 			return err
 		}
 		// Preserve historical receipts, but never import their native authority.
-		if _, err := owner.conn.ExecContext(ctx, db.Bind("DELETE FROM sqlstore_meta WHERE name=?"), relationalActivationCurrent); err != nil {
-			return err
+		for _, name := range []string{relationalActivationCurrent, relationalReplayCurrent} {
+			if _, err := owner.conn.ExecContext(ctx, db.Bind("DELETE FROM sqlstore_meta WHERE name=?"), name); err != nil {
+				return err
+			}
 		}
 		if err := restrict(ctx, owner.conn); err != nil {
 			return err
