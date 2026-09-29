@@ -531,3 +531,27 @@ Portable blob images omit current native controls and retain historical activati
 
 Both owners expose a final read-only guard for checks across stores.
 External fencing remains required throughout inspection. A successful capture does not authorize activation.
+
+## Final imported graph
+
+`InspectImportedReferences` checks the complete imported KV, SQL, and blob graph while all native import barriers remain closed.
+The request binds exact component claims, replay positions, and the expected closed SQL witness.
+The coordinator supplies the current validation time. Recovery evidence cannot choose that time.
+
+Inspection rejects unknown permission fields, policy records with expiry, unfinished replay stages, and unknown budget history.
+It validates retained references through their domain owners and preserves uncertain monetary reservations.
+Deleted historical owners can remain in diagnostics when the domain contract permits their retained execution records.
+
+After graph validation, inspection rechecks native positions and the live SQL witness.
+Failure returns no checked graph receipt. Partial files remain diagnostic artifacts.
+The receipt binds the request and captured bytes. It does not prove external fencing or complete post-backup history.
+
+## Authorization revision replacement
+
+After policy replay, replace KV and SQL authorization epochs through `revision.PrepareKVRecovery` and `revision.ApplySQLRecovery`.
+Both operations require explicit replacement authority and exact expected prior state.
+The KV mutation belongs in an ordered native replay step. The SQL mutation uses its supplied replay transaction.
+
+Keep admission closed through replacement and final graph inspection.
+New authorization epochs start at sequence one. Previously cached permission cannot establish continuity after recovery.
+Complete independent-history acceptance and controlled activation remain required.
