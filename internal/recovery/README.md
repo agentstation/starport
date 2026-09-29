@@ -450,3 +450,18 @@ Matching stages remain in the backup and inactive preparation with `verified-sta
 Validated journal files retain `verified-history` status. Neither status gives a file an active destination.
 The procedure never promotes a staged catalog. Unknown, partial, or changed staging evidence stops publication before target preparation.
 Publication leaves catalog and inference admission closed.
+
+## Accounting replay preparation
+
+`reservation.PrepareAccountingReplay` accepts later attempt records and their new correction receipts.
+Its source must retain the immutable snapshot from before that replay step, including each original budget window.
+Every exact retry uses that same snapshot. The function returns conditional writes without changing storage or granting dispatch permission.
+
+The accounting owner preserves pinned prices, original windows, seed consumption, other attempts, and the first settlement time.
+Uncertain attempts retain their reservations. A changed charge requires its correction ancestry.
+Missing windows and saturated captured totals remain restricted. This operation cannot establish missing history or infer zero consumption.
+
+The coordinator must verify independent interval coverage and combine linked execution changes before native replay.
+A record or a digest alone does not prove complete history.
+After native replay starts, resume its ordered receipts instead of repeating snapshot import.
+Complete recovery coordination and activation remain required before admission opens.
