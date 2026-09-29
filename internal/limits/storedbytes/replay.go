@@ -218,6 +218,8 @@ func readReplayMarker(ctx context.Context, source RecoveryReader, state AccountR
 	if json.Unmarshal(raw.Value, &marker, json.RejectUnknownMembers(true)) != nil || marker.Version != 1 || marker.State != state || !bytes.Equal(marker.Original, total.Value) {
 		return byteReplayMarker{}, nil, ErrStorageHistoryUnknown
 	}
+	// JSON may decode an absent byte slice as empty. The checked read retains exact presence.
+	marker.Original = bytes.Clone(total.Value)
 	return marker, raw.Value, nil
 }
 

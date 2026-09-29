@@ -240,3 +240,34 @@ func TestStoredByteRecoveryAttachmentsAndStrictSchemas(t *testing.T) {
 		require.Error(t, err)
 	}
 }
+
+func TestStoredByteReplayNativePreservesAbsentTotalPreimage(t *testing.T) {
+	for _, kind := range []string{"badger", "valkey"} {
+		t.Run(kind, func(t *testing.T) {
+			independent := byteEvidence(t, byteClaimEvidence("one"))
+			state, err := CaptureAccountReplayState(t.Context(), independent, "account")
+			require.NoError(t, err)
+			before := byteSnapshot{}
+			store, target, claim := nativeByteImport(t, kind, before)
+			staged, err := PrepareAccountReplay(t.Context(), before, state, []RecoveryClaim{byteClaimEvidence("one")})
+			require.NoError(t, err)
+			receipt, err := target.ReconcileImport(t.Context(), claim, 1, "", strings.Repeat("a", 64), staged)
+			require.NoError(t, err)
+			intermediate := applyByteMutations(t, before, staged)
+			final, err := FinalizeAccountReplay(t.Context(), intermediate, state)
+			require.NoError(t, err)
+			for _, change := range final {
+				if change.Key == byteTotalKey("account") {
+					require.Nil(t, change.ExpectedValue)
+				}
+			}
+			_, err = target.ReconcileImport(t.Context(), claim, 2, receipt, strings.Repeat("b", 64), final)
+			require.NoError(t, err)
+			meter, err := NewStorageMeter(store)
+			require.NoError(t, err)
+			total, err := meter.Total(t.Context(), "account")
+			require.NoError(t, err)
+			require.Equal(t, state.Bytes, total)
+		})
+	}
+}
