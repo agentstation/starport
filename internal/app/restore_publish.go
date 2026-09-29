@@ -30,6 +30,12 @@ func PublishBackupFiles(ctx context.Context, cfg *config.Config, request recover
 	if err != nil {
 		return result, err
 	}
+	if request.Role == config.RuntimeEvidenceRole {
+		tree, remaining, err = selectRuntimeRestoreFiles(ctx, cfg, source, tree, plan, remaining)
+		if err != nil {
+			return result, err
+		}
+	}
 	scratch := request.ScratchDirectory
 	if scratch == "" {
 		scratch = filepath.Dir(request.Directory)

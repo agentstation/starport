@@ -148,12 +148,8 @@ func restoreBlobTarget(ctx context.Context, cfg config.FilesConfig) (blob.Restor
 }
 
 func planBackupFiles(ctx context.Context, cfg *config.Config, source *recovery.RestoreSource) ([]recovery.FileDisposition, error) {
-	body, err := source.SelectedFile(ctx, "inventory.json", 16<<20)
+	inventory, err := readBackupInventory(ctx, source)
 	if err != nil {
-		return nil, err
-	}
-	var inventory config.BackupInventory
-	if err := json.Unmarshal(body, &inventory, json.RejectUnknownMembers(true)); err != nil {
 		return nil, err
 	}
 	hashes := source.SelectedFileHashes()
@@ -167,4 +163,14 @@ func planBackupFiles(ctx context.Context, cfg *config.Config, source *recovery.R
 		result = append(result, recovery.FileDisposition{ArtifactID: file.ArtifactID, Role: file.Role, Relative: file.Relative, SHA256: file.SHA256, Destination: file.Destination, Action: file.Action, Reason: file.Reason})
 	}
 	return result, nil
+}
+
+func readBackupInventory(ctx context.Context, source *recovery.RestoreSource) (config.BackupInventory, error) {
+	var inventory config.BackupInventory
+	body, err := source.SelectedFile(ctx, "inventory.json", 16<<20)
+	if err != nil {
+		return inventory, err
+	}
+	err = json.Unmarshal(body, &inventory, json.RejectUnknownMembers(true))
+	return inventory, err
 }

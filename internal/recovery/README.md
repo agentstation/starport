@@ -270,11 +270,22 @@ An exact retry verifies the same content without replacement. All storage barrie
 remain closed. The result does not establish current permission, accepted catalog
 consistency, safe replica reuse, or independent post-backup history.
 
+Completed directory migrations require matching receipt and completion records.
+The runtime owner checks their canonical content, captured directory, owner,
+explicit scheduler identity, and retained seed. Historical paths identify the
+former host. Inspection does not open them or apply this host's path rules.
+
+The command keeps both records in the verified backup and inactive preparation.
+It reports their disposition as `verified-history` and omits them from the active
+runtime directory. The remaining files still require complete inventory and
+runtime validation. This permits restore at a new path without reusing old native
+migration authority. Exact retries preserve the same historical selection.
+
 Unknown files, corrupt records, incomplete references, pending native file
-publications, and path-bound migration records cause refusal. Preserve those
-records for their separate owner recovery procedure. A pending semantic input
-publication can remain in the tree when all its references validate. Inspection
-does not apply or discard that transaction.
+publications, and incomplete or conflicting migration records cause refusal.
+Preserve those records for their separate owner recovery procedure. A pending
+semantic input publication can remain when all its references validate.
+Inspection does not apply or discard that transaction.
 
 ## Target configuration and local administrator access
 
