@@ -30,6 +30,10 @@ func policyPublicationFixture(t *testing.T, wrongOwner bool) (*config.Config, re
 }
 
 func policyPublicationRoleFixture(t *testing.T, role string, wrongOwner bool) (*config.Config, recovery.PublishFilesRequest) {
+	return policyPublicationRoleStagingFixture(t, role, wrongOwner, "")
+}
+
+func policyPublicationRoleStagingFixture(t *testing.T, role string, wrongOwner bool, mode string) (*config.Config, recovery.PublishFilesRequest) {
 	t.Helper()
 	source, capture := backupApplicationFixture(t)
 	paths := source.EffectivePaths()
@@ -43,6 +47,34 @@ func policyPublicationRoleFixture(t *testing.T, role string, wrongOwner bool) (*
 		store, err := credentials.OpenSelectionPolicyStore(t.Context(), source.InferenceCredentialPolicyDirectory(), owner, true)
 		require.NoError(t, err)
 		require.NoError(t, store.Accept(t.Context(), "openai"))
+	}
+	if mode != "" {
+		directory, prefix := source.InferenceCredentialPolicyDirectory(), ".product-stage-"
+		if role == config.AcquisitionPolicyRole {
+			directory, prefix = source.CatalogCredentialPolicyDirectory(), ".policy-"
+		}
+		stage := []byte("candidate")
+		if strings.HasPrefix(mode, "legacy") {
+			var err error
+			stage, err = os.ReadFile(filepath.Join(directory, "policy.json"))
+			require.NoError(t, err)
+			if mode == "legacy-partial" {
+				stage = stage[:len(stage)-1]
+			}
+		} else {
+			journal, err := os.ReadFile("testdata/recovery-publication.jsonl")
+			require.NoError(t, err)
+			journal = bytes.ReplaceAll(journal, []byte(".layer-"), []byte(prefix))
+			journal = bytes.ReplaceAll(journal, []byte("source.json"), []byte("policy.json"))
+			_, err = productfiles.ExistingDirectory(filepath.Join(directory, productfiles.PublicationDirectoryName))
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(filepath.Join(directory, productfiles.PublicationDirectoryName, strings.Repeat("A", 26)+".jsonl"), journal, 0600))
+			require.NoError(t, os.WriteFile(filepath.Join(directory, productfiles.PublicationDirectoryName, ".owner.lock"), nil, 0600))
+			if mode == "changed" {
+				stage = []byte("changed candidate")
+			}
+		}
+		require.NoError(t, os.WriteFile(filepath.Join(directory, prefix+strings.Repeat("A", 26)), stage, 0600))
 	}
 	_, err := CloseBackupBoundary(t.Context(), source)
 	require.NoError(t, err)
@@ -291,4 +323,58 @@ func testRestorePublishSharedRole(t *testing.T, role string) {
 	require.NoError(t, err)
 	require.NoError(t, kv.BatchDelete(t.Context(), keys))
 	require.NoError(t, kv.Close())
+}
+
+func TestRestorePublishCredentialPolicyRetainsStagingWithoutAcceptance(t *testing.T) {
+	for _, scenario := range []struct{ role, mode string }{{config.AcquisitionPolicyRole, "native"}, {config.InferenceCredentialPolicyRole, "native"}, {config.AcquisitionPolicyRole, "legacy"}} {
+		t.Run(scenario.role+"/"+scenario.mode, func(t *testing.T) {
+			cfg, request := policyPublicationRoleStagingFixture(t, scenario.role, false, scenario.mode)
+			first, err := PublishBackupFiles(t.Context(), cfg, request)
+			require.NoError(t, err)
+			require.True(t, first.Tree.Published)
+			body, err := os.ReadFile(filepath.Join(first.Tree.Destination, "policy.json"))
+			require.NoError(t, err)
+			require.Contains(t, string(body), "v1")
+			var count int
+			for _, file := range first.Remaining {
+				if file.Role != scenario.role {
+					continue
+				}
+				count++
+				require.Equal(t, "verified-staging", file.Action)
+				require.Empty(t, file.Destination)
+				require.NoFileExists(t, filepath.Join(first.Tree.Destination, file.Relative))
+				original, err := os.ReadFile(filepath.Join(request.Directory, "files", filepath.FromSlash(file.ArtifactID)))
+				require.NoError(t, err)
+				prepared, err := os.ReadFile(filepath.Join(request.FilesDirectory, "files", filepath.FromSlash(file.ArtifactID)))
+				require.NoError(t, err)
+				require.Equal(t, original, prepared)
+			}
+			want := 2
+			if scenario.mode == "legacy" {
+				want = 1
+			}
+			require.Equal(t, want, count)
+			requirePublicationBarriers(t, cfg)
+			again, err := PublishBackupFiles(t.Context(), cfg, request)
+			require.NoError(t, err)
+			require.True(t, again.Tree.Reused)
+			require.Equal(t, first.Remaining, again.Remaining)
+			requirePublicationBarriers(t, cfg)
+		})
+	}
+}
+
+func TestRestorePublishCredentialPolicyRefusesUncertainStagingBeforePreparation(t *testing.T) {
+	for _, scenario := range []struct{ role, mode string }{{config.AcquisitionPolicyRole, "changed"}, {config.InferenceCredentialPolicyRole, "changed"}, {config.AcquisitionPolicyRole, "legacy-partial"}} {
+		t.Run(scenario.role+"/"+scenario.mode, func(t *testing.T) {
+			cfg, request := policyPublicationRoleStagingFixture(t, scenario.role, false, scenario.mode)
+			_, err := PublishBackupFiles(t.Context(), cfg, request)
+			require.Error(t, err)
+			require.NoDirExists(t, cfg.EffectivePaths().BadgerDir)
+			require.NoFileExists(t, cfg.EffectivePaths().SQLiteFile)
+			require.NoDirExists(t, cfg.CatalogCredentialPolicyDirectory())
+			require.NoDirExists(t, cfg.InferenceCredentialPolicyDirectory())
+		})
+	}
 }

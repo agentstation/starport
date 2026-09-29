@@ -17,6 +17,9 @@ const InferenceCredentialPolicyRole = "inference-credential-policy"
 // BaselineRole identifies completed catalog baseline exports.
 const BaselineRole = pathRoleBaseline
 
+// BaselineRecoveryRole identifies baseline publication journals and writer metadata.
+const BaselineRecoveryRole = fileRoleBaselineRecovery
+
 // RuntimeEvidenceRole identifies private runtime identity and retained catalog inputs.
 const RuntimeEvidenceRole = fileRoleRuntimeEvidence
 

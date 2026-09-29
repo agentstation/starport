@@ -40,8 +40,8 @@ github.com/AzureAD/microsoft-authentication-library-for-go v1.8.0 h1:Nljr4q1GRA/
 github.com/AzureAD/microsoft-authentication-library-for-go v1.8.0/go.mod h1:Y33QHnf0FfdVewFFISOGe20mkZbxX4H839o955/PoeI=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
-github.com/agentstation/starmap v0.16.6-0.20260929043939-05501c5970ed h1:csycYuqqyR9uqiJQqg83SWWzcwLI6PGrkQwwxo0e3O8=
-github.com/agentstation/starmap v0.16.6-0.20260929043939-05501c5970ed/go.mod h1:cCNBcKDllsycjRvn7WPAz9YmT33ydFoVURpGta+veQg=
+github.com/agentstation/starmap v0.16.6-0.20260929053147-9ab700ad930f h1:7QYALy1N/yBZ4YMWqSH92IIP1/LhQJ4wKrTB7JJdz6Y=
+github.com/agentstation/starmap v0.16.6-0.20260929053147-9ab700ad930f/go.mod h1:cCNBcKDllsycjRvn7WPAz9YmT33ydFoVURpGta+veQg=
 github.com/agentstation/utc v0.2.0 h1:zKeYoUA65am9lL9k70iKDci17hXlt9l+N9OCAJvD/Wk=
 github.com/agentstation/utc v0.2.0/go.mod h1:6/sYtnBRR4MhH8Oj9JTG9buSeBgWA9c1ppctsY1nFa8=
 github.com/agentstation/uuidkey v1.2.0 h1:kR6oaO5irgmo3Nbp0/y68SFFAGSzObLY6x44m5/ff24=

@@ -36,6 +36,18 @@ func PublishBackupFiles(ctx context.Context, cfg *config.Config, request recover
 			return result, err
 		}
 	}
+	if request.Role == config.AcquisitionPolicyRole || request.Role == config.InferenceCredentialPolicyRole {
+		tree, remaining, err = selectCredentialRestoreFiles(ctx, cfg, request.Role, source, tree, plan, remaining)
+		if err != nil {
+			return result, err
+		}
+	}
+	if request.Role == config.BaselineRole {
+		tree, remaining, err = selectBaselineRestoreFiles(ctx, source, tree, plan, remaining)
+		if err != nil {
+			return result, err
+		}
+	}
 	scratch := request.ScratchDirectory
 	if scratch == "" {
 		scratch = filepath.Dir(request.Directory)

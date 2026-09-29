@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/agentstation/starmap"
@@ -19,6 +20,8 @@ func baselinePublicationFixture(t *testing.T, mode string) (*config.Config, reco
 	exported, err := starmap.ExportEmbeddedBaseline(t.Context(), paths.BaselineDir)
 	require.NoError(t, err)
 	switch mode {
+	case "journal", "changed-stage":
+		baselinePublicationStageFixture(t, paths.BaselineDir, mode)
 	case "corrupt":
 		require.NoError(t, os.WriteFile(filepath.Join(exported.Directory, "catalog.json"), []byte("invalid captured catalog"), 0600))
 	case "stage":
@@ -58,7 +61,7 @@ func TestRestorePublishBaselinePreservesExportAndLeavesJournalsInactive(t *testi
 		require.NotEqual(t, config.BaselineRole, file.Role)
 		foundJournal = foundJournal || file.Role == "baseline-recovery"
 	}
-	require.True(t, foundJournal, "captured journal ownership must remain unresolved")
+	require.True(t, foundJournal, "captured journals must remain inactive")
 	requirePublicationBarriers(t, cfg)
 	again, err := PublishBackupFiles(t.Context(), cfg, request)
 	require.NoError(t, err)
@@ -81,7 +84,12 @@ func TestRestorePublishBaselineRefusesInvalidExportsAndStages(t *testing.T) {
 			_, err := PublishBackupFiles(t.Context(), cfg, request)
 			require.Error(t, err)
 			require.NoDirExists(t, cfg.EffectivePaths().BaselineDir)
-			requirePublicationBarriers(t, cfg)
+			if mode == "stage" {
+				require.NoDirExists(t, cfg.EffectivePaths().BadgerDir)
+				require.NoFileExists(t, cfg.EffectivePaths().SQLiteFile)
+			} else {
+				requirePublicationBarriers(t, cfg)
+			}
 		})
 	}
 }
@@ -99,4 +107,63 @@ func TestRestorePublishBaselinePreservesExistingConflictingTarget(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, "preserve", string(body))
 	requirePublicationBarriers(t, cfg)
+}
+
+func baselinePublicationStageFixture(t *testing.T, directory, mode string) {
+	t.Helper()
+	token := strings.Repeat("A", 26)
+	stage := filepath.Join(directory, ".baseline-"+token)
+	_, err := productfiles.CreateDirectory(stage)
+	require.NoError(t, err)
+	body := []byte("retained candidate; never a completed export")
+	journal, err := os.ReadFile("testdata/baseline-publication.json")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(directory, starmap.BaselineRecoveryDirectoryName, token+".json"), journal, 0600))
+	if mode == "changed-stage" {
+		body = append(body, '!')
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(stage, "catalog.json"), body, 0600))
+}
+
+func TestRestorePublishBaselineRetainsVerifiedStageWithoutPromotion(t *testing.T) {
+	cfg, request, _ := baselinePublicationFixture(t, "journal")
+	result, err := PublishBackupFiles(t.Context(), cfg, request)
+	require.NoError(t, err)
+	require.True(t, result.Tree.Published)
+	require.Equal(t, 2, result.Tree.Files)
+	stage := ".baseline-" + strings.Repeat("A", 26)
+	require.NoDirExists(t, filepath.Join(result.Tree.Destination, stage))
+	var selected bool
+	for _, file := range result.Remaining {
+		if file.Role == config.BaselineRecoveryRole {
+			require.Equal(t, "verified-history", file.Action)
+			require.Empty(t, file.Destination)
+		}
+		if file.Role == config.BaselineRole {
+			require.Equal(t, "verified-staging", file.Action)
+			require.Empty(t, file.Destination)
+			original, err := os.ReadFile(filepath.Join(request.Directory, "files", filepath.FromSlash(file.ArtifactID)))
+			require.NoError(t, err)
+			prepared, err := os.ReadFile(filepath.Join(request.FilesDirectory, "files", filepath.FromSlash(file.ArtifactID)))
+			require.NoError(t, err)
+			require.Equal(t, original, prepared)
+			selected = true
+		}
+	}
+	require.True(t, selected)
+	requirePublicationBarriers(t, cfg)
+	again, err := PublishBackupFiles(t.Context(), cfg, request)
+	require.NoError(t, err)
+	require.True(t, again.Tree.Reused)
+	require.Equal(t, result.Remaining, again.Remaining)
+	requirePublicationBarriers(t, cfg)
+}
+
+func TestRestorePublishBaselineRefusesChangedStageBeforePreparation(t *testing.T) {
+	cfg, request, _ := baselinePublicationFixture(t, "changed-stage")
+	_, err := PublishBackupFiles(t.Context(), cfg, request)
+	require.Error(t, err)
+	require.NoDirExists(t, cfg.EffectivePaths().BaselineDir)
+	require.NoDirExists(t, cfg.EffectivePaths().BadgerDir)
+	require.NoFileExists(t, cfg.EffectivePaths().SQLiteFile)
 }

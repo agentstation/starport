@@ -216,7 +216,16 @@ starport backup publish-files \
 
 This command verifies or resumes restricted preparation before publishing the selected role.
 Current configuration selects the canonical destination. Backup paths cannot select a host destination.
-The credential owner validates every retained policy record and refuses another replica identity or a pending publication journal.
+The credential owner validates every active policy record and refuses another replica identity.
+
+Before preparation, its publication inspector checks native journals against the verified inventory.
+It permits only the owner's destination names and staging prefixes.
+Captured staging bytes must match the journal size and digest.
+
+The command keeps validated journals and staging files in the backup and inactive preparation.
+It reports `verified-staging` without an active destination and never promotes a candidate policy.
+Acquisition policy also permits complete legacy staging records that match the configured owner and policy family.
+Partial or unowned legacy stages cause refusal. New acquisition writes use durable native journals with bounded writer retries.
 
 Use `--role credential-policy` to publish the separate catalog-acquisition policy tree.
 Starmap validates that tree through the catalog owner without resolving credentials or starting acquisition.
@@ -339,3 +348,15 @@ An exact preparation retry preserves the fresh target token and the inactive cap
 Repeat this procedure for each target replica with its own local token path.
 This step does not recover gateway API keys, provider credentials, or SSO account grants.
 Independent history reconciliation and controlled activation remain required before any gateway starts.
+
+### Baseline publication evidence
+
+Baseline publication verifies completed exports through Starmap before it installs them.
+Captured baseline journals remain inactive because their native identities belong to the source filesystem.
+A journal must have canonical encoding, supported fields, and its matching stage name.
+The captured writer record must be empty. Every captured staging file must match one complete journal record by name, size, and digest.
+
+Matching stages remain in the backup and inactive preparation with `verified-staging` status.
+Validated journal files retain `verified-history` status. Neither status gives a file an active destination.
+The procedure never promotes a staged catalog. Unknown, partial, or changed staging evidence stops publication before target preparation.
+Publication leaves catalog and inference admission closed.

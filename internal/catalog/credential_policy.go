@@ -21,6 +21,15 @@ func (s Settings) InspectCredentialPolicy(ctx context.Context, directory string)
 	})
 }
 
+// InspectCredentialPolicyPublications selects publication evidence for inactive retention.
+// The caller preserves selected bytes and validates the remaining policy before publication.
+func (s Settings) InspectCredentialPolicyPublications(ctx context.Context, files map[string]productfiles.RetainedFile, read productfiles.RetainedRecordReader) ([]string, error) {
+	owner := s.directoryOwner()
+	return acquisition.InspectCredentialPolicyPublications(ctx, acquisition.CredentialProductStarport, acquisition.CredentialPolicyState{
+		Product: owner.Product, DeploymentID: owner.Deployment, InstanceID: owner.Instance,
+	}, files, read)
+}
+
 // credentialPolicy classifies retained state before catalog startup creates its markers.
 func (s Settings) credentialPolicy(ctx context.Context, store storage.KVStore) (*acquisition.CredentialPolicyState, error) {
 	if s.CredentialPolicyDirectory == "" {
