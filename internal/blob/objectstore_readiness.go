@@ -83,7 +83,7 @@ func (o *ObjectStore) expectRetired(ctx context.Context, key string) error {
 }
 
 func (o *ObjectStore) probeMultipart(ctx context.Context, key string, state string) error {
-	object := aws.String(o.objectKey(retainedDir + "/" + key))
+	object := aws.String(o.objectKey(blobAddress(retainedDir, key)))
 	bucket := aws.String(o.bucket)
 	created, err := o.client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
 		Bucket: bucket, Key: object, Metadata: map[string]string{retainedObjectMetadataKey: liveObjectMetadata},

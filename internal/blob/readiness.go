@@ -14,9 +14,9 @@ var ErrPublicationUnavailable = errors.New("blob: conditional publication is una
 // ErrConditionalPublicationUnsupported reports a failed conditional-write probe.
 var ErrConditionalPublicationUnsupported = errors.New("blob: storage did not enforce conditional publication")
 
-// publicationReadiness retains capability evidence for one configured client.
+// blobReadiness retains capability evidence for one configured client.
 // Success is not a promise of future availability or physical data erasure.
-type publicationReadiness struct {
+type blobReadiness struct {
 	ready      atomic.Bool
 	mu         sync.Mutex
 	running    chan struct{}
@@ -24,9 +24,9 @@ type publicationReadiness struct {
 	last       error
 }
 
-func (r *publicationReadiness) ensure(ctx context.Context, probe func(context.Context) error) error {
+func (r *blobReadiness) ensure(ctx context.Context, probe func(context.Context) error, unavailable error) error {
 	if err := ctx.Err(); err != nil {
-		return errors.Join(ErrPublicationUnavailable, err)
+		return errors.Join(unavailable, err)
 	}
 	if r.ready.Load() {
 		return nil
@@ -40,9 +40,9 @@ func (r *publicationReadiness) ensure(ctx context.Context, probe func(context.Co
 		r.mu.Unlock()
 		select {
 		case <-ctx.Done():
-			return errors.Join(ErrPublicationUnavailable, ctx.Err())
+			return errors.Join(unavailable, ctx.Err())
 		case <-active:
-			return r.ensure(ctx, probe)
+			return r.ensure(ctx, probe, unavailable)
 		}
 	}
 	if time.Now().Before(r.retryAfter) {
@@ -60,7 +60,7 @@ func (r *publicationReadiness) ensure(ctx context.Context, probe func(context.Co
 	if err == nil {
 		r.ready.Store(true)
 	} else {
-		err = errors.Join(ErrPublicationUnavailable, err)
+		err = errors.Join(unavailable, err)
 		r.retryAfter = time.Now().Add(time.Second)
 	}
 	r.last = err
@@ -77,5 +77,5 @@ func (f *Filesystem) EnsurePublicationReady(ctx context.Context) error { return 
 // EnsurePublicationReady verifies this client's conditional-write support.
 // Construction does not contact the bucket. Warm checks read process memory.
 func (o *ObjectStore) EnsurePublicationReady(ctx context.Context) error {
-	return o.readiness.ensure(ctx, o.probePublication)
+	return o.readiness.ensure(ctx, o.probePublication, ErrPublicationUnavailable)
 }

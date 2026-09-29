@@ -12,6 +12,24 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
+// InspectCredentialPolicy validates retained acquisition policy without writes or credential access.
+// The caller must fence writers and verify the complete inventory around inspection.
+func (s Settings) InspectCredentialPolicy(ctx context.Context, directory string) error {
+	owner := s.directoryOwner()
+	return acquisition.InspectCredentialPolicyState(ctx, acquisition.CredentialProductStarport, acquisition.CredentialPolicyState{
+		Directory: directory, Product: owner.Product, DeploymentID: owner.Deployment, InstanceID: owner.Instance,
+	})
+}
+
+// InspectCredentialPolicyPublications selects publication evidence for inactive retention.
+// The caller preserves selected bytes and validates the remaining policy before publication.
+func (s Settings) InspectCredentialPolicyPublications(ctx context.Context, files map[string]productfiles.RetainedFile, read productfiles.RetainedRecordReader) ([]string, error) {
+	owner := s.directoryOwner()
+	return acquisition.InspectCredentialPolicyPublications(ctx, acquisition.CredentialProductStarport, acquisition.CredentialPolicyState{
+		Product: owner.Product, DeploymentID: owner.Deployment, InstanceID: owner.Instance,
+	}, files, read)
+}
+
 // credentialPolicy classifies retained state before catalog startup creates its markers.
 func (s Settings) credentialPolicy(ctx context.Context, store storage.KVStore) (*acquisition.CredentialPolicyState, error) {
 	if s.CredentialPolicyDirectory == "" {

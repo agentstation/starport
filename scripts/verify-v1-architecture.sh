@@ -123,7 +123,8 @@ check V11 'import graph architecture fitness' sh -c '
     bash scripts/test-package-layout-verifier.sh
 '
 
-check V12 'full Go test suite' go test ./...
+# Full-suite coverage belongs to make test, native CI, and the release gate.
+# Keep this command limited to the eleven architecture contracts above.
 
 printf 'Summary: %d passed, %d failed\n' "$passed" "$failed"
 

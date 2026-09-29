@@ -36,22 +36,22 @@ func TestObjectStoreScopesKeysUnderThePrefix(t *testing.T) {
 	_, err := store.Put(context.Background(), "file-id", strings.NewReader("payload"))
 	require.NoError(t, err)
 
-	value, ok := server.stored("deployment-one/file-id")
+	value, ok := server.stored("deployment-one/objects/ba/08/ba08185db67b39e932f1b453465dde3dbc3b1a93f02c508b5dbdb9bc379f8119")
 	require.True(t, ok, "the object does not sit under the prefix")
 	require.Equal(t, "payload", string(value))
 
-	_, ok = server.stored("file-id")
+	_, ok = server.stored("objects/ba/08/ba08185db67b39e932f1b453465dde3dbc3b1a93f02c508b5dbdb9bc379f8119")
 	require.False(t, ok, "the object also sits outside the prefix")
 }
 
-func TestObjectStoreWithoutAPrefixUsesTheKeyItself(t *testing.T) {
+func TestObjectStoreWithoutAPrefixUsesPortableAddress(t *testing.T) {
 	t.Parallel()
 
 	server, store := openObjectStore(t, "")
 	_, err := store.Put(context.Background(), "file-id", strings.NewReader("payload"))
 	require.NoError(t, err)
 
-	_, ok := server.stored("file-id")
+	_, ok := server.stored("objects/ba/08/ba08185db67b39e932f1b453465dde3dbc3b1a93f02c508b5dbdb9bc379f8119")
 	require.True(t, ok)
 }
 

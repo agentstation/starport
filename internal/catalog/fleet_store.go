@@ -271,8 +271,12 @@ func (s *FleetStore) CommitPublication(ctx context.Context, publication runtime.
 }
 
 func (s *FleetStore) publicationKey(head runtime.FleetHead) string {
+	return fleetPublicationKey(s.prefix, head)
+}
+
+func fleetPublicationKey(prefix string, head runtime.FleetHead) string {
 	encoded, _ := json.Marshal(head)
-	return s.prefix + "publication:" + strconv.FormatUint(head.Revision, 10) + ":" + payloadDigest(encoded)
+	return prefix + "publication:" + strconv.FormatUint(head.Revision, 10) + ":" + payloadDigest(encoded)
 }
 
 func fleetReadError(err error, id string) error {

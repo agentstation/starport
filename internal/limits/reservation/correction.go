@@ -74,6 +74,10 @@ func (r *Repository) InspectCorrection(ctx context.Context, attemptID, correctio
 	if err != nil {
 		return nil, err
 	}
+	return decodeCorrectionReceipt(attemptID, correctionID, data)
+}
+
+func decodeCorrectionReceipt(attemptID, correctionID string, data []byte) (*CorrectionReceipt, error) {
 	var receipt CorrectionReceipt
 	if json.Unmarshal(data, &receipt) != nil || receipt.Version != correctionRecordVersion || !validPublicationDigest(receipt.PublicationDigest) ||
 		!receipt.Correction.valid() || receipt.Correction.ID != correctionID ||
@@ -264,6 +268,10 @@ func (r *Repository) verifyCorrectionHead(ctx context.Context, record Record) er
 	if err != nil {
 		return errors.Join(ErrUnavailable, err)
 	}
+	return verifyCorrectionRecord(record, *receipt)
+}
+
+func verifyCorrectionRecord(record Record, receipt CorrectionReceipt) error {
 	expected := receipt.Before
 	amount, err := expected.Attempt.evidenceAmount(&receipt.Correction.Evidence)
 	if err != nil {

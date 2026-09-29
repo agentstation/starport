@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -96,6 +97,63 @@ class NativeCatalogTests(unittest.TestCase):
         self.test["test"] = "TestOptionalStore"
         with self.assertRaises(ValueError):
             self.validate()
+
+    def enable_shards(self):
+        runner = "windows-2025"
+        self.proof["format"] = 2
+        self.bind_events(runner, [{"Package": "github.com/agentstation/starport/internal/config", "Action": "pass"}])
+        names = sorted(["TestFixture"] + [f"TestOwner{i}" for i in range(30)])
+        toolchain = (self.root / f"native-catalog-{runner}/toolchain.txt").read_text()
+        for index in range(native.app_shards.SHARDS):
+            self.proof["run"]["jobs"].append({"name": f"App test ({runner}, {index})", "status": "completed", "conclusion": "success", "databaseId": 100 + index})
+            selected = native.app_shards.partition(names, index)
+            roster = {"version": 1, "index": index, "shards": native.app_shards.SHARDS,
+                      "owners": names, "selected": selected, "source": "b" * 40, "workflow_head": "a" * 40}
+            suffix = f"app-{runner}-{index}"
+            self.bind(suffix, "roster.json", json.dumps(roster))
+            self.bind(suffix, "toolchain.txt", toolchain)
+            self.bind_events(suffix, [self.event("run", name=name) for name in selected] +
+                             [self.event("pass", name=name) for name in selected] + [self.event("pass", test=False)])
+
+    def test_shards_qualify_named_tests_and_preserve_raw_package_completions(self):
+        self.enable_shards()
+        self.assertEqual(len(self.validate()), 2)
+
+    def test_shards_require_every_job_artifact_and_matching_toolchain(self):
+        self.enable_shards()
+        jobs = self.proof["run"]["jobs"]
+        for changed in [jobs[:-1], jobs + jobs[-1:], [dict(jobs[-1], conclusion="failure")] + jobs[:-1]]:
+            self.proof["run"]["jobs"] = changed
+            with self.assertRaises(ValueError):
+                self.validate()
+        self.proof["run"]["jobs"] = jobs
+        self.bind("app-windows-2025-0", "toolchain.txt", "different\n")
+        with self.assertRaises(ValueError):
+            self.validate()
+
+    def test_shards_refuse_duplicate_app_execution_in_base_artifact(self):
+        self.enable_shards()
+        self.bind_events("windows-2025", [self.event("run"), self.event("pass"), self.event("pass", test=False)])
+        with self.assertRaises(ValueError):
+            self.validate()
+
+    def test_skipped_required_sharded_owner_remains_unqualified(self):
+        self.enable_shards()
+        for index in range(native.app_shards.SHARDS):
+            suffix = f"app-windows-2025-{index}"
+            path = self.root / f"native-catalog-{suffix}/tests.jsonl"
+            events = [json.loads(line) for line in path.read_text().splitlines()]
+            for event in events:
+                if event.get("Test") == "TestFixture" and event["Action"] == "pass":
+                    event["Action"] = "skip"
+            self.bind_events(suffix, events)
+        with self.assertRaises(ValueError):
+            self.validate()
+
+    def test_starmap_consumer_can_load_by_path_from_another_directory(self):
+        module = Path(native.__file__).resolve()
+        code = "import importlib.util; s=importlib.util.spec_from_file_location('native', " + repr(str(module)) + "); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); assert m.app_shards.SHARDS == 4"
+        subprocess.run([sys.executable, "-I", "-c", code], cwd=self.root, check=True, capture_output=True, text=True, timeout=10)
 
     def test_missing_capture_is_unverified(self):
         self.assertEqual(native.verify(self.root, {"platform": "windows", "tests": [self.test]})["status"], "UNVERIFIED")

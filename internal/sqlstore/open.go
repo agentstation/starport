@@ -59,4 +59,4 @@ func openSQLite(config SQLiteConfig) (*DB, error) {
 // reader from blocking the writer, foreign keys make the schema's stated
 // relations real, and the busy timeout turns a locked database into a bounded
 // wait instead of an immediate error.
-const sqliteOptions = "_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+const sqliteOptions = "_pragma=busy_timeout(50)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"

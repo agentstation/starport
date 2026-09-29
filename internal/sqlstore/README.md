@@ -41,9 +41,73 @@ name order, once each, and records what it applied. A test holds the three
 dialect sets to the same file names, and the shared contract tests hold
 every backend to the same resulting behavior.
 
-Write MySQL migrations idempotent-safe (`IF NOT EXISTS`, `INSERT IGNORE`):
-MySQL auto-commits DDL. A failed multi-statement file can leave early
-statements applied with no record. The retry must tolerate them.
+SQLite owns each migration through `BEGIN IMMEDIATE`. PostgreSQL and MySQL
+hold a session lock on one connection. History checks, schema changes, and
+completion records share that ownership. Startup rejects unknown migration
+history.
+
+MySQL can commit DDL before the migration completion record. The runner stores
+an intent before each attempt and blocks automatic retry after interruption.
+`ReconcileMySQLMigration` records an administrator's independently verified
+`applied` or `reverted` outcome. It binds the decision to the migration digest,
+operator identity, operation ID, and evidence digest. It never repairs schema
+or repeats uncertain statements itself.
+
+After manual repair, the operation commits its audit record, completion state,
+and intent removal together. An exact operation retry returns the original
+result. Reusing an operation ID with different evidence fails. The caller
+authenticates the administrator and retains the evidence bytes.
+
+## SQLite snapshots
+
+`SnapshotSQLite` uses `VACUUM INTO` to capture committed data, including records
+that remain in the WAL. It validates the database and migration history before
+publishing a new private directory. The directory contains `starport.db`,
+`snapshot.json`, and private publication metadata. Existing destinations remain
+untouched.
+
+`RestoreSQLiteSnapshot` checks the manifest's size and SHA256 digest before
+importing the database. It rejects corrupt images, invalid foreign keys, and
+unknown or incomplete migration history. It preserves older, contiguous
+migration history without applying new schema files.
+
+These methods copy SQL state only. They do not select the database for a
+running gateway or approve restored permissions. The deployment coordinator
+must stop cross-store writes before backup. Before admission, it must fence old
+writers and reconcile independent revocation and spending evidence. The full
+KV, SQL, blob, configuration, and key-access procedure remains part of CSP13.
+
+
+## Relational transfer
+
+`SnapshotRelational` exports SQLite, PostgreSQL, or MySQL records into a portable
+SQLite image. It reads one consistent SQL snapshot and preserves the audit ID
+allocation counter. The transfer uses the current complete migration set.
+Unknown tables, columns, triggers, and pending migration attempts stop export.
+Use a dedicated PostgreSQL schema or MySQL database for this procedure.
+
+`ImportRelational` verifies the image in private staging before writing the
+target. The target must contain only the current schema and its initial
+metadata. The caller must fence target writers and stop schema changes first.
+Concurrent imports share migration ownership, so only one can fill the target.
+
+The caller supplies a required recovery callback. It must close restored
+permission gates in the same transaction as the imported records. A callback
+failure rolls back the records. A successful import does not select the target
+for a running gateway or approve recovery.
+
+Migration 0012 retains migration repair records on every backend. It also gives
+MySQL migration timestamps microsecond precision to preserve PostgreSQL values.
+Finer timestamps fail transfer to network SQL. MySQL limits and collation still
+apply. Incompatible keys or oversized values stop import without partial records.
+
+Native audit counters retain their previous upper bound, including deleted IDs.
+A failed import can leave an allocation gap on MySQL. Retry preserves that
+counter instead of resetting it. Transfer never resets the retained allocation floor.
+
+MySQL cannot preserve an exhausted signed audit counter.
+Import refuses that target before copying records. SQLite and PostgreSQL retain
+the exhausted state.
 
 ## Tests
 

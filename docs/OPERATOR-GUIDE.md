@@ -499,7 +499,8 @@ Keep the original runtime selected in configuration through `publish`. Select th
 
 Completion verifies the configuration again after opening the replacement. Environment-only target settings cannot complete the move.
 Use `--json` for the phase result. The result reports `journal_directory` and `host_journal_directory` for the selected operation.
-The command does not start the gateway or open SQL.
+The command keeps the gateway stopped. With Badger, it leaves SQL closed.
+With Valkey, it requires access to the existing PostgreSQL recovery witness.
 
 The explicit journal directory contains Starmap recovery records and Starport's `starport-runtime/<operation-hash>/catalog-binding.json`.
 The catalog KV store retains matching migration checkpoints under `catalog_migration:v1:`.

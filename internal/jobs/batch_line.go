@@ -126,5 +126,5 @@ func (r *batchRepository) ReadLine(ctx context.Context, account, id string, numb
 }
 
 func batchLineKey(account, id string, number int) string {
-	return "batch-lines:v1:account:" + base64.RawURLEncoding.EncodeToString([]byte(account)) + ":batch:" + base64.RawURLEncoding.EncodeToString([]byte(id)) + ":line:" + strconv.Itoa(number)
+	return BatchLineStoragePrefix + base64.RawURLEncoding.EncodeToString([]byte(account)) + ":batch:" + base64.RawURLEncoding.EncodeToString([]byte(id)) + ":line:" + strconv.Itoa(number)
 }

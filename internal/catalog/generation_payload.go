@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
+
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -94,19 +96,20 @@ func writeGenerationChunks(ctx context.Context, store storage.KVStore, chunks ma
 	return flush()
 }
 
+type generationChunkReader interface {
+	BatchGet(context.Context, []string) (map[string][]byte, error)
+}
+
 // readGenerationPayload reassembles the encoded generation a record names and
 // proves the result against the recorded digest.
 func readGenerationPayload(
 	ctx context.Context,
-	store storage.KVStore,
+	store generationChunkReader,
 	record generationRecord,
 	generationID string,
 ) ([]byte, error) {
-	if record.Encoding != generationEncodingChunked {
-		return nil, fmt.Errorf(
-			"catalog generation %q uses unsupported record encoding %q, want %q",
-			generationID, record.Encoding, generationEncodingChunked,
-		)
+	if err := validateGenerationDescriptor(record, 2*catalogs.MaxCatalogPayloadBytes+1<<20); err != nil {
+		return nil, fmt.Errorf("catalog generation %q: %w", generationID, err)
 	}
 
 	// One digest can repeat within a payload, so chunks are collected into a
@@ -141,6 +144,9 @@ func readGenerationPayload(
 				"catalog generation %q is missing chunk %d of %d (%s)",
 				generationID, index+1, len(record.Chunks), digest,
 			)
+		}
+		if len(chunk) != min(generationChunkSize, record.Size-len(payload)) || payloadDigest(chunk) != digest {
+			return nil, fmt.Errorf("catalog generation %q has an invalid chunk %d", generationID, index)
 		}
 		payload = append(payload, chunk...)
 	}
@@ -195,4 +201,16 @@ func catalogGenerationChunkKey(digest string) string {
 func payloadDigest(payload []byte) string {
 	sum := sha256.Sum256(payload)
 	return hex.EncodeToString(sum[:])
+}
+
+func validateGenerationDescriptor(record generationRecord, limit int) error {
+	if record.Encoding != generationEncodingChunked || record.Size < 0 || record.Size > limit || record.ChunkSize != generationChunkSize || len(record.Chunks) != (record.Size+generationChunkSize-1)/generationChunkSize || !fleetChunkDigest(record.Digest) {
+		return fmt.Errorf("invalid catalog payload descriptor")
+	}
+	for _, digest := range record.Chunks {
+		if !fleetChunkDigest(digest) {
+			return fmt.Errorf("invalid catalog chunk digest")
+		}
+	}
+	return nil
 }

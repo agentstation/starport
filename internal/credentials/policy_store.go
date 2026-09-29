@@ -132,11 +132,19 @@ func (s *FileSelectionPolicyStore) read(name string, provider catalogs.ProviderI
 	if err != nil {
 		return selectionPolicyRecord{}, err
 	}
+	record, err := decodeSelectionPolicyRecord(data, s.owner)
+	if err == nil && record.Provider != provider {
+		return record, fmt.Errorf("inference policy owner or version does not match")
+	}
+	return record, err
+}
+
+func decodeSelectionPolicyRecord(data []byte, owner SelectionPolicyOwner) (selectionPolicyRecord, error) {
 	var record selectionPolicyRecord
 	if err := json.Unmarshal(data, &record, json.RejectUnknownMembers(true)); err != nil {
 		return record, fmt.Errorf("invalid inference policy encoding")
 	}
-	if record.Schema != 1 || record.Owner != s.owner || record.Provider != provider || (record.Policy != InferencePolicyLegacy && record.Policy != InferencePolicyCurrent) {
+	if record.Schema != 1 || record.Owner != owner || (record.Policy != InferencePolicyLegacy && record.Policy != InferencePolicyCurrent) {
 		return record, fmt.Errorf("inference policy owner or version does not match")
 	}
 	encoded, err := json.Marshal(record)

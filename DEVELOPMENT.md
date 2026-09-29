@@ -107,6 +107,35 @@ bash scripts/smoke-openrouter-sdks.sh
 This scene tests raw HTTP plus the pinned official Python, TypeScript, and Go
 OpenRouter clients.
 
+## Native application tests
+
+Windows AMD64 runs the application suite in four concurrent CI jobs.
+Other native platforms keep one complete application run.
+Production storage settings and test assertions remain the same on every platform.
+
+Each shard discovers runnable tests, examples, and fuzz seed owners with Go's race build.
+A stable name hash assigns each owner to one shard.
+New owners enter the next run automatically. Subtests and fuzz seeds stay with their owner.
+
+The aggregate gate checks complete discovery, exact execution counts, source identity, and native toolchain agreement.
+Build requires every shard and that gate.
+Optional service skips remain visible and do not qualify a required native contract.
+Linux coverage and the other native checks remain unchanged.
+
+Reproduce one shard with a fresh output directory:
+
+```bash
+python scripts/app_shards.py run --index 0 --output /tmp/starport-app-shard-0
+```
+
+The script gives cold race compilation a separate 15-minute budget.
+Each shard has a 12-minute Go test deadline.
+The artifact retains the discovery roster, raw Go JSON events, and native toolchain details.
+It does not combine four package completions into one result.
+
+`scripts/native_catalog.py` binds the additional artifacts when it captures current CI evidence.
+Its verifier also reads historical captures from the original complete suite.
+
 ## Run storage integration tests
 
 ```bash
@@ -175,7 +204,7 @@ Do not lower a lint rule or test assertion to hide a defect.
 
 ## Respect concept ownership
 
-Starport uses concept-owned seams:
+Starport uses concept-owned boundaries:
 
 - `internal/inference` owns canonical inference types.
 - `internal/catalog` projects one immutable Starmap generation.

@@ -178,7 +178,18 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/limits",
 		"github.com/agentstation/starport/internal/storage",
 	)
+	// Recovery composes owner checks over captured state. Domain owners retain
+	// record interpretation. Recovery cannot import application or request orchestration.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/recovery"],
+		"github.com/agentstation/starport/internal/account",
+		"github.com/agentstation/starport/internal/apikey",
+		"github.com/agentstation/starport/internal/blob",
+		"github.com/agentstation/starport/internal/credentials",
+		"github.com/agentstation/starport/internal/files",
+		"github.com/agentstation/starport/internal/identity",
+		"github.com/agentstation/starport/internal/jobs",
+		"github.com/agentstation/starport/internal/limits",
+		"github.com/agentstation/starport/internal/limits/reservation",
 		"github.com/agentstation/starport/internal/sqlstore",
 		"github.com/agentstation/starport/internal/storage",
 	)
@@ -218,12 +229,14 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/storage",
 	)
 	// Jobs owns work that outlives its request. It reads operation vocabulary,
-	// correction limits, retained valuation, and stored records.
+	// correction limits, retained valuation, and stored records. Recovery checks
+	// use the file owner to validate account-bound input and output references.
 	// Execution and provider connectors remain outside this record boundary.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/jobs"],
 		"github.com/agentstation/starport/internal/limits",
 		"github.com/agentstation/starport/internal/limits/reservation",
 		"github.com/agentstation/starport/internal/blob",
+		"github.com/agentstation/starport/internal/files",
 		"github.com/agentstation/starport/internal/routing",
 		"github.com/agentstation/starport/internal/storage",
 	)

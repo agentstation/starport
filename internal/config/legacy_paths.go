@@ -57,8 +57,8 @@ func (p Paths) legacyCandidates() ([]LegacyPath, error) {
 		{pathRoleBadger, previous.BadgerDir, p.BadgerDir, badgerPathEnvironment},
 		{pathRoleSQLite, previous.SQLiteFile, p.SQLiteFile, sqlitePathEnvironment},
 		{pathRoleFiles, previous.FilesDir, p.FilesDir, filesPathEnvironment},
-		{"local-token", previous.LocalTokenFile, p.LocalTokenFile, dataDirectoryEnvironment},
-		{"welcome-stamp", previous.WelcomeStampFile, p.WelcomeStampFile, dataDirectoryEnvironment},
+		{fileRoleLocalToken, previous.LocalTokenFile, p.LocalTokenFile, dataDirectoryEnvironment},
+		{fileRoleWelcome, previous.WelcomeStampFile, p.WelcomeStampFile, dataDirectoryEnvironment},
 	} {
 		if legacyConfig != "" && item.selected != "" && p.implicitPath(productpaths.Data, item.role) {
 			add(item.role, item.old, item.selected, item.selector, "")
