@@ -31,6 +31,7 @@ type BackupVerifier func(context.Context, *config.Config, recovery.VerifyRequest
 func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.Command {
 	return &urfavecli.Command{Name: "backup", Usage: "Capture and verify a stopped deployment", Commands: []*urfavecli.Command{
 		newPrepareBackupCommand(deps, usageError),
+		newInspectImportedBackupCommand(deps, usageError),
 		newPublishBackupFilesCommand(deps, usageError),
 		{
 			Name: "close", Usage: "Close recovery approval; separately stop and fence all writers", OnUsageError: usageError,
@@ -152,3 +153,5 @@ func writeBackupResult(cmd *urfavecli.Command, result recovery.CaptureResult) er
 
 	return err
 }
+
+const backupScratchUsage = "Existing private scratch directory; defaults to the backup parent"

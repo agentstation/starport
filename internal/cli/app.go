@@ -86,23 +86,24 @@ type usageErrorHandler = urfavecli.OnUsageErrorFunc
 
 // Dependencies contains all runtime boundaries used by commands.
 type Dependencies struct {
-	Stdin               io.Reader
-	Stdout              io.Writer
-	Stderr              io.Writer
-	Build               BuildInfo
-	RunServer           ServerRunner
-	StartDevelopment    DevelopmentStarter
-	Initialize          Initializer
-	LoadConfig          ConfigLoader
-	ResolvePaths        PathResolver
-	Diagnose            Diagnoser
-	MigrateRuntime      RuntimeMigrator
-	InitializeFleet     FleetInitializer
-	CloseBackupBoundary BackupCloser
-	CaptureBackup       BackupCapturer
-	VerifyBackup        BackupVerifier
-	PrepareBackup       BackupPreparer
-	PublishBackupFiles  BackupFilePublisher
+	Stdin                 io.Reader
+	Stdout                io.Writer
+	Stderr                io.Writer
+	Build                 BuildInfo
+	RunServer             ServerRunner
+	StartDevelopment      DevelopmentStarter
+	Initialize            Initializer
+	LoadConfig            ConfigLoader
+	ResolvePaths          PathResolver
+	Diagnose              Diagnoser
+	MigrateRuntime        RuntimeMigrator
+	InitializeFleet       FleetInitializer
+	CloseBackupBoundary   BackupCloser
+	CaptureBackup         BackupCapturer
+	VerifyBackup          BackupVerifier
+	PrepareBackup         BackupPreparer
+	InspectImportedBackup ImportedBackupInspector
+	PublishBackupFiles    BackupFilePublisher
 	// Desktop reaches the operator's machine. It is not validated: a machine
 	// with no browser and no clipboard still runs every command, because each
 	// one prints the link it would otherwise have handed over.
