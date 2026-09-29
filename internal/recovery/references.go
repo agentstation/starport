@@ -16,6 +16,7 @@ import (
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -23,6 +24,7 @@ import (
 // ReferenceReport counts verified records and retained recovery diagnostics.
 // It does not authorize later spending or restore.
 type ReferenceReport struct {
+	JobSlots                      jobslots.RecoveryReport  `json:"job_slots"`
 	JobExecution                  jobs.RecoveryExecution   `json:"job_execution"`
 	JobCorrections                jobs.RecoveryCorrections `json:"job_corrections"`
 	MissingReservationJobs        int64                    `json:"missing_reservation_jobs"`
@@ -79,10 +81,16 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 		return report, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, accounting.Close()) }()
+	slots, err := newBackupJobSlotIndex(ctx, accounting.tx)
+	if err != nil {
+		return report, err
+	}
 	correctionKinds := make(map[string]int64)
 	err = records.Enumerate(ctx, func(record storage.TransferRecord) error {
 		var checkErr error
 		switch {
+		case strings.HasPrefix(record.Key, jobslots.ClaimStoragePrefix), strings.HasPrefix(record.Key, limits.OutstandingJobsPrefix):
+			checkErr = slots.Add(ctx, record)
 		case strings.HasPrefix(record.Key, reservation.StoragePrefix):
 			checkErr = inspectBudgetExecution(ctx, records, accounting, record, &report)
 
@@ -110,12 +118,8 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 				report.FileRecords++
 			}
 		case strings.HasPrefix(record.Key, jobs.BatchStoragePrefix):
-			var missing int64
-			_, missing, checkErr = jobs.VerifyRecoveryBatch(ctx, record.Key, record.Value, records)
-			if checkErr == nil {
-				report.BatchRecords++
-				report.MissingBatchFiles += missing
-			}
+			checkErr = inspectBatchExecution(ctx, records, record, &report, slots)
+
 		case strings.HasPrefix(record.Key, jobs.BatchLineStoragePrefix):
 			var missing bool
 			var line jobs.BatchLine
@@ -136,7 +140,7 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 				correctionKinds[kind]++
 			}
 		case strings.HasPrefix(record.Key, jobs.StoragePrefix):
-			checkErr = inspectJobExecution(ctx, records, blobs, manifest, record, &report)
+			checkErr = inspectJobExecution(ctx, records, blobs, manifest, record, &report, slots)
 		}
 		if checkErr != nil {
 			return fmt.Errorf("recovery reference check failed for record %x: %w", sha256.Sum256([]byte(record.Key)), checkErr)
@@ -148,6 +152,9 @@ func inspectVerifiedBundleReferences(ctx context.Context, directory, scratch str
 	}
 	if err == nil {
 		report.BudgetWindows, err = accounting.Verify(ctx)
+	}
+	if err == nil {
+		report.JobSlots, err = slots.Verify(ctx)
 	}
 	if err == nil {
 		err = inspectCapturedDomains(ctx, records, manifest.Request.Boundary, inspectors)

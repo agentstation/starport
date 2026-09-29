@@ -36,6 +36,17 @@ Native response receipts retain unconfirmed submissions without repeating provid
 Batch validation requires every recorded execution claim and its parent batch.
 Missing batch files remain visible for reconciliation.
 
+Slot checks compare every account counter with its unreleased claims and require the retained history marker.
+A private on-disk index checks claim attachments in both directions against owner-validated jobs and batches.
+Missing claims, lost attachment flags, expiring slot state, and inconsistent totals cause refusal.
+Terminal batches still hold capacity until their runs finish.
+
+An interrupted release acknowledgement can retain a finished job beside its released claim.
+Released claims can outlive deleted jobs. Unattached claims remain held, regardless of age.
+The report counts pending claims without proving that later attachment history is complete.
+The slot owner exposes read-only record, total, and attachment checks for captured or reconciled views.
+These checks do not release capacity or grant activation permission.
+
 SQL identity checks verify users, teams, memberships, account grants, and templates through their owners.
 The captured SQL recovery boundary must match the manifest and remain closed.
 Grants can retain deleted-account references, which verification reports without restoring access.
