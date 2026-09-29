@@ -104,6 +104,17 @@ Restoring the SQL witness cannot restore permission to approve itself.
 
 ### Catalog preparation before activation
 
+`Witness.PrepareImportedEpoch` binds an imported SQL boundary to independently retained epoch evidence.
+The evidence names the highest epoch, its source digest, the external reference, and the accepting operator.
+Starport checks this binding. The operator must establish the external record's completeness.
+
+The resulting epoch exceeds the retained highest epoch and preserves capacity for a later withdrawal.
+Unknown, older, or exhausted epoch evidence causes refusal.
+The SQL change and immutable receipt commit together while admission and the import barrier remain closed.
+An exact retry preserves the selected epoch. Conflicting evidence or a later boundary causes refusal.
+
+This step must precede catalog preparation. It does not reconcile lost permissions, spending, or execution history.
+
 `catalog.PrepareFleetAdoption` validates and selects recovered catalog publications while the SQL recovery gate remains closed.
 It preserves publication contents and binds the selected heads to the replacement backend and epoch.
 An exact retry validates the retained preparation receipt.
