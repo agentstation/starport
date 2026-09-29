@@ -465,3 +465,15 @@ The coordinator must verify independent interval coverage and combine linked exe
 A record or a digest alone does not prove complete history.
 After native replay starts, resume its ordered receipts instead of repeating snapshot import.
 Complete recovery coordination and activation remain required before admission opens.
+
+## Batch execution replay
+
+`jobs.PrepareBatchReplay` stages at most 127 retained line records per native step.
+The batch record remains unchanged during staging. Final publication requires every claimed line and its retained result references to validate.
+This supports histories larger than one native transaction without making partial state available to workers.
+
+Replay preserves input digests, request identities, results, authorization evidence, and terminal times.
+It cannot reduce the claimed-line count or make a completed result uncertain again.
+A retained claim still refuses another execution, including after repository reconstruction.
+The coordinator must validate the complete closed view before activation, including staged lines without matching parents.
+Independent interval coverage must establish which remaining lines never started.
