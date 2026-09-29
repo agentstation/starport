@@ -73,6 +73,7 @@ func runContext(
 		VerifyBackup:          app.VerifyBackup,
 		PrepareBackup:         app.PrepareBackup,
 		InspectImportedBackup: app.InspectImportedBackup,
+		ApplyImportedHistory:  app.ApplyImportedHistory,
 		PublishBackupFiles:    app.PublishBackupFiles,
 	})
 	if err == nil {

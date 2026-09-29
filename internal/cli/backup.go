@@ -32,6 +32,7 @@ func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 	return &urfavecli.Command{Name: "backup", Usage: "Capture and verify a stopped deployment", Commands: []*urfavecli.Command{
 		newPrepareBackupCommand(deps, usageError),
 		newInspectImportedBackupCommand(deps, usageError),
+		newApplyHistoryCommand(deps, usageError),
 		newPublishBackupFilesCommand(deps, usageError),
 		{
 			Name: "close", Usage: "Close recovery approval; separately stop and fence all writers", OnUsageError: usageError,

@@ -613,8 +613,8 @@ The epoch exceeds the independently reported highest epoch.
 Exact retries require the same artifact, import claim, and current closed boundary.
 After SQL accepts the artifact, recovery refuses a missing journal instead of generating another one.
 
-These library operations do not provide an operator replay or activation command.
-Typed owner validation, ordered native replay, complete graph inspection, and controlled activation remain required.
+`starport backup apply-history` provides operator history acceptance and ordered native replay.
+Complete graph inspection and controlled activation remain required.
 Keep the accepted journal, original evidence package, and external fencing controls throughout recovery.
 
 
@@ -635,3 +635,32 @@ After blob replay, use the position-aware inspection and activation methods.
 The zero-position methods refuse a nonzero or incomplete replay chain.
 Operator inspection requires `--blob-replay-sequence`, with `--blob-replay-sha256` when the sequence is positive.
 These owner operations keep ordinary startup restricted. They do not establish complete history or authorize activation.
+
+
+## Operator history replay
+
+`starport backup apply-history` uses the original backup and independent history package with existing closed targets.
+Supply the manifest digests retained separately from those files.
+Use the target digest from `backup inspect-import`, the unchanged operation, and the unchanged fencing reference.
+For Valkey, also supply its recorded incarnation.
+
+Choose an existing private journal directory outside the backup, history package, and selected stores.
+Keep the journal, payloads, assets, and external fencing controls after interruption.
+An exact retry uses the same command, journal, digests, and attestations.
+Changed evidence requires a fresh-target recovery.
+A future protocol needs separate checks before it can replace accepted evidence.
+
+The operator must explicitly attest that writers remain fenced.
+The operator must also attest that retained evidence accounts for previously admitted work.
+A `replay_complete` manifest also requires `--complete-interval`.
+These attestations describe external facts. The command cannot establish their truth.
+A `remain_restricted` manifest records incomplete coverage and permits no activation.
+
+Each step records its original native preimage before mutation and retains the native receipt after mutation.
+After an interrupted reply, retry uses those retained preimages and checks the exact native replay position.
+It refuses missing journals, changed target bindings, conflicting records, and changed attestations.
+It does not reverse completed steps after a later conflict.
+
+The result reports the acceptance digest, journal digest, replay positions, and completed step count.
+Every successful result remains restricted. No gateway or provider worker starts.
+Use `starport backup apply-history --help` for the complete flag list.

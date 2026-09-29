@@ -103,6 +103,7 @@ type Dependencies struct {
 	VerifyBackup          BackupVerifier
 	PrepareBackup         BackupPreparer
 	InspectImportedBackup ImportedBackupInspector
+	ApplyImportedHistory  ImportedHistoryApplier
 	PublishBackupFiles    BackupFilePublisher
 	// Desktop reaches the operator's machine. It is not validated: a machine
 	// with no browser and no clipboard still runs every command, because each

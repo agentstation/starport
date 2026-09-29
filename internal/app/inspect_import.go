@@ -87,9 +87,13 @@ func validateInspectionTargets(cfg *config.Config, request recovery.InspectImpor
 	if _, err := os.Lstat(request.Destination); !errors.Is(err, os.ErrNotExist) {
 		return errors.New("import inspection requires a new output directory")
 	}
+	return validateExistingImportedTargets(cfg, request.ValkeyIncarnation)
+}
+
+func validateExistingImportedTargets(cfg *config.Config, incarnation string) error {
 	kv := cfg.RuntimeStorage()
 	if kv.Type == storage.StorageTypeBadger {
-		if request.ValkeyIncarnation != "" {
+		if incarnation != "" {
 			return errors.New("import inspection for Badger does not accept a Valkey incarnation")
 		}
 		if _, err := productfiles.ExistingDirectory(kv.Badger.Path); err != nil {
@@ -102,7 +106,7 @@ func validateInspectionTargets(cfg *config.Config, request recovery.InspectImpor
 		if !info.Mode().IsRegular() {
 			return errors.New("import inspection requires an existing Badger manifest")
 		}
-	} else if request.ValkeyIncarnation == "" {
+	} else if incarnation == "" {
 		return errors.New("import inspection for Valkey requires an explicit serving process incarnation")
 	}
 	selectedSQL := cfg.Storage.RuntimeSQL()
