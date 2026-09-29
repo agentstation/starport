@@ -77,20 +77,26 @@ jobs:
       - name: Run native tests
         shell: bash
         run: |
-          # Catalog recovery and application contracts repeatedly start real
-          # runtimes. Run each alone before other packages share the runner.
+          # Run storage recovery first so publication failures precede full runtime startup.
+          # Catalog and application contracts then run alone to bound peak memory.
           go list ./... > native-catalog/packages.txt
           remaining=()
           while IFS= read -r package; do
-            if [[ "$package" != "github.com/agentstation/starport/internal/catalog" && "$package" != "github.com/agentstation/starport/internal/app" ]]; then
-              remaining+=("$package")
-            fi
+            case "${package#github.com/agentstation/starport/internal/}" in
+              sqlstore|blob|recovery|catalog|app) ;;
+              *) remaining+=("$package") ;;
+            esac
           done < native-catalog/packages.txt
+          coverage=()
+          if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
+            coverage=(-coverprofile=native-catalog/storage.coverage.txt -covermode=atomic)
+          fi
+          go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" ./internal/sqlstore ./internal/blob ./internal/recovery | tee native-catalog/tests.jsonl
           coverage=()
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             coverage=(-coverprofile=native-catalog/catalog.coverage.txt -covermode=atomic)
           fi
-          go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" ./internal/catalog | tee native-catalog/tests.jsonl
+          go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" ./internal/catalog | tee -a native-catalog/tests.jsonl
           coverage=()
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             coverage=(-coverprofile=native-catalog/app.coverage.txt -covermode=atomic)
@@ -104,7 +110,8 @@ jobs:
           fi
           go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" "${remaining[@]}" | tee -a native-catalog/tests.jsonl
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
-            cat native-catalog/catalog.coverage.txt > coverage.txt
+            cat native-catalog/storage.coverage.txt > coverage.txt
+            tail -n +2 native-catalog/catalog.coverage.txt >> coverage.txt
             tail -n +2 native-catalog/app.coverage.txt >> coverage.txt
             tail -n +2 native-catalog/remaining.coverage.txt >> coverage.txt
           fi

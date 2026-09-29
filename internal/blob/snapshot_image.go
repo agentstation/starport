@@ -81,8 +81,17 @@ func prepareBlobImage(ctx context.Context, scratch, source string, expected Snap
 	return prepared, nil
 }
 
-func (i *blobImage) close() error {
+func (i *blobImage) closeRoot() error {
+	if i.root == nil {
+		return nil
+	}
 	err := i.root.Close()
+	i.root = nil
+	return err
+}
+
+func (i *blobImage) close() error {
+	err := i.closeRoot()
 	current, statErr := i.parent.Lstat(i.name)
 	if statErr == nil && os.SameFile(current, i.identity) {
 		err = errors.Join(err, i.parent.RemoveAll(i.name), productfiles.SyncDirectory(i.parent))

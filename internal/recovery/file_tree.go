@@ -107,7 +107,9 @@ func (s *RestoreSource) publishFileTree(ctx context.Context, request FileTreeReq
 		return result, errors.Join(err, root.Close())
 	}
 	defer func() {
-		resultErr = errors.Join(resultErr, root.Close())
+		if root != nil {
+			resultErr = errors.Join(resultErr, root.Close())
+		}
 		current, err := parentRoot.Lstat(name)
 		if err == nil && os.SameFile(identity, current) {
 			resultErr = errors.Join(resultErr, parentRoot.RemoveAll(name), productfiles.SyncDirectory(parentRoot))
@@ -117,6 +119,12 @@ func (s *RestoreSource) publishFileTree(ctx context.Context, request FileTreeReq
 		if err := copyRestoreTreeFile(ctx, root, s.request.Directory, file); err != nil {
 			return result, err
 		}
+	}
+	// Windows requires the staging handle to close before directory publication.
+	err = root.Close()
+	root = nil
+	if err != nil {
+		return result, err
 	}
 	stagePath := filepath.Join(filepath.Dir(request.Destination), name)
 	nativeIdentity, err := validateRestoredTree(ctx, stagePath, files, validate)

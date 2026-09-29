@@ -64,7 +64,9 @@ func stageRestoreFiles(ctx context.Context, destination, source string, manifest
 		return errors.Join(err, root.Close())
 	}
 	defer func() {
-		resultErr = errors.Join(resultErr, root.Close())
+		if root != nil {
+			resultErr = errors.Join(resultErr, root.Close())
+		}
 		current, err := parentRoot.Lstat(name)
 		if err == nil && os.SameFile(identity, current) {
 			resultErr = errors.Join(resultErr, parentRoot.RemoveAll(name), productfiles.SyncDirectory(parentRoot))
@@ -89,7 +91,16 @@ func stageRestoreFiles(ctx context.Context, destination, source string, manifest
 	if err := syncBundleDirectories(ctx, root); err != nil {
 		return err
 	}
+	// Windows requires the staging handle to close before directory publication.
+	err = root.Close()
+	root = nil
+	if err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if _, err := stage.Identity(); err != nil {
 		return err
 	}
 	if err := productfiles.PublishDirectory(parentRoot, name, parentRoot, filepath.Base(destination)); err != nil {

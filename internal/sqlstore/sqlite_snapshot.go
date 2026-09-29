@@ -117,7 +117,9 @@ func publishSQLiteSnapshot(ctx context.Context, destination string, prepare func
 		return result, errors.Join(err, stageRoot.Close())
 	}
 	defer func() {
-		resultErr = errors.Join(resultErr, stageRoot.Close())
+		if stageRoot != nil {
+			resultErr = errors.Join(resultErr, stageRoot.Close())
+		}
 		if !result.Published {
 			current, err := root.Lstat(stageName)
 			if err == nil && os.SameFile(identity, current) {
@@ -134,6 +136,12 @@ func publishSQLiteSnapshot(ctx context.Context, destination string, prepare func
 		return result, err
 	}
 	if err := stage.CompareAndPublish(ctx, "snapshot.json", nil, body); err != nil {
+		return result, err
+	}
+	// Windows requires the staging handle to close before directory publication.
+	err = stageRoot.Close()
+	stageRoot = nil
+	if err != nil {
 		return result, err
 	}
 	if _, err := stage.Identity(); err != nil {

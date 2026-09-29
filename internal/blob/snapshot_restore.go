@@ -73,6 +73,10 @@ func restoreFilesystem(ctx context.Context, destination, source, operation strin
 	if err := control.CompareAndPublish(ctx, "import", nil, claim); err != nil {
 		return result, err
 	}
+	// Windows requires the staging handle to close before directory publication.
+	if err := image.closeRoot(); err != nil {
+		return result, err
+	}
 	if _, err := image.directory.Identity(); err != nil {
 		return result, err
 	}
