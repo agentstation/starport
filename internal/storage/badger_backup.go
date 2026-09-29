@@ -133,7 +133,9 @@ func RestoreBadger(ctx context.Context, config BadgerConfig, source string, expe
 		return result, err
 	}
 	defer func() {
-		resultErr = errors.Join(resultErr, stageRoot.Close())
+		if stageRoot != nil {
+			resultErr = errors.Join(resultErr, stageRoot.Close())
+		}
 		if !result.Published {
 			current, err := root.Lstat(stageName)
 			if err == nil && os.SameFile(identity, current) {
@@ -159,7 +161,16 @@ func RestoreBadger(ctx context.Context, config BadgerConfig, source string, expe
 	if err := stage.CompareAndPublish(ctx, "restore-receipt.json", nil, body); err != nil {
 		return result, err
 	}
+	// Windows requires the staging handle to close before directory publication.
+	err = stageRoot.Close()
+	stageRoot = nil
+	if err != nil {
+		return result, err
+	}
 	if _, err := stage.Identity(); err != nil {
+		return result, err
+	}
+	if err := ctx.Err(); err != nil {
 		return result, err
 	}
 	if err := productfiles.PublishDirectory(root, stageName, root, name); err != nil {
