@@ -56,6 +56,7 @@ func TestInspectImportedBackupRetainsCompletePrivateReceipt(t *testing.T) {
 	result, err := InspectImportedBackup(t.Context(), cfg, request)
 	require.NoError(t, err)
 	require.Equal(t, request.ExpectedBoundary, result.Request.Boundary)
+	require.Len(t, result.TargetSHA256, 64)
 	require.False(t, result.Request.CapturedAt.IsZero())
 	bound, err := json.Marshal(result.Request)
 	require.NoError(t, err)

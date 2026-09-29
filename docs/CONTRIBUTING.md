@@ -70,7 +70,7 @@ its owning concept.
 
 ## Add tests
 
-Test observable behavior at the changed seam. Cover success, boundaries,
+Test observable behavior at the changed boundary. Cover success, boundaries,
 failures, recovery, and concurrency when they apply.
 
 Run one package while you work:
@@ -88,6 +88,21 @@ make test-integration
 
 Do not replace a real contract with a mock in the test that must prove that
 contract. Do not lower an assertion to hide a defect.
+
+Windows CI partitions the complete recovery package into four native shards
+on each supported architecture. AMD64 keeps race detection. ARM64 keeps the
+pure-Go configuration. Each shard discovers all top-level tests, examples,
+and fuzz seeds before it selects its owners.
+
+The evidence job requires the
+combined selections to cover every discovered owner exactly once. It also
+checks source, package, and toolchain identity. Linux and macOS retain their
+complete package runs. Shared-storage jobs retain their real-service checks.
+
+The shard runner preserves optional skips in its raw evidence. A skipped
+required test cannot qualify a native contract. Recovery shards retain Go's
+ten-minute package limit. Test assertions and individual deadlines do not
+change.
 
 ## Format and check
 

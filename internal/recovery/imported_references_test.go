@@ -268,3 +268,39 @@ func TestImportedReferencesCanceled(t *testing.T) {
 	require.Empty(t, result.RequestSHA256)
 	require.NoDirExists(t, filepath.Join(root, "graph"))
 }
+
+func TestImportedReferencesRequireExactBlobReplayPosition(t *testing.T) {
+	for _, shared := range []bool{false, true} {
+		name := "local"
+		if shared {
+			name = "shared"
+		}
+		t.Run(name, func(t *testing.T) {
+			fixture := newImportedGraphFixture(t, shared)
+			initial, err := fixture.inspect(t)
+			require.NoError(t, err)
+			payload := "independently retained bytes"
+			sum := sha256.Sum256([]byte(payload))
+			step := blob.ImportPublicationStep{Sequence: 1, EvidenceSHA256: strings.Repeat("a", 64), Key: "later-independent-upload", Expected: blob.PublicationState{Kind: "absent"}, Next: blob.PublicationState{Kind: "live", Size: int64(len(payload)), SHA256: hex.EncodeToString(sum[:])}}
+			replay := fixture.target.Blobs.(blob.ImportPublicationReplayer)
+			receipt, err := replay.ReplayPublication(t.Context(), fixture.request.BlobOperation, fixture.request.BlobOriginal, step, strings.NewReader(payload), privateKVDirectory(t))
+			require.NoError(t, err)
+			refused, err := fixture.inspect(t)
+			require.Error(t, err)
+			require.Empty(t, refused.RequestSHA256)
+			fixture.request.BlobPosition = blob.ImportReplayPosition{Sequence: 1, ReceiptSHA256: receipt}
+			current, err := fixture.inspect(t)
+			require.NoError(t, err)
+			require.NotEqual(t, initial.RequestSHA256, current.RequestSHA256)
+			step.Sequence = 2
+			step.PreviousSHA256 = receipt
+			step.Expected = step.Next
+			step.Next = blob.PublicationState{Kind: "retired"}
+			_, err = replay.ReplayPublication(t.Context(), fixture.request.BlobOperation, fixture.request.BlobOriginal, step, nil, privateKVDirectory(t))
+			require.NoError(t, err)
+			refused, err = fixture.inspect(t)
+			require.Error(t, err)
+			require.Empty(t, refused.RequestSHA256)
+		})
+	}
+}

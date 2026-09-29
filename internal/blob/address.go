@@ -15,7 +15,7 @@ func blobAddress(namespace, key string) string {
 }
 
 func validBlobAddress(address string) bool {
-	if validActivationAddress(address) {
+	if validActivationAddress(address) || validReplayAddress(address) {
 		return true
 	}
 	parts := strings.Split(address, "/")

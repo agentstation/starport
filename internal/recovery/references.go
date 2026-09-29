@@ -19,6 +19,7 @@ import (
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/limits/jobslots"
 	"github.com/agentstation/starport/internal/limits/reservation"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -26,6 +27,7 @@ import (
 // ReferenceReport counts verified records and retained recovery diagnostics.
 // It does not authorize later spending or restore.
 type ReferenceReport struct {
+	StoredByteClaims              int64                    `json:"stored_byte_claims"`
 	JobSlots                      jobslots.RecoveryReport  `json:"job_slots"`
 	JobExecution                  jobs.RecoveryExecution   `json:"job_execution"`
 	JobCorrections                jobs.RecoveryCorrections `json:"job_corrections"`
@@ -96,10 +98,18 @@ func inspectCapturedReferences(ctx context.Context, records *KVSnapshotView, ima
 	if err != nil {
 		return report, err
 	}
+	byteIndex, err := newBackupStoredByteIndex(ctx, accounting.tx)
+	if err != nil {
+		return report, err
+	}
 	correctionKinds := make(map[string]int64)
 	err = records.Enumerate(ctx, func(record storage.TransferRecord) error {
 		var checkErr error
 		switch {
+		case strings.HasPrefix(record.Key, storedbytes.ReplayStoragePrefix), strings.HasPrefix(record.Key, "limits:v1:stored_bytes:"):
+			checkErr = storedbytes.ErrStorageHistoryUnknown
+		case strings.HasPrefix(record.Key, storedbytes.StoredBytesPrefix):
+			checkErr = byteIndex.Add(ctx, record)
 		case strings.HasPrefix(record.Key, jobslots.ReplayStoragePrefix):
 			checkErr = jobslots.ErrHistoryUnknown
 		case strings.HasPrefix(record.Key, reservation.WindowReplayPrefix):
@@ -110,16 +120,7 @@ func inspectCapturedReferences(ctx context.Context, records *KVSnapshotView, ima
 			checkErr = inspectBudgetExecution(ctx, records, accounting, record, &report)
 
 		case strings.HasPrefix(record.Key, account.StoragePrefix):
-			var owner account.Record
-			owner, checkErr = verifyCapturedAccount(record)
-			if checkErr == nil {
-				var unknown int64
-				unknown, checkErr = reservation.CheckBackupLimits(ctx, records, limits.ScopeAccount, owner.Account.ID, owner.Account.Limits)
-				report.UnknownAccountBudgetHistories += unknown
-			}
-			if checkErr == nil {
-				report.AccountRecords++
-			}
+			checkErr = inspectAccountBudgetHistory(ctx, records, record, &report)
 		case strings.HasPrefix(record.Key, credentials.ProviderCredentialStoragePrefix):
 			var count int
 			count, checkErr = verifyCapturedCredential(ctx, record, encryption)
@@ -128,7 +129,7 @@ func inspectCapturedReferences(ctx context.Context, records *KVSnapshotView, ima
 				report.CredentialValues += int64(count)
 			}
 		case strings.HasPrefix(record.Key, files.StoragePrefix):
-			_, checkErr = files.VerifyRecoveryRecord(ctx, record.Key, record.Value, blobs, capturedAt)
+			checkErr = inspectStoredFile(ctx, record, blobs, capturedAt, byteIndex)
 			if checkErr == nil {
 				report.FileRecords++
 			}
@@ -170,6 +171,9 @@ func inspectCapturedReferences(ctx context.Context, records *KVSnapshotView, ima
 	}
 	if err == nil {
 		report.JobSlots, err = slots.Verify(ctx)
+	}
+	if err == nil {
+		report.StoredByteClaims, err = byteIndex.Verify(ctx)
 	}
 	if err == nil {
 		err = inspectCapturedDomains(ctx, records, boundary, inspectors)
@@ -216,4 +220,17 @@ func verifyCapturedCredential(ctx context.Context, record storage.TransferRecord
 		return 0, err
 	}
 	return credentials.VerifyRecoveryRecord(ctx, record.Key, record.Value, encryption)
+}
+
+func inspectAccountBudgetHistory(ctx context.Context, records *KVSnapshotView, record storage.TransferRecord, report *ReferenceReport) error {
+	owner, err := verifyCapturedAccount(record)
+	if err != nil {
+		return err
+	}
+	unknown, err := reservation.CheckBackupLimits(ctx, records, limits.ScopeAccount, owner.Account.ID, owner.Account.Limits)
+	report.UnknownAccountBudgetHistories += unknown
+	if err == nil {
+		report.AccountRecords++
+	}
+	return err
 }

@@ -87,9 +87,13 @@ func validateInspectionTargets(cfg *config.Config, request recovery.InspectImpor
 	if _, err := os.Lstat(request.Destination); !errors.Is(err, os.ErrNotExist) {
 		return errors.New("import inspection requires a new output directory")
 	}
+	return validateExistingImportedTargets(cfg, request.ValkeyIncarnation)
+}
+
+func validateExistingImportedTargets(cfg *config.Config, incarnation string) error {
 	kv := cfg.RuntimeStorage()
 	if kv.Type == storage.StorageTypeBadger {
-		if request.ValkeyIncarnation != "" {
+		if incarnation != "" {
 			return errors.New("import inspection for Badger does not accept a Valkey incarnation")
 		}
 		if _, err := productfiles.ExistingDirectory(kv.Badger.Path); err != nil {
@@ -102,7 +106,7 @@ func validateInspectionTargets(cfg *config.Config, request recovery.InspectImpor
 		if !info.Mode().IsRegular() {
 			return errors.New("import inspection requires an existing Badger manifest")
 		}
-	} else if request.ValkeyIncarnation == "" {
+	} else if incarnation == "" {
 		return errors.New("import inspection for Valkey requires an explicit serving process incarnation")
 	}
 	selectedSQL := cfg.Storage.RuntimeSQL()
@@ -161,11 +165,15 @@ func inspectConfiguredImport(ctx context.Context, cfg *config.Config, request re
 	if err != nil {
 		return result, err
 	}
+	target, err := configuredRecoveryTarget(ctx, cfg, db, blobs, request.ValkeyIncarnation)
+	if err != nil {
+		return result, err
+	}
 	blobInspector, ok := blobs.(blob.ImportInspector)
 	if !ok {
 		return result, errors.New("configured blob target does not support closed import inspection")
 	}
-	native := recovery.ImportedReferenceRequest{Boundary: request.ExpectedBoundary, CapturedAt: time.Now().UTC(), KVClaim: identity.KVClaim, KVPosition: request.KVPosition, SQLOriginal: identity.SQLOriginal, SQLIdentity: identity.SQL, SQLPosition: request.SQLPosition, BlobOperation: identity.ComponentOperation, BlobOriginal: identity.BlobOriginal}
+	native := recovery.ImportedReferenceRequest{Boundary: request.ExpectedBoundary, CapturedAt: time.Now().UTC(), KVClaim: identity.KVClaim, KVPosition: request.KVPosition, SQLOriginal: identity.SQLOriginal, SQLIdentity: identity.SQL, SQLPosition: request.SQLPosition, BlobOperation: identity.ComponentOperation, BlobPosition: request.BlobPosition, BlobOriginal: identity.BlobOriginal}
 	scratch := request.ScratchDirectory
 	if scratch == "" {
 		scratch = filepath.Dir(request.Directory)
@@ -178,5 +186,9 @@ func inspectConfiguredImport(ctx context.Context, cfg *config.Config, request re
 	if err != nil || current != request.ExpectedBoundary {
 		return result, errors.Join(recovery.ErrConflict, err)
 	}
-	return recovery.ImportInspectionResult{Directory: request.Destination, ManifestSHA256: request.ManifestSHA256, Operation: request.Operation, ValkeyIncarnation: request.ValkeyIncarnation, Request: native, Inspection: checked}, nil
+	after, err := configuredRecoveryTarget(ctx, cfg, db, blobs, request.ValkeyIncarnation)
+	if err != nil || target != after {
+		return result, errors.Join(recovery.ErrConflict, err)
+	}
+	return recovery.ImportInspectionResult{Directory: request.Destination, ManifestSHA256: request.ManifestSHA256, TargetSHA256: target, Operation: request.Operation, ValkeyIncarnation: request.ValkeyIncarnation, Request: native, Inspection: checked}, nil
 }

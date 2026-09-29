@@ -181,6 +181,80 @@ class NativeCatalogTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             native.unchanged_source(self.root, revision)
 
+    def enable_recovery_shards(self):
+        self.enable_shards()
+        self.proof["format"] = 3
+        names = sorted(["TestRecoveryFixture"] + [f"TestRecoveryOwner{i}" for i in range(30)])
+        for runner in native.RUNNERS["windows"].values():
+            toolchain = (self.root / f"native-catalog-{runner}/toolchain.txt").read_text()
+            for index in range(native.app_shards.SHARDS):
+                self.proof["run"]["jobs"].append({"name": f"Recovery test ({runner}, {index})", "status": "completed", "conclusion": "success", "databaseId": 200 + len(self.proof["run"]["jobs"])})
+                selected = native.app_shards.partition(names, index)
+                roster = {"version": 1, "index": index, "shards": native.app_shards.SHARDS,
+                          "package": native.app_shards.RECOVERY_PACKAGE, "owners": names, "selected": selected,
+                          "source": "b" * 40, "workflow_head": "a" * 40}
+                suffix = f"recovery-{runner}-{index}"
+                self.bind(suffix, "roster.json", json.dumps(roster))
+                self.bind(suffix, "toolchain.txt", toolchain)
+                events = [dict(self.event("run", name=name), Package=native.app_shards.RECOVERY_PACKAGE) for name in selected]
+                events += [dict(self.event("pass", name=name), Package=native.app_shards.RECOVERY_PACKAGE) for name in selected]
+                events += [dict(self.event("pass", test=False), Package=native.app_shards.RECOVERY_PACKAGE)]
+                self.bind_events(suffix, events)
+        self.test = {"package": native.app_shards.RECOVERY_PACKAGE, "test": "TestRecoveryFixture"}
+
+    def test_recovery_shards_qualify_both_windows_architectures(self):
+        self.enable_recovery_shards()
+        self.assertEqual({x["architecture"] for x in self.validate()}, {"amd64", "arm64"})
+
+    def test_recovery_jobs_and_every_bound_artifact_are_mandatory(self):
+        self.enable_recovery_shards()
+        jobs = copy.deepcopy(self.proof["run"]["jobs"])
+        for changed in [jobs[:-1], jobs + jobs[-1:], [dict(jobs[-1], conclusion="failure")] + jobs[:-1]]:
+            self.proof["run"]["jobs"] = changed
+            with self.assertRaises(ValueError):
+                self.validate()
+        self.proof["run"]["jobs"] = jobs
+        self.proof["sha256"].pop("native-catalog-recovery-windows-11-arm-0/roster.json")
+        with self.assertRaises(ValueError):
+            self.validate()
+
+    def test_recovery_shards_reject_base_overlap_and_foreign_toolchain(self):
+        self.enable_recovery_shards()
+        self.bind_events("windows-11-arm", [dict(self.event("pass", test=False), Package=native.app_shards.RECOVERY_PACKAGE)])
+        with self.assertRaises(ValueError):
+            self.validate()
+        self.bind_events("windows-11-arm", [self.event("run"), self.event("pass"), self.event("pass", test=False)])
+        self.bind("recovery-windows-11-arm-0", "toolchain.txt", "foreign\n")
+        with self.assertRaises(ValueError):
+            self.validate()
+
+    def test_recovery_source_package_and_owner_counts_cannot_be_forged(self):
+        self.enable_recovery_shards()
+        suffix = "recovery-windows-2025-0"
+        original = (self.root / f"native-catalog-{suffix}/roster.json").read_text()
+        for key, value in [("package", native.app_shards.PACKAGE), ("workflow_head", "c" * 40), ("selected", [])]:
+            changed = json.loads(original)
+            changed[key] = value
+            self.bind(suffix, "roster.json", json.dumps(changed))
+            with self.assertRaises(ValueError):
+                self.validate()
+        self.bind(suffix, "roster.json", original)
+        events = [json.loads(line) for line in (self.root / f"native-catalog-{suffix}/tests.jsonl").read_text().splitlines()]
+        self.bind_events(suffix, events + events[:1])
+        with self.assertRaises(ValueError):
+            self.validate()
+
+    def test_required_recovery_subtest_skip_remains_unqualified(self):
+        self.enable_recovery_shards()
+        for index in range(native.app_shards.SHARDS):
+            suffix = f"recovery-windows-2025-{index}"
+            events = [json.loads(line) for line in (self.root / f"native-catalog-{suffix}/tests.jsonl").read_text().splitlines()]
+            if any(event.get("Test") == "TestRecoveryFixture" for event in events):
+                events.insert(1, dict(self.event("skip", name="TestRecoveryFixture/real-store"), Package=native.app_shards.RECOVERY_PACKAGE))
+                self.bind_events(suffix, events)
+        with self.assertRaises(ValueError):
+            self.validate()
+
 
 if __name__ == "__main__":
     unittest.main()

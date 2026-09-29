@@ -136,6 +136,9 @@ func writeBlobSnapshot(ctx context.Context, destination string, walk blobObjectW
 }
 
 func inspectBlobEnvelope(address string, size int64, input io.Reader) (io.Reader, bool, error) {
+	if validReplayAddress(address) {
+		return inspectReplayHistory(address, size, input)
+	}
 	if validActivationAddress(address) {
 		return inspectActivationHistory(address, size, input)
 	}
@@ -237,7 +240,7 @@ func (o *ObjectStore) walkObjects(ctx context.Context, legacy bool, yield blobOb
 			if !ok {
 				return errors.New("blob: listing escaped the selected prefix")
 			}
-			if !legacy && (name == blobLayoutKey || name == blobActivationCurrent || name == blobImportKey) {
+			if !legacy && (name == blobLayoutKey || name == blobActivationCurrent || name == blobImportKey || name == blobReplayCurrent) {
 				continue
 			}
 			if name == blobImportKey {

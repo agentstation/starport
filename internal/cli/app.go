@@ -49,16 +49,13 @@ const (
 	flagAllowRemoteNoAuth = "allow-remote-no-auth"
 )
 
-// jsonOutputUsage is what every --json flag says it does. The commands own
-// separate flag constants because each names its own flag, but they describe
-// one behaviour and a reader comparing two help screens should see one
-// sentence.
+// jsonOutputUsage describes the shared JSON output behavior.
+// Commands own their flag constants. Help screens use one description for the same output behavior.
 const jsonOutputUsage = "Write machine-readable JSON"
 
-// GatewayOptions carries the gateway decisions a command line can make. They
-// are decisions, not configuration: everything else the gateway reads comes
-// from the environment and the configuration file, and these exist because an
-// operator has to be able to make them for one run without editing either.
+// GatewayOptions carries gateway choices for one command run.
+// Other settings come from the environment and configuration file.
+// These fields let an operator override settings without editing either source.
 type GatewayOptions struct {
 	// DisableAuth serves requests without a gateway API key.
 	DisableAuth bool
@@ -103,10 +100,10 @@ type Dependencies struct {
 	VerifyBackup          BackupVerifier
 	PrepareBackup         BackupPreparer
 	InspectImportedBackup ImportedBackupInspector
+	ApplyImportedHistory  ImportedHistoryApplier
 	PublishBackupFiles    BackupFilePublisher
-	// Desktop reaches the operator's machine. It is not validated: a machine
-	// with no browser and no clipboard still runs every command, because each
-	// one prints the link it would otherwise have handed over.
+	// Desktop provides browser and clipboard access. Dependency checks do not require these services.
+	// Commands print each link even when neither service is available.
 	Desktop Desktop
 	// ExtraCommands appends process-owned commands to the root command tree.
 	// The process boundary owns commands whose behavior binds to its build,
@@ -197,19 +194,16 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			if err := writeDevelopmentResult(cmd.Writer, session); err != nil {
 				return runtimeFailure{cause: closeDevelopmentSession(ctx, session, err)}
 			}
-			// No greeting here: the session output above already carries the
-			// console link and the key, and the welcome's stamp would be a
-			// file a mode that promises statelessness leaves behind. Only
-			// `serve` greets.
+			// Development output already includes the console link and key.
+			// A welcome stamp would leave persistent state. Only serve writes that stamp and greets.
 			if session.ConsoleURL != "" && !cmd.Bool(flagNoOpen) {
 				if reason := browserSuppressed(deps, cmd.Writer); reason != "" {
 					if _, err := fmt.Fprintf(cmd.Writer, "Did not open a browser: %s.\n", reason); err != nil {
 						return runtimeFailure{cause: closeDevelopmentSession(ctx, session, err)}
 					}
 				} else {
-					// The browser is opened beside the gateway rather than before
-					// it, because the listener is not up until Run is called and a
-					// browser that arrives first shows a connection error.
+					// Run starts the listener. Wait for that listener before opening the browser.
+					// An earlier browser request would show a connection error.
 					go openConsoleWhenReady(ctx, deps, session)
 				}
 			}

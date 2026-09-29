@@ -103,6 +103,45 @@ class AppShardTests(unittest.TestCase):
                 self.assertIn("-race", run.call_args.args[0])
                 self.assertIn("-count=1", run.call_args.args[0])
 
+    def recovery_records(self):
+        for record in self.records.values():
+            record["roster.json"]["package"] = shards.RECOVERY_PACKAGE
+            for event in record["tests.jsonl"]:
+                event["Package"] = shards.RECOVERY_PACKAGE
+
+    def test_recovery_census_preserves_every_owner_and_exact_package(self):
+        self.recovery_records()
+        events, _ = shards.verify_shards(self.load, package=shards.RECOVERY_PACKAGE)
+        self.assertEqual(sum(e["Action"] == "run" for e in events), len(self.names))
+        with self.assertRaises(ValueError):
+            shards.verify_shards(self.load)
+        self.records[0]["roster.json"].pop("package")
+        with self.assertRaises(ValueError):
+            shards.verify_shards(self.load, package=shards.RECOVERY_PACKAGE)
+
+    def test_recovery_refuses_another_packages_raw_results(self):
+        self.recovery_records()
+        self.records[0]["tests.jsonl"][0]["Package"] = shards.PACKAGE
+        with self.assertRaises(ValueError):
+            shards.verify_shards(self.load, package=shards.RECOVERY_PACKAGE)
+
+    def test_recovery_run_preserves_native_race_and_arm_pure_modes(self):
+        for race in (True, False):
+            with self.subTest(race=race), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / "proof"
+                responses = ["\n".join(self.names), "a" * 40, "go version\n", "native\n"]
+                with patch.object(shards.subprocess, "check_output", side_effect=responses) as listing, \
+                     patch.object(shards.subprocess, "run") as run:
+                    run.return_value.returncode = 19
+                    self.assertEqual(shards.run(Path(temporary), output, 0, shards.RECOVERY_PACKAGE, race), 19)
+                    command = run.call_args.args[0]
+                    self.assertEqual("-race" in command, race)
+                    self.assertEqual("-race" in listing.call_args_list[0].args[0], race)
+                    self.assertEqual(command[-1], "./internal/recovery")
+                    self.assertIn("10m", command)
+                    roster = json.loads((output / "roster.json").read_text())
+                    self.assertEqual(roster["package"], shards.RECOVERY_PACKAGE)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,6 +14,9 @@ import (
 type filesystemActivation struct{ directory *productfiles.Directory }
 
 func (t filesystemRestoreTarget) ActivateImport(ctx context.Context, operation string, expected Snapshot, decisionSHA256 string) error {
+	return t.ActivateImportAt(ctx, operation, expected, ImportReplayPosition{}, decisionSHA256)
+}
+func (t filesystemRestoreTarget) ActivateImportAt(ctx context.Context, operation string, expected Snapshot, position ImportReplayPosition, decisionSHA256 string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -32,7 +35,11 @@ func (t filesystemRestoreTarget) ActivateImport(ctx context.Context, operation s
 	if err != nil {
 		return err
 	}
-	return activateBlobImport(ctx, filesystemActivation{directory: control}, claim, decisionSHA256)
+	records := filesystemActivation{directory: control}
+	if err := checkReplayPosition(ctx, records, claim, position); err != nil {
+		return err
+	}
+	return activateBlobImport(ctx, records, claim, decisionSHA256)
 }
 
 func (f filesystemActivation) read(ctx context.Context, name string) ([]byte, error) {
@@ -83,7 +90,7 @@ func (f filesystemActivation) confirm(ctx context.Context) (resultErr error) {
 // controls. Portable history remains a validated archive entry.
 func backupControlEntry(address string, info os.FileInfo) (bool, error) {
 	switch address {
-	case blobActivationCurrent, blobImportKey:
+	case blobActivationCurrent, blobImportKey, blobReplayCurrent:
 		if !info.Mode().IsRegular() {
 			return false, ErrActivationConflict
 		}

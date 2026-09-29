@@ -563,7 +563,7 @@ Use the original backup manifest digest, restore operation, and fencing referenc
 Supply the exact expected closed boundary from preparation or the accepted epoch receipt.
 The command does not discover or approve a replacement boundary.
 
-Specify both replay sequences explicitly. Use zero before replay, or supply the sequence and digest from each last accepted native replay receipt.
+Specify the KV, SQL, and blob replay sequences explicitly. Use zero before replay, or supply the sequence and digest from each last accepted native replay receipt.
 For Valkey, supply the independently recorded `run_id:master_replid` through `--valkey-incarnation`.
 The command checks that identity against the configured target. Badger does not use this flag.
 
@@ -574,3 +574,93 @@ An interrupted or failed inspection produces no successful receipt. Preserve its
 
 Use `starport backup inspect-import --help` for the required flags.
 Inspection leaves all import barriers closed. It does not complete migration or permit a gateway restart.
+
+## Independent history acceptance
+
+`RestoreSource.VerifyHistoryPackage` reads a private `history.json` and its declared JSON payloads.
+The caller supplies the independently retained manifest digest and the selected target-identity digest.
+The manifest binds the backup, deployment, operation, fencing reference, and prepared component identities.
+It also records the reviewed interval, evidence references, highest known epoch, and ordered typed steps.
+Verification proves byte integrity and format bounds. It does not prove that external evidence is complete.
+
+The manifest limit is 1 MiB. It permits at most 4,096 evidence sources and 4,096 ordered steps.
+Each JSON payload has an 8 MiB limit. Their combined limit is 64 MiB.
+
+Paths must follow `payloads/000001.json` in consecutive order.
+Unknown kinds, duplicate members, unknown fields, and changed digests fail verification.
+The verified package retains private immutable copies of its JSON payloads.
+
+The `backup inspect-import` receipt includes `target_sha256` for the selected storage scopes.
+Its binding includes local native file identities, the Valkey incarnation, SQL routes and namespaces, and blob scope.
+Credential rotation does not change that binding. Connection secrets never enter it.
+The command checks the binding before and after inspection.
+This digest cannot establish remote physical continuity or external writer fencing.
+
+Asset descriptors use consecutive `assets/000001.bin` paths and explicit evidence-source references.
+Assets have separate bounds: 4,096 entries, 1 GiB per asset, and 16 GiB combined.
+Verification streams their private files without loading them into memory.
+Every later copy rechecks the declared bytes and the original directory identity.
+A failed copy requires the caller to discard its partial output.
+
+`Witness.AcceptImportedHistory` requires explicit operator attestations for external fencing and previously admitted work.
+A `replay_complete` disposition also requires the operator to accept complete interval coverage explicitly.
+An empty step list cannot establish that coverage.
+Missing coverage permits only `remain_restricted`. It grants no activation permission.
+
+Acceptance first publishes a private immutable `acceptance.json` in an existing journal directory.
+It then binds that artifact's digest through the native SQL reconciliation receipt and a new closed epoch.
+The epoch exceeds the independently reported highest epoch.
+Exact retries require the same artifact, import claim, and current closed boundary.
+After SQL accepts the artifact, recovery refuses a missing journal instead of generating another one.
+
+`starport backup apply-history` provides operator history acceptance and ordered native replay.
+Complete graph inspection and controlled activation remain required.
+Keep the accepted journal, original evidence package, and external fencing controls throughout recovery.
+
+
+## Retained file and asset replay
+
+`files.PrepareRecoveryReplay` preserves private file identities, expiry, output lineage, and exact prior bytes.
+A deletion requires positive blob retirement evidence. Missing bytes do not establish retirement.
+`storedbytes.PrepareAccountReplay` stages at most 64 claims per native step.
+Its final census must include every retained claim and the exact account total.
+Final graph inspection refuses unfinished byte-account reconstruction and inconsistent file-to-claim references.
+
+`blob.ReplayPublication` binds each asset publication or retirement to the original import claim and an ordered evidence receipt.
+Independent asset bytes have a 1 GiB per-asset limit and must match their declared size and digest.
+A durable pending cursor prevents inspection or activation until replay completes.
+An exact retry never republishes an older asset after later retirement.
+
+After blob replay, use the position-aware inspection and activation methods.
+The zero-position methods refuse a nonzero or incomplete replay chain.
+Operator inspection requires `--blob-replay-sequence`, with `--blob-replay-sha256` when the sequence is positive.
+These owner operations keep ordinary startup restricted. They do not establish complete history or authorize activation.
+
+
+## Operator history replay
+
+`starport backup apply-history` uses the original backup and independent history package with existing closed targets.
+Supply the manifest digests retained separately from those files.
+Use the target digest from `backup inspect-import`, the unchanged operation, and the unchanged fencing reference.
+For Valkey, also supply its recorded incarnation.
+
+Choose an existing private journal directory outside the backup, history package, and selected stores.
+Keep the journal, payloads, assets, and external fencing controls after interruption.
+An exact retry uses the same command, journal, digests, and attestations.
+Changed evidence requires a fresh-target recovery.
+A future protocol needs separate checks before it can replace accepted evidence.
+
+The operator must explicitly attest that writers remain fenced.
+The operator must also attest that retained evidence accounts for previously admitted work.
+A `replay_complete` manifest also requires `--complete-interval`.
+These attestations describe external facts. The command cannot establish their truth.
+A `remain_restricted` manifest records incomplete coverage and permits no activation.
+
+Each step records its original native preimage before mutation and retains the native receipt after mutation.
+After an interrupted reply, retry uses those retained preimages and checks the exact native replay position.
+It refuses missing journals, changed target bindings, conflicting records, and changed attestations.
+It does not reverse completed steps after a later conflict.
+
+The result reports the acceptance digest, journal digest, replay positions, and completed step count.
+Every successful result remains restricted. No gateway or provider worker starts.
+Use `starport backup apply-history --help` for the complete flag list.

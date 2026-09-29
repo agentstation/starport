@@ -73,6 +73,7 @@ func runContext(
 		VerifyBackup:          app.VerifyBackup,
 		PrepareBackup:         app.PrepareBackup,
 		InspectImportedBackup: app.InspectImportedBackup,
+		ApplyImportedHistory:  app.ApplyImportedHistory,
 		PublishBackupFiles:    app.PublishBackupFiles,
 	})
 	if err == nil {
@@ -82,9 +83,8 @@ func runContext(
 	return starportcli.ExitCode(err)
 }
 
-// processCommands names the commands this process boundary owns: the agent
-// surface binds to the build, because the embedded skill and the embedded
-// catalog generation ship inside this binary.
+// processCommands names the commands that this process boundary owns.
+// The agent surface binds to the build. Its embedded skill and catalog generation ship inside this binary.
 func processCommands() []*urfavecli.Command {
 	return []*urfavecli.Command{
 		newModelsCommand(loadRoutableModels),
@@ -129,10 +129,8 @@ func startDevelopment(
 	if err != nil {
 		return starportcli.DevelopmentSession{}, err
 	}
-	// A console link that could not be minted is not a reason to refuse a
-	// gateway. The session still runs and still prints its URL, and the
-	// operator reaches the console the same way they would on any other
-	// deployment.
+	// A console-link failure does not stop the gateway.
+	// The session still runs and prints its URL. The operator uses the normal console access procedure.
 	consoleURL, err := runtime.ConsoleURL()
 	if err != nil {
 		log.Warn().Err(err).Msg("Could not mint a console launch link for this development gateway")
