@@ -25,7 +25,7 @@ func (preparedHistorySQL) Format(state fmt.State, _ rune) {
 // It does not open a connection or apply, commit, or activate any state.
 func prepareHistorySQL(kind string, payload []byte, accepted revision.RecoveryAuthority) (preparedHistorySQL, error) {
 	switch kind {
-	case "sql_identity":
+	case historySQLIdentity:
 		var transition identity.RecoveryTransition
 		digest, err := decodeHistoryPayload(kind, payload, &transition)
 		if err != nil || !explicitIdentityChanges(payload) {
@@ -34,32 +34,21 @@ func prepareHistorySQL(kind string, payload []byte, accepted revision.RecoveryAu
 		return preparedHistorySQL{digest: digest, apply: func(ctx context.Context, db *sqlstore.DB, conn *sql.Conn) error {
 			return identity.ApplyRecoveryTransition(ctx, db, conn, transition)
 		}}, nil
-	case "sql_authorization_final":
-		var transition revision.SQLRecoveryTransition
-		digest, err := decodeHistoryPayload(kind, payload, &transition)
+	case historySQLAuthorityFinal:
+		var input historySQLAuthorityPayload
+		_, err := decodeHistoryPayload(kind, payload, &input)
+		if err != nil || input.Version != 1 || !explicitHistoryMembers(payload, "expected") {
+			return preparedHistorySQL{}, ErrConflict
+		}
+		transition, err := revision.NewSQLRecoveryTransition(input.Expected, accepted)
 		if err != nil {
 			return preparedHistorySQL{}, err
 		}
-		if _, err := revision.NewSQLRecoveryTransition(nil, accepted); err != nil {
+		digest, err := transition.Digest()
+		if err != nil {
 			return preparedHistorySQL{}, err
 		}
 		return preparedHistorySQL{digest: digest, apply: func(ctx context.Context, db *sqlstore.DB, conn *sql.Conn) error {
-			before, err := revision.CaptureSQLRecovery(ctx, db, conn)
-			if err != nil {
-				return err
-			}
-			bound, err := revision.NewSQLRecoveryTransition(before, accepted)
-			if err != nil {
-				return err
-			}
-			actualDigest, err := transition.Digest()
-			if err != nil {
-				return err
-			}
-			boundDigest, err := bound.Digest()
-			if err != nil || actualDigest != boundDigest {
-				return revision.ErrRecoveryConflict
-			}
 			return revision.ApplySQLRecovery(ctx, db, conn, transition)
 		}}, nil
 	default:
@@ -83,4 +72,9 @@ func explicitIdentityChanges(payload []byte) bool {
 		}
 	}
 	return true
+}
+
+type historySQLAuthorityPayload struct {
+	Version  int             `json:"version"`
+	Expected *revision.Stamp `json:"expected"`
 }

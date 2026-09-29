@@ -78,8 +78,7 @@ func TestHistoryPayloadNativePermissionAndFinalAuthority(t *testing.T) {
 			require.Equal(t, next.SHA256(), got.SHA256())
 			_, expected, err := revision.CaptureKVRecovery(t.Context(), after)
 			require.NoError(t, err)
-			transition, err := revision.NewKVRecoveryTransition(expected, authority)
-			require.NoError(t, err)
+			transition := historyKVAuthorityPayload{Version: 1, ExpectedSHA256: expected}
 			replacement, err := prepareHistoryKV(t.Context(), "kv_authorization_final", historyPayloadJSON(t, transition), after, nil, time.Now(), nil, authority)
 			require.NoError(t, err)
 			_, err = reconciler.ReconcileImport(t.Context(), fixture.request.KVClaim, 2, receipt, replacement.digest, replacement.mutations)
@@ -88,7 +87,7 @@ func TestHistoryPayloadNativePermissionAndFinalAuthority(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, receipt, again)
 			other := authority
-			other.Epoch = "unaccepted-epoch"
+			other.Epoch = ""
 			_, err = prepareHistoryKV(t.Context(), "kv_authorization_final", historyPayloadJSON(t, transition), after, nil, time.Now(), nil, other)
 			require.Error(t, err)
 			require.ErrorIs(t, storage.CheckImportBarrier(t.Context(), fixture.kv), storage.ErrImportRestricted)

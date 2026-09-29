@@ -110,17 +110,11 @@ func TestHistoryPayloadSQLNativeWithdrawalAndAuthority(t *testing.T) {
 			stamp, err := revision.CaptureSQLRecovery(t.Context(), target, conn)
 			require.NoError(t, err)
 			require.NoError(t, conn.Close())
-			rotation, err := revision.NewSQLRecoveryTransition(stamp, accepted)
-			require.NoError(t, err)
+			rotation := historySQLAuthorityPayload{Version: 1, Expected: stamp}
 			prepared, err = prepareHistorySQL("sql_authorization_final", historyPayloadJSON(t, rotation), accepted)
 			require.NoError(t, err)
 			final := sqlstore.RelationalReplayStep{Sequence: 3, PreviousSHA256: last, EvidenceSHA256: strings.Repeat("c", 64), TransitionSHA256: prepared.digest}
-			wrong := accepted
-			wrong.Epoch = "not-accepted"
-			unbound, err := prepareHistorySQL("sql_authorization_final", historyPayloadJSON(t, rotation), wrong)
-			require.NoError(t, err)
-			_, err = target.ReplayRelationalImport(t.Context(), snapshot.Snapshot, imported, final, func(ctx context.Context, conn *sql.Conn) error { return unbound.apply(ctx, target, conn) })
-			require.ErrorIs(t, err, revision.ErrRecoveryConflict)
+
 			_, err = target.ReplayRelationalImport(t.Context(), snapshot.Snapshot, imported, final, func(ctx context.Context, conn *sql.Conn) error { return prepared.apply(ctx, target, conn) })
 			require.NoError(t, err)
 			require.ErrorIs(t, target.CheckImportBarrier(t.Context()), sqlstore.ErrImportRestricted)

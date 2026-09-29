@@ -143,33 +143,21 @@ func prepareHistoryKVKind(ctx context.Context, kind string, payload []byte, befo
 		}
 		changes, err := storedbytes.FinalizeAccountReplay(ctx, before, value.State)
 		return digest, changes, err
-	case "kv_authorization_final":
+	case historyKVAuthorityFinal:
 		return prepareHistoryKVAuthority(ctx, payload, before, accepted)
 	default:
 		return "", nil, ErrConflict
 	}
 }
 func prepareHistoryKVAuthority(ctx context.Context, payload []byte, before *KVSnapshotView, accepted revision.RecoveryAuthority) (string, []storage.CompareAndSwapMutation, error) {
-	var transition revision.KVRecoveryTransition
-	digest, err := decodeHistoryPayload("kv_authorization_final", payload, &transition)
+	var input historyKVAuthorityPayload
+	digest, err := decodeHistoryPayload(historyKVAuthorityFinal, payload, &input)
+	if err != nil || input.Version != 1 || !explicitHistoryMembers(payload, "expected_sha256") {
+		return "", nil, ErrConflict
+	}
+	transition, err := revision.NewKVRecoveryTransition(input.ExpectedSHA256, accepted)
 	if err != nil {
 		return "", nil, err
-	}
-	_, expected, err := revision.CaptureKVRecovery(ctx, before)
-	if err != nil {
-		return "", nil, err
-	}
-	bound, err := revision.NewKVRecoveryTransition(expected, accepted)
-	if err != nil {
-		return "", nil, err
-	}
-	actualDigest, err := transition.Digest()
-	if err != nil {
-		return "", nil, err
-	}
-	boundDigest, err := bound.Digest()
-	if err != nil || actualDigest != boundDigest {
-		return "", nil, revision.ErrRecoveryConflict
 	}
 	change, err := revision.PrepareKVRecovery(ctx, before, transition)
 	return digest, []storage.CompareAndSwapMutation{change}, err
@@ -211,4 +199,9 @@ func explicitHistoryArray(data []byte, members ...string) bool {
 		}
 	}
 	return true
+}
+
+type historyKVAuthorityPayload struct {
+	Version        int    `json:"version"`
+	ExpectedSHA256 string `json:"expected_sha256"`
 }
