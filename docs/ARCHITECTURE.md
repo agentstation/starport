@@ -742,8 +742,8 @@ cd /path/to/starport
 bash scripts/verify-starmap-ownership.sh
 bash scripts/verify-v1-architecture.sh
 bash scripts/verify-v1-release.sh
-go test ./...
-go test -race ./internal/catalog ./internal/proxy ./internal/routing \
+make test
+go test -race -timeout 30m ./internal/catalog ./internal/proxy ./internal/routing \
   ./internal/providers/connectors ./internal/app ./internal/server
 go vet ./...
 make lint
@@ -752,6 +752,9 @@ bash scripts/smoke-openrouter-sdks.sh
 make release-check
 make release-snapshot
 ```
+
+The architecture command runs eleven focused contracts. The separate full-suite command retains all Go tests.
+Aggregate test commands use the native CI allowance of 30 minutes per package. Individual contract deadlines remain unchanged.
 
 The release gate requires raw HTTP and the official OpenRouter Python,
 TypeScript, and Go SDKs. It also verifies five static binaries, five archives,
