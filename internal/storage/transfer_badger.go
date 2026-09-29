@@ -37,7 +37,7 @@ func (b *badgerTransfer) Enumerate(ctx context.Context, yield func(TransferRecor
 				return err
 			}
 			item := it.Item()
-			if item.IsDeletedOrExpired() || bytes.Equal(item.Key(), []byte(transferActivationCurrent)) {
+			if item.IsDeletedOrExpired() || (bytes.Equal(item.Key(), []byte(transferActivationCurrent)) || bytes.Equal(item.Key(), []byte(transferReconciliationCurrent))) {
 				continue
 			}
 			if item.KeySize() > TransferMaxKeyBytes || item.ValueSize() > TransferMaxValueBytes || item.ExpiresAt() > uint64(transferMaxExpiry/1000) {
@@ -166,14 +166,16 @@ func (b *badgerTransfer) update(ctx context.Context, write func(*badger.Txn) err
 	return err
 }
 
-// inactiveBadgerImport prevents completed operations from reclaiming a barrier.
+// inactiveBadgerImport prevents import replay after reconciliation or activation starts.
 func inactiveBadgerImport(txn *badger.Txn) error {
-	_, err := txn.Get([]byte(transferActivationCurrent))
-	if err == nil {
-		return ErrConflict
-	}
-	if !errors.Is(err, badger.ErrKeyNotFound) {
-		return err
+	for _, key := range []string{transferActivationCurrent, transferReconciliationCurrent} {
+		_, err := txn.Get([]byte(key))
+		if err == nil {
+			return ErrConflict
+		}
+		if !errors.Is(err, badger.ErrKeyNotFound) {
+			return err
+		}
 	}
 	return nil
 }

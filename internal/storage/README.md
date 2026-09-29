@@ -171,3 +171,24 @@ Other deployment namespaces remain unchanged. Fresh fleet initialization retains
 
 These components do not complete deployment recovery.
 The full procedure still requires matching SQL, blobs, catalog state, credential access, and post-backup revocation and spending evidence.
+
+## Reconcile imported records in order
+
+`ImportReconciler` applies domain-validated changes while the exact import barrier remains present.
+Domain owners supply persistent-record comparisons and replacements. Operator input must use those owners, not arbitrary storage keys.
+Each operation binds its claim, sequence, previous receipt digest, independent evidence digest, and complete mutation digest.
+The native transaction compares every preimage before it writes records, the receipt, and the current sequence.
+
+Badger requires persistent storage with `sync_writes` enabled. Valkey checks its bound process and replication identity in the same script as the writes.
+The operation supports at most 128 mutations and 4 MiB of key and value bytes per step.
+It refuses expiring records, sequence gaps, changed evidence, changed mutations, and storage-control keys.
+An exact completed retry returns its receipt without restoring earlier values.
+Concurrent conflicts require an exact retry or operator investigation.
+
+The first successful reconciliation prevents further snapshot import, including an exact preparation retry.
+Resume from the ordered reconciliation receipts. Do not restart bundle preparation after this boundary.
+Portable backups preserve historical receipts and omit the current native sequence.
+Historical receipts alone cannot authorize reconciliation after another restore.
+
+These transactions do not prove external evidence completeness, reconstruct domain history, or permit admission.
+The recovery coordinator must validate permission, accounting, execution, and cross-store references before it releases any barrier.

@@ -35,7 +35,7 @@ return redis.call('SCAN', ARGV[2], 'MATCH', ARGV[3], 'COUNT', 256)`
 			if !ok || len(key) == 0 || len(key) > TransferMaxKeyBytes {
 				return ErrInvalidKey
 			}
-			if key == transferActivationCurrent {
+			if key == transferActivationCurrent || key == transferReconciliationCurrent {
 				continue
 			}
 			record, err := v.read(ctx, key)
@@ -98,12 +98,14 @@ func (v *valkeyTransfer) Claim(ctx context.Context, claim []byte) error {
 	if err := validateTransferClaim(claim); err != nil {
 		return err
 	}
-	_, _, err := v.bound.ReadWithLifetime(ctx, transferActivationCurrent, 256)
-	if err == nil {
-		return ErrConflict
-	}
-	if !errors.Is(err, ErrNotFound) {
-		return err
+	for _, key := range []string{transferActivationCurrent, transferReconciliationCurrent} {
+		_, _, err := v.bound.ReadWithLifetime(ctx, key, 4096)
+		if err == nil {
+			return ErrConflict
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return err
+		}
 	}
 	current, ttl, err := v.bound.ReadWithLifetime(ctx, TransferBarrierKey, 4096)
 	if err == nil {
@@ -122,12 +124,12 @@ func (v *valkeyTransfer) Claim(ctx context.Context, claim []byte) error {
 		return err
 	}
 	const claimScript = valkeyApprovedIncarnation + `
-if redis.call('EXISTS', KEYS[1], KEYS[2]) ~= 0 then return 0 end
+if redis.call('EXISTS', KEYS[1], KEYS[2], KEYS[3]) ~= 0 then return 0 end
 redis.call('SET', KEYS[1], ARGV[2])
 return 1`
 	store := v.bound.store
-	result, err := store.do(ctx, store.client.B().Eval().Script(claimScript).Numkeys(2).
-		Key(store.prefix+TransferBarrierKey, store.prefix+transferActivationCurrent).
+	result, err := store.do(ctx, store.client.B().Eval().Script(claimScript).Numkeys(3).
+		Key(store.prefix+TransferBarrierKey, store.prefix+transferActivationCurrent, store.prefix+transferReconciliationCurrent).
 		Arg(v.bound.identity, string(claim)).Build()).AsInt64()
 	if err != nil {
 		return transferValkeyError(err)
@@ -146,7 +148,7 @@ func (v *valkeyTransfer) Import(ctx context.Context, claim []byte, record Transf
 		return err
 	}
 	const script = valkeyApprovedIncarnation + `
-if redis.call('EXISTS', KEYS[3]) ~= 0 or redis.call('GET', KEYS[1]) ~= ARGV[2] or redis.call('PTTL', KEYS[1]) ~= -1 then return 0 end
+if redis.call('EXISTS', KEYS[3], KEYS[4]) ~= 0 or redis.call('GET', KEYS[1]) ~= ARGV[2] or redis.call('PTTL', KEYS[1]) ~= -1 then return 0 end
 local current = redis.call('GET', KEYS[2])
 local expected = tonumber(ARGV[4])
 if current then
@@ -164,7 +166,7 @@ else
 end
 return 1`
 	store := v.bound.store
-	result, err := store.do(ctx, store.client.B().Eval().Script(script).Numkeys(3).Key(store.prefix+TransferBarrierKey, store.prefix+record.Key, store.prefix+transferActivationCurrent).Arg(v.bound.identity, string(claim), string(record.Value), strconv.FormatInt(record.ExpiresAtMillis, 10)).Build()).AsInt64()
+	result, err := store.do(ctx, store.client.B().Eval().Script(script).Numkeys(4).Key(store.prefix+TransferBarrierKey, store.prefix+record.Key, store.prefix+transferActivationCurrent, store.prefix+transferReconciliationCurrent).Arg(v.bound.identity, string(claim), string(record.Value), strconv.FormatInt(record.ExpiresAtMillis, 10)).Build()).AsInt64()
 	if err != nil {
 		return transferValkeyError(err)
 	}
