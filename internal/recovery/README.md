@@ -104,6 +104,44 @@ Restoring the SQL witness cannot restore permission to approve itself.
 
 ## Capture commands
 
+### Unprefixed Valkey records
+
+Ordinary gateway startup and backup capture use the canonical deployment namespace.
+They never read unprefixed records as a fallback.
+An explicit migration can capture unprefixed records from a dedicated Valkey database.
+Close the recovery gate and stop every source writer before capture.
+The configured deployment ID assigns the source records to that deployment.
+The selected database must belong exclusively to that deployment.
+
+```sh
+starport backup create --destination /private/backup/namespace-migration \
+  --operation namespace-migration --fencing-evidence incident/source-writers-fenced \
+  --key-reference recovery/master-key --unprefixed-valkey --json
+```
+
+Capture refuses a database that also contains canonical deployment namespaces.
+An import barrier, unknown backend identity, or unsupported cluster mode also causes refusal.
+
+The source connection exposes record enumeration only.
+Capture preserves record bytes and absolute expiration times without changing the source.
+The manifest records the explicit source layout. The command reports the captured record count and reference checks.
+Invalid account, credential, budget, file, or catalog references still cause refusal.
+
+Use separate, empty target stores for `backup prepare` with the independently retained manifest digest.
+Preparation imports logical records into the target's canonical namespace and retains startup barriers.
+Compare processed record counts with the manifest. An expired record remains expired.
+Exact retries preserve the operation and restrictions. The source remains available for diagnosis.
+
+This operation does not dual-write, delete the old namespace, or switch running gateways.
+Keep both deployments fenced until independent history reconciliation and controlled activation complete.
+Those activation procedures remain required before the migration can serve traffic.
+
+The native test fixture uses database 13 for unprefixed source records and database 14 for the target.
+Set `TEST_UNPREFIXED_VALKEY_URL` to the dedicated test service with the `/13` suffix.
+These database numbers are test conventions, not product settings.
+
+### Configured deployment capture
+
 The configured deployment must already contain initialized persistent stores.
 Capture does not create a missing store or migrate its schema.
 The configured master key must remain available through its normal configuration source.
