@@ -31,6 +31,7 @@ type InspectImportRequest struct {
 type ImportInspectionResult struct {
 	Directory         string                   `json:"directory"`
 	ManifestSHA256    string                   `json:"manifest_sha256"`
+	TargetSHA256      string                   `json:"target_sha256"`
 	Operation         RestoreOperation         `json:"operation"`
 	ValkeyIncarnation string                   `json:"valkey_incarnation,omitempty"`
 	Request           ImportedReferenceRequest `json:"request"`

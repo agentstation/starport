@@ -590,6 +590,12 @@ Paths must follow `payloads/000001.json` in consecutive order.
 Unknown kinds, duplicate members, unknown fields, and changed digests fail verification.
 The verified package retains private immutable copies of its JSON payloads.
 
+The `backup inspect-import` receipt includes `target_sha256` for the selected storage scopes.
+Its binding includes local native file identities, the Valkey incarnation, SQL routes and namespaces, and blob scope.
+Credential rotation does not change that binding. Connection secrets never enter it.
+The command checks the binding before and after inspection.
+This digest cannot establish remote physical continuity or external writer fencing.
+
 Asset descriptors use consecutive `assets/000001.bin` paths and explicit evidence-source references.
 Assets have separate bounds: 4,096 entries, 1 GiB per asset, and 16 GiB combined.
 Verification streams their private files without loading them into memory.

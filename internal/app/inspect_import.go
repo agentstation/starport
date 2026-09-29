@@ -161,6 +161,10 @@ func inspectConfiguredImport(ctx context.Context, cfg *config.Config, request re
 	if err != nil {
 		return result, err
 	}
+	target, err := configuredRecoveryTarget(ctx, cfg, db, blobs, request.ValkeyIncarnation)
+	if err != nil {
+		return result, err
+	}
 	blobInspector, ok := blobs.(blob.ImportInspector)
 	if !ok {
 		return result, errors.New("configured blob target does not support closed import inspection")
@@ -178,5 +182,9 @@ func inspectConfiguredImport(ctx context.Context, cfg *config.Config, request re
 	if err != nil || current != request.ExpectedBoundary {
 		return result, errors.Join(recovery.ErrConflict, err)
 	}
-	return recovery.ImportInspectionResult{Directory: request.Destination, ManifestSHA256: request.ManifestSHA256, Operation: request.Operation, ValkeyIncarnation: request.ValkeyIncarnation, Request: native, Inspection: checked}, nil
+	after, err := configuredRecoveryTarget(ctx, cfg, db, blobs, request.ValkeyIncarnation)
+	if err != nil || target != after {
+		return result, errors.Join(recovery.ErrConflict, err)
+	}
+	return recovery.ImportInspectionResult{Directory: request.Destination, ManifestSHA256: request.ManifestSHA256, TargetSHA256: target, Operation: request.Operation, ValkeyIncarnation: request.ValkeyIncarnation, Request: native, Inspection: checked}, nil
 }
