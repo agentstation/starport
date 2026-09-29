@@ -85,6 +85,22 @@ func TestCredentialPermissionReplayRefusesUnsupportedPrivateFacts(t *testing.T) 
 	_, err = PrepareRecoveryReplay(t.Context(), before, wrong, []RecoveryChange{{Scope: "tenant", Provider: "provider", ExpectedSHA256: record.SHA256(), Next: &record}})
 	require.ErrorIs(t, err, ErrRecoveryCredential)
 	require.NotContains(t, err.Error(), "private-fixture")
+	var zero RecoveryRecord
+	_, zeroErr := zero.MarshalJSON()
+	require.Error(t, zeroErr)
+	require.Empty(t, zero.SHA256())
+	_, zeroErr = PrepareRecoveryReplay(t.Context(), before, encryption, []RecoveryChange{{Scope: "tenant", Provider: "provider", ExpectedSHA256: record.SHA256(), Next: &zero}})
+	require.Error(t, zeroErr)
+	for _, value := range []any{record, &record} {
+		for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%d", "%q", "%x", "%p"} {
+			formatted := fmt.Sprintf(verb, value)
+			require.NotContains(t, formatted, "private-fixture")
+			require.NotContains(t, formatted, "[123")
+			if verb != "%p" {
+				require.Equal(t, "<private credentials recovery evidence>", formatted)
+			}
+		}
+	}
 	raw, err := record.MarshalJSON()
 	require.NoError(t, err)
 	var roundtrip RecoveryRecord

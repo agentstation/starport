@@ -70,7 +70,9 @@ func TestVideoJobReplayStagesLongPrivateCorrectionHistory(t *testing.T) {
 					job, err = records.MarkCorrectionReported(t.Context(), job, intent, status)
 					require.NoError(t, err)
 				}
-				audit = append(audit, jobs.RecoveryJobCorrection{Intent: intent, Applied: true, ReportStatus: status})
+				evidence, err := jobs.NewRecoveryJobCorrection(intent, true, status)
+				require.NoError(t, err)
+				audit = append(audit, evidence)
 				if i == 7 {
 					before = captureJobRecords(t, source)
 				}
@@ -190,11 +192,14 @@ func TestVideoJobReplayRejectsRetainedStateLoss(t *testing.T) {
 	mutation, err := jobs.PrepareJobReplay(t.Context(), before, before, assets, time.Now(), final)
 	require.NoError(t, err)
 	require.True(t, bytes.Equal(mutation.ExpectedValue, mutation.NewValue))
-	changed := jobs.RecoveryJobCorrection{Intent: intent, Applied: true, ReportStatus: "expired"}
+	changed, err := jobs.NewRecoveryJobCorrection(intent, true, "expired")
+	require.NoError(t, err)
 	_, err = jobs.PrepareJobCorrectionReplay(t.Context(), before, final, []jobs.RecoveryJobCorrection{changed})
 	require.Error(t, err, "an immutable delivered report cannot become expired")
 	intent.Decision.DecidedAt = intent.Decision.DecidedAt.Add(91 * 24 * time.Hour)
-	_, err = jobs.PrepareJobCorrectionReplay(t.Context(), capturedJobRecords{}, final, []jobs.RecoveryJobCorrection{{Intent: intent}})
+	expired, err := jobs.NewRecoveryJobCorrection(intent, false, "")
+	require.NoError(t, err)
+	_, err = jobs.PrepareJobCorrectionReplay(t.Context(), capturedJobRecords{}, final, []jobs.RecoveryJobCorrection{expired})
 	require.Error(t, err, "restore must not restart the correction horizon")
 }
 

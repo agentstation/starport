@@ -69,7 +69,7 @@ func PrepareRecoveryReplay(ctx context.Context, source reservation.BackupReader,
 			continue
 		}
 		next := change.Next
-		if next.stored.Account.ID != change.ID || len(next.data) == 0 {
+		if next.recoveryRecord == nil || next.stored.Account.ID != change.ID || len(next.data) == 0 {
 			return nil, ErrCorruptRecord
 		}
 		if before != nil {

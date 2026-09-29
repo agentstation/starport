@@ -109,8 +109,8 @@ func readSQLRecovery(ctx context.Context, db *sqlstore.DB, conn *sql.Conn, lock 
 
 // ApplySQLRecovery replaces revision authority inside the supplied ReplayRelationalImport transaction.
 // It does not start, commit, initialize, or activate authority. The coordinator binds the receipt.
-// Domain changes and this replacement must commit together, followed by complete final validation.
-// Run this final replacement once before activation, after all policy replay.
+// Run this final replacement once after all policy replay, while every import barrier remains closed.
+// It may use its own final ordered step. Complete graph and revision validation must precede activation.
 func ApplySQLRecovery(ctx context.Context, db *sqlstore.DB, conn *sql.Conn, transition SQLRecoveryTransition) error {
 	if _, err := transition.Digest(); err != nil {
 		return err

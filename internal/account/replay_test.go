@@ -99,6 +99,22 @@ func TestAccountPermissionReplayRefusesUnsupportedOrStaleEvidence(t *testing.T) 
 	require.ErrorIs(t, err, ErrDefaultImmutable)
 	_, err = PrepareRecoveryReplay(t.Context(), before, []RecoveryChange{{ID: DefaultID, ExpectedSHA256: strings.Repeat("0", 64), Next: &record}})
 	require.Error(t, err)
+	var zero RecoveryRecord
+	_, zeroErr := zero.MarshalJSON()
+	require.Error(t, zeroErr)
+	require.Empty(t, zero.SHA256())
+	_, zeroErr = PrepareRecoveryReplay(t.Context(), before, []RecoveryChange{{ID: DefaultID, ExpectedSHA256: record.SHA256(), Next: &zero}})
+	require.Error(t, zeroErr)
+	for _, value := range []any{record, &record} {
+		for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%d", "%q", "%x", "%p"} {
+			formatted := fmt.Sprintf(verb, value)
+			require.NotContains(t, formatted, "Default")
+			require.NotContains(t, formatted, "[123")
+			if verb != "%p" {
+				require.Equal(t, "<private account recovery evidence>", formatted)
+			}
+		}
+	}
 	raw, err := record.MarshalJSON()
 	require.NoError(t, err)
 	var roundtrip RecoveryRecord

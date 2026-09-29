@@ -59,6 +59,9 @@ func PrepareRecoveryReplay(ctx context.Context, source reservation.BackupReader,
 		}
 		total += len(key) + len(original.Value)
 		if change.Next != nil {
+			if change.Next.recoveryRecord == nil {
+				return nil, ErrRecoveryCredential
+			}
 			total += len(change.Next.data)
 		}
 		if total > storage.ImportReplayMaxBytes {

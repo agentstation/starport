@@ -5,6 +5,7 @@ import (
 	legacyjson "encoding/json"
 	"encoding/json/v2"
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -15,15 +16,27 @@ import (
 
 // RecoveryJob contains private operator recovery evidence, including provider identifiers.
 // Its JSON representation is the complete durable record. It must not reach public APIs or logs.
-type RecoveryJob struct{ job Job }
+type RecoveryJob struct{ *recoveryJobState }
+
+type recoveryJobState struct{ job Job }
 
 func (RecoveryJob) String() string { return "<private job recovery evidence>" }
 
 // GoString prevents formatted diagnostics from exposing private recovery evidence.
 func (RecoveryJob) GoString() string { return "<private job recovery evidence>" }
 
+// Format excludes private job evidence from diagnostic formatting.
+func (RecoveryJob) Format(state fmt.State, _ rune) {
+	_, _ = state.Write([]byte("<private job recovery evidence>"))
+}
+
 // MarshalJSON preserves private fields absent from the public Job representation.
-func (r RecoveryJob) MarshalJSON() ([]byte, error) { return encodeJob(r.job) }
+func (r RecoveryJob) MarshalJSON() ([]byte, error) {
+	if r.recoveryJobState == nil {
+		return nil, ErrCorruptRecord
+	}
+	return encodeJob(r.job)
+}
 
 // UnmarshalJSON checks the durable schema before accepting private recovery evidence.
 func (r *RecoveryJob) UnmarshalJSON(data []byte) error {
@@ -38,7 +51,7 @@ func (r *RecoveryJob) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	r.job = job
+	r.recoveryJobState = &recoveryJobState{job: job}
 	return nil
 }
 
@@ -68,7 +81,7 @@ func CaptureRecoveryJob(ctx context.Context, source reservation.BackupReader, ac
 // The after snapshot includes staged corrections and proposed accounting changes under closed authority.
 // The coordinator must combine the returned write with related claims and accounting writes.
 func PrepareJobReplay(ctx context.Context, before, after reservation.BackupReader, assets blob.PublicationReader, capturedAt time.Time, next RecoveryJob) (storage.CompareAndSwapMutation, error) {
-	if ctx == nil || before == nil || after == nil || assets == nil || capturedAt.IsZero() {
+	if ctx == nil || before == nil || after == nil || assets == nil || capturedAt.IsZero() || next.recoveryJobState == nil {
 		return storage.CompareAndSwapMutation{}, ErrCorruptRecord
 	}
 	if err := ctx.Err(); err != nil {

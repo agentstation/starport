@@ -192,6 +192,22 @@ func TestAPIKeyPermissionReplayRefusesUnsupportedEvidence(t *testing.T) {
 	record, err := CaptureRecoveryRecord(t.Context(), before, "key")
 	require.NoError(t, err)
 	require.Equal(t, "<private apikey recovery evidence>", fmt.Sprintf("%#v", record))
+	var zero RecoveryRecord
+	_, zeroErr := zero.MarshalJSON()
+	require.Error(t, zeroErr)
+	require.Empty(t, zero.SHA256())
+	_, zeroErr = PrepareRecoveryReplay(t.Context(), before, permissionRequest(t, before, before, RecoveryChange{ID: "key", ExpectedSHA256: record.SHA256(), Next: &zero}))
+	require.Error(t, zeroErr)
+	for _, value := range []any{record, &record} {
+		for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%d", "%q", "%x", "%p"} {
+			formatted := fmt.Sprintf(verb, value)
+			require.NotContains(t, formatted, "private-hash")
+			require.NotContains(t, formatted, "[123")
+			if verb != "%p" {
+				require.Equal(t, "<private apikey recovery evidence>", formatted)
+			}
+		}
+	}
 	raw, err := record.MarshalJSON()
 	require.NoError(t, err)
 	var decoded RecoveryRecord

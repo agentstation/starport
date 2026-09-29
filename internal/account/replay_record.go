@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json/v2"
 	"errors"
+	"fmt"
 
 	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/agentstation/starport/internal/policyrecord"
@@ -15,7 +16,9 @@ import (
 
 // RecoveryRecord holds complete private permission evidence for operator recovery.
 // JSON contains durable fields. Diagnostic formatting never exposes those fields.
-type RecoveryRecord struct {
+type RecoveryRecord struct{ *recoveryRecord }
+
+type recoveryRecord struct {
 	data   []byte
 	stored accountRecord
 }
@@ -25,9 +28,14 @@ func (RecoveryRecord) String() string { return "<private account recovery eviden
 // GoString excludes private permission evidence from formatted diagnostics.
 func (RecoveryRecord) GoString() string { return "<private account recovery evidence>" }
 
+// Format excludes private evidence from diagnostic formatting.
+func (RecoveryRecord) Format(state fmt.State, _ rune) {
+	_, _ = state.Write([]byte("<private account recovery evidence>"))
+}
+
 // MarshalJSON returns the complete retained durable record.
 func (r RecoveryRecord) MarshalJSON() ([]byte, error) {
-	if len(r.data) == 0 {
+	if r.recoveryRecord == nil || len(r.data) == 0 {
 		return nil, ErrCorruptRecord
 	}
 	return bytes.Clone(r.data), nil
@@ -45,13 +53,13 @@ func (r *RecoveryRecord) UnmarshalJSON(data []byte) error {
 	if _, err := decodeAccount(data); err != nil {
 		return ErrCorruptRecord
 	}
-	*r = RecoveryRecord{data: bytes.Clone(data), stored: stored}
+	*r = RecoveryRecord{recoveryRecord: &recoveryRecord{data: bytes.Clone(data), stored: stored}}
 	return nil
 }
 
 // SHA256 binds the complete record to an expected replay preimage.
 func (r RecoveryRecord) SHA256() string {
-	if len(r.data) == 0 {
+	if r.recoveryRecord == nil || len(r.data) == 0 {
 		return ""
 	}
 	sum := sha256.Sum256(r.data)

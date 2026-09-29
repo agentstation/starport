@@ -131,7 +131,7 @@ func prepareReplayKey(ctx context.Context, source reservation.BackupReader, chan
 		delta = -1
 	} else {
 		selected = change.Next
-		if len(selected.data) == 0 || selected.stored.APIKey.ID != change.ID {
+		if selected.recoveryRecord == nil || len(selected.data) == 0 || selected.stored.APIKey.ID != change.ID {
 			return nil, 0, ErrCorruptRecord
 		}
 		if before != nil {
