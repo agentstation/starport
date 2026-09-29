@@ -65,13 +65,14 @@ func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 				&urfavecli.StringFlag{Name: flagBackupFencingEvidence, Required: true, Usage: "Non-secret reference to proof that all writers are stopped and fenced"},
 				&urfavecli.StringFlag{Name: "key-reference", Required: true, Usage: "Recovery reference for the configured master key; never the key value"},
 				&urfavecli.IntFlag{Name: "entry-limit", Usage: "Maximum local file inspection entries; zero selects the default"},
+				&urfavecli.BoolFlag{Name: "unprefixed-valkey", Usage: "Capture a dedicated unprefixed Valkey database for namespace migration; all source writers must be fenced"},
 				&urfavecli.BoolFlag{Name: flagStructuredJSON, Usage: jsonOutputUsage},
 			},
 			Action: func(ctx context.Context, cmd *urfavecli.Command) error {
 				if err := rejectArguments(cmd); err != nil {
 					return err
 				}
-				request := recovery.CaptureRequest{Destination: cmd.String("destination"), OperationID: cmd.String(flagBackupOperation), Build: deps.Build.Version, FencingEvidence: cmd.String(flagBackupFencingEvidence), KeyReference: cmd.String("key-reference"), EntryLimit: cmd.Int("entry-limit")}
+				request := recovery.CaptureRequest{Destination: cmd.String("destination"), OperationID: cmd.String(flagBackupOperation), Build: deps.Build.Version, FencingEvidence: cmd.String(flagBackupFencingEvidence), KeyReference: cmd.String("key-reference"), EntryLimit: cmd.Int("entry-limit"), UnprefixedValkey: cmd.Bool("unprefixed-valkey")}
 				if err := request.Validate(); err != nil {
 					return urfavecli.Exit(err.Error(), ExitCodeUsage)
 				}
@@ -139,6 +140,9 @@ func writeBackupResult(cmd *urfavecli.Command, result recovery.CaptureResult) er
 		return err
 	}
 	keys := result.References.GatewayKeys
+	if _, err := fmt.Fprintf(cmd.Writer, "Captured KV records: %d. Unprefixed Valkey source: %t.\n", result.KVRecords, result.UnprefixedValkey); err != nil {
+		return err
+	}
 	_, err = fmt.Fprintf(cmd.Writer, "Gateway keys: %d; hash indexes: %d; missing accounts: %d; missing teams: %d; deleted initial keys: %d.\nBudget records: %d; verified windows: %d; held reservations: %d; retained team origins: %d.\nUnknown budget histories: %d account, %d key, %d team.\nUnknown history does not establish zero consumption or permission.\n", keys.Keys, keys.HashIndexes, keys.MissingAccounts, keys.MissingTeams, keys.MissingInitialKeys, result.References.BudgetRecords, result.References.BudgetWindows, result.References.HeldReservations, result.References.Identity.BudgetOrigins, result.References.UnknownAccountBudgetHistories, keys.UnknownBudgetHistories, result.References.Identity.UnknownBudgetHistories)
 	if err != nil {
 		return err

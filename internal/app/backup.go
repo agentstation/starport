@@ -51,6 +51,9 @@ func CaptureBackup(ctx context.Context, cfg *config.Config, request recovery.Cap
 	if err := request.Validate(); err != nil {
 		return result, err
 	}
+	if request.UnprefixedValkey && (cfg == nil || cfg.RuntimeStorage().Type != storage.StorageTypeValkey) {
+		return result, errors.New("unprefixed capture requires configured Valkey storage")
+	}
 	encryption, err := backupEncryption(cfg)
 	if err != nil {
 		return result, err
@@ -75,7 +78,12 @@ func CaptureBackup(ctx context.Context, cfg *config.Config, request recovery.Cap
 	if boundary.Open {
 		return result, recovery.ErrClosed
 	}
-	source, err := storage.OpenSnapshotSource(ctx, cfg.RuntimeStorage())
+	var source storage.SnapshotSource
+	if request.UnprefixedValkey {
+		source, err = storage.OpenUnprefixedValkeySnapshotSource(ctx, cfg.RuntimeStorage().Valkey)
+	} else {
+		source, err = storage.OpenSnapshotSource(ctx, cfg.RuntimeStorage())
+	}
 	if err != nil {
 		return result, err
 	}
@@ -104,6 +112,7 @@ func CaptureBackup(ctx context.Context, cfg *config.Config, request recovery.Cap
 	}
 	manifest, err := recovery.BackupBundle(ctx, request.Destination, recovery.BundleSources{KV: source, SQL: db, Blobs: blobs, Files: files, Encryption: encryption}, recovery.BundleRequest{
 		OperationID: request.OperationID, Build: request.Build, Boundary: boundary, FencingEvidence: request.FencingEvidence, KeyReference: request.KeyReference, ExternalRequirements: inventory.Requirements,
+		UnprefixedValkey: request.UnprefixedValkey,
 	})
 	if err != nil {
 		return result, err
@@ -116,7 +125,7 @@ func CaptureBackup(ctx context.Context, cfg *config.Config, request recovery.Cap
 	if err != nil {
 		return result, err
 	}
-	return recovery.CaptureResult{Directory: request.Destination, ManifestSHA256: digest, DeploymentID: inventory.DeploymentID, RecoveryEpoch: boundary.Epoch, Artifacts: len(manifest.Artifacts), References: references}, nil
+	return recovery.CaptureResult{Directory: request.Destination, ManifestSHA256: digest, DeploymentID: inventory.DeploymentID, RecoveryEpoch: boundary.Epoch, Artifacts: len(manifest.Artifacts), KVRecords: manifest.KV.Records, UnprefixedValkey: manifest.Request.UnprefixedValkey, References: references}, nil
 }
 
 // VerifyBackup checks captured bytes and selected-key access without opening live stores.
@@ -136,7 +145,7 @@ func VerifyBackup(ctx context.Context, cfg *config.Config, request recovery.Veri
 	if err != nil {
 		return recovery.CaptureResult{}, err
 	}
-	return recovery.CaptureResult{Directory: request.Directory, ManifestSHA256: request.ManifestSHA256, DeploymentID: manifest.Request.Boundary.DeploymentID, RecoveryEpoch: manifest.Request.Boundary.Epoch, Artifacts: len(manifest.Artifacts), References: references}, nil
+	return recovery.CaptureResult{Directory: request.Directory, ManifestSHA256: request.ManifestSHA256, DeploymentID: manifest.Request.Boundary.DeploymentID, RecoveryEpoch: manifest.Request.Boundary.Epoch, Artifacts: len(manifest.Artifacts), KVRecords: manifest.KV.Records, UnprefixedValkey: manifest.Request.UnprefixedValkey, References: references}, nil
 }
 
 func backupEncryption(cfg *config.Config) (*credentials.EncryptionService, error) {

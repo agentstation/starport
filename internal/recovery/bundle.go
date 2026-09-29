@@ -52,6 +52,7 @@ type BundleRequest struct {
 	FencingEvidence      string   `json:"fencing_evidence"`
 	KeyReference         string   `json:"key_reference"`
 	ExternalRequirements []string `json:"external_requirements"`
+	UnprefixedValkey     bool     `json:"unprefixed_valkey,omitzero"`
 }
 
 // BundleArtifact binds a regular file inside the backup to its exact bytes.
