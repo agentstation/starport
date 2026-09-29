@@ -1,0 +1,78 @@
+{
+  "generation": {
+    "Manifest": {
+      "manifest_version": 2,
+      "schema_version": 19,
+      "generation_id": "fleet-generation",
+      "generated_at": "2026-09-10T00:00:00Z",
+      "payload": {
+        "checksum": "sha256:7941a155da69074aca5b7a4f3b2a21cda0816cfeaeaa57d08789178c1a07894d",
+        "size_bytes": 440,
+        "media_type": "application/vnd.agentstation.starmap.catalog+json"
+      },
+      "validation": {
+        "validator_version": "alias-fixture/v1",
+        "validated_at": "2026-09-10T00:00:00Z",
+        "status": "passed",
+        "error_count": 0,
+        "warning_count": 0,
+        "checks": [
+          {
+            "name": "catalog",
+            "status": "passed"
+          }
+        ]
+      },
+      "sync_run_id": "fleet-generation",
+      "source_observations": [
+        {
+          "source": "alias_fixture",
+          "observation_id": "observation:fleet-generation",
+          "observed_at": "2026-09-10T00:00:00Z",
+          "revision": {
+            "kind": "content_digest",
+            "value": "sha256:7941a155da69074aca5b7a4f3b2a21cda0816cfeaeaa57d08789178c1a07894d"
+          },
+          "completeness": "complete",
+          "status": "succeeded",
+          "evidence_checksum": "sha256:7941a155da69074aca5b7a4f3b2a21cda0816cfeaeaa57d08789178c1a07894d"
+        }
+      ],
+      "review_candidates": [],
+      "completeness": "complete",
+      "degraded": false,
+      "consumer_compatibility": {
+        "min_schema_version": 19,
+        "max_schema_version": 19
+      }
+    },
+    "Payload": "eyJzY2hlbWFfdmVyc2lvbiI6MTksInByb3ZpZGVycyI6W10sImF1dGhvcnMiOlt7ImlkIjoiYXV0aG9yIiwibmFtZSI6IkF1dGhvciIsImNyZWF0ZWRfYXQiOiIwMDAxLTAxLTAxVDAwOjAwOjAwWiIsInVwZGF0ZWRfYXQiOiIwMDAxLTAxLTAxVDAwOjAwOjAwWiJ9XSwicHJvdmlkZXJfbW9kZWxzIjp7fSwiYXV0aG9yX21vZGVscyI6eyJhdXRob3IiOlt7ImF1dGhvcnMiOlt7ImlkIjoiYXV0aG9yIiwibmFtZSI6IkF1dGhvciIsImNyZWF0ZWRfYXQiOiIwMDAxLTAxLTAxVDAwOjAwOjAwWiIsInVwZGF0ZWRfYXQiOiIwMDAxLTAxLTAxVDAwOjAwOjAwWiJ9XSwiY3JlYXRlZF9hdCI6IjAwMDEtMDEtMDFUMDA6MDA6MDBaIiwiaWQiOiJjdXJyZW50IiwibmFtZSI6IkN1cnJlbnQiLCJ1cGRhdGVkX2F0IjoiMDAwMS0wMS0wMVQwMDowMDowMFoifV19LCJwcm92ZW5hbmNlIjp7fX0="
+  },
+  "recovery": {
+    "generation_id": "fleet-generation",
+    "payload_checksum": "sha256:7941a155da69074aca5b7a4f3b2a21cda0816cfeaeaa57d08789178c1a07894d",
+    "checksum": "4dbc126a179e5552b6343cdb9db4f29e4083e40e4db9c827cce3b9b1e9a2b4e6",
+    "data": "H4sIAAAAAAAE/8xUXW+rRhD9L/Naci8QPgxSH3zj2sWKk+ajtsNVhIbdwV4bFsSuwcTyf69k8uGqqW4fWqmSR/IOZ5dzzpzlAA3VSpQSQtuAFBXlQhKEB5ihFBkpDeEBitf/yTlYsTUV+NGyAgNWJKlGLUqZCA4hZDmRvvjowjuEeIIaQrBN27swgwvLfDTN8PSLwYAKu7xEDuEB2JrYVu0KCEGt0Xa90A8cCy3X5egFpu8gQzf10ckuUxtti3E0B5bHMkJCdH1uDvxBYPkDZqHpDwKHgwFKvFCSdpoUhI5jGlAQF5joriIIAasqFwy1KOXXRvIvuCKplT4J+6I01gVWXxhqzMvVTxtVSjga0GAu+AkC4eFtVdYfngHmAtVFJvZ6V9PXxoL3TT9wQ2nUOwUhVKgUcTCA6rqsE1bupIbQNKDFWgq5Ouv0tkH4/QASC4IQXgl/ct7x+WiA6iRL6t3fT06Vu5pRUqaK6uYktD++77/pS171gQFnyD4OZ1vDT6LRP/6BFzU1og/sAbZCcgiBlVKT1AkXK1IaDGgw39G/mJejAawsqpw0SVLq9Mp+eW6m2jFGxPv5NIKTZJT8B+k9PhtQUyOoTRhKLjieYvz92Xin9VeWnFY1cuIQZpgrMoCVUu0KqhNWFhVqkYpc6A7CAxRCJp9d7gL3n/SPRwN+e7utQN305cle5+linPFi3jE7b1IRebPHrYrkty69jKt4Mu9YF3kLy1RRMbb4ZN0wORO3ufajIt9Gm1I8LecmToIuEq1Ii7GOHyIv2o4tPlk3TEQqKm66eDE248V99rS8E7ciamej4f76cbi/fhzu56Nhe7sZtrebYbsQkYrkvI0n/xQ/DZYPrWC/Thte5Nt4Oc3SRbCNF/uXaFP52UP7zm9pW008mSvWRR510zVf3pfpZfSq5ZXv/1Db0+U0f1re5/E4WPOryIs2w3Y2+kX3Nf59Nhp6fX3DSLQCF3fiVkw3fDnt4oVr/nkuNxaT0zyVd+L6amqxyf2aT+bbpT02o00pZqNhO3sw+5rftbNR2de4FNncCq6vpi0rAjteuOu0uMmjTeVnS/NnOBpQ7dJcqDXV/QeEU5WXXUFSQx/2s+CCx/hlxvwBIbN44AdZMEB0LdOxHd9xfZecDLmbZRmzBnZqOqbpOJbtucQodVzuwfGPAQBDKyPaDgcAAA=="
+  },
+  "grant": {
+    "Holder": "replica",
+    "Epoch": 7,
+    "SessionID": "process-session",
+    "Identity": {
+      "deployment_id": "deployment",
+      "recovery_epoch": 3,
+      "backend_id": "approved-process"
+    },
+    "ExpiresAt": "0001-01-01T00:00:00Z"
+  },
+  "expected": {
+    "identity": {
+      "deployment_id": "",
+      "recovery_epoch": 0,
+      "backend_id": ""
+    },
+    "revision": 0,
+    "generation_id": "",
+    "recovery_checksum": ""
+  }
+}
