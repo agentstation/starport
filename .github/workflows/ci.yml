@@ -103,17 +103,21 @@ jobs:
           fi
           # The complete application suite exceeds Go's default ten-minute
           # package allowance. Individual contract deadlines remain unchanged.
-          go test -json -count=1 -timeout 30m ${{ matrix.race }} "${coverage[@]}" ./internal/app | tee -a native-catalog/tests.jsonl
+          if [[ "${{ matrix.runner }}" != "windows-2025" ]]; then
+            go test -json -count=1 -timeout 30m ${{ matrix.race }} "${coverage[@]}" ./internal/app | tee -a native-catalog/tests.jsonl
+          fi
           coverage=()
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             coverage=(-coverprofile=native-catalog/remaining.coverage.txt -covermode=atomic)
           fi
           go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" "${remaining[@]}" | tee -a native-catalog/tests.jsonl
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
-            cat native-catalog/storage.coverage.txt > coverage.txt
-            tail -n +2 native-catalog/catalog.coverage.txt >> coverage.txt
-            tail -n +2 native-catalog/app.coverage.txt >> coverage.txt
-            tail -n +2 native-catalog/remaining.coverage.txt >> coverage.txt
+            {
+              cat native-catalog/storage.coverage.txt
+              tail -n +2 native-catalog/catalog.coverage.txt
+              tail -n +2 native-catalog/app.coverage.txt
+              tail -n +2 native-catalog/remaining.coverage.txt
+            } > coverage.txt
           fi
 
       - name: Measure production destination allocations
@@ -137,6 +141,61 @@ jobs:
           files: ./coverage.txt
           flags: unittests
           name: codecov-umbrella
+
+  app-test:
+    name: App test (windows-2025, ${{ matrix.shard }})
+    timeout-minutes: 35
+    runs-on: windows-2025
+    env:
+      CGO_ENABLED: '1'
+      STARPORT_TEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.1"
+          cache: true
+      - name: Run complete application shard
+        shell: bash
+        run: python scripts/app_shards.py run --index ${{ matrix.shard }} --output native-app
+      - name: Retain raw application shard evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-catalog-app-windows-2025-${{ matrix.shard }}
+          path: native-app/
+          retention-days: 14
+          if-no-files-found: error
+
+  app-evidence:
+    name: Complete Windows application coverage
+    timeout-minutes: 10
+    env:
+      STARPORT_TEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    runs-on: ubuntu-24.04
+    needs: [app-test]
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Test shard and native evidence contracts
+        run: |
+          python scripts/test-app-shards.py
+          python scripts/test-native-catalog.py
+      - name: Download this run's native application evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${{ github.run_id }}" --repo "${{ github.repository }}" --pattern 'native-catalog-app-windows-2025-*' --dir app-evidence
+      - name: Verify every discovered owner ran exactly once
+        run: python scripts/app_shards.py verify --directory app-evidence
 
   shared-storage:
     name: Shared Storage Startup
@@ -444,7 +503,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test, shared-storage, catalog-fleet, durable-work-recovery, authorization-capacity, storage-recipes, release-contract, sdk-smoke]
+    needs: [lint, test, app-test, app-evidence, shared-storage, catalog-fleet, durable-work-recovery, authorization-capacity, storage-recipes, release-contract, sdk-smoke]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

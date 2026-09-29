@@ -2,10 +2,16 @@
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import re
 import subprocess
 from pathlib import Path
+
+# Starmap loads this module by path, outside this directory's import search path.
+_shard_spec = importlib.util.spec_from_file_location("starport_app_shards", Path(__file__).with_name("app_shards.py"))
+app_shards = importlib.util.module_from_spec(_shard_spec)
+_shard_spec.loader.exec_module(app_shards)
 
 
 REPOSITORY = "agentstation/starport"
@@ -61,6 +67,8 @@ def validate_platform(directory, proof, system, tests):
     if not isinstance(system, str) or system not in RUNNERS or not isinstance(tests, list) or not tests:
         raise ValueError("Native qualification requires a supported platform and named tests.")
     run = proof["run"]
+    if proof.get("format", 1) not in {1, 2}:
+        raise ValueError("Unsupported native evidence format.")
     validate_run(run)
     if not isinstance(run.get("jobs"), list) or any(not isinstance(job, dict) for job in run["jobs"]):
         raise ValueError("Native evidence has invalid job records.")
@@ -78,6 +86,19 @@ def validate_platform(directory, proof, system, tests):
         events = [json.loads(line) for line in raw.splitlines() if line.strip()]
         if not events or any(not isinstance(event, dict) or event.get("Action") == "fail" for event in events):
             raise ValueError("Native test evidence is empty or contains failed tests.")
+        if runner == "windows-2025" and proof.get("format", 1) == 2:
+            for index in range(app_shards.SHARDS):
+                name = f"App test ({runner}, {index})"
+                shard_jobs = [job for job in run["jobs"] if job.get("name") == name]
+                if len(shard_jobs) != 1 or shard_jobs[0].get("status") != "completed" or shard_jobs[0].get("conclusion") != "success":
+                    raise ValueError("A required native application shard job did not pass.")
+            app_events, app_toolchain = app_shards.verify_shards(lambda index, name: read_bound_file(
+                directory, f"native-catalog-app-{runner}-{index}/{name}", proof["sha256"]), expected_head=run["headSha"])
+            if app_toolchain.splitlines() != toolchain:
+                raise ValueError("Application shards differ from the native platform toolchain.")
+            if any(event.get("Package") == app_shards.PACKAGE for event in events):
+                raise ValueError("Sharded application evidence overlaps the remaining native suite.")
+            events.extend(app_events)
         for test in tests:
             if not isinstance(test, dict):
                 raise ValueError("Native qualification has an invalid test record.")
@@ -123,7 +144,16 @@ def capture(root, run_id, directory):
             for name in names:
                 path = f"native-catalog-{runner}/{name}"
                 digests[path] = hashlib.sha256((directory / path).read_bytes()).hexdigest()
-    (directory / "capture.json").write_text(json.dumps({"run": run, "sha256": digests}, indent=2) + "\n")
+    for index in range(app_shards.SHARDS):
+        for name in ("roster.json", "tests.jsonl", "toolchain.txt"):
+            path = f"native-catalog-app-windows-2025-{index}/{name}"
+            digests[path] = hashlib.sha256((directory / path).read_bytes()).hexdigest()
+    proof = {"format": 2, "run": run, "sha256": digests}
+    # Check completeness before retaining a capture. Individual skipped contracts
+    # remain unqualified when callers request them later.
+    app_shards.verify_shards(lambda index, name: read_bound_file(
+        directory, f"native-catalog-app-windows-2025-{index}/{name}", digests), expected_head=run["headSha"])
+    (directory / "capture.json").write_text(json.dumps(proof, indent=2) + "\n")
 
 
 if __name__ == "__main__":
