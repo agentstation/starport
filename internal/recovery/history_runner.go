@@ -29,6 +29,8 @@ const (
 type HistoryKVTarget interface {
 	storage.ImportInspector
 	storage.ImportReconciler
+	storage.ImportRecordReader
+	storage.ImportPositionInspector
 }
 
 // HistoryBlobTarget combines guarded capture and ordered publication for one selected target.
@@ -47,8 +49,9 @@ type HistoryReplayTargets struct {
 // HistoryReplayRequest binds selected target configuration and an existing private scratch directory.
 // The composition root must check local path overlap before opening any target.
 type HistoryReplayRequest struct {
-	TargetSHA256     string
-	ScratchDirectory string
+	TargetSHA256       string
+	ScratchDirectory   string
+	CatalogPreparation *CatalogPreparationPlan
 }
 
 // HistoryReplayPositions records where each native replay chain stopped.
@@ -73,12 +76,13 @@ type HistoryReplayReport struct {
 	Restricted       bool                   `json:"restricted"`
 }
 type historyRunRecord struct {
-	Version          int                        `json:"version"`
-	AcceptanceSHA256 string                     `json:"acceptance_sha256"`
-	HistorySHA256    string                     `json:"history_sha256"`
-	TargetSHA256     string                     `json:"target_sha256"`
-	Authority        revision.RecoveryAuthority `json:"authority"`
-	ValidatedAt      time.Time                  `json:"validated_at"`
+	Version            int                        `json:"version"`
+	AcceptanceSHA256   string                     `json:"acceptance_sha256"`
+	HistorySHA256      string                     `json:"history_sha256"`
+	TargetSHA256       string                     `json:"target_sha256"`
+	Authority          revision.RecoveryAuthority `json:"authority"`
+	ValidatedAt        time.Time                  `json:"validated_at"`
+	CatalogPreparation *CatalogPreparationPlan    `json:"catalog_preparation,omitempty"`
 }
 type historyRunner struct {
 	witness   *Witness
@@ -119,41 +123,55 @@ func (w *Witness) ReplayImportedHistory(ctx context.Context, source *RestoreSour
 	if err != nil {
 		return nil, err
 	}
-	state, err := runner.scanJournal(ctx)
+	state, err := runner.replayUntil(ctx, len(accepted.state.history.manifest.Steps))
 	if err != nil {
 		return nil, err
 	}
-	for state.count < len(accepted.state.history.manifest.Steps) {
-		if err := accepted.check(ctx, w); err != nil {
-			return nil, err
+	completed := &CompletedHistory{runner: runner, report: runner.report(state)}
+	if err := completed.check(ctx, w); err != nil {
+		return nil, err
+	}
+	return completed, nil
+}
+func (r *historyRunner) replayUntil(ctx context.Context, stop int) (historyJournalState, error) {
+	state, err := r.scanJournal(ctx)
+	if err != nil {
+		return state, err
+	}
+	for state.count < stop {
+		if err := r.accepted.check(ctx, r.witness); err != nil {
+			return state, err
 		}
-		step := accepted.state.history.manifest.Steps[state.count]
+		step := r.accepted.state.history.manifest.Steps[state.count]
+		if r.run.CatalogPreparation != nil && state.count == len(r.accepted.state.history.manifest.Steps)-2 && (state.catalog == nil || state.catalog.complete == "") {
+			return state, ErrConflict
+		}
 		prepared := state.pending
 		if prepared == nil {
-			if err := runner.guard(ctx, state.positions, ""); err != nil {
-				return nil, err
+			if err := r.guard(ctx, state.positions, ""); err != nil {
+				return state, err
 			}
-			prepared, err = runner.prepare(ctx, step, state.positions, state.previous)
+			prepared, err = r.prepare(ctx, step, state.positions, state.previous)
 			if err != nil {
-				return nil, err
+				return state, err
 			}
 		}
-		if err := runner.guard(ctx, state.positions, historyNativeOwner(step.Kind)); err != nil {
-			return nil, err
+		if err := r.guard(ctx, state.positions, historyNativeOwner(step.Kind)); err != nil {
+			return state, err
 		}
-		applied, err := runner.apply(ctx, *prepared)
+		applied, err := r.apply(ctx, *prepared)
 		if err != nil {
-			return nil, err
+			return state, err
 		}
-		if err := runner.guard(ctx, applied.After, ""); err != nil {
-			return nil, err
+		if err := r.guard(ctx, applied.After, ""); err != nil {
+			return state, err
 		}
-		if err := runner.publishApplied(ctx, applied); err != nil {
-			return nil, err
+		if err := r.publishApplied(ctx, applied); err != nil {
+			return state, err
 		}
 		body, err := json.Marshal(applied, json.Deterministic(true))
 		if err != nil {
-			return nil, err
+			return state, err
 		}
 		state.count++
 		state.previous = historySHA256(body)
@@ -162,15 +180,31 @@ func (w *Witness) ReplayImportedHistory(ctx context.Context, source *RestoreSour
 		state.kvRotated = state.kvRotated || step.Kind == historyKVAuthorityFinal
 		state.sqlRotated = state.sqlRotated || step.Kind == historySQLAuthorityFinal
 	}
-	completed := &CompletedHistory{runner: runner, report: runner.report(state)}
-	if err := completed.check(ctx, w); err != nil {
-		return nil, err
+	if state.catalog != nil && state.catalog.pending != nil {
+		if err := r.guard(ctx, state.positions, historyOwnerKV); err != nil {
+			return state, err
+		}
+		if err := r.checkCatalogPendingPosition(ctx, *state.catalog); err != nil {
+			return state, err
+		}
+	} else if err := r.guard(ctx, state.positions, ""); err != nil {
+		return state, err
 	}
-	return completed, nil
+	return state, nil
 }
 func newHistoryRunner(ctx context.Context, w *Witness, source *RestoreSource, accepted *AcceptedHistory, targets HistoryReplayTargets, request HistoryReplayRequest) (*historyRunner, error) {
 	if ctx == nil || w == nil || w.db == nil || source == nil || accepted == nil || accepted.state == nil || targets.KV == nil || targets.Blobs == nil || targets.Encryption == nil || !historyDigest(request.TargetSHA256) || !filepath.IsAbs(request.ScratchDirectory) || filepath.Clean(request.ScratchDirectory) != request.ScratchDirectory {
 		return nil, ErrConflict
+	}
+	if request.CatalogPreparation != nil {
+		if !validCatalogPlan(request.CatalogPreparation) {
+			return nil, ErrConflict
+		}
+		if _, err := catalogPrefixCount(accepted.state.history.manifest.Steps); err != nil {
+			return nil, err
+		}
+		selected := *request.CatalogPreparation
+		request.CatalogPreparation = &selected
 	}
 	if err := accepted.check(ctx, w); err != nil {
 		return nil, err

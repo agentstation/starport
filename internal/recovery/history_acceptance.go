@@ -100,7 +100,7 @@ func prepareHistoryAcceptance(source *RestoreSource, history *VerifiedHistory, r
 		return nil, ErrConflict
 	}
 	m := history.state.manifest
-	if m.Disposition == "replay_complete" && !attestation.CompleteInterval {
+	if m.Disposition == historyReplayComplete && !attestation.CompleteInterval {
 		return nil, ErrConflict
 	}
 	identity, err := source.ImportIdentity(m.Operation)

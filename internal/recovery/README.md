@@ -284,7 +284,9 @@ It does not prove rollback. Preserve the targets and retry the same operation af
 Ordinary startup refuses imported stores while their barriers remain.
 
 Credential-policy publication has an explicit owner procedure below.
-Other file owners, independent-history reconciliation, and activation commands remain unfinished.
+Coordinated activation checks independent history and canonical file owners through `starport backup activate`.
+Use the [operator recovery procedure](../../docs/RECOVERY.md) for activation, exact retries, and passive status.
+Complete deployment qualification remains open.
 Do not remove barriers manually or treat a preparation receipt as permission to start inference.
 
 
@@ -664,3 +666,25 @@ It does not reverse completed steps after a later conflict.
 The result reports the acceptance digest, journal digest, replay positions, and completed step count.
 Every successful result remains restricted. No gateway or provider worker starts.
 Use `starport backup apply-history --help` for the complete flag list.
+
+## Closed final history
+
+`FinalizeImportedHistory` requires complete accepted history and final KV and SQL revision replacement.
+It checks the imported graph while every import barrier remains closed.
+
+`ClosedFinalHistory.Check` verifies the retained decision, original graph images, exact native replay positions, and derived revision epochs.
+It also verifies the closed SQL boundary.
+
+`closed-final-prepared.json` retains the operation, target, validation time, and fence attestation before capture.
+Retries preserve those values.
+Each failed partial capture remains an immutable attempt.
+Guarded retries can capture the same native positions in another attempt, up to 16 attempts.
+
+After a capture receipt exists, retries reuse its graph.
+Missing or corrupt preparation refuses recovery instead of choosing another validation time.
+External fencing and interval completeness remain operator assertions.
+Native checks verify binding, data integrity, owner receipts, current authorization epochs, and closed admission.
+
+`ClosedFinalReport` states five missing activation requirements: settings, canonical files, catalog selection, transport trust, and administrator credentials.
+The report grants no activation capability.
+The future activation coordinator must retain a complete owner-verified decision and resume from native activation receipts.
