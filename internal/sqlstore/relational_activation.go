@@ -169,7 +169,8 @@ func newRelationalActivationReceipt(snapshot SQLiteSnapshot, identity Relational
 	receipt := relationalActivationReceipt{Version: 1, ClaimSHA256: hex.EncodeToString(digest[:]), DecisionSHA256: decisionSHA256}
 	if position != nil {
 		receipt.Version = 2
-		receipt.Position = new(*position)
+		copied := *position
+		receipt.Position = &copied
 	}
 	encoded, err := json.Marshal(receipt)
 	return claim, receipt, encoded, err

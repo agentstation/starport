@@ -71,22 +71,12 @@ func (db *DB) exportRelational(ctx context.Context, candidate *DB, guard func(co
 	if err := validateRelationalSchema(ctx, source, db.dialect); err != nil {
 		return err
 	}
-	high, err := auditHighWater(ctx, source, db.dialect)
-	if err != nil {
-		return err
-	}
 	target, err := candidate.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = target.Rollback() }()
-	if _, err := target.ExecContext(ctx, "DELETE FROM schema_migrations; DELETE FROM sqlstore_meta"); err != nil {
-		return err
-	}
-	if err := copyRelationalRows(ctx, source, target, TypeSQLite); err != nil {
-		return err
-	}
-	if err := restoreAuditHighWater(ctx, target, target, TypeSQLite, high); err != nil {
+	if err := copyRelationalImage(ctx, source, db.dialect, target); err != nil {
 		return err
 	}
 	if err := source.Commit(); err != nil {
