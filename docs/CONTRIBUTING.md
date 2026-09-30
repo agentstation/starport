@@ -100,9 +100,9 @@ checks source, package, and toolchain identity. Linux and macOS retain their
 complete package runs. Shared-storage jobs retain their real-service checks.
 
 The shard runner preserves optional skips in its raw evidence. A skipped
-required test cannot qualify a native contract. Recovery shards retain Go's
-ten-minute package limit. Test assertions and individual deadlines do not
-change.
+required test cannot qualify a native contract. Recovery shards use a
+twenty-minute package allowance. Test assertions and individual deadlines do
+not change.
 
 ## Format and check
 

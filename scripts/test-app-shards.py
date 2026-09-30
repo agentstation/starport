@@ -138,7 +138,7 @@ class AppShardTests(unittest.TestCase):
                     self.assertEqual("-race" in command, race)
                     self.assertEqual("-race" in listing.call_args_list[0].args[0], race)
                     self.assertEqual(command[-1], "./internal/recovery")
-                    self.assertIn("10m", command)
+                    self.assertIn("20m", command)
                     roster = json.loads((output / "roster.json").read_text())
                     self.assertEqual(roster["package"], shards.RECOVERY_PACKAGE)
 

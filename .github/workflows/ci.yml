@@ -95,7 +95,9 @@ jobs:
           if [[ "${{ matrix.runner }}" != "windows-2025" && "${{ matrix.runner }}" != "windows-11-arm" ]]; then
             storage+=(./internal/recovery)
           fi
-          go test -json -count=1 ${{ matrix.race }} "${coverage[@]}" "${storage[@]}" | tee native-catalog/tests.jsonl
+          # The complete recovery package exceeds Go's default ten-minute
+          # package allowance. Individual contract deadlines remain unchanged.
+          go test -json -count=1 -timeout 30m ${{ matrix.race }} "${coverage[@]}" "${storage[@]}" | tee native-catalog/tests.jsonl
           coverage=()
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             coverage=(-coverprofile=native-catalog/catalog.coverage.txt -covermode=atomic)
