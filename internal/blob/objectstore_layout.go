@@ -25,6 +25,16 @@ var ErrLayoutMigrationRequired = errors.New("blob: existing objects require expl
 // ErrImportRestricted retains the deployment recovery barrier on imported bytes.
 var ErrImportRestricted = errors.New("blob: imported bytes require deployment recovery")
 
+// objectControlKey reports native control objects. Snapshots exclude them.
+// History objects are domain archive entries and are not control objects.
+func objectControlKey(name string) bool {
+	switch name {
+	case blobLayoutKey, blobImportKey, blobActivationCurrent, blobReplayCurrent, blobClosureKey:
+		return true
+	}
+	return false
+}
+
 func (o *ObjectStore) ensureLayout(ctx context.Context) error {
 	return o.layout.ensure(ctx, o.probeLayout, ErrLayoutUnavailable)
 }

@@ -37,6 +37,9 @@ func inspectBlobActivation(ctx context.Context, records activationRecords, opera
 			return errors.Join(ErrActivationConflict, err)
 		}
 	}
+	if err := checkAdoptionClosure(ctx, records); err != nil {
+		return errors.Join(ErrActivationConflict, err)
+	}
 	return ctx.Err()
 }
 

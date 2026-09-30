@@ -167,12 +167,30 @@ func verifyBlobActivation(ctx context.Context, records activationRecords, key st
 			return errors.Join(ErrActivationConflict, err)
 		}
 	}
+	if err := checkAdoptionClosure(ctx, records); err != nil {
+		return errors.Join(ErrActivationConflict, err)
+	}
 	return records.confirm(ctx)
+}
+
+// activeReceipt parses a canonical receipt of a completed native activation.
+func activeReceipt(value []byte) (blobActivationReceipt, bool) {
+	var receipt blobActivationReceipt
+	if len(value) > blobActivationLimit || json.Unmarshal(value, &receipt) != nil || receipt.Version != 1 || receipt.Phase != "active" ||
+		!activationDigest(receipt.ClaimSHA256) || !activationDigest(receipt.DecisionSHA256) {
+		return receipt, false
+	}
+	canonical, _ := json.Marshal(receipt)
+	return receipt, bytes.Equal(value, canonical)
 }
 
 // checkActivationBarrier permits only an ordinary store or a completed native
 // activation. Portable historical receipts never establish current authority.
+// A pending populated claim closure refuses both states.
 func checkActivationBarrier(ctx context.Context, records activationRecords) error {
+	if err := checkAdoptionClosure(ctx, records); err != nil {
+		return err
+	}
 	barrier, err := records.read(ctx, blobImportKey)
 	if errors.Is(err, ErrNotFound) {
 		_, err := records.read(ctx, blobActivationCurrent)
@@ -184,17 +202,12 @@ func checkActivationBarrier(ctx context.Context, records activationRecords) erro
 	if err != nil {
 		return errors.Join(ErrImportRestricted, err)
 	}
-	var receipt blobActivationReceipt
-	if len(barrier) > blobActivationLimit || json.Unmarshal(barrier, &receipt) != nil || receipt.Version != 1 || receipt.Phase != "active" ||
-		!activationDigest(receipt.ClaimSHA256) || !activationDigest(receipt.DecisionSHA256) {
-		return ErrImportRestricted
-	}
-	canonical, _ := json.Marshal(receipt)
-	if !bytes.Equal(barrier, canonical) {
+	receipt, ok := activeReceipt(barrier)
+	if !ok {
 		return ErrImportRestricted
 	}
 	current, err := records.read(ctx, blobActivationCurrent)
-	if err != nil || !bytes.Equal(current, canonical) {
+	if err != nil || !bytes.Equal(current, barrier) {
 		return errors.Join(ErrImportRestricted, err)
 	}
 	receipt.Phase = ""

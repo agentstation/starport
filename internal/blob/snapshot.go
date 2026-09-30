@@ -240,7 +240,7 @@ func (o *ObjectStore) walkObjects(ctx context.Context, legacy bool, yield blobOb
 			if !ok {
 				return errors.New("blob: listing escaped the selected prefix")
 			}
-			if !legacy && (name == blobLayoutKey || name == blobActivationCurrent || name == blobImportKey || name == blobReplayCurrent) {
+			if !legacy && objectControlKey(name) {
 				continue
 			}
 			if name == blobImportKey {
