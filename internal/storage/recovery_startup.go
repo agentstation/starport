@@ -42,7 +42,7 @@ func InspectRecoveryStartup(ctx context.Context, store KVStore) (RecoveryStartup
 		if replay != nil {
 			return RecoveryStartupState{}, ErrImportRestricted
 		}
-		for _, prefix := range []string{transferActivationPrefix, transferReconciliationPrefix} {
+		for _, prefix := range []string{transferActivationPrefix, transferReconciliationPrefix, transferPopulatedPrefix} {
 			keys, err := store.ScanWithPrefix(ctx, prefix, 1)
 			if err != nil || len(keys) != 0 {
 				return RecoveryStartupState{}, errors.Join(ErrImportRestricted, err)
