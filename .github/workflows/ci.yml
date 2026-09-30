@@ -152,7 +152,7 @@ jobs:
 
   app-test:
     name: App test (windows-2025, ${{ matrix.shard }})
-    timeout-minutes: 35
+    timeout-minutes: 45
     runs-on: windows-2025
     env:
       CGO_ENABLED: '1'
