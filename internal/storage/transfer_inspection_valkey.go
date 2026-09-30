@@ -29,33 +29,12 @@ func (v *valkeyTransfer) InspectImport(ctx context.Context, claim []byte, positi
 	if ctx == nil || yield == nil {
 		return ErrInvalidMutation
 	}
-	guards, err := prepareImportInspection(claim, position, func(key string) ([]byte, error) {
-		data, ttl, err := v.bound.ReadWithLifetime(ctx, key, 4096)
-		if errors.Is(err, ErrNotFound) {
-			return nil, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		if ttl != 0 {
-			return nil, ErrConflict
-		}
-		return data, nil
-	})
+	guards, err := v.importInspectionGuards(ctx, claim, position)
 	if err != nil {
 		return err
 	}
 	store := v.bound.store
-	keys := make([]string, 0, len(guards)+1)
-	args := []string{v.bound.identity, strconv.Itoa(len(guards))}
-	for _, guard := range guards {
-		keys = append(keys, store.prefix+guard.Key)
-		present := "0"
-		if guard.ExpectedValue != nil {
-			present = "1"
-		}
-		args = append(args, present, string(guard.ExpectedValue))
-	}
+	keys, args := v.importInspectionArguments(guards)
 	pattern := strings.NewReplacer("\\", "\\\\", "*", "\\*", "?", "\\?", "[", "\\[", "]", "\\]").Replace(store.prefix) + "*"
 	cursor := "0"
 	for {
@@ -72,7 +51,7 @@ func (v *valkeyTransfer) InspectImport(ctx context.Context, claim []byte, positi
 			if importControlKey(key) {
 				continue
 			}
-			record, err := v.readImportInspection(ctx, key, keys, args)
+			record, err := v.readImportInspection(ctx, key, keys, args, TransferMaxValueBytes)
 			if errors.Is(err, ErrNotFound) {
 				continue
 			}
@@ -92,7 +71,7 @@ func (v *valkeyTransfer) InspectImport(ctx context.Context, claim []byte, positi
 	return transferValkeyError(err)
 }
 
-func (v *valkeyTransfer) readImportInspection(ctx context.Context, key string, guards, args []string) (TransferRecord, error) {
+func (v *valkeyTransfer) readImportInspection(ctx context.Context, key string, guards, args []string, limit int) (TransferRecord, error) {
 	const read = `
 local key=KEYS[count+1]
 if redis.call('EXISTS',key)==0 then return false end
@@ -100,7 +79,7 @@ if redis.call('STRLEN',key)>tonumber(ARGV[offset+1]) then return redis.error_rep
 return {redis.call('GET',key),redis.call('PEXPIRETIME',key)}`
 	store := v.bound.store
 	keys := append(append([]string{}, guards...), store.prefix+key)
-	readArgs := append(append([]string{}, args...), strconv.Itoa(TransferMaxValueBytes))
+	readArgs := append(append([]string{}, args...), strconv.Itoa(limit))
 	values, err := store.do(ctx, store.client.B().Eval().Script(valkeyImportInspectionGuard+read).Numkeys(int64(len(keys))).Key(keys...).Arg(readArgs...).Build()).ToArray()
 	if valkey.IsValkeyNil(err) {
 		return TransferRecord{}, ErrNotFound
@@ -130,3 +109,34 @@ return {redis.call('GET',key),redis.call('PEXPIRETIME',key)}`
 }
 
 var _ ImportInspector = (*valkeyTransfer)(nil)
+
+func (v *valkeyTransfer) importInspectionGuards(ctx context.Context, claim []byte, position ImportReplayPosition) ([]CompareAndSwapMutation, error) {
+	return prepareImportInspection(claim, position, func(key string) ([]byte, error) {
+		data, ttl, err := v.bound.ReadWithLifetime(ctx, key, 4096)
+		if errors.Is(err, ErrNotFound) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if ttl != 0 {
+			return nil, ErrConflict
+		}
+		return data, nil
+	})
+}
+
+func (v *valkeyTransfer) importInspectionArguments(guards []CompareAndSwapMutation) ([]string, []string) {
+	store := v.bound.store
+	keys := make([]string, 0, len(guards)+1)
+	args := []string{v.bound.identity, strconv.Itoa(len(guards))}
+	for _, guard := range guards {
+		keys = append(keys, store.prefix+guard.Key)
+		present := "0"
+		if guard.ExpectedValue != nil {
+			present = "1"
+		}
+		args = append(args, present, string(guard.ExpectedValue))
+	}
+	return keys, args
+}

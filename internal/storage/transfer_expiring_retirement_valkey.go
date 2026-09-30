@@ -6,13 +6,12 @@ import (
 	"strconv"
 )
 
-const (
-	importGuardPresent = "present"
-	importGuardAbsent  = "absent"
-)
-
-func (v *valkeyTransfer) ReconcileImport(ctx context.Context, claim []byte, sequence int64, previous, evidence string, mutations []CompareAndSwapMutation) (string, error) {
-	receipt, encoded, err := newReconciliationReceipt(claim, sequence, previous, evidence, mutations)
+func (v *valkeyTransfer) ReconcileExpiringImport(ctx context.Context, claim []byte, sequence int64, previous, evidence string, records []TransferRecord) (string, error) {
+	records, err := copyExpiringImportRecords(ctx, records)
+	if err != nil {
+		return "", err
+	}
+	receipt, encoded, mutations, err := expiringReconciliationReceipt(claim, sequence, previous, evidence, records)
 	if err != nil {
 		return "", err
 	}
@@ -32,11 +31,11 @@ func (v *valkeyTransfer) ReconcileImport(ctx context.Context, claim []byte, sequ
 	if err != nil {
 		return "", err
 	}
-	// Compare all records and check command permissions before the first write.
 	const script = valkeyApprovedIncarnation + `
 local checks = tonumber(ARGV[2])
+local expiring = tonumber(ARGV[3])
 for i=1,checks do
- local offset = 3+(i-1)*2
+ local offset = 4+(i-1)*2
  local current = redis.call('GET', KEYS[i])
  if ARGV[offset] == 'absent' then
   if current then return 0 end
@@ -44,34 +43,49 @@ for i=1,checks do
   if current ~= ARGV[offset+1] or redis.call('PTTL', KEYS[i]) ~= -1 then return 0 end
  end
 end
-for i=checks+1,#KEYS do
- local offset = 3+checks*2+(i-checks-1)*2
+local now = redis.call('TIME')
+local millis = tonumber(now[1])*1000 + math.floor(tonumber(now[2])/1000)
+for i=1,expiring do
+ local offset = 4+checks*2+(i-1)*2
+ local key = KEYS[checks+i]
+ local current = redis.call('GET', key)
+ local expiry = tonumber(ARGV[offset+1])
+ if current then
+  if current ~= ARGV[offset] or redis.call('PEXPIRETIME', key) ~= expiry then return 0 end
+ elseif expiry > millis then return 0 end
+end
+for i=checks+expiring+1,#KEYS do
+ local offset = 4+checks*2+expiring*2+(i-checks-expiring-1)*2
  if ARGV[offset] == 'delete' then
   if not redis.acl_check_cmd('DEL', KEYS[i]) then return redis.error_reply('STARPORT_RECONCILIATION_ACL') end
  else
   if not redis.acl_check_cmd('SET', KEYS[i], ARGV[offset+1]) then return redis.error_reply('STARPORT_RECONCILIATION_ACL') end
  end
 end
-for i=checks+1,#KEYS do
- local offset = 3+checks*2+(i-checks-1)*2
+for i=checks+expiring+1,#KEYS do
+ local offset = 4+checks*2+expiring*2+(i-checks-expiring-1)*2
  if ARGV[offset] == 'delete' then redis.call('DEL', KEYS[i])
  else redis.call('SET', KEYS[i], ARGV[offset+1]) end
 end
 return 1`
-	guards := append([]CompareAndSwapMutation(nil), plan.guards...)
-	if len(plan.writes) > 0 {
-		guards = append(guards, mutations...)
-	}
 	store := v.bound.store
-	keys := make([]string, 0, len(guards)+len(plan.writes))
-	args := []string{v.bound.identity, strconv.Itoa(len(guards))}
-	for _, guard := range guards {
+	expiring := records
+	if len(plan.writes) == 0 {
+		expiring = nil
+	}
+	keys := make([]string, 0, len(plan.guards)+len(expiring)+len(plan.writes))
+	args := []string{v.bound.identity, strconv.Itoa(len(plan.guards)), strconv.Itoa(len(expiring))}
+	for _, guard := range plan.guards {
 		keys = append(keys, store.prefix+guard.Key)
 		exists := importGuardPresent
 		if guard.ExpectedValue == nil {
 			exists = importGuardAbsent
 		}
 		args = append(args, exists, string(guard.ExpectedValue))
+	}
+	for _, record := range expiring {
+		keys = append(keys, store.prefix+record.Key)
+		args = append(args, string(record.Value), strconv.FormatInt(record.ExpiresAtMillis, 10))
 	}
 	for _, mutation := range plan.writes {
 		keys = append(keys, store.prefix+mutation.Key)
@@ -91,4 +105,4 @@ return 1`
 	return plan.digest, nil
 }
 
-var _ ImportReconciler = (*valkeyTransfer)(nil)
+var _ ImportExpiringRetirer = (*valkeyTransfer)(nil)

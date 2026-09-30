@@ -191,7 +191,7 @@ func TestImportActivationRefusesChangedCompletion(t *testing.T) {
 					claim, decision := []byte("completed"), strings.Repeat("a", 64)
 					require.NoError(t, transfer.Claim(t.Context(), claim))
 					require.NoError(t, activate.ActivateImport(t.Context(), claim, decision))
-					historyKey, receipt, err := activationReceipt(claim, decision)
+					historyKey, receipt, err := activationReceiptAt(claim, nil, decision)
 					require.NoError(t, err)
 					switch changed {
 					case "current-missing":
@@ -222,7 +222,7 @@ func TestImportActivationRefusesChangedCompletion(t *testing.T) {
 }
 
 func TestImportActivationValidatesPortableHistory(t *testing.T) {
-	key, value, err := activationReceipt([]byte("history"), strings.Repeat("a", 64))
+	key, value, err := activationReceiptAt([]byte("history"), nil, strings.Repeat("a", 64))
 	require.NoError(t, err)
 	valid := TransferRecord{Key: key, Value: value}
 	require.NoError(t, valid.Validate())
@@ -245,7 +245,7 @@ func TestImportActivationDoesNotReviveClaimFromCurrentMarker(t *testing.T) {
 			claim := []byte("used-operation")
 			require.NoError(t, transfer.Claim(t.Context(), claim))
 			require.NoError(t, transferActivator(t, transfer).ActivateImport(t.Context(), claim, strings.Repeat("a", 64)))
-			key, _, err := activationReceipt(claim, strings.Repeat("a", 64))
+			key, _, err := activationReceiptAt(claim, nil, strings.Repeat("a", 64))
 			require.NoError(t, err)
 			require.NoError(t, store.Delete(t.Context(), key))
 			require.Error(t, transfer.Claim(t.Context(), claim))

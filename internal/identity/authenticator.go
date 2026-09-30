@@ -103,13 +103,10 @@ type Authenticator struct {
 // acquisition paths: gothic for the OAuth providers, WorkOS for enterprise
 // SSO, either or both.
 func NewAuthenticator(cfg AcquisitionConfig, users UserRepository) (*Authenticator, error) {
-	if len(cfg.OAuthProviders) == 0 && !cfg.WorkOS.configured() {
-		return nil, ErrNoProvidersConfigured
+	if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
 	base := strings.TrimRight(strings.TrimSpace(cfg.CallbackBaseURL), "/")
-	if base == "" {
-		return nil, ErrCallbackBaseRequired
-	}
 	paths := map[string]acquisitionPath{}
 	if len(cfg.OAuthProviders) > 0 {
 		oauth, names, err := newGothicPath(base, cfg.OAuthProviders)
