@@ -9,17 +9,36 @@ import (
 
 // Open creates the configured KVStore.
 func Open(config Config) (KVStore, error) {
+	return openForApplication(config, true)
+}
+
+// OpenForStartup checks native barriers and leaves Badger maintenance stopped.
+// The application must check its other recovery owners before starting maintenance.
+func OpenForStartup(config Config) (KVStore, error) {
+	return openForApplication(config, false)
+}
+
+func openForApplication(config Config, maintenance bool) (KVStore, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid storage config: %w", err)
 	}
 
 	switch config.Type {
 	case StorageTypeBadger:
-		store, err := OpenBadger(config.Badger)
+		store, err := openBadgerConnection(config.Badger, false, false)
 		if err != nil {
 			return nil, err
 		}
-		return checkOpenedImport(store)
+		opened, err := checkOpenedImport(store)
+		if err != nil {
+			return nil, err
+		}
+		if maintenance {
+			if err := store.StartMaintenance(); err != nil {
+				return nil, errors.Join(err, store.Close())
+			}
+		}
+		return opened, nil
 	case StorageTypeValkey:
 		store, err := OpenValkey(config.Valkey)
 		if err != nil {
@@ -35,6 +54,9 @@ func checkOpenedImport(store KVStore) (KVStore, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := CheckImportBarrier(ctx, store); err != nil {
+		return nil, errors.Join(err, store.Close())
+	}
+	if _, err := InspectRecoveryStartup(ctx, store); err != nil {
 		return nil, errors.Join(err, store.Close())
 	}
 	return store, nil

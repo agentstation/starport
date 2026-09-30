@@ -28,6 +28,7 @@ type BadgerStore struct {
 	compactStop   chan struct{}
 	wg            sync.WaitGroup
 	closed        bool
+	readOnly      bool
 	mu            sync.RWMutex
 }
 
@@ -79,6 +80,7 @@ func openBadgerConnection(config BadgerConfig, readOnly, maintenance bool) (*Bad
 
 	store := &BadgerStore{
 		db:          db,
+		readOnly:    readOnly,
 		config:      config,
 		gcStop:      make(chan struct{}),
 		compactStop: make(chan struct{}),

@@ -68,6 +68,24 @@ func CaptureSQLRecovery(ctx context.Context, db *sqlstore.DB, conn *sql.Conn) (*
 	return readSQLRecovery(ctx, db, conn, false)
 }
 
+// CaptureSQLSnapshotRecovery reads original authority from an immutable portable image.
+// It does not initialize, rotate, or approve that authority.
+func CaptureSQLSnapshotRecovery(ctx context.Context, source *sqlstore.RelationalSnapshotView) (*Stamp, error) {
+	if ctx == nil || source == nil {
+		return nil, ErrRecoveryConflict
+	}
+	return scanSQLRecovery(ctx, source.QueryContext, "SELECT id, CASE WHEN LENGTH(CAST(epoch AS BLOB)) > 256 THEN NULL ELSE epoch END, sequence FROM authorization_revision ORDER BY id LIMIT 2")
+}
+
+// ValidateSQLRecoveryPreimage checks an explicitly retained row or explicit absence.
+// A valid preimage is a comparison requirement, not replacement authority.
+func ValidateSQLRecoveryPreimage(expected *Stamp) error {
+	if expected != nil && (!validRecoveryStamp(*expected) || expected.Sequence > math.MaxInt64) {
+		return ErrRecoveryConflict
+	}
+	return nil
+}
+
 func readSQLRecovery(ctx context.Context, db *sqlstore.DB, conn *sql.Conn, lock bool) (*Stamp, error) {
 	if ctx == nil || db == nil || conn == nil {
 		return nil, ErrRecoveryConflict
@@ -83,7 +101,14 @@ func readSQLRecovery(ctx context.Context, db *sqlstore.DB, conn *sql.Conn, lock 
 	if lock && db.Dialect() != sqlstore.TypeSQLite {
 		query += " FOR UPDATE"
 	}
-	rows, err := conn.QueryContext(ctx, query)
+	return scanSQLRecovery(ctx, conn.QueryContext, query)
+}
+
+func scanSQLRecovery(ctx context.Context, read func(context.Context, string, ...any) (*sql.Rows, error), query string) (*Stamp, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	rows, err := read(ctx, query)
 	if err != nil {
 		return nil, err
 	}

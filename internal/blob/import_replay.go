@@ -92,8 +92,14 @@ func validPublicationState(s PublicationState) bool {
 	}
 	return false
 }
+func validPublicationTransition(key string, expected, next PublicationState) bool {
+	return ValidateKey(key) == nil && validPublicationState(expected) && validPublicationState(next) && next.Kind != publicationAbsent &&
+		(expected.Kind != publicationRetired || next.Kind == publicationRetired) &&
+		(expected.Kind != publicationLive || next.Kind != publicationLive || expected == next)
+}
+
 func makeReplayReceipt(claim []byte, step ImportPublicationStep) (blobReplayReceipt, []byte, error) {
-	if ValidateKey(step.Key) != nil || !validPublicationState(step.Expected) || !validPublicationState(step.Next) || step.Next.Kind == publicationAbsent || step.Expected.Kind == publicationRetired && step.Next.Kind != publicationRetired || step.Expected.Kind == publicationLive && step.Next.Kind == publicationLive && step.Expected != step.Next {
+	if !validPublicationTransition(step.Key, step.Expected, step.Next) {
 		return blobReplayReceipt{}, nil, ErrPublicationExists
 	}
 	mutation, err := json.Marshal(struct {

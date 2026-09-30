@@ -78,3 +78,21 @@ func (db *DB) checkImportPosition(ctx context.Context, conn *sql.Conn, claim []b
 	}
 	return ctx.Err()
 }
+
+// CheckUnreleasedRelationalImport verifies the original closed claim at any replay position.
+// It creates no record and never releases or repairs an import barrier.
+func (db *DB) CheckUnreleasedRelationalImport(ctx context.Context, original SQLiteSnapshot, identity RelationalImportIdentity) (resultErr error) {
+	if db == nil || db.DB == nil {
+		return ErrClosed
+	}
+	claim, err := inspectionClaim(ctx, original, identity, RelationalReplayPosition{})
+	if err != nil {
+		return err
+	}
+	owner, err := db.acquireMigrationOwner(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, owner.close()) }()
+	return db.verifyReplayBarrier(ctx, owner.conn, claim)
+}
