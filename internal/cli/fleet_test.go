@@ -3,8 +3,8 @@ package cli
 import (
 	"context"
 	"errors"
-	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/recovery"
 	"github.com/stretchr/testify/require"
 	"testing"
 )

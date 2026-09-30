@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starmap/pkg/productfiles"
 	"github.com/agentstation/starmap/runtime"
 	"github.com/agentstation/starport/internal/blob"
@@ -29,6 +30,10 @@ func ActivateRecovery(ctx context.Context, cfg *config.Config, request RecoveryA
 	if _, bounded := ctx.Deadline(); !bounded {
 		return result, recovery.ErrConflict
 	}
+	// One activation decodes the same catalog payload many times.
+	// The scope retains complete decodes for this operation only and supplies no authority.
+	release := catalogs.RetainDecodedCatalogs()
+	defer release()
 	encryption, err := backupEncryption(cfg)
 	if err != nil {
 		return result, err
