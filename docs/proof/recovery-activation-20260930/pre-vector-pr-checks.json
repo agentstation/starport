@@ -1,0 +1,62 @@
+{
+  "scope": "Candidate pre-vector repository checks. Final combined consumer qualification remains required.",
+  "source_commit": "0e52e853dc797cf31a0d80da5082c6a10d390e87",
+  "producer_module": "v0.16.6-0.20260930103856-1c03a457a14f",
+  "environment": {
+    "GOWORK": "off",
+    "GOTOOLCHAIN": "go1.27.1",
+    "GOCACHE": "/private/tmp/csp13-go-build-20260929"
+  },
+  "results": {
+    "sdk": {
+      "exit_code": 0,
+      "http_contract_checks": 7,
+      "sdk_smoke_checks": 5,
+      "catalog_transition_checks": 9,
+      "named_go_test": "TestSDKCanonicalRemovalAfterSuccessfulInference",
+      "named_go_test_pass": 1,
+      "package_pass": 1,
+      "skip": 0,
+      "upstream": "Loopback fixture; no paid provider call."
+    },
+    "overhead": {
+      "exit_code": 0,
+      "named_test": "TestGatewayOverheadBenchmark",
+      "pass": 1,
+      "requests": 200,
+      "upstream_delay_ms": 20,
+      "p50_reported_ms": 0,
+      "p99_reported_ms": 0,
+      "limit": "This rounded component timer does not qualify full-path production overhead."
+    },
+    "first_run": {
+      "exit_code": 0,
+      "observable_contracts": [
+        "Ephemeral development",
+        "Isolated initialization",
+        "Configuration validation",
+        "Diagnosis",
+        "Readiness",
+        "Authenticated model discovery"
+      ],
+      "upstream": "Synthetic credential; no paid provider call."
+    }
+  },
+  "raw_logs": {
+    "sdk": {
+      "file": "sdk-pre-vector.json.gz",
+      "sha256": "aee9c0a3e4983b7113a61cbfa548a3384275a6de9b8db42cdd4e939bcf27af42",
+      "representation": "JSON string lines; SHA-256 identifies the original complete log bytes."
+    },
+    "overhead": {
+      "file": "overhead-pre-vector.json.gz",
+      "sha256": "92005843c80ebbd4aaf59632826d1a74de3ac540fdd6707b086f30597c5f71b7",
+      "representation": "JSON string lines; SHA-256 identifies the original complete log bytes."
+    },
+    "first_run": {
+      "file": "first_run-pre-vector.json.gz",
+      "sha256": "13df9cf24049e80dbd789601314d6896dc1a5674feff1997aab89e9fff49ff03",
+      "representation": "JSON string lines; SHA-256 identifies the original complete log bytes."
+    }
+  }
+}

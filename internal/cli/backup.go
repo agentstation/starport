@@ -31,6 +31,8 @@ type BackupVerifier func(context.Context, *config.Config, recovery.VerifyRequest
 func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.Command {
 	return &urfavecli.Command{Name: "backup", Usage: "Capture and verify a stopped deployment", Commands: []*urfavecli.Command{
 		newPrepareBackupCommand(deps, usageError),
+		newRecoveryActivationCommand(deps, usageError, false),
+		newRecoveryActivationCommand(deps, usageError, true),
 		newInspectImportedBackupCommand(deps, usageError),
 		newApplyHistoryCommand(deps, usageError),
 		newPublishBackupFilesCommand(deps, usageError),

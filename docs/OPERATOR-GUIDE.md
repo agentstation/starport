@@ -62,6 +62,11 @@ The model response contains the active Starmap catalog view. It does not prove
 that a provider accepts its resolved credential. The first inference attempt
 provides that evidence.
 
+## Deployment recovery
+
+Use [Coordinated deployment recovery](RECOVERY.md) for stopped deployment backups, activation, and exact retries.
+Keep all writers fenced through fresh gateway readiness. Production qualification remains open under CSP13.
+
 ## Development scratch recovery
 
 `starport dev` keeps Badger and SQLite in memory. Its catalog state and uploaded files use a private `starport-dev-` directory under the operating system temporary directory.

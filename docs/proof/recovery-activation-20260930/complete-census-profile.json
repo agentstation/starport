@@ -1,0 +1,139 @@
+{
+  "scope": "Complete prepared catalog census native qualification and exact full embedded CPU profile; whole CSP13 remains in progress",
+  "source_commit": "5586643cc15a3fc1ef76829ac47c36eadddc043a",
+  "producer": "github.com/agentstation/starmap v0.16.6-0.20260930082412-e0845d601fb5",
+  "go": "go1.27.1 darwin/arm64",
+  "native_topologies": [
+    {
+      "path": "/tmp/csp13-activation-topology-exact-census-race.jsonl",
+      "sha256": "c03620b35a0eafb3a4b635e6c57d85ab20c42c2542c1848b383b8ea566bf6884",
+      "results": [
+        {
+          "test": "TestRecoveryActivationNativeTopologyRecipes/local-to-fleet",
+          "result": "pass",
+          "elapsed_seconds": 49.23
+        },
+        {
+          "test": "TestRecoveryActivationNativeTopologyRecipes/fleet-to-local",
+          "result": "pass",
+          "elapsed_seconds": 63.49
+        },
+        {
+          "test": "TestRecoveryActivationNativeTopologyRecipes/local-restore",
+          "result": "pass",
+          "elapsed_seconds": 35.63
+        },
+        {
+          "test": "TestRecoveryActivationNativeTopologyRecipes/fleet-restore",
+          "result": "pass",
+          "elapsed_seconds": 63.24
+        },
+        {
+          "test": "TestRecoveryActivationNativeTopologyRecipes",
+          "result": "pass",
+          "elapsed_seconds": 211.6
+        }
+      ],
+      "package_results": [
+        {
+          "result": "pass",
+          "elapsed_seconds": 213.718
+        }
+      ]
+    },
+    {
+      "path": "/tmp/csp13-activation-topology-exact-census-pure.jsonl",
+      "sha256": "7288a41bcad25db303994196c28b2b9828867cd010b2fa3acf50ed352fccec39",
+      "results": [
+        {
+          "test": "TestRecoveryActivationNativeTopologyRecipes/local-to-fleet",
+          "result": "pass",
+          "elapsed_seconds": 24.33
+        },
+        {
+          "test": "TestRecoveryActivationNativeTopologyRecipes/fleet-to-local",
+          "result": "pass",
+          "elapsed_seconds": 31.07
+        },
+        {
+          "test": "TestRecoveryActivationNativeTopologyRecipes/local-restore",
+          "result": "pass",
+          "elapsed_seconds": 21.97
+        },
+        {
+          "test": "TestRecoveryActivationNativeTopologyRecipes/fleet-restore",
+          "result": "pass",
+          "elapsed_seconds": 34.13
+        },
+        {
+          "test": "TestRecoveryActivationNativeTopologyRecipes",
+          "result": "pass",
+          "elapsed_seconds": 111.49
+        }
+      ],
+      "package_results": [
+        {
+          "result": "pass",
+          "elapsed_seconds": 112.436
+        }
+      ]
+    }
+  ],
+  "full_embedded_failure": {
+    "path": "/tmp/csp13-activation-full-embedded-exact-census-race.jsonl",
+    "sha256": "6ee32422cda443a6baec4fb2115ca32c9e6a8fdfe34c094ef3d7bbdb9e1a0ab4",
+    "results": [
+      {
+        "test": "TestRecoveryActivationFullEmbeddedApplication",
+        "result": "fail",
+        "elapsed_seconds": 485.19
+      }
+    ],
+    "package_results": [
+      {
+        "result": "fail",
+        "elapsed_seconds": 486.906
+      }
+    ]
+  },
+  "budgets": {
+    "full_embedded_operation_seconds": 420,
+    "process_seconds": 1800,
+    "changed": false
+  },
+  "profile": {
+    "method": "Standard Go CPU profile with the actual retained test binary, both from the failing source run",
+    "assets": {
+      "/tmp/csp13-activation-full-embedded-exact-census-race.test": "2949d7966e0ac9b26a8fa6e15be73b4eef239c940247ed49d98ac0273c3b6fee",
+      "/tmp/csp13-activation-full-embedded-exact-census-race.cpu": "9819abeda7f5a7f87763f59f96216149a0910db5df5b9d04ee2a808c2eda7129",
+      "/tmp/csp13-activation-full-embedded-exact-census-race-top.txt": "79791d0af3789e01eaf5f33b7a6d56395411fc67d0e37cb0ff1744a2701f7019",
+      "/tmp/csp13-activation-full-embedded-exact-census-race-cum.txt": "ebf656f5acfd14800b0abcbef2faa9a048d5685460fcc0c9ea603e9e403949c5",
+      "/tmp/csp13-activation-full-embedded-exact-census-race-prepare.txt": "ff749725c6cf04b1b4d7106d4f1b9083af798793cfef8fe69074f69468b9f6c5",
+      "/tmp/csp13-activation-full-embedded-exact-census-race-release.txt": "313cbfd35f1bc255d7958b4dcb548bf47260bc81d21b60de9f5a8621d2d196e7",
+      "/tmp/csp13-activation-full-embedded-exact-census-race-owners.txt": "fa22ec0065739adb37fc005b29590c74c337c54ecb640f2431008290e0487fec"
+    },
+    "duration_seconds": 485.38,
+    "sampled_cpu_seconds": 447.82,
+    "owner_cumulative_cpu_seconds": {
+      "InspectPreparedCapturedCatalog": 0.58,
+      "inspectPreparedCatalogCensus": 0.2,
+      "prepareRecoveryActivation": 41.87,
+      "RetainAndMaterialize": 21.88,
+      "checkPreparedActivationOwners": 22.05,
+      "InspectMaterialization": 25.42,
+      "sealedRecoveryActivation.checkCurrent": 16.19,
+      "duplicate_immediate_final_Check": 4.28,
+      "DecodeCatalogPayload": 79.69,
+      "runtime_external_code": 215.82
+    },
+    "attribution": "Prepared census removed the repeated prepared-snapshot semantic decode. The remaining CPU is in original structural validation, retention materialization, and passive current-owner materialization checks, with substantial race-runtime cost.",
+    "phase_limit": "The procedure reached ordered release. Profile samples are in its pre-phase checkCurrent call; no phase count or completed native release is claimed."
+  },
+  "next_contract": "Producer-owned private immutable retained-input comparison proof. Validate original input structure once, then check completed native owner/batch/manifest/reference plus bounded envelope size and hash without repeated semantic decode. Selected runtime/replay/permission checks remain separate.",
+  "remaining": [
+    "Actual full embedded race success under unchanged operation budget",
+    "Root small release safety patch qualification",
+    "Published comparison proof seam and final consumer integration",
+    "Final combined-source native platform CI and whole deployment acceptance"
+  ]
+}

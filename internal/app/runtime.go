@@ -44,13 +44,14 @@ type catalogRuntime interface {
 }
 
 type runtimeFactories struct {
-	openStorage  func(storage.Config) (storage.KVStore, error)
-	openSQL      func(config.StorageConfig) (*sqlstore.DB, error)
-	openBlob     func(context.Context, config.FilesConfig) (blob.Store, error)
-	openCatalog  func(context.Context, storage.KVStore, *sqlstore.DB, runtimecatalog.Settings, runtimecatalog.DeploymentLookup) (catalogRuntime, error)
-	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
-	newCache     func(cache.ManagerConfig, cache.ResponseStore) (*cache.Manager, error)
-	newServer    func(*server.Config, server.Dependencies) (httpRuntime, error)
+	openStorage        func(storage.Config) (storage.KVStore, error)
+	openSQL            func(config.StorageConfig) (*sqlstore.DB, error)
+	inspectRecoverySQL func(context.Context, config.StorageConfig, string) (sqlstore.RecoveryStartupState, error)
+	openBlob           func(context.Context, config.FilesConfig) (blob.Store, error)
+	openCatalog        func(context.Context, storage.KVStore, *sqlstore.DB, runtimecatalog.Settings, runtimecatalog.DeploymentLookup) (catalogRuntime, error)
+	newConnector       func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
+	newCache           func(cache.ManagerConfig, cache.ResponseStore) (*cache.Manager, error)
+	newServer          func(*server.Config, server.Dependencies) (httpRuntime, error)
 }
 
 type buildOptions struct {

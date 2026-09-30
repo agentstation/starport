@@ -497,7 +497,8 @@ jobs:
           go test -json -race -count=1 -timeout 7m ./internal/catalog \
             -run '^TestCapturedFleetCatalogNativeReferences$' > backup-catalog.jsonl
           go test -json -race -count=1 -timeout 5m ./internal/app \
-            -run '^(TestRestoreApplicationSharedRecipe|TestRestorePublishFilesSharedRecipe|TestUnprefixedBackup.*)$' > backup-application.jsonl
+            -run '^(TestRestoreApplicationSharedRecipe|TestRestorePublishFilesSharedRecipe|TestUnprefixedBackupRequiresValkeyBeforeOpeningStores|TestUnprefixedBackupMigratesVerifiedRecordsUnderBarriers)$' > backup-application.jsonl
+          python scripts/recovery_application.py verify-legacy --results backup-application.jsonl
       - name: Retain durable work evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -513,10 +514,147 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  application-recovery:
+    name: Application Recovery (${{ matrix.group }}, ${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      CGO_ENABLED: ${{ matrix.mode == 'race' && '1' || '0' }}
+      GOWORK: 'off'
+      STARPORT_TEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        group: [activation, gateway, operator, namespace, full-embedded]
+        mode: [pure, race]
+    services:
+      valkey:
+        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        ports:
+          - 6379/tcp
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      valkey-replacement:
+        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        ports:
+          - 6379/tcp
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      postgres:
+        image: postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: starport_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres -d starport_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      mysql:
+        image: mysql@sha256:3466ba4a4828aa8d46fb7c3bc16b67b781c98413cf4ea0fac6feaa6e881faa26
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_ROOT_HOST: '%'
+          MYSQL_DATABASE: starport_test
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.1"
+          cache: true
+      - name: Test required application recovery evidence
+        run: python scripts/test-recovery-application.py
+      - name: Build the pinned recovery object store
+        env:
+          GOBIN: ${{ runner.temp }}/recovery-objectstore-bin
+          GOSUMDB: sum.golang.org
+        run: |
+          go install github.com/minio/minio@v0.0.0-20250907161309-07c3a429bfed
+          go version -m "$GOBIN/minio" > "$RUNNER_TEMP/recovery-objectstore-build.txt"
+      - name: Qualify named application recovery against native owners
+        shell: bash
+        env:
+          TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
+          TEST_UNPREFIXED_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}/13
+          TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
+          TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
+          TEST_MYSQL_DSN: root@tcp(127.0.0.1:${{ job.services.mysql.ports['3306'] }})/starport_test?parseTime=true
+          TEST_BLOB_S3_ENDPOINT: http://127.0.0.1:9000
+          MINIO_ROOT_USER: starport-test
+          MINIO_ROOT_PASSWORD: starport-local-test-only
+          MINIO_BROWSER: 'off'
+        run: |
+          "$RUNNER_TEMP/recovery-objectstore-bin/minio" server "$RUNNER_TEMP/recovery-objectstore-data" \
+            --address 127.0.0.1:9000 > "$RUNNER_TEMP/recovery-objectstore.log" 2>&1 &
+          objectstore_pid=$!
+          trap 'kill "$objectstore_pid" 2>/dev/null || true; wait "$objectstore_pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --show-error --retry 15 --retry-connrefused \
+            --retry-delay 1 --max-time 3 "$TEST_BLOB_S3_ENDPOINT/minio/health/live"
+          # Groups have separate services. Tests run serially within each group.
+          # The Go process cap preserves the existing application suite allowance.
+          # Product operation deadlines remain in the named tests.
+          python scripts/recovery_application.py run --group ${{ matrix.group }} --mode ${{ matrix.mode }} \
+            --output "$RUNNER_TEMP/application-recovery"
+      - name: Retain original application recovery evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: application-recovery-${{ matrix.group }}-${{ matrix.mode }}
+          path: ${{ runner.temp }}/application-recovery/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain native object storage evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: application-objectstore-${{ matrix.group }}-${{ matrix.mode }}
+          path: |
+            ${{ runner.temp }}/recovery-objectstore-build.txt
+            ${{ runner.temp }}/recovery-objectstore.log
+          retention-days: 14
+          if-no-files-found: error
+
+  application-recovery-evidence:
+    name: Complete Application Recovery
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [application-recovery]
+    permissions:
+      contents: read
+      actions: read
+    env:
+      STARPORT_TEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Require every application recovery group
+        env:
+          APPLICATION_RECOVERY_RESULT: ${{ needs.application-recovery.result }}
+        run: test "$APPLICATION_RECOVERY_RESULT" = success
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Test required application recovery evidence
+        run: python scripts/test-recovery-application.py
+      - name: Download original application recovery evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${{ github.run_id }}" --repo "${{ github.repository }}" --pattern 'application-recovery-*' --dir application-recovery-evidence
+      - name: Require every named owner and subcase in both native modes
+        run: python scripts/recovery_application.py verify --directory application-recovery-evidence
+
   authorization-capacity:
     name: Authorization Capacity
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -527,13 +665,18 @@ jobs:
           cache: true
       - name: Measure authorization capacity
         run: make --silent test-authorization-capacity > authorization-capacity.jsonl
+      - name: Verify bounded catalog capacity
+        run: make --silent test-catalog-capacity
       - name: Retain capacity evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: authorization-capacity
-          path: authorization-capacity.jsonl
+          path: |
+            authorization-capacity.jsonl
+            catalog-capacity/
           retention-days: 7
+          if-no-files-found: error
 
   storage-recipes:
     name: Storage Recipes
@@ -573,7 +716,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test, app-test, app-evidence, recovery-test, recovery-evidence, shared-storage, catalog-fleet, durable-work-recovery, authorization-capacity, storage-recipes, release-contract, sdk-smoke]
+    needs: [lint, test, app-test, app-evidence, recovery-test, recovery-evidence, shared-storage, catalog-fleet, durable-work-recovery, application-recovery-evidence, authorization-capacity, storage-recipes, release-contract, sdk-smoke]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

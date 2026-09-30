@@ -8,6 +8,7 @@ Use this index to find current product, operator, and developer information.
 - [Operator guide](OPERATOR-GUIDE.md): configure storage, provider credentials,
   direct secret sources, the catalog settings, clients, diagnosis, and
   shutdown.
+- [Coordinated recovery](RECOVERY.md): recover a stopped deployment and inspect its current permission.
 - [Deployment topologies](DEPLOYMENT-TOPOLOGIES.md): select a catalog source
   kind, a request budget, and a freshness age.
 - [Configuration reference](../.env.example): list all supported environment

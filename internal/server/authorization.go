@@ -34,12 +34,12 @@ func (m *AuthMiddleware) cachedBearer(ctx context.Context, secret, hash string) 
 	ctx = requestctx.WithAPIKeyModel(ctx, &key)
 	ctx = requestctx.WithAccountID(ctx, owner.ID)
 	ctx = requestctx.WithAccountRecord(ctx, &owner)
-	policy := func() error {
+	policy := m.admissionPolicy(func() error {
 		if m.policy.Disabled() {
 			return authorization.ErrWithdrawn
 		}
 		return nil
-	}
+	})
 	if err := policy(); err != nil {
 		return nil, err
 	}
@@ -83,6 +83,8 @@ func (m *AuthMiddleware) cachedPolicy(ctx context.Context, caller authorization.
 	ctx = requestctx.WithAPIKeyModel(ctx, &key)
 	ctx = requestctx.WithAccountID(ctx, owner.ID)
 	ctx = requestctx.WithAccountRecord(ctx, &owner)
+	originalPolicy := policy
+	policy = m.admissionPolicy(policy)
 	if policy != nil {
 		if err := policy(); err != nil {
 			return nil, err
@@ -97,6 +99,22 @@ func (m *AuthMiddleware) cachedPolicy(ctx context.Context, caller authorization.
 		if console {
 			next = requestctx.WithConsoleSession(next, grant, actor)
 		}
-		return m.cachedPolicy(next, caller, policy)
+		return m.cachedPolicy(next, caller, originalPolicy)
 	}), nil
+}
+
+// admissionPolicy retains recovery withdrawal checks for all caller modes.
+func (m *AuthMiddleware) admissionPolicy(policy func() error) func() error {
+	if m.recoveryAdmission == nil {
+		return policy
+	}
+	return func() error {
+		if err := m.recoveryAdmission(); err != nil {
+			return authorization.ErrUnavailable
+		}
+		if policy != nil {
+			return policy()
+		}
+		return nil
+	}
 }

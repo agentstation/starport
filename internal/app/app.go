@@ -4,6 +4,7 @@ package app
 import (
 	"cmp"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -141,6 +142,10 @@ func New(cfg *config.Config, options ...Option) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	certificate, err := cfg.LoadServerCertificate(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("validate server TLS: %w", err)
+	}
 	transportRegistry, err := connectors.ProductionTransportRegistry()
 	if err != nil {
 		return nil, fmt.Errorf("open transport registry: %w", err)
@@ -157,7 +162,7 @@ func New(cfg *config.Config, options ...Option) (*App, error) {
 		build:            build.build,
 		lifecycle:        make([]lifecycleEntry, 0, 5),
 	}
-	builder := runtimeBuilder{application: application, config: cfg, factories: build.factories}
+	builder := runtimeBuilder{application: application, config: cfg, factories: build.factories, serverCertificate: certificate}
 	if err := builder.compose(); err != nil {
 		rollbackErr := application.closeLifecycle(context.Background())
 		if rollbackErr != nil {
@@ -193,29 +198,31 @@ func prepareComposition(cfg *config.Config, options []Option) (buildOptions, err
 }
 
 type runtimeBuilder struct {
-	application  *App
-	config       *config.Config
-	factories    runtimeFactories
-	apiKeys      apikey.Repository
-	accounts     account.Repository
-	providerKeys keyring.ProviderKeys
-	rateLimits   ratelimit.Repository
-	usageRecords usage.Repository
-	usageSink    usage.Sink
-	presets      presets.Repository
-	sqlDB        *sqlstore.DB
-	templates    account.TemplateRepository
-	audit        *audit.Repository
-	files        *files.Service
-	jobs         *jobs.Service
-	batches      *jobs.BatchService
-	gateway      proxy.Proxy
-	console      console.PageServer
-	metrics      *telemetry.Metrics
-	tracing      *telemetry.Tracing
-	auth         authRuntime
-	gate         *localauth.Gate
-	identityAuth *identity.Authenticator
+	serverCertificate *tls.Certificate
+	application       *App
+	config            *config.Config
+	factories         runtimeFactories
+	apiKeys           apikey.Repository
+	accounts          account.Repository
+	providerKeys      keyring.ProviderKeys
+	rateLimits        ratelimit.Repository
+	usageRecords      usage.Repository
+	usageSink         usage.Sink
+	presets           presets.Repository
+	sqlDB             *sqlstore.DB
+	recoveryStartup   sqlstore.RecoveryStartupState
+	templates         account.TemplateRepository
+	audit             *audit.Repository
+	files             *files.Service
+	jobs              *jobs.Service
+	batches           *jobs.BatchService
+	gateway           proxy.Proxy
+	console           console.PageServer
+	metrics           *telemetry.Metrics
+	tracing           *telemetry.Tracing
+	auth              authRuntime
+	gate              *localauth.Gate
+	identityAuth      *identity.Authenticator
 	// identityRepos is the durable people plane openIdentity opened, or zero
 	// when this deployment configured no identity. The HTTP server receives
 	// it either way and degrades the members surface to 503 when zero.
@@ -234,15 +241,17 @@ type authRuntime struct {
 func (b *runtimeBuilder) compose() error {
 	steps := []func() error{
 		b.validateCatalogStorage,
+		b.inspectRecoveryStartup,
 		b.guardLocalSetup,
 		b.openStorage,
+		b.checkRecoveryStartup,
 		b.prepareInferencePolicy,
 		b.openSQLStore,
+		b.openBudgetAdmission,
 		b.openAuthorization,
 		b.openBlob,
 		b.openEvents,
 		b.openConcepts,
-		b.openBudgetAdmission,
 		b.openJobService,
 		b.openRegistry,
 		b.openCache,
@@ -998,9 +1007,11 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	// Workers stop before the registry and storage close. HTTP drains first.
 	b.application.own("video workers", b.jobs.Close)
 	serverCfg := serverConfig(b.config, b.auth)
+	serverCfg.TLSCertificate = b.serverCertificate
 	serverCfg.Build = b.application.build
 	httpServer, err := b.factories.newServer(serverCfg, server.Dependencies{
 		Readiness:           b.application.admissionReady,
+		RecoveryAdmission:   b.application.recoveryAdmission,
 		AuthorizationStatus: b.application.authorizationStatus,
 		Service:             b.gateway, APIKeys: b.apiKeys, Accounts: b.accounts,
 		Authorization:   b.application.authorization.cache,
@@ -1345,9 +1356,10 @@ func (a *App) closeWithTimeout() error {
 
 func defaultRuntimeFactories() runtimeFactories {
 	return runtimeFactories{
-		openStorage: openStorage,
-		openSQL:     openSQL,
-		openBlob:    openBlob,
+		openStorage:        openStorage,
+		openSQL:            openSQL,
+		inspectRecoverySQL: inspectRecoverySQL,
+		openBlob:           openBlob,
 		// One source, one runtime. The composition root names no
 		// local-or-remote choice: the operator selects a source kind, and
 		// every kind reaches the same connected runtime.
@@ -1660,7 +1672,7 @@ func (a *App) catalogCandidateLoop(ctx context.Context) {
 
 func validateFactories(factories runtimeFactories) error {
 	if factories.openStorage == nil || factories.openSQL == nil ||
-		factories.openBlob == nil ||
+		factories.openBlob == nil || factories.inspectRecoverySQL == nil ||
 		factories.openCatalog == nil || factories.newConnector == nil ||
 		factories.newCache == nil || factories.newServer == nil {
 		return errors.New("application runtime factories are incomplete")
@@ -1669,7 +1681,7 @@ func validateFactories(factories runtimeFactories) error {
 }
 
 func openStorage(cfg storage.Config) (storage.KVStore, error) {
-	return storage.Open(cfg)
+	return storage.OpenForStartup(cfg)
 }
 
 func openSQL(cfg config.StorageConfig) (*sqlstore.DB, error) {

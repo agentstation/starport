@@ -177,10 +177,11 @@ type AccountReader interface {
 
 // AuthMiddleware provides authentication functionality
 type AuthMiddleware struct {
-	authorization   *authorization.Cache
-	permissionClock authorization.Clock
-	apiKeys         apikey.Repository
-	accounts        AccountReader
+	authorization     *authorization.Cache
+	permissionClock   authorization.Clock
+	recoveryAdmission func() error
+	apiKeys           apikey.Repository
+	accounts          AccountReader
 	// policy is the live authentication mode. It is read once per request, not
 	// once per router build, because the console can change the mode without a
 	// restart and "disabled" must not come to mean "disabled at boot". A nil

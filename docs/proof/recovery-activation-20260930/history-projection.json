@@ -1,0 +1,1058 @@
+{
+  "recorded_at": "2026-09-30T15:22:36.313208+00:00",
+  "source_parent": "fdbc713094bc5ca1ee0c304a0a2ada9ae1c5e515",
+  "source_prerequisite_original": "dc20ad6578955ffe41dca9b70748f2394897b904",
+  "branch": "codex/recovery-restart-epoch-20260930",
+  "scope": "Offline expected-state projection across original KV, SQL, and blob images. Complete populated native adoption remains unimplemented and unqualified.",
+  "go": "1.27.1",
+  "platform": "darwin/arm64",
+  "workspace": "GOWORK=off; no module replacement",
+  "producer": {
+    "Path": "github.com/agentstation/starmap",
+    "Version": "v0.16.6-0.20260930115749-2bb995712275",
+    "Sum": "h1:sEg3/nzKoGXIvoZ1kvwvyNoIHJDlFSVcL0WlOzoYs98=",
+    "GoVersion": "1.27.1",
+    "Replace": null
+  },
+  "source_sha256": {
+    "internal/authorization/revision/recovery_snapshot_test.go": "5c2f6311354cf1f0cce9ed6748831b10509603875b0fd11465f31badfa27fd3e",
+    "internal/authorization/revision/recovery_sql.go": "33de6fd62c9db0ea9ab110b0ea09e615d969888fd6709abddd1fc3346f72496a",
+    "internal/blob/archive_projection.go": "73e516a25fd70a60693816ea433f20d63ef4a8054c39cf759893151f8077fe7a",
+    "internal/blob/archive_projection_test.go": "bf4c94214484bf9d5dbf35a1552b052f8a598ecacc05d486bb2575643acf8999",
+    "internal/blob/import_replay.go": "787617f03347694f5ba272832442237873a96fae02ec8731391392b42b3af082",
+    "internal/recovery/history_projection.go": "8c3dec43b7d3e091e60922a225622a971f03825eb9754de6a48832eb2d72e466",
+    "internal/recovery/history_projection_owners.go": "721836075af06d9d68c1b2508c3a1ffd83fe9844674e4a817c07ed8c2d648fae",
+    "internal/recovery/history_projection_test.go": "1ad749d637ef7a309531245983e57be41f15b2589225108f446e2b75a42f2cd9",
+    "internal/recovery/restore_source_manifest.go": "c692073d64426c9bf6f76c16c91cf32fb3f441cd28e456671f5e49509c00c5c5",
+    "internal/sqlstore/relational_recovery_census.go": "9a3c96595d0bc36e4b1f1dc488d6ed477992ec616f8be89cde45644b2c479301",
+    "internal/sqlstore/relational_recovery_census_test.go": "333c82669ce016c702729bfe920d99e68fd6b923988c1dc71353e7ccc7ef3f73",
+    "docs/proof/recovery-activation-20260930/history-projection.md": "39739924f068d50805466c98e0fc520ddfcbf277b712d318e7239ca21cef07e3",
+    "go.mod": "4ac567fdc024d751492c207c88b1542f4fb5a895a3614ee6bee124a8fc10ec4a",
+    "go.sum": "08bda2dfe3cc0ffed934cad27e398de428e08f4cf1fba4dc3ea4389abbb56168"
+  },
+  "qualification": [
+    {
+      "mode": "race",
+      "command": "GOWORK=off GOTOOLCHAIN=go1.27.1 GOCACHE=/private/tmp/csp13-go-build-20260929 go test -race -json -p 1 -count=1 -timeout=6m ./internal/blob ./internal/sqlstore ./internal/authorization/revision ./internal/recovery -run '^(TestArchiveProjection.*|TestRelationalRecoveryCensus.*|TestRevisionRecoverySnapshot.*|TestRevisionRecoveryPreimage.*|TestIndependentHistoryProjection.*|TestHistoryProjectionKV.*)$'",
+      "exit_status": 0,
+      "log": "/tmp/csp13-restart-epoch-20260930/race-final-source.jsonl",
+      "sha256": "5c57726741da6c2acd04cc1d3bd1d443776d58b1371986aafc378b931896dfd0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "counts": {
+        "pass": 57,
+        "fail": 0,
+        "skip": 0
+      },
+      "top_level": 12,
+      "results": [
+        {
+          "Time": "2026-09-30T10:15:53.063962-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionPreservesOriginalAndMatchesOwnerState",
+          "Elapsed": 0.29
+        },
+        {
+          "Time": "2026-09-30T10:15:53.118886-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/changed-preimage",
+          "Elapsed": 0.05
+        },
+        {
+          "Time": "2026-09-30T10:15:53.224744-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/retired-resurrection",
+          "Elapsed": 0.11
+        },
+        {
+          "Time": "2026-09-30T10:15:53.3284-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/missing-payload",
+          "Elapsed": 0.1
+        },
+        {
+          "Time": "2026-09-30T10:15:53.385614-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/changed-payload",
+          "Elapsed": 0.06
+        },
+        {
+          "Time": "2026-09-30T10:15:53.441214-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/wrong-size",
+          "Elapsed": 0.06
+        },
+        {
+          "Time": "2026-09-30T10:15:53.496353-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/cancel",
+          "Elapsed": 0.06
+        },
+        {
+          "Time": "2026-09-30T10:15:53.550756-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/delete",
+          "Elapsed": 0.05
+        },
+        {
+          "Time": "2026-09-30T10:15:53.606941-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/nil-owner",
+          "Elapsed": 0.06
+        },
+        {
+          "Time": "2026-09-30T10:15:53.606955-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy",
+          "Elapsed": 0.54
+        },
+        {
+          "Time": "2026-09-30T10:15:58.838996-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/sqlstore",
+          "Test": "TestRelationalRecoveryCensusIncludesEveryOwnerCategory",
+          "Elapsed": 1.65
+        },
+        {
+          "Time": "2026-09-30T10:15:59.168366-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/sqlstore",
+          "Test": "TestRelationalRecoveryCensusRefusesCanceledAndClosedView",
+          "Elapsed": 0.33
+        },
+        {
+          "Time": "2026-09-30T10:16:03.396878-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/authorization/revision",
+          "Test": "TestRevisionRecoverySnapshotReadsOriginalSingletonWithoutRotation/absent",
+          "Elapsed": 0.27
+        },
+        {
+          "Time": "2026-09-30T10:16:03.624004-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/authorization/revision",
+          "Test": "TestRevisionRecoverySnapshotReadsOriginalSingletonWithoutRotation/present",
+          "Elapsed": 0.23
+        },
+        {
+          "Time": "2026-09-30T10:16:03.625585-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/authorization/revision",
+          "Test": "TestRevisionRecoverySnapshotReadsOriginalSingletonWithoutRotation",
+          "Elapsed": 0.55
+        },
+        {
+          "Time": "2026-09-30T10:16:03.625686-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/authorization/revision",
+          "Test": "TestRevisionRecoveryPreimageRefusesInvalidRows",
+          "Elapsed": 0
+        },
+        {
+          "Time": "2026-09-30T10:16:14.508632-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionMatchesActualPostBackupOwners",
+          "Elapsed": 3.96
+        },
+        {
+          "Time": "2026-09-30T10:16:17.89072-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/missing-attempt",
+          "Elapsed": 3.38
+        },
+        {
+          "Time": "2026-09-30T10:16:21.756808-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/changed-empty",
+          "Elapsed": 3.87
+        },
+        {
+          "Time": "2026-09-30T10:16:25.723278-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/unrecorded-domain",
+          "Elapsed": 3.97
+        },
+        {
+          "Time": "2026-09-30T10:16:29.818867-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/unrecorded-sql",
+          "Elapsed": 4.1
+        },
+        {
+          "Time": "2026-09-30T10:16:34.139006-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/lost-file",
+          "Elapsed": 4.32
+        },
+        {
+          "Time": "2026-09-30T10:16:40.022405-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/changed-kv-revision",
+          "Elapsed": 5.88
+        },
+        {
+          "Time": "2026-09-30T10:16:45.35482-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/missing-kv-revision",
+          "Elapsed": 5.33
+        },
+        {
+          "Time": "2026-09-30T10:16:49.33467-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/changed-sql-revision",
+          "Elapsed": 3.98
+        },
+        {
+          "Time": "2026-09-30T10:16:53.474687-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/missing-sql-revision",
+          "Elapsed": 4.14
+        },
+        {
+          "Time": "2026-09-30T10:16:57.42131-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/unsupported-catalog",
+          "Elapsed": 3.95
+        },
+        {
+          "Time": "2026-09-30T10:16:57.421395-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges",
+          "Elapsed": 42.91
+        },
+        {
+          "Time": "2026-09-30T10:17:00.123056-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/partial",
+          "Elapsed": 2.7
+        },
+        {
+          "Time": "2026-09-30T10:17:02.795233-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/changed-output",
+          "Elapsed": 2.67
+        },
+        {
+          "Time": "2026-09-30T10:17:05.399301-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/extra-file",
+          "Elapsed": 2.6
+        },
+        {
+          "Time": "2026-09-30T10:17:07.954645-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/forged-binding",
+          "Elapsed": 2.56
+        },
+        {
+          "Time": "2026-09-30T10:17:09.933672-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/changed-history",
+          "Elapsed": 1.98
+        },
+        {
+          "Time": "2026-09-30T10:17:11.83414-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/missing-final",
+          "Elapsed": 1.9
+        },
+        {
+          "Time": "2026-09-30T10:17:14.681515-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/stale-final-kv",
+          "Elapsed": 2.85
+        },
+        {
+          "Time": "2026-09-30T10:17:17.983333-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/stale-final-sql",
+          "Elapsed": 3.3
+        },
+        {
+          "Time": "2026-09-30T10:17:20.064588-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/substituted-operation",
+          "Elapsed": 2.08
+        },
+        {
+          "Time": "2026-09-30T10:17:22.170932-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/missing-assets",
+          "Elapsed": 2.11
+        },
+        {
+          "Time": "2026-09-30T10:17:24.531113-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/cancel",
+          "Elapsed": 2.36
+        },
+        {
+          "Time": "2026-09-30T10:17:24.531142-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace",
+          "Elapsed": 27.11
+        },
+        {
+          "Time": "2026-09-30T10:17:24.660194-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestHistoryProjectionKVPreservesExpiredStateAndAtomicPreimages",
+          "Elapsed": 0.13
+        },
+        {
+          "Time": "2026-09-30T10:17:27.786387-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/changed-archive",
+          "Elapsed": 3.13
+        },
+        {
+          "Time": "2026-09-30T10:17:30.898765-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/missing-archive",
+          "Elapsed": 3.11
+        },
+        {
+          "Time": "2026-09-30T10:17:34.497955-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/changed-kv",
+          "Elapsed": 3.6
+        },
+        {
+          "Time": "2026-09-30T10:17:38.493587-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/missing-sql",
+          "Elapsed": 4
+        },
+        {
+          "Time": "2026-09-30T10:17:43.603534-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/changed-captured-manifest",
+          "Elapsed": 5.11
+        },
+        {
+          "Time": "2026-09-30T10:17:47.266384-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/changed-original-manifest",
+          "Elapsed": 3.66
+        },
+        {
+          "Time": "2026-09-30T10:17:47.266401-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt",
+          "Elapsed": 22.61
+        },
+        {
+          "Time": "2026-09-30T10:17:51.010374-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/changed-kv",
+          "Elapsed": 3.74
+        },
+        {
+          "Time": "2026-09-30T10:17:54.684523-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/missing-kv",
+          "Elapsed": 3.67
+        },
+        {
+          "Time": "2026-09-30T10:17:58.449249-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/changed-sql",
+          "Elapsed": 3.76
+        },
+        {
+          "Time": "2026-09-30T10:18:01.389214-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/missing-sql",
+          "Elapsed": 2.94
+        },
+        {
+          "Time": "2026-09-30T10:18:04.55767-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/changed-archive",
+          "Elapsed": 3.17
+        },
+        {
+          "Time": "2026-09-30T10:18:07.801613-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/missing-archive",
+          "Elapsed": 3.24
+        },
+        {
+          "Time": "2026-09-30T10:18:10.790178-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/changed-selected-file",
+          "Elapsed": 2.99
+        },
+        {
+          "Time": "2026-09-30T10:18:14.016556-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/extra-file",
+          "Elapsed": 3.23
+        },
+        {
+          "Time": "2026-09-30T10:18:14.016573-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts",
+          "Elapsed": 26.75
+        }
+      ],
+      "packages": [
+        {
+          "Time": "2026-09-30T10:15:54.613233-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Elapsed": 2.101
+        },
+        {
+          "Time": "2026-09-30T10:16:00.175852-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/sqlstore",
+          "Elapsed": 3.319
+        },
+        {
+          "Time": "2026-09-30T10:16:04.634797-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/authorization/revision",
+          "Elapsed": 1.933
+        },
+        {
+          "Time": "2026-09-30T10:18:15.036525-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Elapsed": 125.117
+        }
+      ]
+    },
+    {
+      "mode": "pure",
+      "command": "CGO_ENABLED=0 GOWORK=off GOTOOLCHAIN=go1.27.1 GOCACHE=/private/tmp/csp13-go-build-20260929 go test -json -p 1 -count=1 -timeout=6m ./internal/blob ./internal/sqlstore ./internal/authorization/revision ./internal/recovery -run '^(TestArchiveProjection.*|TestRelationalRecoveryCensus.*|TestRevisionRecoverySnapshot.*|TestRevisionRecoveryPreimage.*|TestIndependentHistoryProjection.*|TestHistoryProjectionKV.*)$'",
+      "exit_status": 0,
+      "log": "/tmp/csp13-restart-epoch-20260930/pure-final-source.jsonl",
+      "sha256": "414e0ad72e583be52e0cb606c55650a1c4b5715fcf8fc98f9348bf7577ea38e6",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "counts": {
+        "pass": 57,
+        "fail": 0,
+        "skip": 0
+      },
+      "top_level": 12,
+      "results": [
+        {
+          "Time": "2026-09-30T10:18:45.768082-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionPreservesOriginalAndMatchesOwnerState",
+          "Elapsed": 0.15
+        },
+        {
+          "Time": "2026-09-30T10:18:45.818879-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/changed-preimage",
+          "Elapsed": 0.05
+        },
+        {
+          "Time": "2026-09-30T10:18:45.869213-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/retired-resurrection",
+          "Elapsed": 0.05
+        },
+        {
+          "Time": "2026-09-30T10:18:45.920288-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/missing-payload",
+          "Elapsed": 0.05
+        },
+        {
+          "Time": "2026-09-30T10:18:45.989604-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/changed-payload",
+          "Elapsed": 0.07
+        },
+        {
+          "Time": "2026-09-30T10:18:46.049549-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/wrong-size",
+          "Elapsed": 0.06
+        },
+        {
+          "Time": "2026-09-30T10:18:46.101339-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/cancel",
+          "Elapsed": 0.05
+        },
+        {
+          "Time": "2026-09-30T10:18:46.151275-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/delete",
+          "Elapsed": 0.05
+        },
+        {
+          "Time": "2026-09-30T10:18:46.200383-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy/nil-owner",
+          "Elapsed": 0.05
+        },
+        {
+          "Time": "2026-09-30T10:18:46.200408-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Test": "TestArchiveProjectionRefusesInvalidTransitionsWithoutChangingCopy",
+          "Elapsed": 0.43
+        },
+        {
+          "Time": "2026-09-30T10:18:48.128538-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/sqlstore",
+          "Test": "TestRelationalRecoveryCensusIncludesEveryOwnerCategory",
+          "Elapsed": 0.86
+        },
+        {
+          "Time": "2026-09-30T10:18:48.253502-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/sqlstore",
+          "Test": "TestRelationalRecoveryCensusRefusesCanceledAndClosedView",
+          "Elapsed": 0.12
+        },
+        {
+          "Time": "2026-09-30T10:18:49.911348-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/authorization/revision",
+          "Test": "TestRevisionRecoverySnapshotReadsOriginalSingletonWithoutRotation/absent",
+          "Elapsed": 0.13
+        },
+        {
+          "Time": "2026-09-30T10:18:50.036768-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/authorization/revision",
+          "Test": "TestRevisionRecoverySnapshotReadsOriginalSingletonWithoutRotation/present",
+          "Elapsed": 0.13
+        },
+        {
+          "Time": "2026-09-30T10:18:50.037849-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/authorization/revision",
+          "Test": "TestRevisionRecoverySnapshotReadsOriginalSingletonWithoutRotation",
+          "Elapsed": 0.26
+        },
+        {
+          "Time": "2026-09-30T10:18:50.037905-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/authorization/revision",
+          "Test": "TestRevisionRecoveryPreimageRefusesInvalidRows",
+          "Elapsed": 0
+        },
+        {
+          "Time": "2026-09-30T10:18:55.16249-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionMatchesActualPostBackupOwners",
+          "Elapsed": 2.2
+        },
+        {
+          "Time": "2026-09-30T10:18:57.104885-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/missing-attempt",
+          "Elapsed": 1.94
+        },
+        {
+          "Time": "2026-09-30T10:18:59.31028-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/changed-empty",
+          "Elapsed": 2.21
+        },
+        {
+          "Time": "2026-09-30T10:19:01.596719-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/unrecorded-domain",
+          "Elapsed": 2.29
+        },
+        {
+          "Time": "2026-09-30T10:19:03.954596-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/unrecorded-sql",
+          "Elapsed": 2.36
+        },
+        {
+          "Time": "2026-09-30T10:19:07.357752-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/lost-file",
+          "Elapsed": 3.4
+        },
+        {
+          "Time": "2026-09-30T10:19:10.065176-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/changed-kv-revision",
+          "Elapsed": 2.71
+        },
+        {
+          "Time": "2026-09-30T10:19:13.199457-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/missing-kv-revision",
+          "Elapsed": 3.13
+        },
+        {
+          "Time": "2026-09-30T10:19:15.378257-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/changed-sql-revision",
+          "Elapsed": 2.18
+        },
+        {
+          "Time": "2026-09-30T10:19:18.429883-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/missing-sql-revision",
+          "Elapsed": 3.05
+        },
+        {
+          "Time": "2026-09-30T10:19:20.897748-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges/unsupported-catalog",
+          "Elapsed": 2.47
+        },
+        {
+          "Time": "2026-09-30T10:19:20.897849-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesLossAndUnrecordedChanges",
+          "Elapsed": 25.74
+        },
+        {
+          "Time": "2026-09-30T10:19:22.279923-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/partial",
+          "Elapsed": 1.38
+        },
+        {
+          "Time": "2026-09-30T10:19:23.656355-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/changed-output",
+          "Elapsed": 1.38
+        },
+        {
+          "Time": "2026-09-30T10:19:24.990519-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/extra-file",
+          "Elapsed": 1.33
+        },
+        {
+          "Time": "2026-09-30T10:19:26.26376-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/forged-binding",
+          "Elapsed": 1.27
+        },
+        {
+          "Time": "2026-09-30T10:19:27.220924-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/changed-history",
+          "Elapsed": 0.96
+        },
+        {
+          "Time": "2026-09-30T10:19:28.106795-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/missing-final",
+          "Elapsed": 0.89
+        },
+        {
+          "Time": "2026-09-30T10:19:29.585403-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/stale-final-kv",
+          "Elapsed": 1.48
+        },
+        {
+          "Time": "2026-09-30T10:19:31.07776-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/stale-final-sql",
+          "Elapsed": 1.49
+        },
+        {
+          "Time": "2026-09-30T10:19:31.976271-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/substituted-operation",
+          "Elapsed": 0.9
+        },
+        {
+          "Time": "2026-09-30T10:19:32.865555-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/missing-assets",
+          "Elapsed": 0.89
+        },
+        {
+          "Time": "2026-09-30T10:19:34.003658-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace/cancel",
+          "Elapsed": 1.14
+        },
+        {
+          "Time": "2026-09-30T10:19:34.003675-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRefusesChangedEvidenceAndPartialWorkspace",
+          "Elapsed": 13.11
+        },
+        {
+          "Time": "2026-09-30T10:19:34.12154-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestHistoryProjectionKVPreservesExpiredStateAndAtomicPreimages",
+          "Elapsed": 0.12
+        },
+        {
+          "Time": "2026-09-30T10:19:36.681417-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/changed-archive",
+          "Elapsed": 2.56
+        },
+        {
+          "Time": "2026-09-30T10:19:39.092569-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/missing-archive",
+          "Elapsed": 2.41
+        },
+        {
+          "Time": "2026-09-30T10:19:41.769026-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/changed-kv",
+          "Elapsed": 2.68
+        },
+        {
+          "Time": "2026-09-30T10:19:45.024235-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/missing-sql",
+          "Elapsed": 3.26
+        },
+        {
+          "Time": "2026-09-30T10:19:48.310124-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/changed-captured-manifest",
+          "Elapsed": 3.29
+        },
+        {
+          "Time": "2026-09-30T10:19:51.005499-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt/changed-original-manifest",
+          "Elapsed": 2.7
+        },
+        {
+          "Time": "2026-09-30T10:19:51.005522-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRechecksCapturedImagesAndRootReceipt",
+          "Elapsed": 16.88
+        },
+        {
+          "Time": "2026-09-30T10:19:53.551784-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/changed-kv",
+          "Elapsed": 2.55
+        },
+        {
+          "Time": "2026-09-30T10:19:56.291071-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/missing-kv",
+          "Elapsed": 2.74
+        },
+        {
+          "Time": "2026-09-30T10:19:59.007849-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/changed-sql",
+          "Elapsed": 2.72
+        },
+        {
+          "Time": "2026-09-30T10:20:01.553525-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/missing-sql",
+          "Elapsed": 2.55
+        },
+        {
+          "Time": "2026-09-30T10:20:03.963853-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/changed-archive",
+          "Elapsed": 2.41
+        },
+        {
+          "Time": "2026-09-30T10:20:06.810978-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/missing-archive",
+          "Elapsed": 2.85
+        },
+        {
+          "Time": "2026-09-30T10:20:09.560325-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/changed-selected-file",
+          "Elapsed": 2.75
+        },
+        {
+          "Time": "2026-09-30T10:20:12.39726-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts/extra-file",
+          "Elapsed": 2.84
+        },
+        {
+          "Time": "2026-09-30T10:20:12.397277-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Test": "TestIndependentHistoryProjectionRetryRequiresCompleteOriginalArtifacts",
+          "Elapsed": 21.39
+        }
+      ],
+      "packages": [
+        {
+          "Time": "2026-09-30T10:18:46.202687-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/blob",
+          "Elapsed": 0.814
+        },
+        {
+          "Time": "2026-09-30T10:18:48.254094-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/sqlstore",
+          "Elapsed": 1.238
+        },
+        {
+          "Time": "2026-09-30T10:18:50.038468-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/authorization/revision",
+          "Elapsed": 0.54
+        },
+        {
+          "Time": "2026-09-30T10:20:12.402404-05:00",
+          "Action": "pass",
+          "Package": "github.com/agentstation/starport/internal/recovery",
+          "Elapsed": 79.916
+        }
+      ]
+    }
+  ],
+  "failed_and_historical_evidence": [
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/failed-prose-evidence.json",
+      "sha256": "7f820a1d7af548a453356eb1553e357e4c774a59bf38656fe9efd10fd6ff578e",
+      "bytes": 1191
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/lint-changed-final.log",
+      "sha256": "f0461541ba5640d91e49285481e134143dffeaf4a3e5de10296cd0a0714f1340",
+      "bytes": 2829
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/lint-changed.log",
+      "sha256": "88f59e8af7ef6e83376765501b406ec83a6143e96fa06bc542cc2902a5a4d1be",
+      "bytes": 6184
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/lint-initial.log",
+      "sha256": "cc82f824679d1859371a668250b6d730ed7f864fe141eeaa5b4c4f5316c17974",
+      "bytes": 28100
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/lint-production.log",
+      "sha256": "76f91ed6e698b4df5eb0b1a1751ca22ba9d3f4e349b2b8795543b52ea61685be",
+      "bytes": 1532
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/pure-final.jsonl",
+      "sha256": "8a47e0d292a9228c0087f8b3d938de7a76c05e588d690e5b39a36ac7a1764d4e",
+      "bytes": 359621,
+      "counts": {
+        "pass": 57,
+        "fail": 0,
+        "skip": 0
+      }
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/pure-final.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/race-final.jsonl",
+      "sha256": "98b9a2536f6d9bf8c1840cbd903ab61d2243685205316492ed609e35e09a0ea3",
+      "bytes": 359664,
+      "counts": {
+        "pass": 57,
+        "fail": 0,
+        "skip": 0
+      }
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/race-final.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/race-initial.jsonl",
+      "sha256": "3c5465174fb4fb54797d9d9aa8db2a6b525c1041acdf37448ddfbed10eca69b5",
+      "bytes": 413964,
+      "counts": {
+        "pass": 21,
+        "fail": 36,
+        "skip": 0
+      }
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/race-initial.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/race-owner-repair.jsonl",
+      "sha256": "7be7b871c1a59cdb3f2bc8c50250b8f6b576e5d598344a0e5f7b12fe8a7a329e",
+      "bytes": 21640,
+      "counts": {
+        "pass": 12,
+        "fail": 0,
+        "skip": 0
+      }
+    },
+    {
+      "log": "/tmp/csp13-restart-epoch-20260930/race-owner-repair.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ],
+  "static": [
+    {
+      "command": "CGO_ENABLED=0 GOWORK=off GOTOOLCHAIN=go1.27.1 go vet ./internal/blob ./internal/sqlstore ./internal/authorization/revision ./internal/recovery",
+      "exit_status": 0,
+      "log": "/tmp/csp13-restart-epoch-20260930/vet-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": ""
+    },
+    {
+      "command": "CGO_ENABLED=0 GOWORK=off GOTOOLCHAIN=go1.27.1 go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./internal/blob ./internal/sqlstore ./internal/authorization/revision ./internal/recovery",
+      "exit_status": 0,
+      "log": "/tmp/csp13-restart-epoch-20260930/lint-production-final.log",
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+      "result": "0 issues."
+    },
+    {
+      "command": "CGO_ENABLED=0 GOWORK=off GOTOOLCHAIN=go1.27.1 go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run --tests=true --new-from-patch=/tmp/csp13-restart-epoch-20260930/projection.patch ./internal/blob ./internal/sqlstore ./internal/authorization/revision ./internal/recovery",
+      "exit_status": 0,
+      "log": "/tmp/csp13-restart-epoch-20260930/lint-scoped-final.log",
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+      "result": "0 issues."
+    },
+    {
+      "command": "technical-writing lint <11 intended Go files> CONTRACT.md",
+      "exit_status": 0,
+      "log": "/tmp/csp13-restart-epoch-20260930/prose-final.log",
+      "sha256": "405f44d3ac422bb25f51c04292139d1ff4f93e1f2f2f484b9a8a886adebc0951",
+      "result": "PASS: 12 file(s), 0 diagnostic(s)"
+    },
+    {
+      "command": "bash scripts/verify-dependency-direction.sh",
+      "exit_status": 0,
+      "log": "/tmp/csp13-restart-epoch-20260930/dependency-final.log",
+      "sha256": "3a49bf0772b6d01f07c91a8c2a646acdfeaaa97cbb1b191026f789ae6f7d9027",
+      "result": "SP-D01 PASS: proxy does not import the concrete cache adapter\nSP-D02 PASS: proxy does not import the concrete provider registry\nSP-D03 PASS: proxy exposes the cache behavior contract\nSP-D04 PASS: proxy exposes the provider leasing contract\nSP-D05 PASS: app does not import Starmap source selection\nSP-D06 PASS: app does not import Starmap sync options\nSummary: 6 passed, 0 failed"
+    }
+  ],
+  "manual_review": {
+    "original_evidence": "Every attempt runs VerifyBundle with supplied encryption and verifies the original independent history. No live target is recaptured.",
+    "expiry": "Original transfer expirations and original independent interval cutoff remain unchanged.",
+    "revision": "Captured revision owners check original final history preimages. Projected domain images retain original stamps; the two final rotations are excluded.",
+    "captured_archive": "The actual captured blob archive is reopened and checked after initial source inspection.",
+    "privacy": "Private capabilities retain sensitive fields behind a private state pointer. Tests include invalid pointer formatting fallback.",
+    "native_effects": "Only owned local Badger, SQLite, and filesystem copies are used; no configured network services, containers, claims, or admission.",
+    "legacy_lint": "Full test-enabled package lint has existing failures. Production lint and changed-line test-enabled lint pass."
+  },
+  "remaining": [
+    "Complete populated native claims, catalog-owner adoption, application coordinator, and all-writer fencing.",
+    "Actual persisted Valkey process restart/promotion, acknowledged-data-loss and restored-SQL refusal.",
+    "Aggregate workspace quota and measured full projection capacity; current owner bounds remain unchanged.",
+    "Numerical supported RPO and RTO targets remain undecided.",
+    "Linux and Windows native qualification of these new projection cases.",
+    "No full CSP13 or A33 completion claim."
+  ]
+}
