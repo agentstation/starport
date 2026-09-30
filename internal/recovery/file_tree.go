@@ -36,6 +36,7 @@ type FileTreeRequest struct {
 type FileTreeResult struct {
 	Destination       string `json:"destination"`
 	DirectoryIdentity string `json:"directory_identity"`
+	ParentIdentity    string `json:"parent_identity"`
 	SelectionSHA256   string `json:"selection_sha256"`
 	Files             int    `json:"files"`
 	Published         bool   `json:"published"`
@@ -74,7 +75,8 @@ func (s *RestoreSource) publishFileTree(ctx context.Context, request FileTreeReq
 	if err != nil {
 		return result, err
 	}
-	parentRoot, err := parent.Open()
+	var parentRoot *os.Root
+	parentRoot, result.ParentIdentity, err = openFileTreeParent(parent)
 	if err != nil {
 		return result, err
 	}
@@ -87,11 +89,11 @@ func (s *RestoreSource) publishFileTree(ctx context.Context, request FileTreeReq
 		if err != nil {
 			return result, err
 		}
-		if _, err := parent.Identity(); err != nil {
+		if err := checkFileTreeDirectoryIdentity(parent, result.ParentIdentity); err != nil {
 			return result, err
 		}
 		result.DirectoryIdentity, result.Reused = identity, true
-		return result, productfiles.SyncDirectory(parentRoot)
+		return result, confirmFileTreeParentDurability(parentRoot, parent, result.ParentIdentity)
 	}
 	name := ".restore-tree-" + rand.Text()
 	stage, err := parent.CreateChild(name)
@@ -139,7 +141,7 @@ func (s *RestoreSource) publishFileTree(ctx context.Context, request FileTreeReq
 	if current, err := stage.Identity(); err != nil || current != nativeIdentity {
 		return result, errors.Join(ErrConflict, err)
 	}
-	if _, err := parent.Identity(); err != nil {
+	if err := checkFileTreeDirectoryIdentity(parent, result.ParentIdentity); err != nil {
 		return result, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -154,7 +156,7 @@ func (s *RestoreSource) publishFileTree(ctx context.Context, request FileTreeReq
 			return result, err
 		}
 	}
-	return result, confirmFileTreePublication(parentRoot, request.Destination, nativeIdentity)
+	return result, confirmOwnedFileTreePublication(parentRoot, parent, request.Destination, nativeIdentity, result.ParentIdentity)
 }
 
 // Confirm durability and identity after the target becomes visible.
@@ -238,4 +240,35 @@ func validRestoreTreeName(name string) bool {
 		}
 	}
 	return true
+}
+
+func checkFileTreeDirectoryIdentity(parent *productfiles.Directory, expected string) error {
+	actual, err := parent.Identity()
+	if err != nil || expected == "" || actual != expected {
+		return errors.Join(ErrConflict, err)
+	}
+	return nil
+}
+
+func openFileTreeParent(parent *productfiles.Directory) (*os.Root, string, error) {
+	identity, err := parent.Identity()
+	if err != nil {
+		return nil, "", err
+	}
+	root, err := parent.Open()
+	return root, identity, err
+}
+
+func confirmFileTreeParentDurability(root *os.Root, parent *productfiles.Directory, identity string) error {
+	if err := productfiles.SyncDirectory(root); err != nil {
+		return err
+	}
+	return checkFileTreeDirectoryIdentity(parent, identity)
+}
+
+func confirmOwnedFileTreePublication(root *os.Root, parent *productfiles.Directory, destination, identity, parentIdentity string) error {
+	if err := confirmFileTreePublication(root, destination, identity); err != nil {
+		return err
+	}
+	return checkFileTreeDirectoryIdentity(parent, parentIdentity)
 }

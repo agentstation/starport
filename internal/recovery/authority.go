@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json/v2"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/agentstation/starport/internal/storage"
@@ -30,6 +31,7 @@ type Authority struct {
 	witness  *Witness
 	approval Record
 	guard    []byte
+	invalid  *atomic.Bool
 }
 
 // OpenAuthority reads existing approval. It never creates or repairs a gate.
@@ -59,7 +61,7 @@ func (w *Witness) OpenAuthority(ctx context.Context, backend storage.Incarnation
 	if ttl != 0 || json.Unmarshal(guard, &record) != nil || record.Version != 1 || record.Approval != approved || record.OperationID == "" {
 		return nil, ErrClosed
 	}
-	authority := &Authority{store: store, witness: w, approval: approved, guard: guard}
+	authority := &Authority{store: store, witness: w, approval: approved, guard: guard, invalid: new(atomic.Bool)}
 	if err := authority.Check(ctx); err != nil {
 		return nil, err
 	}
@@ -71,27 +73,51 @@ func (w *Witness) OpenAuthority(ctx context.Context, backend storage.Incarnation
 func (a *Authority) Check(ctx context.Context) error {
 	current, err := a.witness.Approved(ctx, a.approval.DeploymentID)
 	if err != nil {
+		if errors.Is(err, ErrClosed) || errors.Is(err, ErrConflict) {
+			a.invalid.Store(true)
+		}
 		return err
 	}
 	if current != a.approval {
+		a.invalid.Store(true)
 		return ErrConflict
+	}
+	return a.CheckAdmission()
+}
+
+// CheckAdmission refuses an authority after it observes an invalid retained approval.
+// It reads memory only. It cannot renew permission or adopt a replacement epoch.
+// Success does not establish current recovery approval.
+func (a *Authority) CheckAdmission() error {
+	if a == nil || a.invalid == nil || a.invalid.Load() {
+		return ErrClosed
 	}
 	return nil
 }
 
+func (a *Authority) observeNativeFailure(err error) error {
+	if errors.Is(err, storage.ErrIncarnationChanged) {
+		a.invalid.Store(true)
+	}
+	return err
+}
+
 // ReadWithLifetime reads incarnation-bound data without authorizing a write.
 func (a *Authority) ReadWithLifetime(ctx context.Context, key string, maxBytes int) ([]byte, time.Duration, error) {
-	return a.store.ReadWithLifetime(ctx, key, maxBytes)
+	body, lifetime, err := a.store.ReadWithLifetime(ctx, key, maxBytes)
+	return body, lifetime, a.observeNativeFailure(err)
 }
 
 // ReadBatchWithLifetime reads one incarnation-bound snapshot without authorizing a write.
 func (a *Authority) ReadBatchWithLifetime(ctx context.Context, keys []string, maxBytes int) ([]storage.LifetimeValue, error) {
-	return a.store.ReadBatchWithLifetime(ctx, keys, maxBytes)
+	values, err := a.store.ReadBatchWithLifetime(ctx, keys, maxBytes)
+	return values, a.observeNativeFailure(err)
 }
 
 // AuthorityTime reads the approved backend's clock. It grants no dispatch permit.
 func (a *Authority) AuthorityTime(ctx context.Context) (time.Time, error) {
-	return a.store.AuthorityTime(ctx)
+	now, err := a.store.AuthorityTime(ctx)
+	return now, a.observeNativeFailure(err)
 }
 
 // CompareAndSwapInWindow checks the native recovery epoch with all budget writes.
@@ -110,7 +136,7 @@ func (a *Authority) CompareAndSwapInWindow(ctx context.Context, mutations []stor
 	guarded = append(guarded, storage.CompareAndSwapMutation{Key: authorityKey, ExpectedValue: a.guard, NewValue: a.guard})
 	guarded = append(guarded, mutations...)
 	if err := a.store.CompareAndSwapInWindow(ctx, guarded, window); err != nil {
-		return err
+		return a.observeNativeFailure(err)
 	}
 	return a.Check(ctx)
 }

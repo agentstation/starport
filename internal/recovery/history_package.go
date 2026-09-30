@@ -17,6 +17,8 @@ import (
 	"github.com/agentstation/starmap/pkg/productfiles"
 )
 
+const historyReplayComplete = "replay_complete"
+
 const historyManifestMaxBytes = 1 << 20
 const historyPayloadMaxBytes = 8 << 20
 const historyAggregateMaxBytes = 64 << 20
@@ -174,7 +176,7 @@ func (m historyManifest) validate(source *RestoreSource, request HistoryPackageR
 	if m.Version != 1 || m.BackupSHA256 != source.request.ManifestSHA256 || m.DeploymentID != source.manifest.Request.Boundary.DeploymentID || m.Operation != request.Operation || m.TargetSHA256 != request.TargetSHA256 || m.PreparedSHA256 != preparedSHA256 {
 		return ErrConflict
 	}
-	if m.Mode != "planned_migration" && m.Mode != "disaster_recovery" || m.Disposition != "replay_complete" && m.Disposition != "remain_restricted" {
+	if m.Mode != "planned_migration" && m.Mode != "disaster_recovery" || m.Disposition != historyReplayComplete && m.Disposition != "remain_restricted" {
 		return ErrConflict
 	}
 	if m.Interval.Through.IsZero() || m.Interval.Through.Before(source.manifest.FinishedAt) || !historyReference(m.Interval.EndReference, 2048) || len(m.Evidence) == 0 || len(m.Evidence) > historyMaxEntries || len(m.Steps) > historyMaxEntries {

@@ -13,10 +13,11 @@ import (
 
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/sqlstore"
-	"github.com/agentstation/starport/internal/storage"
 )
 
 const historyJournalRecordMaxBytes = 64 << 10
+const historyPreparedPhase = "prepared"
+const historyAppliedPhase = "applied"
 
 type historyPreparedStep struct {
 	Version        int                      `json:"version"`
@@ -43,6 +44,7 @@ type historyJournalState struct {
 	previous              string
 	positions             HistoryReplayPositions
 	pending               *historyPreparedStep
+	catalog               *catalogJournalState
 	kvRotated, sqlRotated bool
 }
 
@@ -62,14 +64,14 @@ func (r *historyRunner) openRun(ctx context.Context) error {
 			return err
 		}
 		for _, entry := range entries {
-			if strings.HasPrefix(entry.Name(), "step-") || entry.Name() == "images" {
+			if strings.HasPrefix(entry.Name(), "step-") || strings.HasPrefix(entry.Name(), "catalog") || entry.Name() == "images" {
 				return ErrConflict
 			}
 		}
 		if err := r.checkNativePositions(ctx, HistoryReplayPositions{}, ""); err != nil {
 			return err
 		}
-		r.run = historyRunRecord{Version: 1, AcceptanceSHA256: r.accepted.Digest(), HistorySHA256: r.accepted.state.history.digest, TargetSHA256: r.request.TargetSHA256, Authority: historyAcceptedAuthority(r.accepted), ValidatedAt: time.Now().UTC()}
+		r.run = historyRunRecord{Version: 1, AcceptanceSHA256: r.accepted.Digest(), HistorySHA256: r.accepted.state.history.digest, TargetSHA256: r.request.TargetSHA256, Authority: historyAcceptedAuthority(r.accepted), ValidatedAt: time.Now().UTC(), CatalogPreparation: r.request.CatalogPreparation}
 		body, err = json.Marshal(r.run, json.Deterministic(true))
 		if err != nil {
 			return err
@@ -81,7 +83,7 @@ func (r *historyRunner) openRun(ctx context.Context) error {
 		return err
 	}
 	var record historyRunRecord
-	if json.Unmarshal(body, &record, json.RejectUnknownMembers(true)) != nil || record.Version != 1 || record.AcceptanceSHA256 != r.accepted.Digest() || record.HistorySHA256 != r.accepted.state.history.digest || record.TargetSHA256 != r.request.TargetSHA256 || record.Authority != historyAcceptedAuthority(r.accepted) || record.ValidatedAt.IsZero() {
+	if json.Unmarshal(body, &record, json.RejectUnknownMembers(true)) != nil || record.Version != 1 || record.AcceptanceSHA256 != r.accepted.Digest() || record.HistorySHA256 != r.accepted.state.history.digest || record.TargetSHA256 != r.request.TargetSHA256 || record.Authority != historyAcceptedAuthority(r.accepted) || record.ValidatedAt.IsZero() || !sameCatalogPlan(record.CatalogPreparation, r.request.CatalogPreparation) {
 		return ErrConflict
 	}
 	r.run = record
@@ -127,14 +129,39 @@ func (r *historyRunner) scanJournal(ctx context.Context) (historyJournalState, e
 		return state, err
 	}
 	missing := false
-	for _, step := range r.accepted.state.history.manifest.Steps {
+	if !sameCatalogPlan(r.run.CatalogPreparation, r.request.CatalogPreparation) {
+		return state, ErrConflict
+	}
+	steps := r.accepted.state.history.manifest.Steps
+	stop := -1
+	if r.run.CatalogPreparation != nil {
+		if !validCatalogPlan(r.run.CatalogPreparation) {
+			return state, ErrConflict
+		}
+		var err error
+		stop, err = catalogPrefixCount(steps)
+		if err != nil {
+			return state, err
+		}
+	}
+	for index, step := range steps {
+		if index == stop && state.count == stop && state.pending == nil {
+			bridged, complete, err := r.bridgeCatalogJournal(ctx, state, steps[stop:])
+			if err != nil {
+				return state, err
+			}
+			state = bridged
+			if !complete {
+				return state, r.checkUnexpectedJournalFiles(ctx)
+			}
+		}
 		var prepared historyPreparedStep
-		before, err := r.readJournalRecord(ctx, historyStepName(step.Ordinal, "prepared"), &prepared)
+		before, err := r.readJournalRecord(ctx, historyStepName(step.Ordinal, historyPreparedPhase), &prepared)
 		if err != nil {
 			return state, err
 		}
 		var applied historyAppliedStep
-		after, err := r.readJournalRecord(ctx, historyStepName(step.Ordinal, "applied"), &applied)
+		after, err := r.readJournalRecord(ctx, historyStepName(step.Ordinal, historyAppliedPhase), &applied)
 		if err != nil {
 			return state, err
 		}
@@ -160,6 +187,11 @@ func (r *historyRunner) scanJournal(ctx context.Context) (historyJournalState, e
 		state.positions = applied.After
 		state.kvRotated = state.kvRotated || step.Kind == historyKVAuthorityFinal
 		state.sqlRotated = state.sqlRotated || step.Kind == historySQLAuthorityFinal
+	}
+	if state.catalog == nil {
+		if err := r.checkCatalogNames(ctx, catalogJournalState{}); err != nil {
+			return state, err
+		}
 	}
 	return state, r.checkUnexpectedJournalFiles(ctx)
 }
@@ -206,8 +238,8 @@ func (r *historyRunner) checkUnexpectedJournalFiles(ctx context.Context) error {
 	}
 	allowed := map[string]bool{}
 	for _, step := range r.accepted.state.history.manifest.Steps {
-		allowed[historyStepName(step.Ordinal, "prepared")] = true
-		allowed[historyStepName(step.Ordinal, "applied")] = true
+		allowed[historyStepName(step.Ordinal, historyPreparedPhase)] = true
+		allowed[historyStepName(step.Ordinal, historyAppliedPhase)] = true
 	}
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), "step-") && !allowed[entry.Name()] {
@@ -221,7 +253,7 @@ func (r *historyRunner) publishApplied(ctx context.Context, applied historyAppli
 	if err != nil {
 		return err
 	}
-	return r.directory.CompareAndPublish(ctx, historyStepName(applied.Ordinal, "applied"), nil, body)
+	return r.directory.CompareAndPublish(ctx, historyStepName(applied.Ordinal, historyAppliedPhase), nil, body)
 }
 func advanceHistoryPosition(before HistoryReplayPositions, kind, digest string) HistoryReplayPositions {
 	switch historyNativeOwner(kind) {
@@ -239,7 +271,7 @@ func advanceHistoryPosition(before HistoryReplayPositions, kind, digest string) 
 }
 func (r *historyRunner) checkNativePositions(ctx context.Context, positions HistoryReplayPositions, skip string) error {
 	if skip != historyOwnerKV {
-		if err := r.targets.KV.InspectImport(ctx, r.identity.KVClaim, positions.KV, func(storage.TransferRecord) error { return nil }); err != nil {
+		if err := r.targets.KV.CheckImportPosition(ctx, r.identity.KVClaim, positions.KV); err != nil {
 			return err
 		}
 	}
@@ -254,4 +286,28 @@ func (r *historyRunner) checkNativePositions(ctx context.Context, positions Hist
 		}
 	}
 	return ctx.Err()
+}
+
+func (r *historyRunner) bridgeCatalogJournal(ctx context.Context, state historyJournalState, final []historyStep) (historyJournalState, bool, error) {
+	lane, err := r.scanCatalogJournal(ctx, state)
+	if err != nil {
+		return state, false, err
+	}
+	state.catalog = &lane
+	state.positions = lane.positions
+	state.previous = lane.previous
+	if lane.complete == "" {
+		for _, step := range final {
+			for _, phase := range []string{historyPreparedPhase, historyAppliedPhase} {
+				var value any
+				body, err := r.readJournalRecord(ctx, historyStepName(step.Ordinal, phase), &value)
+				if err != nil || body != nil {
+					return state, false, errors.Join(ErrConflict, err)
+				}
+			}
+		}
+		return state, false, nil
+	}
+	state.previous = lane.complete
+	return state, true, nil
 }

@@ -13,7 +13,14 @@ import (
 // SelectedFile reads bounded metadata from a verified source and checks its bytes again.
 // Names are portable bundle IDs. Backup paths cannot select arbitrary host files.
 func (s *RestoreSource) SelectedFile(ctx context.Context, id string, limit int64) ([]byte, error) {
-	if s == nil || s.manifest.Format != bundleFormat || !validBundlePath(id) || limit < 0 || limit > bundleMaxManifestBytes {
+	if limit < 0 || limit > bundleMaxManifestBytes {
+		return nil, errors.New("restore requires verified bounded file metadata")
+	}
+	return s.selectedFile(ctx, id, limit)
+}
+
+func (s *RestoreSource) selectedFile(ctx context.Context, id string, limit int64) ([]byte, error) {
+	if ctx == nil || s == nil || s.manifest.Format != bundleFormat || !validBundlePath(id) {
 		return nil, errors.New("restore requires verified bounded file metadata")
 	}
 	if err := ctx.Err(); err != nil {

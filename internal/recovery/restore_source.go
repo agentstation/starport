@@ -52,6 +52,25 @@ func InspectRestoreSource(ctx context.Context, request VerifyRequest, encryption
 	return &RestoreSource{request: request, manifest: manifest, references: references}, nil
 }
 
+// CheckOriginalArtifacts rechecks the exact source bytes and current encryption-key access.
+// Unchanged artifacts retain their previously checked domain references. No target or permission changes.
+func (s *RestoreSource) CheckOriginalArtifacts(ctx context.Context, request VerifyRequest, encryption *credentials.EncryptionService) error {
+	if ctx == nil || s == nil || s.manifest.Format != bundleFormat {
+		return ErrConflict
+	}
+	if err := request.Validate(); err != nil {
+		return err
+	}
+	if request.ScratchDirectory == "" {
+		request.ScratchDirectory = filepath.Dir(request.Directory)
+	}
+	if request != s.request {
+		return ErrConflict
+	}
+	_, err := VerifyBundle(ctx, s.request.Directory, s.request.ManifestSHA256, encryption)
+	return err
+}
+
 // DeploymentID identifies the verified source deployment.
 func (s *RestoreSource) DeploymentID() string { return s.manifest.Request.Boundary.DeploymentID }
 

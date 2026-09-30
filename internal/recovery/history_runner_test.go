@@ -14,7 +14,9 @@ import (
 
 	"github.com/agentstation/starport/internal/authorization/revision"
 	"github.com/agentstation/starport/internal/blob"
+	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits/storedbytes"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
@@ -31,6 +33,19 @@ type historyRunnerFixture struct {
 }
 
 func newHistoryRunnerFixture(t *testing.T, shared, steps bool) historyRunnerFixture {
+	t.Helper()
+	return newHistoryRunnerFixtureWithSQL(t, shared, steps, "")
+}
+func newHistoryRunnerFixtureWithSQL(t *testing.T, shared, steps bool, sqlType string) historyRunnerFixture {
+	t.Helper()
+	return newHistoryRunnerFixtureWithFinalPolicy(t, shared, steps, sqlType, false)
+}
+func newHistoryRunnerFixtureWithFinalPolicy(t *testing.T, shared, steps bool, sqlType string, finalPolicyOnly bool) historyRunnerFixture {
+	t.Helper()
+	return newHistoryRunnerFixtureWithOwners(t, shared, steps, sqlType, finalPolicyOnly, false)
+}
+
+func newHistoryRunnerFixtureWithOwners(t *testing.T, shared, steps bool, sqlType string, finalPolicyOnly, fileHistory bool) historyRunnerFixture {
 	t.Helper()
 	bundle, capture, directory := backupBundleRecipe(t, shared)
 	people, err := identity.Open(bundle.SQL)
@@ -56,9 +71,16 @@ func newHistoryRunnerFixture(t *testing.T, shared, steps bool) historyRunnerFixt
 	history.Disposition = "replay_complete"
 	if steps {
 		data := []byte("independent recovered bytes")
-		require.NoError(t, os.Mkdir(filepath.Join(request.Directory, "assets"), 0o700))
-		require.NoError(t, os.WriteFile(filepath.Join(request.Directory, "assets", "000001.bin"), data, 0o600))
-		history.Assets = []historyAsset{{ID: "retained", Path: "assets/000001.bin", Size: int64(len(data)), SHA256: historySHA256(data), Evidence: []string{"source"}}}
+		blobKey := "independent-file"
+		var fileInputs []historyFixturePayload
+		if fileHistory {
+			blobKey, fileInputs = historyFileOwnerPayloads(t, data)
+		}
+		if !finalPolicyOnly {
+			require.NoError(t, os.Mkdir(filepath.Join(request.Directory, "assets"), 0o700))
+			require.NoError(t, os.WriteFile(filepath.Join(request.Directory, "assets", "000001.bin"), data, 0o600))
+			history.Assets = []historyAsset{{ID: "retained", Path: "assets/000001.bin", Size: int64(len(data)), SHA256: historySHA256(data), Evidence: []string{"source"}}}
+		}
 		grant := identity.AccountGrant{AccountID: "tenant", UserID: "person", CreatedAt: time.Now().UTC()}
 		create, err := identity.NewRecoveryTransition([]identity.RecoveryIdentityEvent{{Grant: &identity.RecoveryGrantChange{After: &grant}}})
 		require.NoError(t, err)
@@ -72,14 +94,17 @@ func newHistoryRunnerFixture(t *testing.T, shared, steps bool) historyRunnerFixt
 		sqlExpected, err := revision.CaptureSQLRecovery(t.Context(), bundle.SQL, conn)
 		require.NoError(t, err)
 		require.NoError(t, conn.Close())
-		inputs := []struct {
-			kind  string
-			value any
-		}{
-			{"blob_publication", historyBlobPayload{Version: 1, Key: "independent-file", Expected: blob.PublicationState{Kind: "absent"}, Next: blob.PublicationState{Kind: "live", Size: int64(len(data)), SHA256: historySHA256(data)}, AssetID: "retained"}},
+		inputs := []historyFixturePayload{
+			{"blob_publication", historyBlobPayload{Version: 1, Key: blobKey, Expected: blob.PublicationState{Kind: "absent"}, Next: blob.PublicationState{Kind: "live", Size: int64(len(data)), SHA256: historySHA256(data)}, AssetID: "retained"}},
 			{"sql_identity", create}, {"sql_identity", withdraw},
 			{"kv_authorization_final", historyKVAuthorityPayload{Version: 1, ExpectedSHA256: kvExpected}},
 			{"sql_authorization_final", historySQLAuthorityPayload{Version: 1, Expected: sqlExpected}},
+		}
+		if fileHistory {
+			inputs = append(append(inputs[:3:3], fileInputs...), inputs[3:]...)
+		}
+		if finalPolicyOnly {
+			inputs = inputs[len(inputs)-2:]
 		}
 		for i, input := range inputs {
 			data := historyPayloadJSON(t, input.value)
@@ -92,6 +117,13 @@ func newHistoryRunnerFixture(t *testing.T, shared, steps bool) historyRunnerFixt
 	verified, err := source.VerifyHistoryPackage(t.Context(), request)
 	require.NoError(t, err)
 	target, kv, _ := bundleRestoreTargets(t, shared)
+	if sqlType != "" {
+		db, err := sqlstore.Open(historySQLConfig(t, sqlType))
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, db.Close()) })
+		require.NoError(t, db.Migrate(t.Context()))
+		target.SQL = db
+	}
 	_, err = source.Prepare(t.Context(), target, request.Operation)
 	require.NoError(t, err)
 	witness, err := New(target.SQL)
@@ -100,6 +132,58 @@ func newHistoryRunnerFixture(t *testing.T, shared, steps bool) historyRunnerFixt
 	require.NoError(t, err)
 	return historyRunnerFixture{witness: witness, source: source, accepted: accepted, targets: HistoryReplayTargets{KV: target.KV.(HistoryKVTarget), Blobs: target.Blobs.(HistoryBlobTarget), Encryption: bundle.Encryption}, request: HistoryReplayRequest{TargetSHA256: request.TargetSHA256, ScratchDirectory: privateKVDirectory(t)}, kv: kv, packageDirectory: request.Directory}
 }
+
+type historyFixturePayload struct {
+	kind  string
+	value any
+}
+
+func historyFileOwnerPayloads(t *testing.T, data []byte) (string, []historyFixturePayload) {
+	t.Helper()
+	store, reader, _ := kvTransferStores(t, storage.StorageTypeBadger)
+	meter, err := storedbytes.NewStorageMeter(store)
+	require.NoError(t, err)
+	repository, err := files.OpenRepository(store)
+	require.NoError(t, err)
+	bytes, err := blob.NewFilesystem(filepath.Join(privateKVDirectory(t), "independent-file-bytes"))
+	require.NoError(t, err)
+	service, err := files.NewService(repository, bytes, files.WithMeter(meter))
+	require.NoError(t, err)
+	uploaded, err := service.Upload(t.Context(), files.UploadRequest{Account: "owner", Filename: "recovered.txt", Purpose: files.PurposeUserData, Size: int64(len(data))}, strings.NewReader(string(data)))
+	require.NoError(t, err)
+	view := historyPayloadView(t, reader)
+	retained, err := files.CaptureRecoveryFile(t.Context(), view, uploaded.Account, uploaded.ID)
+	require.NoError(t, err)
+	encoded, err := retained.MarshalJSON()
+	require.NoError(t, err)
+	var fileAddress struct {
+		BlobKey string `json:"blob_key"`
+	}
+	require.NoError(t, json.Unmarshal(encoded, &fileAddress))
+	require.NotEmpty(t, fileAddress.BlobKey)
+	state, err := storedbytes.CaptureAccountReplayState(t.Context(), view, uploaded.Account)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, state.Claims)
+	require.EqualValues(t, len(data), state.Bytes)
+	var claims []storedbytes.RecoveryClaim
+	require.NoError(t, view.Enumerate(t.Context(), func(record storage.TransferRecord) error {
+		if !strings.HasPrefix(record.Key, storedbytes.StoredBytesPrefix) {
+			return nil
+		}
+		item, err := storedbytes.VerifyRecoveryRecord(record)
+		if err == nil && item.Claim != nil {
+			claims = append(claims, *item.Claim)
+		}
+		return err
+	}))
+	require.Len(t, claims, 1)
+	return fileAddress.BlobKey, []historyFixturePayload{
+		{"storedbytes_stage", historyByteStage{Version: 1, State: state, Claims: claims}},
+		{"storedbytes_finalize", historyByteFinal{Version: 1, State: state}},
+		{"kv_domain", historyKVDomain{Version: 1, Files: []files.RecoveryChange{{Account: uploaded.Account, ID: uploaded.ID, After: &retained}}}},
+	}
+}
+
 func (f historyRunnerFixture) run(t *testing.T) *CompletedHistory {
 	t.Helper()
 	result, err := f.witness.ReplayImportedHistory(t.Context(), f.source, f.accepted, f.targets, f.request)
