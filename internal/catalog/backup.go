@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starmap/runtime"
 	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -29,6 +30,10 @@ func InspectCapturedCatalog(ctx context.Context, view *recovery.KVSnapshotView, 
 }
 
 func inspectCapturedCatalog(ctx context.Context, records capturedCatalogRecords, boundary recovery.Record) error {
+	return inspectCapturedCatalogIdentity(ctx, records, boundary, runtime.FleetIdentity{})
+}
+
+func inspectCapturedCatalogIdentity(ctx context.Context, records capturedCatalogRecords, boundary recovery.Record, prepared runtime.FleetIdentity) error {
 	if ctx == nil || records == nil || !validCapturedBoundary(boundary) {
 		return errors.New("catalog backup requires a closed recovery boundary")
 	}
@@ -99,8 +104,11 @@ func inspectCapturedCatalog(ctx context.Context, records capturedCatalogRecords,
 	if err := validateCapturedHistory(history, generations); err != nil {
 		return err
 	}
+	if err := inspectTopologyArchives(ctx, captured); err != nil {
+		return err
+	}
 	if fleetPresent {
-		return captured.inspectFleet(ctx, boundary)
+		return captured.inspectFleetIdentity(ctx, boundary, prepared)
 	}
 	return nil
 }

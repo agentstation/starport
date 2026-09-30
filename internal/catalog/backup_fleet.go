@@ -16,6 +16,7 @@ import (
 type capturedFleet struct {
 	capturedCatalog
 	boundary                                 recovery.Record
+	preparedIdentity                         runtime.FleetIdentity
 	prefix                                   string
 	inventory                                fleetInventory
 	head                                     runtime.FleetHead
@@ -32,7 +33,11 @@ type capturedFleet struct {
 }
 
 func (c capturedCatalog) inspectFleet(ctx context.Context, boundary recovery.Record) error {
-	f := capturedFleet{capturedCatalog: c, boundary: boundary, prefix: "catalog:fleet:{" + payloadDigest([]byte(boundary.DeploymentID)) + "}:v1:", publications: map[string]fleetBlob{}, chunks: map[string]capturedFleetChunk{}, heads: map[runtime.FleetHead]bool{}, generations: map[string]GenerationIndexEntry{}}
+	return c.inspectFleetIdentity(ctx, boundary, runtime.FleetIdentity{})
+}
+
+func (c capturedCatalog) inspectFleetIdentity(ctx context.Context, boundary recovery.Record, prepared runtime.FleetIdentity) error {
+	f := capturedFleet{capturedCatalog: c, boundary: boundary, preparedIdentity: prepared, prefix: "catalog:fleet:{" + payloadDigest([]byte(boundary.DeploymentID)) + "}:v1:", publications: map[string]fleetBlob{}, chunks: map[string]capturedFleetChunk{}, heads: map[runtime.FleetHead]bool{}, generations: map[string]GenerationIndexEntry{}}
 	if err := f.loadSelection(ctx); err != nil {
 		return err
 	}
@@ -88,7 +93,7 @@ func (f *capturedFleet) loadSelection(ctx context.Context) error {
 		}
 	}
 	if f.identity != (runtime.FleetIdentity{}) {
-		if err := validateCapturedFleetIdentity(f.identity, f.boundary); err != nil {
+		if err := f.validateIdentity(f.identity); err != nil {
 			return err
 		}
 	}
@@ -245,7 +250,7 @@ func (f *capturedFleet) inspectLease(record storage.TransferRecord) error {
 	if f.identity != (runtime.FleetIdentity{}) && grant.Identity != f.identity {
 		return errors.New("captured fleet lease differs from the retained identity")
 	}
-	return validateCapturedFleetIdentity(grant.Identity, f.boundary)
+	return f.validateIdentity(grant.Identity)
 }
 
 type capturedFleetChunk struct {
@@ -261,6 +266,22 @@ func addCapturedFleetChunks(prefix string, blob fleetBlob, chunks map[string]cap
 
 func sameCapturedEntry(a, b GenerationIndexEntry) bool {
 	return a.GenerationID == b.GenerationID && a.GeneratedAt.Equal(b.GeneratedAt) && a.PayloadChecksum == b.PayloadChecksum && a.SemanticChecksum == b.SemanticChecksum
+}
+
+func (f *capturedFleet) validateIdentity(identity runtime.FleetIdentity) error {
+	if f.preparedIdentity == (runtime.FleetIdentity{}) {
+		return validateCapturedFleetIdentity(identity, f.boundary)
+	}
+	if err := identity.Validate(); err != nil {
+		return err
+	}
+	if f.boundary.Epoch <= 0 {
+		return recovery.ErrConflict
+	}
+	if identity != f.preparedIdentity || identity.DeploymentID != f.boundary.DeploymentID || identity.RecoveryEpoch != uint64(f.boundary.Epoch) || f.boundary.BackendID != "" && identity.BackendID != f.boundary.BackendID {
+		return recovery.ErrConflict
+	}
+	return nil
 }
 
 func validateCapturedFleetIdentity(identity runtime.FleetIdentity, boundary recovery.Record) error {
