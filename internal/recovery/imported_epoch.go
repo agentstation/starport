@@ -69,8 +69,14 @@ func (w *Witness) PrepareImportedEpoch(ctx context.Context, request ImportedEpoc
 	if err != nil {
 		return Record{}, err
 	}
-	err = w.db.ReconcileRelationalImport(ctx, request.Snapshot, request.Import, "recovery-epoch:"+request.Prepared.DeploymentID, digest, func(ctx context.Context, conn *sql.Conn) error {
-		_, err := w.replaceWith(ctx, conn, request.Prepared, next)
+	return w.reconcileEpoch(ctx, request.Snapshot, request.Import, "recovery-epoch:"+request.Prepared.DeploymentID, digest, request.Prepared, next)
+}
+
+// reconcileEpoch replaces the closed record under one native relational receipt and confirms the result.
+// An exact retry reuses the receipt and does not change the record again.
+func (w *Witness) reconcileEpoch(ctx context.Context, snapshot sqlstore.SQLiteSnapshot, identity sqlstore.RelationalImportIdentity, step, digest string, expected, next Record) (Record, error) {
+	err := w.db.ReconcileRelationalImport(ctx, snapshot, identity, step, digest, func(ctx context.Context, conn *sql.Conn) error {
+		_, err := w.replaceWith(ctx, conn, expected, next)
 		return err
 	})
 	if err != nil {

@@ -44,7 +44,7 @@ func openRetainedActivationRunner(ctx context.Context, source *RestoreSource, re
 	runBytes, err := runner.readJournalRecord(ctx, "runner.json", &runner.run)
 	if err != nil || runBytes == nil || runner.run.Version != 1 || runner.run.AcceptanceSHA256 != runner.accepted.Digest() ||
 		runner.run.HistorySHA256 != history.Digest() || runner.run.TargetSHA256 != request.History.TargetSHA256 ||
-		runner.run.Authority != historyAcceptedAuthority(runner.accepted) || runner.run.ValidatedAt.IsZero() {
+		runner.run.Authority != historyAcceptedAuthority(runner.accepted) || runner.run.ValidatedAt.IsZero() || runner.run.Mode != runner.mode() {
 		return nil, historyJournalState{}, errors.Join(ErrConflict, err)
 	}
 	runner.runBytes = bytes.Clone(runBytes)

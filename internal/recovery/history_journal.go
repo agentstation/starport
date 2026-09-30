@@ -71,7 +71,7 @@ func (r *historyRunner) openRun(ctx context.Context) error {
 		if err := r.checkNativePositions(ctx, HistoryReplayPositions{}, ""); err != nil {
 			return err
 		}
-		r.run = historyRunRecord{Version: 1, AcceptanceSHA256: r.accepted.Digest(), HistorySHA256: r.accepted.state.history.digest, TargetSHA256: r.request.TargetSHA256, Authority: historyAcceptedAuthority(r.accepted), ValidatedAt: time.Now().UTC(), CatalogPreparation: r.request.CatalogPreparation}
+		r.run = historyRunRecord{Version: 1, AcceptanceSHA256: r.accepted.Digest(), HistorySHA256: r.accepted.state.history.digest, TargetSHA256: r.request.TargetSHA256, Authority: historyAcceptedAuthority(r.accepted), ValidatedAt: time.Now().UTC(), CatalogPreparation: r.request.CatalogPreparation, Mode: r.mode()}
 		body, err = json.Marshal(r.run, json.Deterministic(true))
 		if err != nil {
 			return err
@@ -83,7 +83,7 @@ func (r *historyRunner) openRun(ctx context.Context) error {
 		return err
 	}
 	var record historyRunRecord
-	if json.Unmarshal(body, &record, json.RejectUnknownMembers(true)) != nil || record.Version != 1 || record.AcceptanceSHA256 != r.accepted.Digest() || record.HistorySHA256 != r.accepted.state.history.digest || record.TargetSHA256 != r.request.TargetSHA256 || record.Authority != historyAcceptedAuthority(r.accepted) || record.ValidatedAt.IsZero() || !sameCatalogPlan(record.CatalogPreparation, r.request.CatalogPreparation) {
+	if json.Unmarshal(body, &record, json.RejectUnknownMembers(true)) != nil || record.Version != 1 || record.AcceptanceSHA256 != r.accepted.Digest() || record.HistorySHA256 != r.accepted.state.history.digest || record.TargetSHA256 != r.request.TargetSHA256 || record.Authority != historyAcceptedAuthority(r.accepted) || record.ValidatedAt.IsZero() || !sameCatalogPlan(record.CatalogPreparation, r.request.CatalogPreparation) || record.Mode != r.mode() {
 		return ErrConflict
 	}
 	r.run = record
