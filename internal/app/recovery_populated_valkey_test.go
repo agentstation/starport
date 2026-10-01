@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const adoptValkeyImage = "valkey/valkey:7-alpine"
+// adoptValkeyImage is the qualified Valkey release by digest, the same image that CI services and
+// storage.QualifiedValkeyVersion name. The private process therefore qualifies the exact release.
+const adoptValkeyImage = "valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f"
 
 // adoptValkey is one private Valkey process with persistent data that the test owns.
 // Restart and promotion tests change this process only. Shared fixtures stay unchanged.
@@ -49,20 +52,21 @@ func adoptRun(t *testing.T, docker string, arguments ...string) string {
 }
 
 // startAdoptValkey starts a private primary with append-only persistence on a private volume and removes both in cleanup.
-func startAdoptValkey(t *testing.T) *adoptValkey {
+// Additional server options apply to the primary only.
+func startAdoptValkey(t *testing.T, options ...string) *adoptValkey {
 	t.Helper()
 	docker := adoptDocker(t)
 	suffix := strings.ToLower(rand.Text())[:12]
 	v := &adoptValkey{docker: docker, name: "starport-adopt-" + suffix, network: "starport-adopt-" + suffix}
 	adoptRun(t, docker, "network", "create", v.network)
 	t.Cleanup(func() { adoptRun(t, docker, "network", "rm", v.network) })
-	v.url = v.start(t, v.name, "")
+	v.url = v.start(t, v.name, "", options...)
 	return v
 }
 
 // start runs one Valkey process on the private network. A non-empty primary starts a replica of that process.
 // The fixed loopback port keeps the configured address across a restart.
-func (v *adoptValkey) start(t *testing.T, name, primary string) string {
+func (v *adoptValkey) start(t *testing.T, name, primary string, options ...string) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -73,6 +77,7 @@ func (v *adoptValkey) start(t *testing.T, name, primary string) string {
 	if primary != "" {
 		arguments = append(arguments, "--replicaof", primary, "6379")
 	}
+	arguments = append(arguments, options...)
 	adoptRun(t, v.docker, arguments...)
 	t.Cleanup(func() {
 		adoptRun(t, v.docker, "rm", "-f", "-v", name)
@@ -112,11 +117,18 @@ func (v *adoptValkey) replica(t *testing.T) (string, string) {
 	t.Helper()
 	name := v.name + "-replica"
 	address := v.start(t, name, v.name)
+	v.synchronized(t, name)
+	return name, address
+}
+
+// synchronized waits until the named replica holds a complete copy of its primary.
+func (v *adoptValkey) synchronized(t *testing.T, name string) {
+	t.Helper()
 	deadline := time.Now().Add(time.Minute)
 	for {
 		output := adoptRun(t, v.docker, "exec", name, "valkey-cli", "INFO", "replication")
 		if strings.Contains(output, "master_link_status:up") && strings.Contains(output, "master_sync_in_progress:0") {
-			return name, address
+			return
 		}
 		require.True(t, time.Now().Before(deadline), "private replica did not synchronize")
 		time.Sleep(200 * time.Millisecond)
@@ -124,10 +136,34 @@ func (v *adoptValkey) replica(t *testing.T) (string, string) {
 }
 
 // promote waits until the replica holds every primary write and then makes it a primary.
+// The old primary stays a writable master until demote completes the failover.
 func (v *adoptValkey) promote(t *testing.T, replica string) {
 	t.Helper()
 	adoptRun(t, v.docker, "exec", v.name, "valkey-cli", "WAIT", "1", "10000")
 	adoptRun(t, v.docker, "exec", replica, "valkey-cli", "REPLICAOF", "NO", "ONE")
+}
+
+// demote completes a failover: the named old primary becomes a replica of the new primary and discards
+// every write that only it acknowledged.
+func (v *adoptValkey) demote(t *testing.T, name, primary string) {
+	t.Helper()
+	adoptRun(t, v.docker, "exec", name, "valkey-cli", "REPLICAOF", primary, "6379")
+	v.synchronized(t, name)
+}
+
+// stat reads one INFO stats counter of the named process.
+func (v *adoptValkey) stat(t *testing.T, name, field string) int {
+	t.Helper()
+	output := adoptRun(t, v.docker, "exec", name, "valkey-cli", "INFO", "stats")
+	for line := range strings.SplitSeq(output, "\n") {
+		if value, ok := strings.CutPrefix(strings.TrimSpace(line), field+":"); ok {
+			count, err := strconv.Atoi(value)
+			require.NoError(t, err)
+			return count
+		}
+	}
+	require.Failf(t, "missing stat", "%s has no %s counter", name, field)
+	return 0
 }
 
 // adoptIncarnation observes the process identity at one address with the deployment settings of cfg.

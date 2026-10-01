@@ -133,6 +133,14 @@ Durable keys and notification channels use `{starport:v1:<base64url-deployment-i
 The identity uses unpadded UTF-8 encoding. One deployment occupies one hash slot, including multi-key conditional mutations.
 This layout does not qualify Cluster support. Cache-only service keys retain their separate cache prefix and service configuration.
 
+The qualified release is Valkey `7.2.14` as one standalone writable primary. `QualifiedValkeyVersion` names it,
+CI pins the same release by image digest, and `TestQualifiedValkeyVersion` compares a real service against it.
+Another release or Cluster mode is UNVERIFIED until a qualification run records it.
+
+The incarnation identity is `run_id:master_replid`. A restart, a promotion, and the first replica attachment to a
+primary without a replication backlog each change it. A bound owner then fails closed until re-admission.
+Attach replicas before admission, or plan a re-admission after the first attachment. `TestValkeyDurabilityAndFailover` records this limit.
+
 Repositories use logical keys. The adapter adds the physical prefix and removes it from scan results and notification callbacks.
 Bounded reads, native ownership checks, and fresh-initialization claims use the same physical prefix.
 Fresh initialization still requires an empty dedicated KV database and SQL schema.
