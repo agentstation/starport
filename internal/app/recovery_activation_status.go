@@ -31,6 +31,11 @@ func InspectRecoveryActivation(ctx context.Context, cfg *config.Config, request 
 		return result, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, n.close()) }()
+	return inspectRecoveryActivation(ctx, cfg, n, source, request, importActivation)
+}
+
+// inspectRecoveryActivation reads the sealed decision and the native phase receipts of one transition.
+func inspectRecoveryActivation(ctx context.Context, cfg *config.Config, n *recoveryActivationNative, source *recovery.RestoreSource, request RecoveryActivationRequest, transition recoveryActivationTransition) (result RecoveryActivationResult, resultErr error) {
 	directory, err := productfiles.ExistingDirectory(request.ActivationDirectory)
 	if err != nil {
 		return result, err
@@ -43,7 +48,7 @@ func InspectRecoveryActivation(ctx context.Context, cfg *config.Config, request 
 	if digest != request.ExpectedDecisionSHA256 {
 		return result, recovery.ErrConflict
 	}
-	sealed, err := openSealedActivation(ctx, cfg, request, n, source, body, digest)
+	sealed, err := openSealedActivation(ctx, cfg, request, n, source, body, digest, transition)
 	if err != nil {
 		return result, err
 	}

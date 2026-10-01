@@ -74,16 +74,27 @@ func verifyCanonicalFilesWithSource(ctx context.Context, cfg *config.Config, req
 		if !exists {
 			return nil, recovery.ErrConflict
 		}
-		checked, err := source.InspectPublishedFileTree(ctx, role.tree, original.Tree, canonicalFileOwnerValidator(cfg, role.role))
-		if err != nil {
+		if err := appendCanonicalPublication(ctx, source, &record, role, original.Tree, canonicalFileOwnerValidator(cfg, role.role)); err != nil {
 			return nil, err
 		}
-		body, err := checked.Record()
-		if err != nil {
-			return nil, err
-		}
-		record.Publications = append(record.Publications, canonicalPublicationRecord{role.role, body})
 	}
+	return sealCanonicalFiles(ctx, cfg, request, record, source)
+}
+
+func appendCanonicalPublication(ctx context.Context, source *recovery.RestoreSource, record *canonicalFilesRecord, role canonicalRoleSelection, tree recovery.FileTreeResult, validate recovery.FileTreeValidator) error {
+	checked, err := source.InspectPublishedFileTree(ctx, role.tree, tree, validate)
+	if err != nil {
+		return err
+	}
+	body, err := checked.Record()
+	if err != nil {
+		return err
+	}
+	record.Publications = append(record.Publications, canonicalPublicationRecord{role.role, body})
+	return nil
+}
+
+func sealCanonicalFiles(ctx context.Context, cfg *config.Config, request recovery.PrepareRequest, record canonicalFilesRecord, source *recovery.RestoreSource) (*VerifiedCanonicalFiles, error) {
 	body, err := json.Marshal(record, json.Deterministic(true))
 	if err != nil || len(body) > canonicalRecoveryMaxBytes {
 		return nil, recovery.ErrConflict

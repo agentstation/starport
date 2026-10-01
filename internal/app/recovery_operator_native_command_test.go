@@ -73,6 +73,7 @@ func operatorPrimaryConfiguration(t *testing.T, cfg *config.Config) (*config.Con
 		"STARPORT_STORAGE_SQL_MODE":              cfg.Storage.SQL.Mode,
 		"STARPORT_STORAGE_SQL_SQLITE_PATH":       cfg.Storage.SQL.SQLite.Path,
 		"STARPORT_STORAGE_SQL_POSTGRES_URL":      cfg.Storage.SQL.Postgres.URL,
+		"STARPORT_STORAGE_SQL_MYSQL_DSN":         cfg.Storage.SQL.MySQL.DSN,
 		"STARPORT_STORAGE_VALKEY_URL":            cfg.Storage.Valkey.URL,
 		"STARPORT_STORAGE_VALKEY_ALLOW_INSECURE": strconv.FormatBool(cfg.Storage.Valkey.AllowInsecure),
 		"STARPORT_FILES_BACKEND":                 cfg.Files.Backend, "STARPORT_FILES_PATH": cfg.Files.Path,
@@ -119,6 +120,16 @@ func operatorCommandDependencies(t *testing.T, environment map[string]string, ou
 			return cfg.EffectivePaths(), nil
 		},
 		ActivateRecovery: ActivateRecovery, InspectRecoveryActivation: InspectRecoveryActivation,
+		PreparePopulatedRecovery: func(ctx context.Context, cfg *config.Config, request cli.PopulatedRecoveryRequest) (cli.PopulatedRecoveryPreparation, error) {
+			result, err := PreparePopulatedRecovery(ctx, cfg, PopulatedRecoveryRequest(request))
+			return cli.PopulatedRecoveryPreparation(result), err
+		},
+		ActivatePopulatedRecovery: func(ctx context.Context, cfg *config.Config, request cli.PopulatedRecoveryRequest) (recovery.ActivationResult, error) {
+			return ActivatePopulatedRecovery(ctx, cfg, PopulatedRecoveryRequest(request))
+		},
+		InspectPopulatedRecovery: func(ctx context.Context, cfg *config.Config, request cli.PopulatedRecoveryRequest) (recovery.ActivationResult, error) {
+			return InspectPopulatedRecovery(ctx, cfg, PopulatedRecoveryRequest(request))
+		},
 		RunServer: func(context.Context, cli.GatewayOptions) error {
 			t.Fatal("recovery started a gateway")
 			return nil

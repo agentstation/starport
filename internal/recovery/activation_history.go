@@ -14,12 +14,14 @@ import (
 // RetainedActivationHistoryRequest selects original history and an independently retained closed-final decision digest.
 // Directory holds acceptance and replay journals. ScratchDirectory holds temporary verification copies.
 // Attestation binds original operator evidence. Current fencing requires a separate owner check.
+// A zero PriorApproval selects an import journal. Otherwise it selects the closed-adoption journal of that approval.
 type RetainedActivationHistoryRequest struct {
 	History          HistoryPackageRequest
 	Directory        string
 	DecisionSHA256   string
 	ScratchDirectory string
 	Attestation      HistoryAttestation
+	PriorApproval    Record
 }
 
 type retainedActivationHistoryState struct {

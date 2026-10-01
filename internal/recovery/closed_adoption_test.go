@@ -125,6 +125,24 @@ func TestBindPriorApproval(t *testing.T) {
 	}
 }
 
+func TestRecordAdoptionBoundary(t *testing.T) {
+	digest := strings.Repeat("a", 64)
+	for _, test := range []struct {
+		record Record
+		want   bool
+	}{
+		{Record{DeploymentID: "deployment", Epoch: 5, BackendID: "prior-backend", Evidence: "adoption-epoch:" + digest}, true},
+		{Record{DeploymentID: "deployment", Epoch: 5, Open: true, BackendID: "prior-backend", Evidence: "adoption-epoch:" + digest}, false},
+		{Record{DeploymentID: "deployment", Epoch: 5, BackendID: "prior-backend", Evidence: "adoption-epoch:" + strings.ToUpper(digest)}, false},
+		{Record{DeploymentID: "deployment", Epoch: 5, BackendID: "prior-backend", Evidence: "adoption-epoch:" + digest[:62]}, false},
+		{Record{DeploymentID: "deployment", Epoch: 5, BackendID: "prior-backend", Evidence: "adoption-epoch:operator-choice"}, false},
+		{Record{DeploymentID: "deployment", Epoch: 5, BackendID: "prior-backend", Evidence: "restore-epoch:" + digest}, false},
+		{Record{DeploymentID: "deployment", Epoch: 5, BackendID: "prior-backend", Evidence: digest}, false},
+	} {
+		require.Equal(t, test.want, test.record.AdoptionBoundary(), test.record.Evidence)
+	}
+}
+
 func TestClosedAdoptionEpochTransitions(t *testing.T) {
 	base := ClosedAdoptionEpochRequest{
 		Closed:        Record{DeploymentID: "deployment", Epoch: 6, BackendID: "prior-backend", Evidence: "adoption-prepared:" + strings.Repeat("e", 64)},
@@ -397,6 +415,7 @@ func TestPopulatedAdoptionNativeEpochSequenceAndApproval(t *testing.T) {
 			require.False(t, accepted.state.boundary.Open)
 			require.Equal(t, f.prior.BackendID, accepted.state.boundary.BackendID)
 			require.True(t, strings.HasPrefix(accepted.state.boundary.Evidence, "adoption-epoch:"))
+			require.True(t, accepted.state.boundary.AdoptionBoundary())
 			current, err = f.witness.Current(t.Context(), f.captured.DeploymentID)
 			require.NoError(t, err)
 			require.Equal(t, accepted.state.boundary, current)
@@ -437,6 +456,16 @@ func TestPopulatedAdoptionNativeEpochSequenceAndApproval(t *testing.T) {
 			final, err := f.witness.FinalizeImportedHistory(t.Context(), completed, finalRequest)
 			require.NoError(t, err)
 			decision := final.Report().DecisionSHA256
+			retainedRequest := RetainedActivationHistoryRequest{History: f.historyReq, Directory: f.accept.Directory, DecisionSHA256: decision,
+				ScratchDirectory: privateKVDirectory(t), Attestation: f.accept.Attestation, PriorApproval: f.prior}
+			retainedHistory, err := OpenRetainedActivationHistory(t.Context(), f.source, retainedRequest, f.replay.Encryption)
+			require.NoError(t, err, "the prior approval selects the adoption journal")
+			require.Equal(t, final.Report(), retainedHistory.Report())
+			require.NoError(t, retainedHistory.Check(t.Context(), f.source, retainedRequest, f.replay.Encryption))
+			importMode := retainedRequest
+			importMode.PriorApproval = Record{}
+			_, err = OpenRetainedActivationHistory(t.Context(), f.source, importMode, f.replay.Encryption)
+			require.ErrorIs(t, err, ErrConflict, "a zero prior approval cannot open an adoption journal")
 			require.NoError(t, f.blobTarget.(blob.ImportReplayActivator).ActivateImportAt(t.Context(), identity.ComponentOperation, identity.BlobOriginal, report.Positions.Blobs, decision))
 			require.NoError(t, f.replay.KV.(storage.ImportReplayActivator).ActivateImportAt(t.Context(), identity.KVClaim, report.Positions.KV, decision))
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)

@@ -3,6 +3,7 @@
 `starport backup activate` completes one stopped deployment's coordinated recovery.
 It replays accepted history, prepares the captured catalog, and releases native import guards in order.
 It does not start a gateway or submit provider requests.
+`starport backup adopt` reopens a closed populated deployment in place. See [Populated adoption in place](#populated-adoption-in-place).
 Production qualification remains open under CSP13 in the canonical production catalog plan.
 
 Keep every writer externally fenced until activation and fresh gateway readiness succeed.
@@ -134,3 +135,140 @@ After valid activation, start a fresh gateway with the same current target confi
 Check `/health/ready` before permitting traffic or removing external fences.
 Gateway readiness does not prove caller credentials, account permission, or available budget.
 Keep uncertain provider work and unresolved reservations for audited reconciliation.
+
+## Populated adoption in place
+
+Populated adoption reopens a closed deployment with its live stores in place.
+It copies no data into empty targets.
+Use it when the live stores hold the data that the deployment must keep, for example after a Valkey restart or a promotion.
+It uses the same shared phases as activation: catalog preparation, the final authorization steps, the decision seal, ordered release, and approval.
+
+Adoption supports a Valkey restart and a Valkey promotion.
+Activation opens the current Valkey process and refuses a different process.
+The approval opens only the Valkey identity that the prepared catalog topology names.
+
+Only Valkey fleet storage with PostgreSQL and object storage supports adoption.
+Badger, SQLite, and the local filesystem refuse adoption.
+The shared storage configuration refuses MySQL with Valkey, so adoption on MySQL also refuses.
+
+### Limits
+
+- **History without prefix steps.**
+  The history package must hold only the operator attestation and the two final authorization steps.
+  A history package with a prefix step refuses.
+  The capture of the fenced live deployment is the only base capture.
+
+- **Acknowledged data loss.**
+  Starport cannot detect an acknowledged write that Valkey lost in a restart or a promotion.
+  The Valkey persistence setting controls the maximum loss.
+  Adoption copies no record, so a lost write stays lost.
+  The attestation must include the complete interval, which includes each lost write.
+
+- **New catalog state directory.**
+  The live catalog state directory belongs to the fenced gateway, so do not use it again.
+  Adoption requires a new empty directory. The fresh gateway starts with the new directory.
+  It materializes the catalog again from the adopted stores.
+  If the configured directory has an owner record, preparation and the first claim refuse.
+  The error names the directory, and the refusal changes nothing.
+
+- **Restored SQL witness.**
+  A restored SQL database can hold a witness record below the KV authority.
+  Capture then writes its manifest and refuses the capture.
+  `starport backup verify` refuses that capture.
+  The refused capture files stay on disk. Delete them through the controlled recovery procedure.
+  If the witness changes after capture, preparation refuses and changes nothing.
+
+### Writer fence
+
+Fence every writer externally before you close approval.
+Keep the fence until adoption and fresh gateway readiness succeed.
+This includes gateways, background workers, source acquisition, database writers, and the old primary.
+After adoption, the closed approval stops dispatch through an old primary that stays reachable.
+It does not stop the old primary process. The external fence is mandatory.
+
+### Adoption inputs
+
+Before you close approval, retain the last open witness record outside the deployment.
+This record is the prior approval. Starport does not supply a command that reads it.
+Close approval with `starport backup close`, and then capture the live deployment with `starport backup create`.
+The capture is the backup of the adoption request.
+
+Bind the independent history package to the capture and the unchanged restore operation.
+Set `ValkeyIncarnation` to the identity of the current Valkey process.
+After a restart or a promotion, this identity differs from the identity in the prior approval.
+
+Configure a new empty catalog state directory in `STARPORT_CATALOG_STATE_DIR` before preparation.
+The live catalog state directory holds the catalog of the prior approval, and adoption refuses it.
+Use the new directory for adoption and for the fresh gateway.
+Keep the old directory with the fenced gateway until you remove the fence.
+
+Create a private preparation directory before preparation.
+Keep it separate from the activation, backup, file staging, history, journal, and scratch directories.
+Use the same file rules as the activation request.
+Unknown JSON members, invalid paths, and conflicting digests fail before configuration loads.
+
+```json
+{
+  "Activation": {
+    "Prepare": { "...": "the activation Prepare fields, with Directory set to the capture" },
+    "History": { "...": "the activation History fields, with the current ValkeyIncarnation" },
+    "ActivationDirectory": "/private/recovery/activation",
+    "PreserveTargetWorkspace": true,
+    "ExpectedDecisionSHA256": ""
+  },
+  "PriorApproval": {
+    "DeploymentID": "replace-with-deployment-id",
+    "Epoch": 0,
+    "Open": true,
+    "BackendID": "replace-with-prior-backend-identity",
+    "Evidence": "replace-with-prior-approval-evidence"
+  },
+  "PreparationDirectory": "/private/recovery/adoption-preparation",
+  "ExpectedPreparedSHA256": ""
+}
+```
+
+Replace each `...` member with the matching fields of the activation example.
+Set `Epoch` to the epoch of the retained prior approval.
+The attestation in `History` asserts that every writer stayed fenced and that the interval is complete.
+Set it only after you verify these facts.
+
+### Adoption procedure
+
+1. Fence every writer externally.
+2. Retain the prior approval, close approval, and capture the live deployment.
+3. Bind the independent history package to the capture.
+4. Configure the new empty catalog state directory.
+5. Prepare the adoption. Preparation places no claim.
+6. Activate the adoption with the retained prepared digest.
+7. Inspect the adoption with the retained prepared and decision digests.
+8. Start a fresh gateway with the same configuration, and check `/health/ready`.
+9. Remove the external fences only after readiness succeeds.
+
+```bash
+starport backup adopt prepare \
+  --request-file /private/recovery/adoption-request.json --timeout 15m --json
+
+starport backup adopt activate \
+  --request-file /private/recovery/adoption-request.json \
+  --prepared-sha256 "$RETAINED_PREPARED_SHA256" --timeout 15m --json
+
+starport backup adopt inspect \
+  --request-file /private/recovery/adoption-request.json \
+  --prepared-sha256 "$RETAINED_PREPARED_SHA256" \
+  --decision-sha256 "$RETAINED_DECISION_SHA256" --timeout 15m --json
+```
+
+Retain `prepared_sha256` and `decision_sha256` independently.
+For an exact retry, run `activate` again with both retained digests and the unchanged request.
+A retry after a lost reply places no new claim.
+Inspection changes no recovery state.
+
+Run inspection and exact retries before you start the fresh gateway.
+The gateway starts its catalog. After that, inspection reports `restricted` as true and `current_admission_valid` as false.
+The gateway readiness check is the current evidence after this step.
+
+If a step fails, the deployment stays closed and restricted.
+A failure before the first claim changes no native record, object, or file.
+A failure after the claim keeps the claim. Do not discard its evidence.
+Inspect the failure through the controlled recovery procedure, and then retry with the unchanged request.

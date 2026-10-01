@@ -25,12 +25,12 @@ type sealedRecoveryActivation struct {
 	encryption *credentials.EncryptionService
 }
 
-func openSealedActivation(ctx context.Context, cfg *config.Config, request RecoveryActivationRequest, n *recoveryActivationNative, source *recovery.RestoreSource, body []byte, digest string) (*sealedRecoveryActivation, error) {
-	return openSealedActivationWithCompiled(ctx, cfg, request, n, source, body, digest, nil, nil)
+func openSealedActivation(ctx context.Context, cfg *config.Config, request RecoveryActivationRequest, n *recoveryActivationNative, source *recovery.RestoreSource, body []byte, digest string, transition recoveryActivationTransition) (*sealedRecoveryActivation, error) {
+	return openSealedActivationWithCompiled(ctx, cfg, request, n, source, body, digest, transition, nil, nil)
 }
 
 // The initial path can retain its actual checked owner capability. Restart must reopen original evidence.
-func openSealedActivationWithCompiled(ctx context.Context, cfg *config.Config, request RecoveryActivationRequest, _ *recoveryActivationNative, source *recovery.RestoreSource, body []byte, digest string, compiled *catalog.CompiledTopology, final *recovery.ClosedFinalHistory) (*sealedRecoveryActivation, error) {
+func openSealedActivationWithCompiled(ctx context.Context, cfg *config.Config, request RecoveryActivationRequest, _ *recoveryActivationNative, source *recovery.RestoreSource, body []byte, digest string, transition recoveryActivationTransition, compiled *catalog.CompiledTopology, final *recovery.ClosedFinalHistory) (*sealedRecoveryActivation, error) {
 	var record recoveryActivationRecord
 	if len(body) > recovery.ActivationDecisionMaxBytes || json.Unmarshal(body, &record, json.RejectUnknownMembers(true)) != nil || record.Version != 1 || record.Preparation.Version != 1 || record.Preparation.Request != request.Original() {
 		return nil, recovery.ErrConflict
@@ -65,7 +65,7 @@ func openSealedActivationWithCompiled(ctx context.Context, cfg *config.Config, r
 	var actual []byte
 	var facts recovery.ActivationFacts
 	if final == nil {
-		retained := recovery.RetainedActivationHistoryRequest{History: recovery.HistoryPackageRequest{Directory: request.History.HistoryDirectory, ManifestSHA256: request.History.HistorySHA256, TargetSHA256: request.History.ExpectedTargetSHA256, Operation: request.History.Operation}, Directory: request.History.JournalDirectory, DecisionSHA256: canonicalRecordSHA256(record.History), ScratchDirectory: request.History.ScratchDirectory, Attestation: request.History.Attestation}
+		retained := recovery.RetainedActivationHistoryRequest{History: activationHistoryRequest(request), Directory: request.History.JournalDirectory, DecisionSHA256: canonicalRecordSHA256(record.History), ScratchDirectory: request.History.ScratchDirectory, Attestation: request.History.Attestation, PriorApproval: transition.priorApproval()}
 		history, openErr := recovery.OpenRetainedActivationHistory(ctx, source, retained, encryption, compiled.InspectPreparedCapturedCatalog)
 		if openErr != nil {
 			return nil, openErr
@@ -87,7 +87,7 @@ func openSealedActivationWithCompiled(ctx context.Context, cfg *config.Config, r
 	if facts.Boundary != record.Preparation.Transfer.DestinationBoundary || facts.Positions.KV.Sequence <= 0 || facts.Positions.SQL.Sequence <= 0 {
 		return nil, recovery.ErrConflict
 	}
-	identity, err := source.ImportIdentity(request.Prepare.Operation)
+	identity, err := transition.identity(ctx, source, request)
 	if err != nil {
 		return nil, err
 	}
@@ -277,8 +277,19 @@ func (s *sealedRecoveryActivation) approveSQL(ctx context.Context, cfg *config.C
 		if !ok {
 			return recovery.ErrConflict
 		}
-		_, err := n.witness.ApproveImportedAuthorityCheckedAt(ctx, provider, recovery.ImportedAuthorityRequest{Closed: s.facts.Boundary, BackendID: s.request.History.ValkeyIncarnation, Evidence: evidence, OperationID: s.identity.SQL.OperationID, Snapshot: s.identity.SQLOriginal, Import: s.identity.SQL, DecisionSHA256: s.journal.Digest()}, s.facts.Positions.SQL, check)
-		return err
+		// The compiled topology binds this destination backend, so the approval must open the same backend.
+		backendID := s.record.Preparation.Transfer.DestinationIdentity.BackendID
+		if backendID != s.request.History.ValkeyIncarnation {
+			return recovery.ErrConflict
+		}
+		approved, err := n.witness.ApproveImportedAuthorityCheckedAt(ctx, provider, recovery.ImportedAuthorityRequest{Closed: s.facts.Boundary, BackendID: s.request.History.ValkeyIncarnation, Evidence: evidence, OperationID: s.identity.SQL.OperationID, Snapshot: s.identity.SQLOriginal, Import: s.identity.SQL, DecisionSHA256: s.journal.Digest()}, s.facts.Positions.SQL, check)
+		if err != nil {
+			return err
+		}
+		if approved.BackendID != backendID {
+			return recovery.ErrConflict
+		}
+		return nil
 	}
 	targetDigest, err := cfg.RuntimeStorage().RecoveryTargetSHA256("")
 	if err != nil {

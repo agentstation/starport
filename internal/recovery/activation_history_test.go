@@ -94,6 +94,32 @@ func TestRetainedActivationHistoryNativeCompletionAndPassivity(t *testing.T) {
 	}
 }
 
+func TestRetainedActivationHistoryImportJournalRefusesAdoptionMode(t *testing.T) {
+	f, _, final, request := retainedActivationFixture(t, false)
+	body, err := os.ReadFile(filepath.Join(request.Directory, "acceptance.json"))
+	require.NoError(t, err)
+	var retainedAcceptance historyAcceptance
+	require.NoError(t, json.Unmarshal(body, &retainedAcceptance, json.RejectUnknownMembers(true)))
+	require.Nil(t, retainedAcceptance.Adoption, "a zero prior approval keeps the import journal")
+	before := retainedActivationTree(t, f.source.request.Directory, f.packageDirectory, request.Directory)
+	retained, err := OpenRetainedActivationHistory(t.Context(), f.source, request, f.targets.Encryption)
+	require.NoError(t, err)
+	require.Equal(t, final.Report(), retained.Report())
+	// This prior approval binds the captured boundary, so only the journal mode separates the two requests.
+	prior := f.source.manifest.Request.Boundary
+	prior.Epoch--
+	prior.Open = true
+	adoption := request
+	adoption.PriorApproval = prior
+	_, err = OpenRetainedActivationHistory(t.Context(), f.source, adoption, f.targets.Encryption)
+	require.ErrorIs(t, err, ErrConflict)
+	for _, binding := range []error{ErrAdoptionPrefix, ErrRestoredWitness, ErrEpochConflict} {
+		require.NotErrorIs(t, err, binding, "the retained acceptance bytes refuse the adoption mode")
+	}
+	require.ErrorIs(t, retained.Check(t.Context(), f.source, adoption, f.targets.Encryption), ErrConflict)
+	require.Equal(t, before, retainedActivationTree(t, f.source.request.Directory, f.packageDirectory, request.Directory))
+}
+
 func TestRetainedActivationHistoryAfterNativeBarrierRemovalPreservesLaterState(t *testing.T) {
 	f, completed, final, request := retainedActivationFixture(t, false)
 	report := completed.Report()

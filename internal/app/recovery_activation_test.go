@@ -33,8 +33,8 @@ func sealActivationFixture(t *testing.T, cfg *config.Config, request RecoveryAct
 	require.NoError(t, err)
 	directory, err := productfiles.ExistingDirectory(request.ActivationDirectory)
 	require.NoError(t, err)
-	require.NoError(t, checkUnsealedActivation(ctx, cfg, native, source, request))
-	sealed, err := prepareRecoveryActivationDecision(ctx, cfg, native, source, request, directory)
+	require.NoError(t, checkUnsealedActivation(ctx, cfg, native, source, request, importActivation))
+	sealed, err := prepareRecoveryActivationDecision(ctx, cfg, native, source, request, directory, importActivation)
 	if err != nil {
 		_ = native.close()
 	}
@@ -213,6 +213,23 @@ func TestRecoveryActivationSQLApprovalRejectsChangedCurrentSource(t *testing.T) 
 	require.NoError(t, os.WriteFile(cfg.Catalog.SourceURL, []byte("changed selected source"), 0600))
 	// The transaction must reject the changed source after external owner checks succeeded.
 	require.Error(t, sealed.approveSQL(ctx, cfg, native))
+	current, err := native.witness.Current(ctx, sealed.facts.Boundary.DeploymentID)
+	require.NoError(t, err)
+	require.Equal(t, sealed.facts.Boundary, current)
+	require.ErrorIs(t, native.db.CheckImportBarrier(ctx), sqlstore.ErrImportRestricted)
+}
+
+func TestRecoveryActivationSQLApprovalRejectsOtherTopologyBackend(t *testing.T) {
+	cfg, request := activationFleetFixture(t)
+	sealed, native := sealActivationFixture(t, cfg, request)
+	defer func() { require.NoError(t, native.close()) }()
+	commitActivationNativePhases(t, cfg, sealed, native, 2)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	require.Equal(t, request.History.ValkeyIncarnation, sealed.record.Preparation.Transfer.DestinationIdentity.BackendID)
+	sealed.record.Preparation.Transfer.DestinationIdentity.BackendID += "-other"
+	// The approval must not open a backend that the compiled topology does not name.
+	require.ErrorIs(t, sealed.approveSQL(ctx, cfg, native), recovery.ErrConflict)
 	current, err := native.witness.Current(ctx, sealed.facts.Boundary.DeploymentID)
 	require.NoError(t, err)
 	require.Equal(t, sealed.facts.Boundary, current)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json/v2"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"time"
 
@@ -69,8 +68,7 @@ func newRecoveryActivationCommand(deps Dependencies, usageError usageErrorHandle
 			if cmd.Bool(flagStructuredJSON) {
 				return writeIndentedJSON(cmd.Writer, result)
 			}
-			_, err = fmt.Fprintf(cmd.Writer, "Decision SHA-256: %s\nCompleted native phases: %d of 3\nHistorical completion: %t\nCurrent admission valid: %t\nRestricted: %t\nNext action: %s\nFresh gateway startup and readiness remain separate checks.\n", result.DecisionSHA256, result.CompletedPhases, result.HistoricallyComplete, result.CurrentAdmissionValid, result.Restricted, result.NextAction)
-			return err
+			return writeActivationResult(cmd.Writer, result)
 		},
 	}
 }

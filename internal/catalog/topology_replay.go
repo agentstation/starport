@@ -595,13 +595,22 @@ func (c *CompiledTopology) compileArchive(immutable map[string][]byte) error {
 	return nil
 }
 
+// topologyDestinationBackend checks the destination backend identity against the recovery boundary.
+// An adoption boundary keeps the prior approval's backend identity, so the destination must name its own backend.
+func topologyDestinationBackend(request TopologyTransferRequest) bool {
+	if request.DestinationBoundary.AdoptionBoundary() {
+		return request.DestinationIdentity.BackendID != ""
+	}
+	return request.DestinationBoundary.BackendID == "" || request.DestinationIdentity.BackendID == request.DestinationBoundary.BackendID
+}
+
 func validateTopologyDirection(inventory *TopologyInventory, request TopologyTransferRequest) error {
 	if request.DestinationBoundary.Epoch <= 0 {
 		return recovery.ErrConflict
 	}
 	switch request.Direction {
 	case TopologyLocalToFleet, TopologyFleetRestore:
-		if (request.Direction == TopologyLocalToFleet) != (inventory.data.Archive == nil) || request.DestinationIdentity.Validate() != nil || request.DestinationIdentity.DeploymentID != request.DestinationBoundary.DeploymentID || request.DestinationIdentity.RecoveryEpoch != uint64(request.DestinationBoundary.Epoch) || (request.DestinationBoundary.BackendID != "" && request.DestinationIdentity.BackendID != request.DestinationBoundary.BackendID) {
+		if (request.Direction == TopologyLocalToFleet) != (inventory.data.Archive == nil) || request.DestinationIdentity.Validate() != nil || request.DestinationIdentity.DeploymentID != request.DestinationBoundary.DeploymentID || request.DestinationIdentity.RecoveryEpoch != uint64(request.DestinationBoundary.Epoch) || !topologyDestinationBackend(request) {
 			return recovery.ErrConflict
 		}
 	case TopologyFleetToLocal, TopologyLocalRestore:
