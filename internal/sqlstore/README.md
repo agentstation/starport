@@ -144,6 +144,10 @@ go test ./internal/sqlstore/...
 
 Credentials use the URL or DSN fields. The examples omit them.
 
+The qualified release is PostgreSQL `16.15`. `QualifiedPostgreSQLVersion` names it, CI pins the
+same release by image digest, and `TestQualifiedPostgreSQLVersion` compares a real service against
+it. Another release is UNVERIFIED until a qualification run records it.
+
 The suite creates a separate PostgreSQL schema or MySQL database for each
 contract test. Use disposable services. PostgreSQL credentials must permit
 schema creation and removal. MySQL credentials must permit database creation
