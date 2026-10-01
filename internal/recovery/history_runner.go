@@ -83,6 +83,7 @@ type historyRunRecord struct {
 	Authority          revision.RecoveryAuthority `json:"authority"`
 	ValidatedAt        time.Time                  `json:"validated_at"`
 	CatalogPreparation *CatalogPreparationPlan    `json:"catalog_preparation,omitempty"`
+	Mode               string                     `json:"mode,omitempty"`
 }
 type historyRunner struct {
 	witness   *Witness
@@ -221,6 +222,17 @@ func newHistoryRunner(ctx context.Context, w *Witness, source *RestoreSource, ac
 	if err != nil || historySHA256(encoded) != manifest.PreparedSHA256 {
 		return nil, ErrConflict
 	}
+	if adoption := accepted.state.adoption; adoption != nil {
+		// Adoption mode refuses a prefix step and replaces the empty-target claims with the populated claims.
+		identity, err = source.AdoptionIdentity(&VerifiedHistory{state: accepted.state.history}, adoption.epoch.PriorApproval)
+		if err != nil {
+			return nil, err
+		}
+		encoded, err = json.Marshal(identity, json.Deterministic(true))
+		if err != nil || historySHA256(encoded) != adoption.identitySHA256 {
+			return nil, ErrConflict
+		}
+	}
 	if err := checkHistoryRotationOrder(manifest.Steps); err != nil {
 		return nil, err
 	}
@@ -236,6 +248,14 @@ func newHistoryRunner(ctx context.Context, w *Witness, source *RestoreSource, ac
 		return nil, err
 	}
 	return runner, nil
+}
+
+// mode names the journal mode of the accepted transition. Import mode is empty, so import journals do not change.
+func (r *historyRunner) mode() string {
+	if r.accepted.state.adoption != nil {
+		return closedAdoptionMode
+	}
+	return ""
 }
 func (r *historyRunner) guard(ctx context.Context, positions HistoryReplayPositions, skip string) error {
 	if err := r.accepted.check(ctx, r.witness); err != nil {
