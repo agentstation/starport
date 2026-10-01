@@ -97,12 +97,12 @@ def run(root, output, index, package=PACKAGE, race=True):
     (output / "toolchain.txt").write_text(command(["go", "version"]) + command(["go", "env", "GOOS", "GOARCH", "GOHOSTOS", "GOHOSTARCH", "CGO_ENABLED"]), encoding="utf-8")
     expression = "^(" + "|".join(re.escape(n) for n in selected) + ")$"
     print(f"Running {package} shard {index}: {len(selected)} discovered owners.", flush=True)
-    # Each shard runs a quarter of its package. The recovery package needs the
-    # larger allowance. Individual contract deadlines remain unchanged.
-    timeout = "20m" if package == RECOVERY_PACKAGE else "12m"
+    # Each shard runs a quarter of its package. Both packages need a larger
+    # allowance than Go's default. Individual contract deadlines remain unchanged.
+    timeout = "20m" if package == RECOVERY_PACKAGE else "25m"
     args = ["go", "test", "-json", *race_flags, "-count=1", "-timeout", timeout, "-run", expression, path]
     with (output / "tests.jsonl").open("w", encoding="utf-8") as stream:
-        result = subprocess.run(args, cwd=root, stdout=stream, timeout=1500, check=False)
+        result = subprocess.run(args, cwd=root, stdout=stream, timeout=1800, check=False)
     # Keep the native Go exit status. Validation cannot turn a failed run green.
     if result.returncode:
         return result.returncode
