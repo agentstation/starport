@@ -25,10 +25,67 @@ type recoveryActivationNative struct {
 	blobInspect  blob.ImportActivationInspector
 }
 
-func openRecoveryActivationNative(ctx context.Context, cfg *config.Config, request RecoveryActivationRequest) (_ *recoveryActivationNative, resultErr error) {
+func openRecoveryActivationNative(ctx context.Context, cfg *config.Config, request RecoveryActivationRequest) (*recoveryActivationNative, error) {
 	if err := validateExistingImportedTargets(cfg, request.History.ValkeyIncarnation); err != nil {
 		return nil, err
 	}
+	return openRecoveryActivationTargets(ctx, cfg, request)
+}
+
+// openPopulatedRecoveryNative omits the imported-target existence checks. Every other opener check stays.
+// Badger, SQLite, and the filesystem blob target refuse with their owner errors before any native open.
+func openPopulatedRecoveryNative(ctx context.Context, cfg *config.Config, request RecoveryActivationRequest) (_ *recoveryActivationNative, resultErr error) {
+	if err := checkPopulatedBackends(cfg); err != nil {
+		return nil, err
+	}
+	if request.History.ValkeyIncarnation == "" {
+		return nil, recovery.ErrConflict
+	}
+	n, err := openRecoveryActivationTargets(ctx, cfg, request)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, n.close())
+		}
+	}()
+	if dialect := n.db.Dialect(); dialect != sqlstore.TypePostgres && dialect != sqlstore.TypeMySQL {
+		return nil, sqlstore.ErrPopulatedBackend
+	}
+	if _, err := n.populatedTargets(); err != nil {
+		return nil, err
+	}
+	return n, nil
+}
+
+// checkPopulatedBackends refuses a configured destination that has no populated claim owner.
+func checkPopulatedBackends(cfg *config.Config) error {
+	if cfg.RuntimeStorage().Type != storage.StorageTypeValkey {
+		return storage.ErrPopulatedImportUnsupported
+	}
+	if sql := cfg.Storage.RuntimeSQL().Type; sql != sqlstore.TypePostgres && sql != sqlstore.TypeMySQL {
+		return sqlstore.ErrPopulatedBackend
+	}
+	if cfg.Files.SelectedBackend() == config.BlobBackendFilesystem {
+		return blob.ErrPopulatedClaimUnsupported
+	}
+	return nil
+}
+
+func (n *recoveryActivationNative) populatedTargets() (recovery.PopulatedTargets, error) {
+	kv, ok := n.kvTransfer.(storage.PopulatedImportClaimer)
+	if !ok {
+		return recovery.PopulatedTargets{}, storage.ErrPopulatedImportUnsupported
+	}
+	blobs, ok := n.blobs.(blob.PopulatedImportClaimer)
+	if !ok {
+		return recovery.PopulatedTargets{}, blob.ErrPopulatedClaimUnsupported
+	}
+	return recovery.PopulatedTargets{KV: kv, SQL: n.db, Blobs: blobs}, nil
+}
+
+func openRecoveryActivationTargets(ctx context.Context, cfg *config.Config, request RecoveryActivationRequest) (_ *recoveryActivationNative, resultErr error) {
 	n := &recoveryActivationNative{}
 	defer func() {
 		if resultErr != nil {

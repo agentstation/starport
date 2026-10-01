@@ -111,3 +111,32 @@ func TestPreparedCatalogInspectionClosedBoundaryAndFutureIdentity(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, f.boundary, current)
 }
+
+func TestTopologyDirectionBindsAdoptionDestinationBackend(t *testing.T) {
+	adoption := "adoption-epoch:" + strings.Repeat("a", 64)
+	for _, test := range []struct {
+		name     string
+		boundary recovery.Record
+		backend  string
+		allowed  bool
+	}{
+		{"import-equal", recovery.Record{DeploymentID: "destination", Epoch: 2, BackendID: "old-native-incarnation", Evidence: "closed"}, "old-native-incarnation", true},
+		{"import-unbound", recovery.Record{DeploymentID: "destination", Epoch: 2, Evidence: "closed"}, "new-native-incarnation", true},
+		{"import-different", recovery.Record{DeploymentID: "destination", Epoch: 2, BackendID: "old-native-incarnation", Evidence: "closed"}, "new-native-incarnation", false},
+		{"adoption-different", recovery.Record{DeploymentID: "destination", Epoch: 2, BackendID: "old-native-incarnation", Evidence: adoption}, "new-native-incarnation", true},
+		{"adoption-equal", recovery.Record{DeploymentID: "destination", Epoch: 2, BackendID: "old-native-incarnation", Evidence: adoption}, "old-native-incarnation", true},
+		{"adoption-empty", recovery.Record{DeploymentID: "destination", Epoch: 2, BackendID: "old-native-incarnation", Evidence: adoption}, "", false},
+		{"open-adoption-evidence", recovery.Record{DeploymentID: "destination", Epoch: 2, Open: true, BackendID: "old-native-incarnation", Evidence: adoption}, "new-native-incarnation", false},
+		{"malformed-adoption-evidence", recovery.Record{DeploymentID: "destination", Epoch: 2, BackendID: "old-native-incarnation", Evidence: "adoption-epoch:operator-choice"}, "new-native-incarnation", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := TopologyTransferRequest{Direction: TopologyLocalToFleet, DestinationBoundary: test.boundary, DestinationIdentity: runtime.FleetIdentity{DeploymentID: "destination", RecoveryEpoch: 2, BackendID: test.backend}}
+			err := validateTopologyDirection(&TopologyInventory{}, request)
+			if test.allowed {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, recovery.ErrConflict)
+		})
+	}
+}

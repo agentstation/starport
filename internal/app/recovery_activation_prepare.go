@@ -14,12 +14,12 @@ import (
 
 // prepareRecoveryActivationDecision finishes closed history and seals all actual owner records.
 // The returned private capability grants no admission without native ordered release and current permission.
-func prepareRecoveryActivationDecision(ctx context.Context, cfg *config.Config, n *recoveryActivationNative, source *recovery.RestoreSource, request RecoveryActivationRequest, directory *productfiles.Directory) (*sealedRecoveryActivation, error) {
+func prepareRecoveryActivationDecision(ctx context.Context, cfg *config.Config, n *recoveryActivationNative, source *recovery.RestoreSource, request RecoveryActivationRequest, directory *productfiles.Directory, transition recoveryActivationTransition) (*sealedRecoveryActivation, error) {
 	encryption, err := backupEncryption(cfg)
 	if err != nil {
 		return nil, err
 	}
-	preparation, compiled, err := prepareRecoveryActivation(ctx, cfg, n, source, request, directory)
+	preparation, compiled, err := prepareRecoveryActivation(ctx, cfg, n, source, request, directory, transition)
 	if err != nil {
 		return nil, err
 	}
@@ -29,12 +29,11 @@ func prepareRecoveryActivationDecision(ctx context.Context, cfg *config.Config, 
 			return nil, err
 		}
 	}
-	historyRequest := recovery.HistoryPackageRequest{Directory: request.History.HistoryDirectory, ManifestSHA256: request.History.HistorySHA256, TargetSHA256: request.History.ExpectedTargetSHA256, Operation: request.History.Operation}
-	history, err := source.VerifyHistoryPackage(ctx, historyRequest)
+	history, err := source.VerifyHistoryPackage(ctx, activationHistoryRequest(request))
 	if err != nil {
 		return nil, err
 	}
-	accepted, err := n.witness.AcceptImportedHistory(ctx, source, history, recovery.HistoryAcceptanceRequest{Directory: request.History.JournalDirectory, Attestation: request.History.Attestation})
+	accepted, err := transition.accept(ctx, n, source, history, request)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +111,7 @@ func prepareRecoveryActivationDecision(ctx context.Context, cfg *config.Config, 
 	if err != nil {
 		return nil, err
 	}
-	if err := checkPreparedActivationOwners(ctx, cfg, n, source, request, preparation, compiled, target, options, materialization, permission); err != nil {
+	if err := checkPreparedActivationOwners(ctx, cfg, n, source, request, transition, preparation, compiled, target, options, materialization, permission); err != nil {
 		return nil, err
 	}
 
@@ -120,14 +119,14 @@ func prepareRecoveryActivationDecision(ctx context.Context, cfg *config.Config, 
 	if err != nil {
 		return nil, err
 	}
-	checked, err := openSealedActivationWithCompiled(ctx, cfg, request, n, source, body, journal.Digest(), compiled, final)
+	checked, err := openSealedActivationWithCompiled(ctx, cfg, request, n, source, body, journal.Digest(), transition, compiled, final)
 	if err != nil {
 		return nil, err
 	}
 	return checked, nil
 }
 
-func checkPreparedActivationOwners(ctx context.Context, cfg *config.Config, n *recoveryActivationNative, source *recovery.RestoreSource, request RecoveryActivationRequest, preparation recoveryActivationPreparationRecord, compiled *catalog.CompiledTopology, target catalog.TopologyRuntimeTarget, options []runtime.Option, materialization []byte, permission *catalog.TopologyPermission) error {
+func checkPreparedActivationOwners(ctx context.Context, cfg *config.Config, n *recoveryActivationNative, source *recovery.RestoreSource, request RecoveryActivationRequest, transition recoveryActivationTransition, preparation recoveryActivationPreparationRecord, compiled *catalog.CompiledTopology, target catalog.TopologyRuntimeTarget, options []runtime.Option, materialization []byte, permission *catalog.TopologyPermission) error {
 	// Recheck every owner before retaining the immutable application decision.
 	inputs, err := InspectRecoveryOperatorInputs(ctx, cfg, n.db, n.blobs, operatorActivationRequest(request))
 	if err != nil {
@@ -154,7 +153,7 @@ func checkPreparedActivationOwners(ctx context.Context, cfg *config.Config, n *r
 	if err := compiled.CheckPermission(ctx, catalogSettings(cfg), clock, permission); err != nil {
 		return err
 	}
-	if err := checkUnsealedActivation(ctx, cfg, n, source, request); err != nil {
+	if err := checkUnsealedActivation(ctx, cfg, n, source, request, transition); err != nil {
 		return err
 	}
 	return nil

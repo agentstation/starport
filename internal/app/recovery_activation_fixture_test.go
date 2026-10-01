@@ -38,6 +38,12 @@ func activationPreparedFixture(t *testing.T, cfg *config.Config, prepare recover
 	_, err := PrepareBackup(t.Context(), cfg, prepare)
 	require.NoError(t, err)
 	canonicalSelectedInputs(t, cfg)
+	return cfg, activationHistoryFixture(t, cfg, prepare)
+}
+
+// activationHistoryFixture writes the final-only history H that binds the source's import identity and the current target.
+func activationHistoryFixture(t *testing.T, cfg *config.Config, prepare recovery.PrepareRequest) RecoveryActivationRequest {
+	t.Helper()
 	incarnation := ""
 	if cfg.RuntimeStorage().Type == storage.StorageTypeValkey {
 		store, err := storage.OpenValkey(cfg.RuntimeStorage().Valkey)
@@ -119,7 +125,7 @@ func activationPreparedFixture(t *testing.T, cfg *config.Config, prepare recover
 			require.NoError(t, store.Close())
 		})
 	}
-	return cfg, request
+	return request
 }
 
 // activationFromActivatedFleet captures actual fleet publications from a completed native target.

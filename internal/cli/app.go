@@ -104,6 +104,9 @@ type Dependencies struct {
 	PublishBackupFiles        BackupFilePublisher
 	ActivateRecovery          RecoveryActivator
 	InspectRecoveryActivation RecoveryActivationInspector
+	PreparePopulatedRecovery  PopulatedRecoveryPreparer
+	ActivatePopulatedRecovery PopulatedRecoveryActivator
+	InspectPopulatedRecovery  PopulatedRecoveryInspector
 	// Desktop provides browser and clipboard access. Dependency checks do not require these services.
 	// Commands print each link even when neither service is available.
 	Desktop Desktop

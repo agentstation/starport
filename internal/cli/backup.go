@@ -33,6 +33,7 @@ func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 		newPrepareBackupCommand(deps, usageError),
 		newRecoveryActivationCommand(deps, usageError, false),
 		newRecoveryActivationCommand(deps, usageError, true),
+		newPopulatedRecoveryCommand(deps, usageError),
 		newInspectImportedBackupCommand(deps, usageError),
 		newApplyHistoryCommand(deps, usageError),
 		newPublishBackupFilesCommand(deps, usageError),

@@ -22,6 +22,17 @@ type ClosedAdoptionEpochRequest struct {
 	Evidence      EpochEvidence                     `json:"evidence"`
 }
 
+// adoptionEpochEvidence prefixes the evidence of a closed populated adoption boundary.
+const adoptionEpochEvidence = "adoption-epoch:"
+
+// AdoptionBoundary reports whether r is a closed populated adoption boundary.
+// Such a boundary keeps the backend identity of the prior approval, so it does not name the destination backend.
+func (r Record) AdoptionBoundary() bool {
+	digest, ok := strings.CutPrefix(r.Evidence, adoptionEpochEvidence)
+	decoded, err := hex.DecodeString(digest)
+	return ok && !r.Open && err == nil && len(decoded) == sha256.Size && hex.EncodeToString(decoded) == digest
+}
+
 func (r ClosedAdoptionEpochRequest) next() (Record, string, error) {
 	closed, prior := r.Closed, r.PriorApproval
 	if closed.Open || closed.Epoch <= 1 || closed.Epoch == math.MaxInt64 || validDeployment(closed.DeploymentID) != nil ||
@@ -50,7 +61,7 @@ func (r ClosedAdoptionEpochRequest) next() (Record, string, error) {
 	identity := hex.EncodeToString(digest[:])
 	next := closed
 	next.Epoch = max(closed.Epoch, r.Evidence.HighestEpoch+1)
-	next.Evidence = "adoption-epoch:" + identity
+	next.Evidence = adoptionEpochEvidence + identity
 	return next, identity, nil
 }
 
@@ -65,5 +76,5 @@ func (w *Witness) PrepareClosedAdoptionEpoch(ctx context.Context, request Closed
 	if err != nil {
 		return Record{}, err
 	}
-	return w.reconcileEpoch(ctx, request.Snapshot, request.Import, "adoption-epoch:"+request.Closed.DeploymentID, digest, request.Closed, next)
+	return w.reconcileEpoch(ctx, request.Snapshot, request.Import, adoptionEpochEvidence+request.Closed.DeploymentID, digest, request.Closed, next)
 }

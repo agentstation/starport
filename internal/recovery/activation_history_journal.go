@@ -22,7 +22,14 @@ func openRetainedActivationRunner(ctx context.Context, source *RestoreSource, re
 	if err := checkHistoryRotationOrder(history.state.manifest.Steps); err != nil {
 		return nil, historyJournalState{}, err
 	}
-	accepted, err := prepareHistoryAcceptance(source, history, HistoryAcceptanceRequest{Directory: request.Directory, Attestation: request.Attestation})
+	acceptance := HistoryAcceptanceRequest{Directory: request.Directory, Attestation: request.Attestation}
+	adoption := request.PriorApproval != (Record{})
+	var accepted *acceptedHistoryState
+	if adoption {
+		accepted, err = prepareAdoptionAcceptance(source, history, request.PriorApproval, acceptance)
+	} else {
+		accepted, err = prepareHistoryAcceptance(source, history, acceptance)
+	}
 	if err != nil {
 		return nil, historyJournalState{}, err
 	}
@@ -34,7 +41,12 @@ func openRetainedActivationRunner(ctx context.Context, source *RestoreSource, re
 	if err != nil || !bytes.Equal(body, accepted.body) {
 		return nil, historyJournalState{}, errors.Join(ErrConflict, err)
 	}
-	identity, err := source.ImportIdentity(request.History.Operation)
+	var identity PreparedImportIdentity
+	if adoption {
+		identity, err = source.AdoptionIdentity(history, request.PriorApproval)
+	} else {
+		identity, err = source.ImportIdentity(request.History.Operation)
+	}
 	if err != nil {
 		return nil, historyJournalState{}, err
 	}

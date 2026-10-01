@@ -18,6 +18,7 @@ import (
 	starportcli "github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/diagnosis"
+	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/setup"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -77,6 +78,16 @@ func runContext(
 		PublishBackupFiles:        app.PublishBackupFiles,
 		ActivateRecovery:          app.ActivateRecovery,
 		InspectRecoveryActivation: app.InspectRecoveryActivation,
+		PreparePopulatedRecovery: func(ctx context.Context, cfg *config.Config, request starportcli.PopulatedRecoveryRequest) (starportcli.PopulatedRecoveryPreparation, error) {
+			result, err := app.PreparePopulatedRecovery(ctx, cfg, app.PopulatedRecoveryRequest(request))
+			return starportcli.PopulatedRecoveryPreparation(result), err
+		},
+		ActivatePopulatedRecovery: func(ctx context.Context, cfg *config.Config, request starportcli.PopulatedRecoveryRequest) (recovery.ActivationResult, error) {
+			return app.ActivatePopulatedRecovery(ctx, cfg, app.PopulatedRecoveryRequest(request))
+		},
+		InspectPopulatedRecovery: func(ctx context.Context, cfg *config.Config, request starportcli.PopulatedRecoveryRequest) (recovery.ActivationResult, error) {
+			return app.InspectPopulatedRecovery(ctx, cfg, app.PopulatedRecoveryRequest(request))
+		},
 	})
 	if err == nil {
 		return 0

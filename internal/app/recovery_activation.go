@@ -5,7 +5,6 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"os"
-	"path/filepath"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starmap/pkg/productfiles"
@@ -50,6 +49,12 @@ func ActivateRecovery(ctx context.Context, cfg *config.Config, request RecoveryA
 		return result, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, n.close()) }()
+	return activateRecovery(ctx, cfg, n, source, request, importActivation)
+}
+
+// activateRecovery runs the shared phases after the transition places its native claims.
+// An exact sealed retry reopens owner evidence and skips the claim.
+func activateRecovery(ctx context.Context, cfg *config.Config, n *recoveryActivationNative, source *recovery.RestoreSource, request RecoveryActivationRequest, transition recoveryActivationTransition) (result RecoveryActivationResult, resultErr error) {
 	directory, err := productfiles.ExistingDirectory(request.ActivationDirectory)
 	if err != nil {
 		return result, err
@@ -60,7 +65,7 @@ func ActivateRecovery(ctx context.Context, cfg *config.Config, request RecoveryA
 		if request.ExpectedDecisionSHA256 != digest {
 			return result, recovery.ErrConflict
 		}
-		checked, err := openSealedActivation(ctx, cfg, request, n, source, body, digest)
+		checked, err := openSealedActivation(ctx, cfg, request, n, source, body, digest, transition)
 		if err != nil {
 			return result, err
 		}
@@ -69,18 +74,21 @@ func ActivateRecovery(ctx context.Context, cfg *config.Config, request RecoveryA
 	if !errors.Is(err, os.ErrNotExist) || request.ExpectedDecisionSHA256 != "" {
 		return result, errors.Join(recovery.ErrConflict, err)
 	}
-	if err := checkUnsealedActivation(ctx, cfg, n, source, request); err != nil {
+	if err := transition.claim(ctx, cfg, n, source, request); err != nil {
 		return result, err
 	}
-	checked, err := prepareRecoveryActivationDecision(ctx, cfg, n, source, request, directory)
+	if err := checkUnsealedActivation(ctx, cfg, n, source, request, transition); err != nil {
+		return result, err
+	}
+	checked, err := prepareRecoveryActivationDecision(ctx, cfg, n, source, request, directory, transition)
 	if err != nil {
 		return result, err
 	}
 	return checked.release(ctx, cfg, n)
 }
 
-func checkUnsealedActivation(ctx context.Context, cfg *config.Config, n *recoveryActivationNative, source *recovery.RestoreSource, request RecoveryActivationRequest) error {
-	identity, err := source.ImportIdentity(request.Prepare.Operation)
+func checkUnsealedActivation(ctx context.Context, cfg *config.Config, n *recoveryActivationNative, source *recovery.RestoreSource, request RecoveryActivationRequest, transition recoveryActivationTransition) error {
+	identity, err := transition.identity(ctx, source, request)
 	if err != nil {
 		return err
 	}
@@ -105,7 +113,7 @@ func checkUnsealedActivation(ctx context.Context, cfg *config.Config, n *recover
 	return inspector.CheckUnreleasedImport(ctx, identity.ComponentOperation, identity.BlobOriginal)
 }
 
-func prepareRecoveryActivation(ctx context.Context, cfg *config.Config, n *recoveryActivationNative, source *recovery.RestoreSource, request RecoveryActivationRequest, directory *productfiles.Directory) (recoveryActivationPreparationRecord, *catalog.CompiledTopology, error) {
+func prepareRecoveryActivation(ctx context.Context, cfg *config.Config, n *recoveryActivationNative, source *recovery.RestoreSource, request RecoveryActivationRequest, directory *productfiles.Directory, transition recoveryActivationTransition) (recoveryActivationPreparationRecord, *catalog.CompiledTopology, error) {
 	retained, _, err := readActivationPreparation(ctx, directory)
 	if err == nil {
 		if retained.Request != request.Original() {
@@ -122,32 +130,7 @@ func prepareRecoveryActivation(ctx context.Context, cfg *config.Config, n *recov
 	if err := catalogSettings(cfg).PrepareRecoveryTopologyDirectory(ctx); err != nil {
 		return retained, nil, err
 	}
-	plan, err := planBackupFiles(ctx, cfg, source)
-	if err != nil {
-		return retained, nil, err
-	}
-	selected, _, _, err := canonicalRecoverySelectionMode(ctx, cfg, source, plan, true)
-	if err != nil {
-		return retained, nil, err
-	}
-	prepared, err := source.Prepare(ctx, recovery.BundleTargets{KV: n.kvTransfer, SQL: n.db, Blobs: n.blobs, FilesDirectory: request.Prepare.FilesDirectory}, request.Prepare.Operation)
-	if err != nil {
-		return retained, nil, err
-	}
-	var originals []recovery.PublishFilesResult
-	// Publication operates before any release. The role owner derives exact selected source files.
-	for _, role := range selected {
-		if _, err := productfiles.NewDirectory(filepath.Dir(role.tree.Destination)); err != nil {
-			return retained, nil, err
-		}
-		tree, err := source.PublishFileTree(ctx, role.tree, canonicalFileOwnerValidator(cfg, role.role))
-		published := recovery.PublishFilesResult{Preparation: recovery.PrepareResult{Prepared: prepared, FilesDirectory: request.Prepare.FilesDirectory}, Role: role.role, Tree: tree}
-		if err != nil {
-			return retained, nil, err
-		}
-		originals = append(originals, published)
-	}
-	canonical, err := verifyCanonicalFilesWithSource(ctx, cfg, request.Prepare, originals, true, source)
+	canonical, err := transition.canonicalFiles(ctx, cfg, n, source, request)
 	if err != nil {
 		return retained, nil, err
 	}
@@ -164,11 +147,11 @@ func prepareRecoveryActivation(ctx context.Context, cfg *config.Config, n *recov
 	if err != nil {
 		return retained, nil, err
 	}
-	history, err := source.VerifyHistoryPackage(ctx, recovery.HistoryPackageRequest{Directory: request.History.HistoryDirectory, ManifestSHA256: request.History.HistorySHA256, TargetSHA256: request.History.ExpectedTargetSHA256, Operation: request.History.Operation})
+	history, err := source.VerifyHistoryPackage(ctx, activationHistoryRequest(request))
 	if err != nil {
 		return retained, nil, err
 	}
-	accepted, err := n.witness.AcceptImportedHistory(ctx, source, history, recovery.HistoryAcceptanceRequest{Directory: request.History.JournalDirectory, Attestation: request.History.Attestation})
+	accepted, err := transition.accept(ctx, n, source, history, request)
 	if err != nil {
 		return retained, nil, err
 	}
@@ -176,7 +159,7 @@ func prepareRecoveryActivation(ctx context.Context, cfg *config.Config, n *recov
 	if err != nil {
 		return retained, nil, err
 	}
-	identity, err := source.ImportIdentity(request.Prepare.Operation)
+	identity, err := transition.identity(ctx, source, request)
 	if err != nil {
 		return retained, nil, err
 	}
