@@ -243,6 +243,9 @@ class ApplicationRecoveryTests(unittest.TestCase):
                 self.assertIn("30m", run.call_args.args[0])
                 self.assertNotIn("-race", run.call_args.args[0])
                 self.assertIn("-count=1", run.call_args.args[0])
+                # Toolchain notices on stderr must not enter the JSON event stream.
+                self.assertEqual(Path(run.call_args.kwargs["stdout"].name).name, "tests.jsonl")
+                self.assertEqual(Path(run.call_args.kwargs["stderr"].name).name, "tests.stderr.txt")
 
     def test_required_workflow_keeps_platforms_and_serial_native_groups(self):
         root = Path(__file__).resolve().parents[1]

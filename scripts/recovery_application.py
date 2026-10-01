@@ -226,8 +226,9 @@ def run(root, output, group, mode):
     (output / "roster.json").write_text(json.dumps(roster, indent=2) + "\n", encoding="utf-8")
     expression = "^(" + "|".join(re.escape(name) for name in GROUPS[group]) + ")$"
     args = ["go", "test", "-json", *flags, "-p", "1", "-count=1", "-timeout", "30m", "-run", expression, "./internal/app"]
-    with (output / "tests.jsonl").open("w", encoding="utf-8") as stream:
-        result = subprocess.run(args, cwd=root, env=env, stdout=stream, stderr=subprocess.STDOUT, timeout=1860, check=False)
+    # The event file holds only the JSON stream. Toolchain notices such as module downloads go to stderr.
+    with (output / "tests.jsonl").open("w", encoding="utf-8") as stream, (output / "tests.stderr.txt").open("w", encoding="utf-8") as errors:
+        result = subprocess.run(args, cwd=root, env=env, stdout=stream, stderr=errors, timeout=1860, check=False)
     if result.returncode:
         return result.returncode
     validate_events(group, read_events(output / "tests.jsonl"))
