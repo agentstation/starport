@@ -2,9 +2,12 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -85,7 +88,9 @@ type Server struct {
 // Dependencies contains ready application ports for the HTTP adapter.
 type Dependencies struct {
 	// Readiness checks common admission prerequisites without external I/O.
-	Readiness           func() bool
+	Readiness func() bool
+	// RecoveryAdmission checks known ownership withdrawals from memory.
+	RecoveryAdmission   func() error
 	AuthorizationStatus func() authorization.Status
 	Authorization       *authorization.Cache
 	PermissionClock     authorization.Clock
@@ -175,6 +180,9 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 	if config == nil {
 		return nil, ErrConfigRequired
 	}
+	if config.TLSCertificate != nil && (len(config.TLSCertificate.Certificate) == 0 || config.TLSCertificate.PrivateKey == nil) {
+		return nil, errors.New("server TLS requires a complete certificate and private key")
+	}
 	if dependencies.Service == nil {
 		return nil, ErrServiceRequired
 	}
@@ -229,6 +237,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		}
 		s.auth.UseAuthorization(dependencies.Authorization, dependencies.PermissionClock)
 	}
+	s.auth.recoveryAdmission = dependencies.RecoveryAdmission
 	s.auth.Govern(s.authPolicy, config.UnauthenticatedScopes)
 	s.auth.AcceptSessions(dependencies.LocalGate)
 
@@ -274,12 +283,15 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 
 	// Create HTTP server
 	s.httpServer = &http.Server{
-		Addr:           fmt.Sprintf("%s:%d", config.Host, config.Port),
+		Addr:           net.JoinHostPort(config.Host, strconv.Itoa(config.Port)),
 		Handler:        s.router,
 		ReadTimeout:    config.ReadTimeout,
 		WriteTimeout:   config.WriteTimeout,
 		IdleTimeout:    config.IdleTimeout,
 		MaxHeaderBytes: config.MaxHeaderBytes,
+	}
+	if config.TLSCertificate != nil {
+		s.httpServer.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*config.TLSCertificate}, MinVersion: tls.VersionTLS12}
 	}
 
 	return s, nil
@@ -336,7 +348,12 @@ func (s *Server) handleMethodNotAllowed(w http.ResponseWriter, r *http.Request) 
 
 // Start starts the HTTP server
 func (s *Server) Start() error {
+	scheme := "http"
+	if s.httpServer.TLSConfig != nil {
+		scheme = "https"
+	}
 	log.Info().
+		Str("scheme", scheme).
 		Int("port", s.cfg.Port).
 		Str("host", s.cfg.Host).
 		Str("auth_mode", string(s.authPolicy.Current().Mode)).
@@ -349,11 +366,17 @@ func (s *Server) Start() error {
 			host = "localhost"
 		}
 		log.Info().
-			Str("url", fmt.Sprintf("http://%s:%d", host, s.cfg.Port)).
+			Str("url", scheme+"://"+net.JoinHostPort(host, strconv.Itoa(s.cfg.Port))).
 			Msg("console ready")
 	}
 
-	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	var err error
+	if s.httpServer.TLSConfig != nil {
+		err = s.httpServer.ListenAndServeTLS("", "")
+	} else {
+		err = s.httpServer.ListenAndServe()
+	}
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 

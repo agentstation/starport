@@ -2,6 +2,7 @@
 package server
 
 import (
+	"crypto/tls"
 	"time"
 
 	"github.com/agentstation/starport/internal/authmode"
@@ -25,6 +26,10 @@ type Config struct {
 
 	// Host to bind to
 	Host string `env:"HOST,default=0.0.0.0"`
+
+	// TLSCertificate selects HTTPS with the certificate that application composition validated.
+	// A nil certificate selects HTTP, including deployments with external TLS termination.
+	TLSCertificate *tls.Certificate `json:"-"`
 
 	// Read and write timeouts
 	ReadTimeout  time.Duration `env:"READ_TIMEOUT,default=10s"`

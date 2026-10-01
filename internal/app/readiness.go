@@ -5,7 +5,7 @@ import "github.com/agentstation/starport/internal/authorization"
 // admissionReady checks common admission prerequisites from retained memory.
 // Per-caller policy, credentials, and budgets still govern each request.
 func (a *App) admissionReady() bool {
-	if a.authorization == nil || !a.authorization.cache.Ready() || a.registry == nil {
+	if a.authorization == nil || !a.authorization.cache.Ready() || a.registry == nil || a.recoveryAdmission() != nil {
 		return false
 	}
 	return a.registry.AdmissionReady()
@@ -19,4 +19,12 @@ func (a *App) authorizationStatus() authorization.Status {
 	status := a.authorization.cache.Status()
 	status.Observations = a.authorization.monitor.Status()
 	return status
+}
+
+// recoveryAdmission checks known recovery withdrawals without external I/O.
+func (a *App) recoveryAdmission() error {
+	if a.budget != nil && a.budget.shared != nil {
+		return a.budget.shared.CheckAdmission()
+	}
+	return nil
 }

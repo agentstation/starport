@@ -212,5 +212,8 @@ func useSharedRecipeWithLocalTestStores(t *testing.T, cfg *config.Config, factor
 	cfg.Files.ObjectStore.Bucket = "clock-test"
 	cfg.Files.ObjectStore.Region = "us-east-1"
 	factories.openSQL = func(config.StorageConfig) (*sqlstore.DB, error) { return sqlstore.Open(localSQL) }
+	factories.inspectRecoverySQL = func(ctx context.Context, _ config.StorageConfig, deployment string) (sqlstore.RecoveryStartupState, error) {
+		return sqlstore.InspectRecoveryStartup(ctx, localSQL, deployment)
+	}
 	factories.openBlob = func(context.Context, config.FilesConfig) (blob.Store, error) { return blob.NewFilesystem(localFiles) }
 }

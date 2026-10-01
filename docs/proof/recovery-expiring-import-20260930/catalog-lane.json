@@ -1,0 +1,39 @@
+{
+  "go": "go1.27.1",
+  "platform": "darwin/arm64",
+  "source_sha256": {
+    "internal/recovery/catalog_assets.go": "37e751cbf664ed9dd43c209751c51296eb6f0f49d75d8cc8960f24c2dcec7b4a",
+    "internal/recovery/catalog_preparation.go": "43ea328b3e1f811526afeb79d8e34cc7e34f825ac32f2e27be884e09ec1928fc",
+    "internal/recovery/catalog_journal.go": "5f5967451e99dc5f191aef252183fe0412eba6e75a6f550acdeed7618ef400e4",
+    "internal/recovery/catalog_retry.go": "0111a6717f96238c5ba88a1774bff22666b3535d3ee5f40725f1d4095c8a7f63",
+    "internal/recovery/catalog_expiring_preparation_test.go": "2c67651873ad594addc64370001dd0732358c719a1dda77b688a9924e29fc2d6"
+  },
+  "scope": "Original expiring catalog retirement assets, under the closed native SQL guard and contiguous KV replay receipts. The immutable asset binds original bytes, presence and absolute expiry. Every path still requires final selection and authorization rotations.",
+  "checks": {
+    "race": {
+      "exit": 0,
+      "results": {
+        "pass": 6
+      },
+      "raw": "/tmp/csp13-catalog-expiring-lane-bounded-race.jsonl",
+      "sha256": "186d5a4629937ded1eebdfaefe74f4349f0bab286ee3a79515c4ced974fbecb9"
+    },
+    "pure": {
+      "exit": 0,
+      "results": {
+        "pass": 6
+      },
+      "raw": "/tmp/csp13-catalog-expiring-lane-bounded-pure.jsonl",
+      "sha256": "dd06cbbb65c914f92a2817ff073f85e91fc25c6e32146a94d44edcc69b3b1151"
+    }
+  },
+  "native_recipes": [
+    "Badger + SQLite",
+    "Valkey + PostgreSQL",
+    "Valkey + MySQL"
+  ],
+  "remaining_uncertainty": [
+    "This lane test proves expired original absence and lost reply through native receipts. Alive original lease deletion and native close/reopen have separate storage-owner proof.",
+    "Complete application activation and fresh-process phase publication qualification remain separate."
+  ]
+}

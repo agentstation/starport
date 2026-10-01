@@ -87,6 +87,7 @@ config.local.yml
 # Performance test results
 benchmarks/
 *.bench
+/catalog-capacity/
 
 # Documentation build
 docs/_build/

@@ -6,9 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/agentstation/starmap/pkg/productfiles"
-	"github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
-	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/recovery"
 )
 
@@ -30,23 +28,9 @@ func PublishBackupFiles(ctx context.Context, cfg *config.Config, request recover
 	if err != nil {
 		return result, err
 	}
-	if request.Role == config.RuntimeEvidenceRole {
-		tree, remaining, err = selectRuntimeRestoreFiles(ctx, cfg, source, tree, plan, remaining)
-		if err != nil {
-			return result, err
-		}
-	}
-	if request.Role == config.AcquisitionPolicyRole || request.Role == config.InferenceCredentialPolicyRole {
-		tree, remaining, err = selectCredentialRestoreFiles(ctx, cfg, request.Role, source, tree, plan, remaining)
-		if err != nil {
-			return result, err
-		}
-	}
-	if request.Role == config.BaselineRole {
-		tree, remaining, err = selectBaselineRestoreFiles(ctx, source, tree, plan, remaining)
-		if err != nil {
-			return result, err
-		}
+	tree, remaining, err = canonicalFileOwnerSelection(ctx, cfg, source, request.Role, tree, plan, remaining)
+	if err != nil {
+		return result, err
 	}
 	scratch := request.ScratchDirectory
 	if scratch == "" {
@@ -63,21 +47,7 @@ func PublishBackupFiles(ctx context.Context, cfg *config.Config, request recover
 	if _, err := productfiles.NewDirectory(filepath.Dir(tree.Destination)); err != nil {
 		return result, err
 	}
-	paths := cfg.EffectivePaths()
-	owner := credentials.SelectionPolicyOwner{Product: "starport", Deployment: paths.DeploymentID, Instance: paths.InstanceID}
-	result.Tree, err = source.PublishFileTree(ctx, tree, func(ctx context.Context, directory string) error {
-		if request.Role == config.RuntimeEvidenceRole {
-			return catalogSettings(cfg).InspectRetainedDirectory(ctx, directory)
-		}
-		if request.Role == config.BaselineRole {
-			return catalog.InspectBaselineExports(ctx, directory)
-		}
-		if request.Role == config.AcquisitionPolicyRole {
-			settings := catalog.Settings{DeploymentID: paths.DeploymentID, InstanceID: paths.InstanceID}
-			return settings.InspectCredentialPolicy(ctx, directory)
-		}
-		return credentials.InspectSelectionPolicyDirectory(ctx, directory, owner)
-	})
+	result.Tree, err = source.PublishFileTree(ctx, tree, canonicalFileOwnerValidator(cfg, request.Role))
 	return result, err
 }
 

@@ -64,17 +64,19 @@ func runContext(
 		LoadConfig: func(loadCtx context.Context) (*config.Config, error) {
 			return config.LoadWithDefaults(loadCtx)
 		},
-		ResolvePaths:          config.PlatformPaths,
-		Diagnose:              diagnosis.Run,
-		MigrateRuntime:        app.MigrateRuntime,
-		InitializeFleet:       app.InitializeFleet,
-		CloseBackupBoundary:   app.CloseBackupBoundary,
-		CaptureBackup:         app.CaptureBackup,
-		VerifyBackup:          app.VerifyBackup,
-		PrepareBackup:         app.PrepareBackup,
-		InspectImportedBackup: app.InspectImportedBackup,
-		ApplyImportedHistory:  app.ApplyImportedHistory,
-		PublishBackupFiles:    app.PublishBackupFiles,
+		ResolvePaths:              config.PlatformPaths,
+		Diagnose:                  diagnosis.Run,
+		MigrateRuntime:            app.MigrateRuntime,
+		InitializeFleet:           app.InitializeFleet,
+		CloseBackupBoundary:       app.CloseBackupBoundary,
+		CaptureBackup:             app.CaptureBackup,
+		VerifyBackup:              app.VerifyBackup,
+		PrepareBackup:             app.PrepareBackup,
+		InspectImportedBackup:     app.InspectImportedBackup,
+		ApplyImportedHistory:      app.ApplyImportedHistory,
+		PublishBackupFiles:        app.PublishBackupFiles,
+		ActivateRecovery:          app.ActivateRecovery,
+		InspectRecoveryActivation: app.InspectRecoveryActivation,
 	})
 	if err == nil {
 		return 0

@@ -109,6 +109,25 @@ test: ## Run all tests
 test-authorization-capacity: ## Measure authorization heap during concurrent tenant churn
 	TEST_AUTHORIZATION_CAPACITY=1 $(GO) test -json -race -count=1 -timeout 3m -run '^TestAuthorizationTenantChurnCapacity$$' ./internal/authorization
 
+.PHONY: test-catalog-capacity
+test-catalog-capacity: ## Measure and verify the decoded catalog limit under race detection and pure Go
+	python3 scripts/test-catalog-capacity.py
+	@mkdir -p catalog-capacity
+	@set -eu; \
+		run_dir="$$(mktemp -d catalog-capacity/run.XXXXXX)"; \
+		python3 scripts/catalog_capacity.py decoded-race --output "$$run_dir/decoded-race"; \
+		python3 scripts/catalog_capacity.py decoded-pure --output "$$run_dir/decoded-pure"; \
+		printf 'Catalog capacity evidence: %s\n' "$$run_dir"
+
+.PHONY: test-catalog-maximum
+test-catalog-maximum: ## Measure the complete catalog maximum on a dedicated local host
+	python3 scripts/test-catalog-capacity.py
+	@mkdir -p catalog-capacity
+	@set -eu; \
+		run_dir="$$(mktemp -d catalog-capacity/maximum.XXXXXX)"; \
+		python3 scripts/catalog_capacity.py maximum-pure --output "$$run_dir/maximum-pure"; \
+		printf 'Catalog maximum evidence: %s\n' "$$run_dir"
+
 .PHONY: tests
 tests: test ## Alias for test
 

@@ -1,0 +1,29 @@
+{
+  "source": "7254d24e180bb109bf0084092a1e9b5f1f37ce5a",
+  "scope": "SQL approval current-source change; original evidence and operator-target tamper; completed history with later withdrawal",
+  "qualification": [
+    {
+      "log": "/tmp/csp13-activation-release-safety-final-race.jsonl",
+      "sha256": "746deca00baa939c00f0992ffd7fcd11b7d4f8be325ee2e4b11f76a2c0c222c0",
+      "counts": {
+        "pass": 9
+      },
+      "package_seconds": 244.065
+    },
+    {
+      "log": "/tmp/csp13-activation-release-safety-final-pure.jsonl",
+      "sha256": "0de7f6802d0c256cccb11c18b3577e86104bb1df4193f3c4685ee7d417ec3930",
+      "counts": {
+        "pass": 9
+      },
+      "package_seconds": 154.652
+    }
+  ],
+  "constraints": [
+    "Go 1.27.1",
+    "GOWORK=off; merged producer e0845d601fb5",
+    "No timeout change",
+    "Actual isolated PostgreSQL, Valkey and object storage; local Badger/SQLite",
+    "Full embedded instrumented activation remains unqualified"
+  ]
+}

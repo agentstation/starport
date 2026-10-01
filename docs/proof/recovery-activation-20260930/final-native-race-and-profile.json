@@ -1,0 +1,242 @@
+{
+  "scope": "Final-source native race matrix and full embedded deadline investigation; whole CSP13 remains in progress",
+  "source_commit": "b7ba377b440b1cee33888cb062f506c3396193e0",
+  "go": "go1.27.1 darwin/arm64",
+  "producer": "github.com/agentstation/starmap v0.16.6-0.20260930082412-e0845d601fb5",
+  "command": "go test -json -race ./internal/app -run ^TestRecoveryActivation(FreshProcessNativeBoundaries|CurrentChoiceOrOriginalEvidenceFailureKeepsRemainingOwnersClosed|CompletedRetryPreservesLaterWithdrawal|NativeTopologyRecipes|ExactPendingPhaseRestart|BoundedSourceNormalStartup|FullEmbeddedApplication)$ -count=1 -timeout=30m",
+  "artifact": {
+    "path": "/tmp/csp13-activation-final-source-native-race-matrix.jsonl",
+    "sha256": "c787b2ae32994620355e1a0e4d7a7ea5c7e23a95ab239b5d578120560b332590"
+  },
+  "test_results": [
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/blobs/header",
+      "result": "pass",
+      "elapsed_seconds": 52.63
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/blobs/empty",
+      "result": "pass",
+      "elapsed_seconds": 41.31
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/blobs/prepared",
+      "result": "pass",
+      "elapsed_seconds": 45.8
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/blobs/published",
+      "result": "pass",
+      "elapsed_seconds": 41.78
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/kv/header",
+      "result": "pass",
+      "elapsed_seconds": 39.95
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/kv/empty",
+      "result": "pass",
+      "elapsed_seconds": 42.01
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/kv/prepared",
+      "result": "pass",
+      "elapsed_seconds": 55.99
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/kv/published",
+      "result": "pass",
+      "elapsed_seconds": 45.27
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/sql/header",
+      "result": "pass",
+      "elapsed_seconds": 56.06
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/sql/empty",
+      "result": "pass",
+      "elapsed_seconds": 54.91
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/sql/prepared",
+      "result": "pass",
+      "elapsed_seconds": 45.71
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart/sql/published",
+      "result": "pass",
+      "elapsed_seconds": 44.4
+    },
+    {
+      "test": "TestRecoveryActivationExactPendingPhaseRestart",
+      "result": "pass",
+      "elapsed_seconds": 568.25
+    },
+    {
+      "test": "TestRecoveryActivationFreshProcessNativeBoundaries/sealed",
+      "result": "pass",
+      "elapsed_seconds": 43.08
+    },
+    {
+      "test": "TestRecoveryActivationFreshProcessNativeBoundaries/blob-native-commit",
+      "result": "pass",
+      "elapsed_seconds": 43.93
+    },
+    {
+      "test": "TestRecoveryActivationFreshProcessNativeBoundaries/kv-native-commit",
+      "result": "pass",
+      "elapsed_seconds": 40.57
+    },
+    {
+      "test": "TestRecoveryActivationFreshProcessNativeBoundaries/sql-native-commit",
+      "result": "pass",
+      "elapsed_seconds": 39.04
+    },
+    {
+      "test": "TestRecoveryActivationFreshProcessNativeBoundaries",
+      "result": "pass",
+      "elapsed_seconds": 166.62
+    },
+    {
+      "test": "TestRecoveryActivationCurrentChoiceOrOriginalEvidenceFailureKeepsRemainingOwnersClosed/settings",
+      "result": "pass",
+      "elapsed_seconds": 29.27
+    },
+    {
+      "test": "TestRecoveryActivationCurrentChoiceOrOriginalEvidenceFailureKeepsRemainingOwnersClosed/token",
+      "result": "pass",
+      "elapsed_seconds": 30.15
+    },
+    {
+      "test": "TestRecoveryActivationCurrentChoiceOrOriginalEvidenceFailureKeepsRemainingOwnersClosed/source-file",
+      "result": "pass",
+      "elapsed_seconds": 29.52
+    },
+    {
+      "test": "TestRecoveryActivationCurrentChoiceOrOriginalEvidenceFailureKeepsRemainingOwnersClosed/runtime",
+      "result": "pass",
+      "elapsed_seconds": 31.14
+    },
+    {
+      "test": "TestRecoveryActivationCurrentChoiceOrOriginalEvidenceFailureKeepsRemainingOwnersClosed/original-history",
+      "result": "pass",
+      "elapsed_seconds": 28.43
+    },
+    {
+      "test": "TestRecoveryActivationCurrentChoiceOrOriginalEvidenceFailureKeepsRemainingOwnersClosed/decision",
+      "result": "pass",
+      "elapsed_seconds": 28.79
+    },
+    {
+      "test": "TestRecoveryActivationCurrentChoiceOrOriginalEvidenceFailureKeepsRemainingOwnersClosed",
+      "result": "pass",
+      "elapsed_seconds": 177.3
+    },
+    {
+      "test": "TestRecoveryActivationCompletedRetryPreservesLaterWithdrawal",
+      "result": "pass",
+      "elapsed_seconds": 35.62
+    },
+    {
+      "test": "TestRecoveryActivationNativeTopologyRecipes/local-to-fleet",
+      "result": "pass",
+      "elapsed_seconds": 37.54
+    },
+    {
+      "test": "TestRecoveryActivationNativeTopologyRecipes/fleet-to-local",
+      "result": "pass",
+      "elapsed_seconds": 64.28
+    },
+    {
+      "test": "TestRecoveryActivationNativeTopologyRecipes/local-restore",
+      "result": "pass",
+      "elapsed_seconds": 38.83
+    },
+    {
+      "test": "TestRecoveryActivationNativeTopologyRecipes/fleet-restore",
+      "result": "pass",
+      "elapsed_seconds": 65.62
+    },
+    {
+      "test": "TestRecoveryActivationNativeTopologyRecipes",
+      "result": "pass",
+      "elapsed_seconds": 206.26
+    },
+    {
+      "test": "TestRecoveryActivationBoundedSourceNormalStartup",
+      "result": "pass",
+      "elapsed_seconds": 125.85
+    },
+    {
+      "test": "TestRecoveryActivationFullEmbeddedApplication",
+      "result": "fail",
+      "elapsed_seconds": 459.65
+    }
+  ],
+  "totals": {
+    "pass": 32,
+    "fail": 1,
+    "skip": 0
+  },
+  "package_result": "fail",
+  "package_elapsed_seconds": 1740.743,
+  "preserved_failure": {
+    "test": "TestRecoveryActivationFullEmbeddedApplication",
+    "elapsed_seconds": 459.65,
+    "error": "context deadline exceeded",
+    "operation_budget_seconds": 420,
+    "assertion": "recovery_activation_test.go:262; ActivateRecovery must succeed",
+    "process_budget_seconds": 1800,
+    "change": "none"
+  },
+  "qualified_scope": [
+    "All 12 native journal publication crash states, with fresh-process exact continuation",
+    "All 4 native commit boundaries, including lost replies",
+    "All 6 original/current input changes refuse remaining releases",
+    "Later withdrawal stays restricted after historical completion",
+    "All 4 cross-topology and same-backend restore directions",
+    "Separate actual normal runtime startup with retained bounded source"
+  ],
+  "diagnostic_assets": {
+    "/tmp/csp13-full-embedded-race-sample.txt": "36124a875f216a05f9763b26a24bc7b5e99822f95ff26277ce98fb1080f00841",
+    "/tmp/csp13-full-embedded-race-sample-command.log": "1975e514917eb3db904c15d336a88efeced48bdb72fd424525e121ec0ecfc177",
+    "/tmp/csp13-activation-final-race.test": "ea2dcae90daa60ec4c9159922a346793582a8c9c190376c649272e64cce6ec3b",
+    "/tmp/csp13-activation-profile-binary-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "cpu_diagnostic": {
+    "method": "One-second macOS sample before native case exit; same-source race binary rebuilt for Go symbol attribution",
+    "sample_binary_uuid": "ADF3CEB5-41DD-3C58-82A6-36F58171B6B9",
+    "rebuilt_binary_uuid": "9ED5F98C-B939-339F-9922-403110199699",
+    "attribution_limit": "Original test binary was removed by go test. The symbol attribution is an inference from a consistent 0x1130 code displacement, confirmed against the TestFullEmbedded ActivateRecovery return address and 17 coherent owner frames. It is not an exact original-binary symbol proof.",
+    "inferred_owner_stack": [
+      "ActivateRecovery",
+      "prepareRecoveryActivationDecision:83",
+      "ClosedFinalHistory.Check:196",
+      "inspectImportedCopies",
+      "inspectCapturedReferences",
+      "CompiledTopology.InspectPreparedCapturedCatalog:61",
+      "inspectCapturedCatalogIdentity",
+      "capturedFleet.inspectPublications",
+      "Starmap ValidateFleetRecovery",
+      "decodeFleetRecoveryRecord",
+      "DecodeCatalogGeneration",
+      "DecodeCatalogPayload"
+    ],
+    "observed_cpu_percent": 100.6,
+    "physical_footprint_gib": 2.8,
+    "peak_physical_footprint_gib": 3.4,
+    "interpretation": "Full fleet publication semantic decoding during a repeated prepared snapshot inspection is the sampled hotspot. Root owns a complete-census exact compiled-byte validation optimization; all semantic and current permission checks must remain."
+  },
+  "socket_condition": {
+    "TIME_WAIT": 3,
+    "FIN_WAIT_2": 0,
+    "interpretation": "The earlier unrelated host socket exhaustion did not recur."
+  },
+  "remaining": [
+    "Full embedded race qualification after the root-owned exact prepared-publication inspection repair",
+    "Final combined-source native Linux/macOS/Windows CI",
+    "Root-owned CLI and post-backup DR deployment acceptance"
+  ]
+}

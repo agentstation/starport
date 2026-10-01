@@ -78,8 +78,14 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 		{
 			name: "missing API key",
 			mutate: func(_ *config.Config, factories *runtimeFactories) {
+				// Budget admission opens before authorization and needs a
+				// durable authority, so an empty Badger store stands in for
+				// a deployment that never ran "starport init".
+				store, err := storage.OpenBadger(storage.BadgerConfig{Path: t.TempDir(), SyncWrites: true, NumVersions: 1, NumLevelZero: 5, MemTableSize: 64 << 20})
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, store.Close()) })
 				factories.openStorage = func(storage.Config) (storage.KVStore, error) {
-					return storage.NewMockStore(), nil
+					return store, nil
 				}
 			},
 			cause: ErrAPIKeyRequired,

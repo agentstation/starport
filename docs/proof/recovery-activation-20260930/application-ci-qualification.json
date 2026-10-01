@@ -1,0 +1,347 @@
+{
+  "schema": 1,
+  "scope": "CSP13 source-only application recovery CI qualification contract",
+  "recorded_at_utc": "2026-09-30T15:04:17.948755+00:00",
+  "base_commit": "4805e6d4091720f43075d71d0136a30a192dd24d",
+  "status": "LOCAL_SOURCE_CHECKS_PASS; NATIVE_AND_HOSTED_QUALIFICATION_UNVERIFIED",
+  "source_sha256": {
+    ".github/workflows/ci.yml": "0ceca0634340aff2c3a91207750bfaea32346a852c35cc542cccc5989a21d16a",
+    "scripts/recovery_application.py": "7c17d6c197fadd3b5f82c2e1f71f62779b35cb9a85145059c9e302f22b9eb9fb",
+    "scripts/test-recovery-application.py": "483a6106e0127126ae6b457cc19d07bcf02dcdc06aa734cbf17eaacfaa45dac3"
+  },
+  "observed_gap": {
+    "original_selector": "^(TestRestoreApplicationSharedRecipe|TestRestorePublishFilesSharedRecipe|TestUnprefixedBackup.*)$",
+    "original_current_owners": [
+      "TestRestoreApplicationSharedRecipe",
+      "TestRestorePublishFilesSharedRecipe",
+      "TestUnprefixedBackupRequiresValkeyBeforeOpeningStores",
+      "TestUnprefixedBackupMigratesVerifiedRecordsUnderBarriers"
+    ],
+    "omitted_required_new_owners": 28,
+    "note": "The omitted roster includes one new real-history owner absent from this base. It requires reviewed integration before qualification."
+  },
+  "groups": {
+    "activation": [
+      "TestRecoveryActivationFreshProcessNativeBoundaries",
+      "TestRecoveryActivationCurrentChoiceOrOriginalEvidenceFailureKeepsRemainingOwnersClosed",
+      "TestRecoveryActivationCompletedRetryPreservesLaterWithdrawal",
+      "TestRecoveryActivationSQLApprovalRejectsChangedCurrentSource",
+      "TestRecoveryActivationNativeTopologyRecipes",
+      "TestRecoveryActivationBoundedSourceNormalStartup",
+      "TestRecoveryActivationExactPendingPhaseRestart",
+      "TestRecoveryActivationJournalExactPublicationProcessExit",
+      "TestRecoveryActivationSealedRetryRequiresOriginalSelector",
+      "TestRecoveryCanonicalCheckedSourceRefusesChangedOriginalBeforeRelease",
+      "TestRecoveryCanonicalFilesChecksRoleOwnersAndInactiveEvidence",
+      "TestRecoveryCanonicalFilesRefusesDiagnosticOnlyOrSubstitutedOriginals",
+      "TestRecoveryCanonicalFilesPassiveRestartRefusesChangedEvidenceAndTargets",
+      "TestRecoveryCanonicalFilesFreshProcessAfterBlobRelease",
+      "TestRecoveryCanonicalFilesRefusesUnresolvedSelectedRoleWithoutPreparation"
+    ],
+    "gateway": [
+      "TestRecoveryFreshGatewayRejectsUnapprovedHistoryBeforeEffects",
+      "TestRecoveryOldWarmedGatewayRefusesAfterKnownClosure",
+      "TestRecoveryGatewayHistoryBarrierProcess",
+      "TestRecoveredSharedGatewayFreshStartupAndBudgetAdmission",
+      "TestRecoveryActivationReplaysActualPostBackupRevocationSpendAndUncertainDispatch",
+      "TestRecoveryFreshReplicaActualHistoryBarriers"
+    ],
+    "operator": [
+      "TestRecoveryActivationLocalOperatorCommands",
+      "TestRecoveryPopulatedOperatorCommandsAcrossNativePhaseCut",
+      "TestRecoveryOperatorInputsSharedNativeTargets",
+      "TestRecoveryOperatorInputsInspectionNeverCreatesMissingDecision",
+      "TestRecoveryOperatorInputsInspectionReopensOriginalEvidence"
+    ],
+    "namespace": [
+      "TestUnprefixedBackupRequiresValkeyBeforeOpeningStores",
+      "TestUnprefixedBackupMigratesVerifiedRecordsUnderBarriers",
+      "TestUnprefixedMigrationPreservesRecordsAcrossProcessExit"
+    ],
+    "full-embedded": [
+      "TestRecoveryActivationFullEmbeddedApplication"
+    ]
+  },
+  "modes": [
+    "pure",
+    "race"
+  ],
+  "required_subcases": {
+    "TestRecoveryActivationNativeTopologyRecipes": [
+      "local-to-fleet",
+      "fleet-to-local",
+      "local-restore",
+      "fleet-restore"
+    ],
+    "TestRecoveryActivationFreshProcessNativeBoundaries": [
+      "sealed",
+      "blob-native-commit",
+      "kv-native-commit",
+      "sql-native-commit"
+    ],
+    "TestRecoveryActivationCurrentChoiceOrOriginalEvidenceFailureKeepsRemainingOwnersClosed": [
+      "settings",
+      "token",
+      "source-file",
+      "runtime",
+      "original-history",
+      "decision"
+    ],
+    "TestRecoveryFreshGatewayRejectsUnapprovedHistoryBeforeEffects": [
+      "missing-sql-approval",
+      "missing-native-approval",
+      "stale-native-epoch",
+      "replacement-incarnation"
+    ],
+    "TestRecoveryOldWarmedGatewayRefusesAfterKnownClosure": [
+      "required-budget",
+      "confirmed-no-budget"
+    ],
+    "TestRecoveryFreshReplicaActualHistoryBarriers": [
+      "prepared-original-history-not-replayed",
+      "sealed-history-native-owners-closed",
+      "blob-native-completed-sql-kv-closed",
+      "kv-native-completed-sql-closed",
+      "completed-import-missing-sql-approval",
+      "completed-sql-original-kv-import-barrier",
+      "completed-import-missing-native-approval",
+      "completed-import-prior-native-epoch",
+      "completed-import-distinct-native-incarnation"
+    ],
+    "TestRecoveryOperatorInputsSharedNativeTargets": [
+      "postgres",
+      "mysql"
+    ],
+    "TestRecoveryPopulatedOperatorCommandsAcrossNativePhaseCut": [
+      "shipping-binary"
+    ],
+    "TestRecoveryActivationExactPendingPhaseRestart": [
+      "blobs/header",
+      "blobs/empty",
+      "blobs/prepared",
+      "blobs/published",
+      "kv/header",
+      "kv/empty",
+      "kv/prepared",
+      "kv/published",
+      "sql/header",
+      "sql/empty",
+      "sql/prepared",
+      "sql/published"
+    ],
+    "TestRecoveryActivationJournalExactPublicationProcessExit": [
+      "blobs/header",
+      "blobs/empty",
+      "blobs/prepared",
+      "blobs/published",
+      "blobs/foreign",
+      "blobs/wrong-prefix",
+      "blobs/wrong-bytes",
+      "blobs/unowned",
+      "blobs/incomplete",
+      "kv/header",
+      "kv/empty",
+      "kv/prepared",
+      "kv/published",
+      "kv/foreign",
+      "kv/wrong-prefix",
+      "kv/wrong-bytes",
+      "kv/unowned",
+      "kv/incomplete",
+      "sql/header",
+      "sql/empty",
+      "sql/prepared",
+      "sql/published",
+      "sql/foreign",
+      "sql/wrong-prefix",
+      "sql/wrong-bytes",
+      "sql/unowned",
+      "sql/incomplete"
+    ]
+  },
+  "counts": {
+    "groups_per_mode": 5,
+    "required_matrix_artifacts": 10,
+    "named_owners_per_mode": 30,
+    "required_subcase_suffixes_per_mode": 71,
+    "maximum_parallel_groups": 2
+  },
+  "current_source_census": {
+    "activation": {
+      "TestRecoveryActivationExactPendingPhaseRestart": {
+        "path": "internal/app/recovery_activation_publication_test.go",
+        "sha256": "b2582b2c1c0ed4a6bad8e26421eb907d28c9bcde120bf83f1e3315ec12bc39eb"
+      },
+      "TestRecoveryActivationJournalExactPublicationProcessExit": {
+        "path": "internal/app/recovery_activation_publication_test.go",
+        "sha256": "b2582b2c1c0ed4a6bad8e26421eb907d28c9bcde120bf83f1e3315ec12bc39eb"
+      },
+      "TestRecoveryActivationSealedRetryRequiresOriginalSelector": {
+        "path": "internal/app/recovery_activation_selector_test.go",
+        "sha256": "552611b88831bafe46f556aba8392d50b46409c3162ee91d80213435d2230ded"
+      },
+      "TestRecoveryActivationFreshProcessNativeBoundaries": {
+        "path": "internal/app/recovery_activation_test.go",
+        "sha256": "a2f4e53b70dcd9dd1d25674e72e9dc49d4125c2f530f60653de56bd7b442f59e"
+      },
+      "TestRecoveryActivationCurrentChoiceOrOriginalEvidenceFailureKeepsRemainingOwnersClosed": {
+        "path": "internal/app/recovery_activation_test.go",
+        "sha256": "a2f4e53b70dcd9dd1d25674e72e9dc49d4125c2f530f60653de56bd7b442f59e"
+      },
+      "TestRecoveryActivationCompletedRetryPreservesLaterWithdrawal": {
+        "path": "internal/app/recovery_activation_test.go",
+        "sha256": "a2f4e53b70dcd9dd1d25674e72e9dc49d4125c2f530f60653de56bd7b442f59e"
+      },
+      "TestRecoveryActivationSQLApprovalRejectsChangedCurrentSource": {
+        "path": "internal/app/recovery_activation_test.go",
+        "sha256": "a2f4e53b70dcd9dd1d25674e72e9dc49d4125c2f530f60653de56bd7b442f59e"
+      },
+      "TestRecoveryActivationNativeTopologyRecipes": {
+        "path": "internal/app/recovery_activation_test.go",
+        "sha256": "a2f4e53b70dcd9dd1d25674e72e9dc49d4125c2f530f60653de56bd7b442f59e"
+      },
+      "TestRecoveryActivationBoundedSourceNormalStartup": {
+        "path": "internal/app/recovery_activation_test.go",
+        "sha256": "a2f4e53b70dcd9dd1d25674e72e9dc49d4125c2f530f60653de56bd7b442f59e"
+      },
+      "TestRecoveryCanonicalFilesChecksRoleOwnersAndInactiveEvidence": {
+        "path": "internal/app/recovery_canonical_files_test.go",
+        "sha256": "5e3e27b555dce41e7b3676c793143aaa7610dbe7bc5aa6d872b3c8afe997c974"
+      },
+      "TestRecoveryCanonicalFilesRefusesDiagnosticOnlyOrSubstitutedOriginals": {
+        "path": "internal/app/recovery_canonical_files_test.go",
+        "sha256": "5e3e27b555dce41e7b3676c793143aaa7610dbe7bc5aa6d872b3c8afe997c974"
+      },
+      "TestRecoveryCanonicalFilesPassiveRestartRefusesChangedEvidenceAndTargets": {
+        "path": "internal/app/recovery_canonical_files_test.go",
+        "sha256": "5e3e27b555dce41e7b3676c793143aaa7610dbe7bc5aa6d872b3c8afe997c974"
+      },
+      "TestRecoveryCanonicalFilesFreshProcessAfterBlobRelease": {
+        "path": "internal/app/recovery_canonical_files_test.go",
+        "sha256": "5e3e27b555dce41e7b3676c793143aaa7610dbe7bc5aa6d872b3c8afe997c974"
+      },
+      "TestRecoveryCanonicalFilesRefusesUnresolvedSelectedRoleWithoutPreparation": {
+        "path": "internal/app/recovery_canonical_files_test.go",
+        "sha256": "5e3e27b555dce41e7b3676c793143aaa7610dbe7bc5aa6d872b3c8afe997c974"
+      },
+      "TestRecoveryCanonicalCheckedSourceRefusesChangedOriginalBeforeRelease": {
+        "path": "internal/app/recovery_canonical_source_test.go",
+        "sha256": "1c452dc7097194ea0a299199786c7ef824b21917442760813b55b946a80282eb"
+      }
+    },
+    "operator": {
+      "TestRecoveryActivationLocalOperatorCommands": {
+        "path": "internal/app/recovery_activation_cli_test.go",
+        "sha256": "80051a1bb28d0a834eed6c49d6faaefe4e1ef977c5ee3f8c89b646add3a0b332"
+      },
+      "TestRecoveryOperatorInputsSharedNativeTargets": {
+        "path": "internal/app/recovery_operator_inputs_test.go",
+        "sha256": "ab94c705739974341c8c4c047e17a1023de7cfc7aaf3a7007e43ca4aa4a5047b"
+      },
+      "TestRecoveryOperatorInputsInspectionNeverCreatesMissingDecision": {
+        "path": "internal/app/recovery_operator_inspection_test.go",
+        "sha256": "457dcd7664f6fcde13c7427c35f29bcf321719ac8cea39be186cd6c0d7530de8"
+      },
+      "TestRecoveryOperatorInputsInspectionReopensOriginalEvidence": {
+        "path": "internal/app/recovery_operator_inspection_test.go",
+        "sha256": "457dcd7664f6fcde13c7427c35f29bcf321719ac8cea39be186cd6c0d7530de8"
+      },
+      "TestRecoveryPopulatedOperatorCommandsAcrossNativePhaseCut": {
+        "path": "internal/app/recovery_operator_native_command_test.go",
+        "sha256": "72f776584c69bac2791faaf45d6558819707e0bfd5c1c73fe77fbcb288deee07"
+      }
+    },
+    "namespace": {
+      "TestUnprefixedMigrationPreservesRecordsAcrossProcessExit": {
+        "path": "internal/app/backup_unprefixed_restart_test.go",
+        "sha256": "da09b0d47653e036aa0676024b1845405563cbfa14bc9d6c2ecd53719ab81fe1"
+      },
+      "TestUnprefixedBackupRequiresValkeyBeforeOpeningStores": {
+        "path": "internal/app/backup_unprefixed_test.go",
+        "sha256": "e6e310cd84e6ac1fcb08a29a87abcd76d733f343e51db9c9e4cebe53f7f1bd0b"
+      },
+      "TestUnprefixedBackupMigratesVerifiedRecordsUnderBarriers": {
+        "path": "internal/app/backup_unprefixed_test.go",
+        "sha256": "e6e310cd84e6ac1fcb08a29a87abcd76d733f343e51db9c9e4cebe53f7f1bd0b"
+      }
+    },
+    "full-embedded": {
+      "TestRecoveryActivationFullEmbeddedApplication": {
+        "path": "internal/app/recovery_activation_test.go",
+        "sha256": "a2f4e53b70dcd9dd1d25674e72e9dc49d4125c2f530f60653de56bd7b442f59e"
+      }
+    }
+  },
+  "current_source_refusals": {
+    "gateway": "Required recovery source is missing: TestRecoveryFreshReplicaActualHistoryBarriers"
+  },
+  "contracts": [
+    "Every application group has separate native Valkey, replacement Valkey, PostgreSQL, MySQL and S3-compatible object-store fixtures. Tests run serially within a group.",
+    "The operator group builds cmd/starport in its selected pure or race mode from unchanged source. Binary bytes, command owner, Go1.27.1, source revision, native architecture, CGO and race settings are retained and checked.",
+    "Named Go JSON events must include each selected owner exactly once, every critical subcase, and a single successful package completion. Any skip, failure, foreign package, missing owner or unfinished subcase refuses qualification.",
+    "The aggregate binds the checked-out source and workflow head, exact named source-file hashes, published producer pin and checksums, platform and mode. Missing, cancelled or failed groups cannot produce a successful aggregate.",
+    "The original four Durable Work Recovery application owners retain their original five-minute process command. Their selector is explicit and their results now refuse missing tests or skips.",
+    "Existing five-platform native jobs, Windows shards, required names and backend owner jobs remain present. Build now requires Complete Application Recovery.",
+    "The application group uses the existing 30-minute whole-Go allowance. Full embedded activation retains its original 420-second operation deadline; all in-test deadlines remain unchanged. The 50-minute job bound includes cold builds, native tests and artifact upload."
+  ],
+  "local_checks": [
+    {
+      "command": "python3 scripts/test-recovery-application.py",
+      "result": "PASS",
+      "tests": 16,
+      "failures": 0,
+      "skips": 0,
+      "raw_log": "/tmp/csp13-application-ci-20260930/registry-tests.log",
+      "sha256": "7e1e0312448d26d6818fca5d0612ecd4485b7feff072a6ce2e263dcf985a54b4"
+    },
+    {
+      "command": "python3 scripts/test-app-shards.py",
+      "result": "PASS",
+      "tests": 11,
+      "failures": 0,
+      "skips": 0,
+      "raw_log": "/tmp/csp13-application-ci-20260930/existing-shard-tests.log",
+      "sha256": "ef7bc95be9504eb640a15a4b1ecb3c6b4b5d69ca0004bdea7de44d16edb05dcc"
+    },
+    {
+      "command": "python3 scripts/test-native-catalog.py",
+      "result": "PASS",
+      "tests": 20,
+      "failures": 0,
+      "skips": 0,
+      "raw_log": "/tmp/csp13-application-ci-20260930/existing-native-tests.log",
+      "sha256": "4ecd1c2c46d0667f6991f6a4998723f983cc72f43a96e4f52141e7a18e899a05"
+    },
+    {
+      "command": "ruby -ryaml workflow parse and matrix assertion",
+      "result": "PASS",
+      "raw_log": "/tmp/csp13-application-ci-20260930/yaml.log",
+      "sha256": "e6b43ba8b73a852030eca85ec45ba08e2516360bae9ca6f319f286b3c006545e"
+    },
+    {
+      "command": "technical-writing lint scripts/recovery_application.py scripts/test-recovery-application.py .github/workflows/ci.yml --format text",
+      "result": "PASS; 3 files; 0 diagnostics",
+      "raw_log": "/tmp/csp13-application-ci-20260930/prose.log",
+      "sha256": "82b28c77d96b62928674b8010193d69b9935579cbb8d2fae09e3e7a90445e618"
+    },
+    {
+      "command": "bash scripts/verify-action-pins.sh",
+      "result": "PASS; 14 release references match exact commit pins"
+    },
+    {
+      "command": "python3 -m py_compile scripts/recovery_application.py scripts/test-recovery-application.py",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "remaining_qualification": [
+    "Root must integrate the reviewed TestRecoveryFreshReplicaActualHistoryBarriers and its nine required real-history subcases. The runner refuses their current absence; no stub or fallback exists.",
+    "Root must build the mode-matched operator executables and run both modes on final combined source, then qualify the actual ten CI artifacts and aggregate.",
+    "Local Python tests exercise evidence validation using synthetic events and declaration fixtures. They are not native recovery acceptance or proof that any application test passed.",
+    "No Go compiler, native application/storage test, container mutation, hosted CI dispatch, publication or branch-protection change was performed in this lane.",
+    "No whole CSP13, numerical RPO/RTO, physical suspend, fresh-authority truth or external all-writer fencing claim is made."
+  ]
+}
