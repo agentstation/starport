@@ -20,7 +20,7 @@ import (
 // The overlay adds one producer-owned test probe without changing module bytes or production hooks.
 func buildActivationPublicationProbe(t *testing.T) string {
 	t.Helper()
-	return buildActivationProducerProbe(t, "internal/privatefiles", "activation_publication_probe_test.go")
+	return buildActivationProducerProbe(t, "internal/privatefiles", "probes/publication/activation_publication_probe_test.go")
 }
 
 func buildActivationProducerProbe(t *testing.T, owner, source string) string {

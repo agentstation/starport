@@ -20,7 +20,7 @@ import (
 
 func seedActivationGeneration(t *testing.T, cfg *config.Config, payload []byte) string {
 	t.Helper()
-	probe, err := filepath.Abs("testdata/activation_generation_probe_test.go")
+	probe, err := filepath.Abs("testdata/probes/generation/activation_generation_probe_test.go")
 	require.NoError(t, err)
 	root, err := filepath.Abs("../..")
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func boundedActivationSourceFixtureWithActivity(t *testing.T, normalStartup bool
 	source, err = config.NewLoader().WithPaths(paths).WithEnvFiles().WithEnvironment(values).Load(t.Context())
 	require.NoError(t, err)
 	export := seedActivationGeneration(t, source, payload)
-	probeBinary := buildActivationProducerProbe(t, "runtime", "activation_materialization_probe_test.go")
+	probeBinary := buildActivationProducerProbe(t, "runtime", "probes/materialization/activation_materialization_probe_test.go")
 	probeCommand := exec.CommandContext(t.Context(), probeBinary, "-test.run=^TestStarportActivationMaterializationProbe$")
 	probeCommand.Env = append(os.Environ(), "STARPORT_MATERIALIZATION_PROBE_FIXTURE="+export)
 	probeOutput, probeErr := probeCommand.CombinedOutput()
