@@ -13,7 +13,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const budgetSettlementTimeout = 5 * time.Second
+const (
+	budgetSettlementTimeout     = 5 * time.Second
+	recoveryObservationInterval = time.Second
+	recoveryObservationTimeout  = time.Second
+)
 
 type budgetOwner struct {
 	ledger    *reservation.Repository
@@ -93,6 +97,42 @@ func (a *App) budgetRecoveryLoop(ctx context.Context) {
 			return
 		case <-timer.C:
 		}
+	}
+}
+
+// recoveryObservationLoop observes independent recovery approval without a request.
+// A budget write already checks approval, but a request without a budget write
+// never does. This worker bounds the interval after closure in which an old
+// gateway still admits such requests. Closure is permanent for this process,
+// so the worker returns after the first observed closure. External fencing of
+// an unreachable gateway remains mandatory.
+func (a *App) recoveryObservationLoop(ctx context.Context) {
+	failing := false
+	for ctx.Err() == nil {
+		timer := time.NewTimer(recoveryObservationInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, recoveryObservationTimeout)
+		err := a.budget.shared.Check(checkCtx)
+		cancel()
+		if ctx.Err() != nil {
+			return
+		}
+		if a.budget.shared.CheckAdmission() != nil {
+			log.Warn().Msg("recovery approval closed or changed; this gateway withdrew admission")
+			return
+		}
+		// Storage errors can contain connection details. Log only transitions.
+		if err != nil && !failing {
+			log.Warn().Msg("recovery approval observation failed; retained admission continues until it succeeds")
+		} else if err == nil && failing {
+			log.Info().Msg("recovery approval observation recovered")
+		}
+		failing = err != nil
 	}
 }
 

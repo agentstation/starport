@@ -1298,6 +1298,9 @@ func (a *App) Run(ctx context.Context) error {
 	if a.budget != nil && a.budget.recovery != nil {
 		a.runtimeWG.Go(func() { a.budgetRecoveryLoop(runCtx) })
 	}
+	if a.budget != nil && a.budget.shared != nil {
+		a.runtimeWG.Go(func() { a.recoveryObservationLoop(runCtx) })
+	}
 
 	serverResult := make(chan error, 1)
 	go func() { serverResult <- a.httpServer.Start() }()
