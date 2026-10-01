@@ -18,6 +18,21 @@ type relationalWriter interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
+// copyRelationalImage replaces the rows and audit allocation of a migrated SQLite candidate with the source state.
+func copyRelationalImage(ctx context.Context, source relationalQuery, dialect string, target *sql.Tx) error {
+	high, err := auditHighWater(ctx, source, dialect)
+	if err != nil {
+		return err
+	}
+	if _, err := target.ExecContext(ctx, "DELETE FROM schema_migrations; DELETE FROM sqlstore_meta"); err != nil {
+		return err
+	}
+	if err := copyRelationalRows(ctx, source, target, TypeSQLite); err != nil {
+		return err
+	}
+	return restoreAuditHighWater(ctx, target, target, TypeSQLite, high)
+}
+
 func copyRelationalRows(ctx context.Context, source relationalQuery, target relationalWriter, dialect string) (resultErr error) {
 	for _, table := range relationalTables {
 		if err := copyRelationalTable(ctx, source, target, dialect, table); err != nil {

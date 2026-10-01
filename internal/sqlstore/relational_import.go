@@ -53,21 +53,7 @@ func (db *DB) importRelational(ctx context.Context, source relationalQuery, high
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, cleanup()) }()
-	if db.dialect == TypeMySQL {
-		if _, err := owner.conn.ExecContext(ctx, "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"); err != nil {
-			return err
-		}
-	}
-	return owner.transaction(ctx, func() error {
-		if db.dialect == TypePostgres {
-			names := make([]string, len(relationalTables))
-			for i, t := range relationalTables {
-				names[i] = t.name
-			}
-			if _, err := owner.conn.ExecContext(ctx, "LOCK TABLE "+strings.Join(names, ",")+" IN ACCESS EXCLUSIVE MODE"); err != nil {
-				return err
-			}
-		}
+	return db.lockedRelationalTransaction(ctx, owner, func() error {
 		if err := validateRelationalSchema(ctx, owner.conn, db.dialect); err != nil {
 			return err
 		}
@@ -114,6 +100,28 @@ func (db *DB) importRelational(ctx context.Context, source relationalQuery, high
 			}
 		}
 		return restoreAuditHighWater(ctx, owner.conn, owner.conn, db.dialect, max(high, currentHigh))
+	})
+}
+
+// lockedRelationalTransaction runs apply in one owner transaction that blocks writers on every portable table.
+// PostgreSQL takes explicit table locks. MySQL serializable reads lock each row and gap that they read.
+func (db *DB) lockedRelationalTransaction(ctx context.Context, owner *migrationOwner, apply func() error) error {
+	if db.dialect == TypeMySQL {
+		if _, err := owner.conn.ExecContext(ctx, "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"); err != nil {
+			return err
+		}
+	}
+	return owner.transaction(ctx, func() error {
+		if db.dialect == TypePostgres {
+			names := make([]string, len(relationalTables))
+			for i, t := range relationalTables {
+				names[i] = t.name
+			}
+			if _, err := owner.conn.ExecContext(ctx, "LOCK TABLE "+strings.Join(names, ",")+" IN ACCESS EXCLUSIVE MODE"); err != nil {
+				return err
+			}
+		}
+		return apply()
 	})
 }
 

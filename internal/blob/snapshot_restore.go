@@ -243,7 +243,7 @@ func (o *ObjectStore) verifyImportContents(ctx context.Context, image *blobImage
 			if !ok {
 				return errors.New("blob: import listing escaped the selected prefix")
 			}
-			if address == blobImportKey || address == blobLayoutKey {
+			if address == blobImportKey || address == blobLayoutKey || address == blobClosureKey {
 				continue
 			}
 			if !validBlobAddress(address) {

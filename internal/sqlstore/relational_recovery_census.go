@@ -31,12 +31,17 @@ func (v *RelationalSnapshotView) RecoveryCensus(ctx context.Context) (result Rel
 	if ctx == nil || v == nil || v.db == nil {
 		return result, ErrClosed
 	}
-	if err := validateRelationalSchema(ctx, v.db, TypeSQLite); err != nil {
+	return sqliteRecoveryCensus(ctx, v.db)
+}
+
+// sqliteRecoveryCensus reads a portable SQLite image. SQLite binary order makes the digests independent of any source server collation.
+func sqliteRecoveryCensus(ctx context.Context, source relationalQuery) (result RelationalRecoveryCensus, resultErr error) {
+	if err := validateRelationalSchema(ctx, source, TypeSQLite); err != nil {
 		return result, err
 	}
 	domain, witness, controls, revisions := sha256.New(), sha256.New(), sha256.New(), sha256.New()
 	for _, table := range relationalTables {
-		rows, err := v.db.QueryContext(ctx, "SELECT "+table.columnNames()+" FROM "+table.name+" ORDER BY "+table.columnNames()) // #nosec G202 -- The compiled portable contract owns every identifier.
+		rows, err := source.QueryContext(ctx, "SELECT "+table.columnNames()+" FROM "+table.name+" ORDER BY "+table.columnNames()) // #nosec G202 -- The compiled portable contract owns every identifier.
 		if err != nil {
 			return RelationalRecoveryCensus{}, err
 		}
@@ -68,7 +73,7 @@ func (v *RelationalSnapshotView) RecoveryCensus(ctx context.Context) (result Rel
 			return RelationalRecoveryCensus{}, err
 		}
 	}
-	high, err := auditHighWater(ctx, v.db, TypeSQLite)
+	high, err := auditHighWater(ctx, source, TypeSQLite)
 	if err != nil {
 		return RelationalRecoveryCensus{}, err
 	}
@@ -86,5 +91,10 @@ func (v *RelationalSnapshotView) RecoveryCensus(ctx context.Context) (result Rel
 func recoveryControlName(name string) bool {
 	return name == relationalImportMarker || name == relationalActivationCurrent || name == relationalReplayCurrent ||
 		strings.HasPrefix(name, relationalActivationPrefix) || strings.HasPrefix(name, "relational-replay-v1:") ||
-		strings.HasPrefix(name, "relational-reconciliation-v1:")
+		strings.HasPrefix(name, "relational-reconciliation-v1:") || strings.HasPrefix(name, relationalPopulatedPrefix)
+}
+
+func (c RelationalRecoveryCensus) valid() bool {
+	return relationalActivationDigest(c.DomainSHA256) && relationalActivationDigest(c.WitnessSHA256) && relationalActivationDigest(c.ControlSHA256) &&
+		relationalActivationDigest(c.RevisionSHA256) && min(c.DomainRows, c.WitnessRows, c.ControlRows, c.RevisionRows, c.AuditHighWater) >= 0
 }

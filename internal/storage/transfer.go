@@ -41,6 +41,9 @@ func (r TransferRecord) Validate() error {
 	if err := validateActivationHistory(r); err != nil {
 		return err
 	}
+	if err := validatePopulatedHistory(r); err != nil {
+		return err
+	}
 	return validateReconciliationHistory(r)
 }
 

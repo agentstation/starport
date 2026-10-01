@@ -97,7 +97,7 @@ func inspectRecoveryTransaction(ctx context.Context, db *DB, tx *sql.Tx, deploym
 			return state, ErrImportRestricted
 		}
 		var retained int
-		err := tx.QueryRowContext(ctx, db.Bind("SELECT COUNT(*) FROM sqlstore_meta WHERE name LIKE ? OR name LIKE ?"), relationalActivationPrefix+"%", "relational-replay-v1:%").Scan(&retained)
+		err := tx.QueryRowContext(ctx, db.Bind("SELECT COUNT(*) FROM sqlstore_meta WHERE name LIKE ? OR name LIKE ? OR name LIKE ?"), relationalActivationPrefix+"%", "relational-replay-v1:%", relationalPopulatedPrefix+"%").Scan(&retained)
 		if err != nil || retained != 0 {
 			return state, errors.Join(ErrImportRestricted, err)
 		}

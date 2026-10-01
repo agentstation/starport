@@ -33,8 +33,13 @@ func (v *valkeyTransfer) InspectImport(ctx context.Context, claim []byte, positi
 	if err != nil {
 		return err
 	}
-	store := v.bound.store
 	keys, args := v.importInspectionArguments(guards)
+	return v.inspectGuarded(ctx, keys, args, yield)
+}
+
+// inspectGuarded yields each record except native controls while every guard holds.
+func (v *valkeyTransfer) inspectGuarded(ctx context.Context, keys, args []string, yield func(TransferRecord) error) error {
+	store := v.bound.store
 	pattern := strings.NewReplacer("\\", "\\\\", "*", "\\*", "?", "\\?", "[", "\\[", "]", "\\]").Replace(store.prefix) + "*"
 	cursor := "0"
 	for {
@@ -67,7 +72,7 @@ func (v *valkeyTransfer) InspectImport(ctx context.Context, claim []byte, positi
 		}
 		cursor = strconv.FormatUint(response.Cursor, 10)
 	}
-	_, err = store.do(ctx, store.client.B().Eval().Script(valkeyImportInspectionGuard+`return 1`).Numkeys(int64(len(keys))).Key(keys...).Arg(args...).Build()).AsInt64()
+	_, err := store.do(ctx, store.client.B().Eval().Script(valkeyImportInspectionGuard+`return 1`).Numkeys(int64(len(keys))).Key(keys...).Arg(args...).Build()).AsInt64()
 	return transferValkeyError(err)
 }
 
