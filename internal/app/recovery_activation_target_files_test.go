@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 )
@@ -17,6 +18,7 @@ func TestRecoveryTargetCensusBindsNativeFilesAroundOwnerValidation(t *testing.T)
 			require.NoError(t, os.Mkdir(path, 0700))
 			file := filepath.Join(path, "record.json")
 			require.NoError(t, os.WriteFile(file, []byte("original"), 0600))
+			var renameErr error
 			_, _, err := inspectTopologyTree(t.Context(), path, func(*os.Root) error {
 				switch change {
 				case "content":
@@ -31,13 +33,19 @@ func TestRecoveryTargetCensusBindsNativeFilesAroundOwnerValidation(t *testing.T)
 				case "removed":
 					return os.Remove(file)
 				case "root":
-					if err := os.Rename(path, path+"-old"); err != nil {
-						return err
+					if renameErr = os.Rename(path, path+"-old"); renameErr != nil {
+						return renameErr
 					}
 					return os.Mkdir(path, 0700)
 				}
 				return nil
 			}, false)
+			if renameErr != nil {
+				// Windows refuses to replace a directory that the census holds open. The census returns that refusal and fails closed.
+				require.Equal(t, "windows", runtime.GOOS)
+				require.ErrorIs(t, err, renameErr)
+				return
+			}
 			require.ErrorIs(t, err, recovery.ErrConflict)
 		})
 	}
