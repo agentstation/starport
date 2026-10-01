@@ -48,7 +48,7 @@ func InspectImportedBackup(ctx context.Context, cfg *config.Config, request reco
 	if err != nil {
 		return recovery.ImportInspectionResult{}, err
 	}
-	result, err := inspectConfiguredImport(ctx, cfg, request, identity, encryption)
+	result, err := inspectConfiguredImport(ctx, cfg, request, identity, encryption, source.CapturedBoundary())
 	if err != nil {
 		return recovery.ImportInspectionResult{}, err
 	}
@@ -127,7 +127,7 @@ func validateExistingImportedTargets(cfg *config.Config, incarnation string) err
 	return nil
 }
 
-func inspectConfiguredImport(ctx context.Context, cfg *config.Config, request recovery.InspectImportRequest, identity recovery.PreparedImportIdentity, encryption *credentials.EncryptionService) (result recovery.ImportInspectionResult, resultErr error) {
+func inspectConfiguredImport(ctx context.Context, cfg *config.Config, request recovery.InspectImportRequest, identity recovery.PreparedImportIdentity, encryption *credentials.EncryptionService, capturedBoundary recovery.Record) (result recovery.ImportInspectionResult, resultErr error) {
 	defer func() {
 		if resultErr != nil {
 			result = recovery.ImportInspectionResult{}
@@ -178,7 +178,12 @@ func inspectConfiguredImport(ctx context.Context, cfg *config.Config, request re
 	if scratch == "" {
 		scratch = filepath.Dir(request.Directory)
 	}
-	checked, err := recovery.InspectImportedReferences(ctx, recovery.ImportedReferenceSources{KV: kvInspector, SQL: db, Blobs: blobInspector}, native, request.Destination, scratch, encryption, catalog.InspectCapturedCatalog)
+	// Imported catalog records retain the source identity until coordinated topology preparation.
+	// Native guards still check the exact target boundary and replay positions.
+	inspectCatalog := func(ctx context.Context, view *recovery.KVSnapshotView, _ recovery.Record) error {
+		return catalog.InspectCapturedCatalog(ctx, view, capturedBoundary)
+	}
+	checked, err := recovery.InspectImportedReferences(ctx, recovery.ImportedReferenceSources{KV: kvInspector, SQL: db, Blobs: blobInspector}, native, request.Destination, scratch, encryption, inspectCatalog)
 	if err != nil {
 		return result, err
 	}
