@@ -35,14 +35,17 @@ type SharedRevision struct {
 // AppliedRevision reports the configuration authority of this process.
 // Desired is the newest stored sequence that this process observed. Applied is
 // the sequence that it serves. Retained reports that the last observation
-// failed and the process keeps its applied revision as a cache.
+// failed and the process keeps its applied revision as a cache. FileChecksum
+// is the local revision: the SHA-256 checksum of the configuration file bytes
+// that this process loaded.
 type AppliedRevision struct {
-	Authority string `json:"authority"`
-	Namespace string `json:"namespace,omitempty"`
-	Desired   int64  `json:"desired,omitempty"`
-	Applied   int64  `json:"applied,omitempty"`
-	Checksum  string `json:"checksum,omitempty"`
-	Retained  bool   `json:"retained"`
+	Authority    string `json:"authority"`
+	Namespace    string `json:"namespace,omitempty"`
+	Desired      int64  `json:"desired,omitempty"`
+	Applied      int64  `json:"applied,omitempty"`
+	Checksum     string `json:"checksum,omitempty"`
+	FileChecksum string `json:"file_checksum,omitempty"`
+	Retained     bool   `json:"retained"`
 }
 
 // NamespaceSetting labels the shared configuration namespace in an
@@ -183,26 +186,52 @@ func (c *Config) SharedSeed() map[string]string {
 // stored revision. Bootstrap and node-scope values stay local. It runs once,
 // at startup, before any adapter reads catalog settings.
 func (c *Config) ApplySharedRevision(revision SharedRevision) error {
-	if c == nil || !c.SharedManagement() {
-		return errors.New("shared configuration revision requires shared management")
-	}
-	if c.authority != nil {
+	if c != nil && c.authority != nil {
 		return errors.New("a shared configuration revision is already applied. A restart applies a newer revision")
 	}
-	if deploymentID := c.paths.DeploymentID; revision.DeploymentID != deploymentID {
-		return &AuthorityMismatchError{Setting: "STARPORT_DEPLOYMENT_ID", Configured: deploymentID, Stored: revision.DeploymentID}
-	}
-	if namespace := c.ConfigNamespace(); revision.Namespace != namespace {
-		return &AuthorityMismatchError{Setting: NamespaceSetting, Configured: namespace, Stored: revision.Namespace, DeploymentID: revision.DeploymentID}
-	}
-	if revision.Sequence <= 0 {
-		return errors.New("shared configuration revision requires a positive sequence")
-	}
-	if err := ValidateSharedValues(revision.Values); err != nil {
+	next, resolution, err := c.resolveSharedRevision(revision)
+	if err != nil {
 		return err
 	}
+	c.Catalog = next
+	c.authority = &authorityState{
+		revision: AppliedRevision{
+			Authority: ManagementShared, Namespace: revision.Namespace,
+			Desired: revision.Sequence, Applied: revision.Sequence, Checksum: revision.Checksum,
+		},
+		resolution: resolution,
+	}
+	return nil
+}
+
+// CheckSharedRevision reports whether this process could apply a stored
+// revision at its next start. It changes nothing.
+func (c *Config) CheckSharedRevision(revision SharedRevision) error {
+	_, _, err := c.resolveSharedRevision(revision)
+	return err
+}
+
+// resolveSharedRevision checks a stored revision and returns the catalog
+// settings that it selects with the local node-scope values.
+func (c *Config) resolveSharedRevision(revision SharedRevision) (CatalogConfig, catalogconfig.Resolution, error) {
+	var resolution catalogconfig.Resolution
+	if c == nil || !c.SharedManagement() {
+		return CatalogConfig{}, resolution, errors.New("shared configuration revision requires shared management")
+	}
+	if deploymentID := c.paths.DeploymentID; revision.DeploymentID != deploymentID {
+		return CatalogConfig{}, resolution, &AuthorityMismatchError{Setting: "STARPORT_DEPLOYMENT_ID", Configured: deploymentID, Stored: revision.DeploymentID}
+	}
+	if namespace := c.ConfigNamespace(); revision.Namespace != namespace {
+		return CatalogConfig{}, resolution, &AuthorityMismatchError{Setting: NamespaceSetting, Configured: namespace, Stored: revision.Namespace, DeploymentID: revision.DeploymentID}
+	}
+	if revision.Sequence <= 0 {
+		return CatalogConfig{}, resolution, errors.New("shared configuration revision requires a positive sequence")
+	}
+	if err := ValidateSharedValues(revision.Values); err != nil {
+		return CatalogConfig{}, resolution, err
+	}
 	if SharedValuesChecksum(revision.Values) != revision.Checksum {
-		return errors.New("shared configuration revision differs from its checksum")
+		return CatalogConfig{}, resolution, errors.New("shared configuration revision differs from its checksum")
 	}
 	var local []catalogconfig.Layer
 	if c.localCatalog != nil {
@@ -213,33 +242,34 @@ func (c *Config) ApplySharedRevision(revision SharedRevision) error {
 		local...,
 	)
 	if err != nil {
-		return fmt.Errorf("resolve shared configuration revision: %w", err)
+		return CatalogConfig{}, resolution, fmt.Errorf("resolve shared configuration revision: %w", err)
 	}
 	layers := append([]catalogconfig.Layer{{Name: sharedRevisionLayer, Values: revision.Values}}, local...)
+	next, err := c.decodeCatalog(resolution, layers)
+	if err != nil {
+		return CatalogConfig{}, resolution, fmt.Errorf("shared configuration revision: %w", err)
+	}
+	return next, resolution, nil
+}
+
+// decodeCatalog decodes the catalog settings that a resolution selects. Node
+// values keep their loaded and anchored form.
+func (c *Config) decodeCatalog(resolution catalogconfig.Resolution, layers []catalogconfig.Layer) (CatalogConfig, error) {
 	values, selected := resolvedCatalogValues(resolution, layers)
 	var next CatalogConfig
 	if err := envconfig.ProcessWith(context.Background(), &envconfig.Config{
 		Target: &next, Lookuper: envconfig.PrefixLookuper("STARPORT_CATALOG_", envconfig.MapLookuper(values)),
 	}); err != nil {
-		return fmt.Errorf("decode shared configuration revision: %w", err)
+		return CatalogConfig{}, fmt.Errorf("decode catalog settings: %w", err)
 	}
-	// Node values keep their loaded and anchored form.
 	next.PermissionClock = c.Catalog.PermissionClock
 	next.WorkspacePath, next.StateDirectory = c.Catalog.WorkspacePath, c.Catalog.StateDirectory
 	next.stateDirectoryScratch = c.Catalog.stateDirectoryScratch
 	if err := next.Validate(); err != nil {
-		return fmt.Errorf("shared configuration revision: %w", err)
+		return CatalogConfig{}, err
 	}
 	next.canonicalValues = selected
-	c.Catalog = next
-	c.authority = &authorityState{
-		revision: AppliedRevision{
-			Authority: ManagementShared, Namespace: revision.Namespace,
-			Desired: revision.Sequence, Applied: revision.Sequence, Checksum: revision.Checksum,
-		},
-		resolution: resolution,
-	}
-	return nil
+	return next, nil
 }
 
 // SharedRevisionApplied reports whether catalog settings can be read. Local
@@ -258,6 +288,8 @@ func (c *Config) AppliedRevision() AppliedRevision {
 		report := AppliedRevision{Authority: c.ManagementMode()}
 		if c.SharedManagement() {
 			report.Namespace = c.ConfigNamespace()
+		} else {
+			report.FileChecksum = c.loadedFileChecksum()
 		}
 		return report
 	}

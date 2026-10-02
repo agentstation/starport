@@ -45,7 +45,7 @@ func TestLocalManagementReadsFileAuthority(t *testing.T) {
 	require.Equal(t, ManagementLocal, cfg.ManagementMode(), "embedded storage selects local management")
 	require.Equal(t, 7*time.Minute, cfg.Catalog.AcquisitionInterval)
 	require.True(t, cfg.SharedRevisionApplied(), "local management needs no shared revision")
-	require.Equal(t, AppliedRevision{Authority: ManagementLocal}, cfg.AppliedRevision())
+	require.Equal(t, AppliedRevision{Authority: ManagementLocal, FileChecksum: fileRevision([]byte("STARPORT_CATALOG_ACQUISITION_INTERVAL=7m\n"))}, cfg.AppliedRevision())
 
 	report := cfg.EffectiveReport()
 	require.Equal(t, ManagementLocal, report.Management)

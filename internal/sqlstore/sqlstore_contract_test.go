@@ -251,6 +251,42 @@ func TestMigrateRunsEachFileOnceInOrder(t *testing.T) {
 	}
 }
 
+// A schema check reports a store behind the binary and changes nothing, so
+// a write path can refuse instead of migrating.
+func TestCheckSchemaCurrentRefusesPendingMigration(t *testing.T) {
+	ctx := context.Background()
+	db, err := Open(Config{Type: TypeSQLite})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+
+	first := fstest.MapFS{"migrations/sqlite/0001_a.sql": {Data: []byte(`CREATE TABLE probe (n INTEGER);`)}}
+	second := fstest.MapFS{
+		"migrations/sqlite/0001_a.sql": first["migrations/sqlite/0001_a.sql"],
+		"migrations/sqlite/0002_b.sql": {Data: []byte(`INSERT INTO probe (n) VALUES (2);`)},
+	}
+	if err := db.checkSchemaCurrent(ctx, first); !errors.Is(err, ErrSchemaBehind) {
+		t.Fatalf("check before any migration = %v, want ErrSchemaBehind", err)
+	}
+	if err := db.migrate(ctx, first); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := db.checkSchemaCurrent(ctx, first); err != nil {
+		t.Fatalf("check at the current schema: %v", err)
+	}
+	if err := db.checkSchemaCurrent(ctx, second); !errors.Is(err, ErrSchemaBehind) {
+		t.Fatalf("check with a pending file = %v, want ErrSchemaBehind", err)
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM probe`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("check changed the store: count %d, err %v", count, err)
+	}
+	if err := db.checkSchemaCurrent(ctx, fstest.MapFS{"migrations/sqlite/0000_z.sql": {Data: []byte(`SELECT 1;`)}}); err == nil || errors.Is(err, ErrSchemaBehind) {
+		t.Fatalf("check with an unknown recorded migration = %v, want an unsupported refusal", err)
+	}
+}
+
 // A migration that fails must leave no record, so a corrected build applies
 // the fixed file instead of skipping it as done.
 func TestMigrateFailureRecordsNothing(t *testing.T) {
