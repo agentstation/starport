@@ -107,6 +107,9 @@ type Dependencies struct {
 	// Catalog serves snapshot freshness, diffs, and forced acquisition. A
 	// nil port degrades the catalog endpoints to 503, loudly.
 	Catalog controllers.CatalogOperations
+	// Configuration serves the configuration admin surface. A nil port
+	// degrades the configuration endpoints to 503, loudly.
+	Configuration controllers.ConfigurationOperations
 	// DiscoveryRegistry retains the accepted generation for catalog discovery.
 	DiscoveryRegistry connectors.LeasingRegistry
 	// Presets serves stored preset management. A nil repository degrades
@@ -251,6 +254,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Usage:               dependencies.Usage,
 		ProviderOperations:  s.providerOperations,
 		Catalog:             dependencies.Catalog,
+		Configuration:       dependencies.Configuration,
 		DiscoveryRegistry:   dependencies.DiscoveryRegistry,
 		DiscoveryViewer:     s.auth.discoveryViewer,
 		Presets:             dependencies.Presets,

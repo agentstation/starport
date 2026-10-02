@@ -349,6 +349,18 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					r.Post("/catalog/refresh", s.controllers.Catalog.Refresh)
 					r.Get("/catalog/refreshes/{run_id}", s.controllers.Catalog.RefreshStatus)
 					r.Delete("/catalog/refreshes/{run_id}", s.controllers.Catalog.CancelRefresh)
+					// The configuration operations surface. Reads come
+					// from process memory. Each write adds the
+					// same-origin, deployment, and management checks
+					// before any store or file access.
+					r.Route("/config", func(r chi.Router) {
+						r.Get("/schema", s.controllers.Configuration.Schema)
+						r.Get("/effective", s.controllers.Configuration.Effective)
+						r.Post("/validate", s.controllers.Configuration.Validate)
+						r.Post("/test-connection", s.controllers.Configuration.TestConnection)
+						r.Post("/save", s.controllers.Configuration.Save)
+						r.Get("/operations/{operation_id}", s.controllers.Configuration.Receipt)
+					})
 				})
 			})
 		})

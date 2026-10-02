@@ -60,10 +60,11 @@ func newSharedConfigurationDeployment(t *testing.T) sharedConfigurationDeploymen
 }
 
 // load reads one process configuration. The product file holds the given
-// local deployment values.
+// local deployment values. Its directory is private, as setup creates it.
 func (d sharedConfigurationDeployment) load(t *testing.T, fileValues string) (*config.Config, string) {
 	t.Helper()
-	directory := t.TempDir()
+	directory := filepath.Join(t.TempDir(), "starport")
+	require.NoError(t, os.MkdirAll(directory, 0o700))
 	file := filepath.Join(directory, "starport.env")
 	require.NoError(t, os.WriteFile(file, []byte(fileValues), 0o600))
 	environment := map[string]string{"STARPORT_CATALOG_STATE_DIR": filepath.Join(directory, "catalog-state")}
@@ -284,4 +285,10 @@ func TestRequestsReadAppliedRevisionInMemory(t *testing.T) {
 	effective := replica.cfg.EffectiveReport()
 	require.Equal(t, config.ManagementShared, effective.Management)
 	require.Equal(t, int64(1), effective.Revision.Applied)
+
+	// The schema and effective admin routes read the same process memory.
+	operations := replica.app.configurationOps
+	require.NotNil(t, operations)
+	require.NotEmpty(t, operations.Schema())
+	require.Equal(t, effective, operations.Effective())
 }
