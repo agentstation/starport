@@ -25,6 +25,7 @@ import (
 	"github.com/agentstation/starport/internal/cache"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/configrevision"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/events"
@@ -120,6 +121,9 @@ type App struct {
 	advisory            *advisoryWorkers
 	authorization       *authorizationOwner
 	budget              *budgetOwner
+	// configuration is the shared configuration store, or nil under local
+	// or external management.
+	configuration *configrevision.Store
 	// build is the provenance the admin and health surfaces report, with
 	// the start time New recorded.
 	build controllers.BuildInfo
@@ -247,6 +251,7 @@ func (b *runtimeBuilder) compose() error {
 		b.checkRecoveryStartup,
 		b.prepareInferencePolicy,
 		b.openSQLStore,
+		b.openConfigurationAuthority,
 		b.openBudgetAdmission,
 		b.openAuthorization,
 		b.openBlob,
@@ -1301,6 +1306,9 @@ func (a *App) Run(ctx context.Context) error {
 	if a.budget != nil && a.budget.shared != nil {
 		a.runtimeWG.Go(func() { a.recoveryObservationLoop(runCtx) })
 	}
+	if a.configuration != nil {
+		a.runtimeWG.Go(func() { a.configurationObservationLoop(runCtx) })
+	}
 
 	serverResult := make(chan error, 1)
 	go func() { serverResult <- a.httpServer.Start() }()
@@ -1422,6 +1430,7 @@ func catalogSettings(deployment *config.Config) runtimecatalog.Settings {
 		InstanceID:                paths.InstanceID,
 		DeploymentID:              paths.DeploymentID,
 		Values:                    cfg.CatalogValues(),
+		AppliedPolicyChecksum:     deployment.AppliedRevision().Checksum,
 		ListenAddress: net.JoinHostPort(
 			deployment.Server.Host, strconv.Itoa(deployment.Server.Port),
 		),

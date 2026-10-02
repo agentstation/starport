@@ -15,7 +15,7 @@ type FleetInitializer func(context.Context, *config.Config, recovery.FreshReques
 
 func newFleetCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.Command {
 	return &urfavecli.Command{Name: "fleet", Usage: "Manage shared deployment storage", Commands: []*urfavecli.Command{{
-		Name: "init", Usage: "Approve fresh Valkey and PostgreSQL stores with all gateways stopped", OnUsageError: usageError,
+		Name: initCommand, Usage: "Approve fresh Valkey and PostgreSQL stores with all gateways stopped", OnUsageError: usageError,
 		Flags: []urfavecli.Flag{
 			&urfavecli.StringFlag{Name: flagBackupOperation, Required: true, Usage: "Stable initialization ID for retry after interruption"},
 			&urfavecli.StringFlag{Name: "evidence", Required: true, Usage: "Non-secret deployment procedure or audit reference"},

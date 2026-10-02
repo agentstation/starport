@@ -54,7 +54,7 @@ func (a *App) CatalogStatus(ctx context.Context) (runtimecatalog.AdminStatus, er
 		return runtimecatalog.AdminStatus{}, ErrCatalogRequired
 	}
 	status := a.catalogRuntime.Status()
-	return runtimecatalog.NewAdminStatus(
+	report := runtimecatalog.NewAdminStatus(
 		status,
 		a.catalogRuntime.RouteValidation(),
 		a.config.Catalog.AcquisitionEnabled,
@@ -62,7 +62,17 @@ func (a *App) CatalogStatus(ctx context.Context) (runtimecatalog.AdminStatus, er
 		a.catalogSnapshotMetadata(ctx),
 		nextSourceRead(status, a.config.Catalog.SourcePollInterval),
 		a.catalogOperations.List(),
-	), nil
+	)
+	if fenced, ok := a.catalogRuntime.(catalogPolicyReporter); ok {
+		report.Runtime.Policy = fenced.PolicyState()
+	}
+	return report, nil
+}
+
+// catalogPolicyReporter is a catalog runtime that compares its applied
+// configuration with the applied fleet policy.
+type catalogPolicyReporter interface {
+	PolicyState() string
 }
 
 // catalogCounts reads how much the accepted head holds. A gateway that

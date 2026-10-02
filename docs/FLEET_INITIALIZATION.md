@@ -43,14 +43,22 @@ starport fleet init --operation initial-deployment --evidence deployment-ticket-
 ```
 
 3. Retain the result with the deployment record.
-4. Create the first gateway API key in the configured storage:
+4. Write the first shared configuration revision from the validated deployment values:
+
+```bash
+starport config init --shared --yes
+```
+
+   A shared-storage deployment uses shared configuration management. A gateway refuses to start until this revision exists.
+   Run the command without `--yes` to preview the namespace and checksum.
+5. Create the first gateway API key in the configured storage:
 
 ```bash
 starport init --configured-storage
 ```
 
-5. Protect the returned key with the deployment's credential controls.
-6. Start Starport with the same configuration:
+6. Protect the returned key with the deployment's credential controls.
+7. Start Starport with the same configuration:
 
 ```bash
 starport serve
@@ -120,6 +128,8 @@ docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starpo
   config validate --json
 docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
   fleet init --operation initial-deployment --evidence deployment-ticket-123 --json
+docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
+  config init --shared --yes
 docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
   init --configured-storage --name primary-admin
 docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \

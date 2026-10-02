@@ -35,6 +35,9 @@ func (s *FleetStore) AcquireLease(ctx context.Context, holder string, ttl time.D
 	if err := s.checkApproval(ctx); err != nil {
 		return runtime.Lease{}, err
 	}
+	if err := s.checkAppliedPolicy(ctx); err != nil {
+		return runtime.Lease{}, err
+	}
 	head, err := s.CurrentHead(ctx)
 	if err != nil && !starmaperrors.IsNotFound(err) {
 		return runtime.Lease{}, err
@@ -98,12 +101,16 @@ func (s *FleetStore) AcquireLease(ctx context.Context, holder string, ttl time.D
 	return lease, nil
 }
 
-// Renew extends only the original live native grant.
+// Renew extends only the original live native grant. A leader whose applied
+// configuration differs from the applied fleet policy loses the lease.
 func (s *FleetStore) Renew(ctx context.Context, lease runtime.Lease, ttl time.Duration) (runtime.Lease, error) {
 	if ttl <= 0 {
 		return runtime.Lease{}, errors.New("fleet lease renewal requires a positive lifetime")
 	}
 	if err := s.checkLeaseOwner(ctx, lease); err != nil {
+		return runtime.Lease{}, err
+	}
+	if err := s.checkAppliedPolicy(ctx); err != nil {
 		return runtime.Lease{}, err
 	}
 	encoded, err := encodeFleetGrant(lease)

@@ -33,6 +33,7 @@ type FleetStore struct {
 	identity runtime.FleetIdentity
 	prefix   string
 	session  string
+	policy   fleetPolicy
 }
 
 // NewFleetStore requires an existing open recovery approval and a matching live backend.

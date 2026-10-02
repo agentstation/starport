@@ -114,8 +114,8 @@ func newConfigCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 		},
 	}
 	return &urfavecli.Command{
-		Name: "config", Usage: "Inspect and validate effective configuration",
-		OnUsageError: usageError, Commands: []*urfavecli.Command{show, paths, validate},
+		Name: "config", Usage: "Inspect and validate effective configuration; init, migrate, apply, and effective manage the shared revision",
+		OnUsageError: usageError, Commands: append([]*urfavecli.Command{show, paths, validate}, newConfigurationAuthorityCommands(deps, usageError)...),
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
 			if cmd.NArg() == 0 {
 				return urfavecli.ShowSubcommandHelp(cmd)

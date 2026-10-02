@@ -17,6 +17,7 @@ type catalogSettingsLookuper struct {
 	sources    []envconfig.Lookuper
 	envconfig.Lookuper
 	resolution catalogconfig.Resolution
+	layers     []catalogconfig.Layer
 	values     map[string]string
 }
 
@@ -61,27 +62,10 @@ func resolveCatalogLookuper(sources []envconfig.Lookuper) (envconfig.Lookuper, e
 	if err != nil {
 		return nil, err
 	}
-	values := make(map[string]string)
-	selected := make(map[string]string)
-	for _, descriptor := range catalogconfig.Descriptors() {
-		if strings.HasPrefix(descriptor.Name, starmapClockPrefix) {
-			continue
-		}
-		value := descriptor.Default
-		if origin, present := resolution.Origins[descriptor.Name]; present {
-			for _, layer := range layers {
-				if layer.Name == origin {
-					value = layer.Values[descriptor.Name]
-					selected[descriptor.Name] = value
-					break
-				}
-			}
-		}
-		values[catalogEnvironmentName(descriptor.Name)] = value
-	}
+	values, selected := resolvedCatalogValues(resolution, layers)
 	lookupers := append([]envconfig.Lookuper{envconfig.MapLookuper(values)}, sources...)
 	return catalogSettingsLookuper{
-		Lookuper: envconfig.MultiLookuper(lookupers...), resolution: resolution, values: selected,
+		Lookuper: envconfig.MultiLookuper(lookupers...), resolution: resolution, layers: layers, values: selected,
 	}, nil
 }
 

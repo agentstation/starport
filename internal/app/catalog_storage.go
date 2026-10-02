@@ -8,7 +8,13 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
+// validateCatalogStorage checks catalog runtime ownership. Under shared
+// management it waits for openConfigurationAuthority, which applies the stored
+// revision and runs it again, so no local deployment value takes part.
 func (b *runtimeBuilder) validateCatalogStorage() error {
+	if !b.config.SharedRevisionApplied() {
+		return nil
+	}
 	return catalogSettings(b.config).ValidateStorageSelection(context.Background())
 }
 

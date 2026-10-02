@@ -182,7 +182,9 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 
 	if selected, ok := lookuper.(catalogSettingsLookuper); ok {
 		cfg.Catalog.canonicalValues = maps.Clone(selected.values)
+		cfg.localCatalog = selected.local()
 	}
+	cfg.selectDefaultManagement()
 	cfg.Catalog.PermissionClock, err = loadPermissionClock(lookuper)
 	if err != nil {
 		return nil, newLoadFailure("catalog permission clock values could not be decoded", err)

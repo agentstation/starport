@@ -17,11 +17,14 @@ import (
 
 // Config represents the complete application configuration
 type Config struct {
-	paths             Paths
-	fileInputs        []configurationFile
-	Server            ServerConfig            `env:",prefix=SERVER_"`
-	Storage           StorageConfig           `env:",prefix=STORAGE_"`
-	Catalog           CatalogConfig           `env:",prefix=CATALOG_"`
+	paths      Paths
+	fileInputs []configurationFile
+	Server     ServerConfig  `env:",prefix=SERVER_"`
+	Storage    StorageConfig `env:",prefix=STORAGE_"`
+	Catalog    CatalogConfig `env:",prefix=CATALOG_"`
+	// Management selects the deployment configuration authority. It is a
+	// bootstrap input and never comes from a shared revision.
+	Management        ManagementConfig        `env:",prefix=CONFIG_"`
 	CredentialSources CredentialSourcesConfig `env:",prefix=CREDENTIAL_SOURCES_"`
 	// InferenceDestinationApprovals holds the applied deployment policy.
 	// Nil selects pinned installation defaults. An explicit empty set denies all destinations.
@@ -47,6 +50,13 @@ type Config struct {
 	credentialResolver         *credentials.Resolver
 	credentialResolverMu       *sync.Mutex
 	inferencePolicyInitialized bool
+
+	// localCatalog keeps the local catalog layers for a shared resolution.
+	// The loader sets it. Copies of a Config share the read-only snapshot.
+	localCatalog *localCatalogResolution
+	// authority holds the applied shared revision. It is nil under local
+	// management and before the startup step applies a revision.
+	authority *authorityState
 
 	// authModeFromFlag records that a command-line flag, and not the
 	// environment, stated the authentication mode. It is unexported so the
@@ -402,6 +412,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.Catalog.Validate(); err != nil {
+		return err
+	}
+	if err := c.Management.Validate(); err != nil {
 		return err
 	}
 	if err := c.CredentialSources.Validate(); err != nil {

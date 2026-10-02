@@ -40,6 +40,11 @@ type Settings struct {
 	// Values retains the canonical settings that have no gateway-specific projection.
 	Values map[string]string
 
+	// AppliedPolicyChecksum identifies the shared configuration revision that
+	// this process applied. A shared fleet refuses the refresh lease when it
+	// differs from the applied fleet policy. Empty leaves the lease unfenced.
+	AppliedPolicyChecksum string
+
 	// PermissionClock contains the canonical host bounds. The runtime owns its monitor.
 	PermissionClock profile.Config
 

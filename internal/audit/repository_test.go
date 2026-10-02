@@ -158,3 +158,30 @@ func TestRepositoryPrunesPastTheRetentionWindow(t *testing.T) {
 	require.Len(t, page.Records, 1)
 	require.Equal(t, "fresh", page.Records[0].Subject)
 }
+
+// TestRecordTxCommitsWithTheCallerTransaction pins the transactional trail:
+// a rolled-back transaction leaves no record, and a committed one leaves one.
+func TestRecordTxCommitsWithTheCallerTransaction(t *testing.T) {
+	repository := openAuditRepository(t, 0)
+	ctx := context.Background()
+
+	tx, err := repository.db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	require.NoError(t, repository.RecordTx(ctx, tx, Record{
+		Actor: "key:ci", Action: "config.commit", Subject: "rolled-back", Outcome: OutcomeOK,
+	}))
+	require.NoError(t, tx.Rollback())
+
+	tx, err = repository.db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	require.NoError(t, repository.RecordTx(ctx, tx, Record{
+		Actor: "key:ci", Action: "config.commit", Subject: "committed", Outcome: OutcomeOK,
+	}))
+	require.NoError(t, tx.Commit())
+
+	page, err := repository.List(ctx, Query{})
+	require.NoError(t, err)
+	require.Len(t, page.Records, 1)
+	require.Equal(t, "committed", page.Records[0].Subject)
+	require.ErrorIs(t, repository.RecordTx(ctx, nil, Record{}), ErrStoreRequired)
+}

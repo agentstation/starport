@@ -24,6 +24,7 @@ import (
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/configrevision"
 	"github.com/agentstation/starport/internal/diagnosis"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
@@ -469,6 +470,13 @@ func TestRecoveryPopulatedOperatorCommandsAcrossNativePhaseCut(t *testing.T) {
 		require.Equal(t, approved, current)
 		require.NoError(t, native.close())
 	})
+
+	// Distributed storage selects shared management. The documented upgrade
+	// step writes revision 1 before the first gateway start.
+	require.True(t, cfg.SharedManagement())
+	initialized, err := InitializeSharedConfiguration(ctx, cfg, configrevision.Request{OperationID: "recovery-operator-shared-configuration"})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), initialized.Revision.Sequence)
 
 	// Command completion is separate from actual fresh gateway admission readiness.
 	application, err := New(cfg)
