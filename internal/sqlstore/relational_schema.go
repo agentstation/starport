@@ -17,12 +17,16 @@ const (
 	relationalTime
 )
 const (
-	migrationTable = "schema_migrations"
-	metadataTable  = "sqlstore_meta"
-	nameColumn     = "name"
-	teamIDColumn   = "team_id"
-	recordColumn   = "record"
-	revisionColumn = "revision"
+	migrationTable     = "schema_migrations"
+	metadataTable      = "sqlstore_meta"
+	nameColumn         = "name"
+	teamIDColumn       = "team_id"
+	recordColumn       = "record"
+	revisionColumn     = "revision"
+	createdColumn      = "created_at"
+	actorColumn        = "actor"
+	sequenceColumn     = "sequence"
+	deploymentIDColumn = "deployment_id"
 )
 
 type relationalColumn struct {
@@ -42,14 +46,16 @@ var relationalTables = []relationalTable{
 	{"account_templates", []relationalColumn{{"id", relationalText}, {revisionColumn, relationalInteger}, {recordColumn, relationalText}}},
 	{"users", []relationalColumn{{"id", relationalText}, {"subject", relationalText}, {revisionColumn, relationalInteger}, {recordColumn, relationalText}}},
 	{"teams", []relationalColumn{{"id", relationalText}, {revisionColumn, relationalInteger}, {recordColumn, relationalText}}},
-	{"team_memberships", []relationalColumn{{"user_id", relationalText}, {teamIDColumn, relationalText}, {"created_at", relationalText}}},
-	{"account_grants", []relationalColumn{{"account_id", relationalText}, {"user_id", relationalText}, {teamIDColumn, relationalText}, {"created_at", relationalText}}},
+	{"team_memberships", []relationalColumn{{"user_id", relationalText}, {teamIDColumn, relationalText}, {createdColumn, relationalText}}},
+	{"account_grants", []relationalColumn{{"account_id", relationalText}, {"user_id", relationalText}, {teamIDColumn, relationalText}, {createdColumn, relationalText}}},
 	{"incident_transitions", []relationalColumn{{"provider_id", relationalText}, {"indicator", relationalText}, {"description", relationalText}, {"observed_at", relationalText}}},
-	{"audit_log", []relationalColumn{{"id", relationalInteger}, {"occurred_at", relationalText}, {"actor", relationalText}, {"action", relationalText}, {"subject", relationalText}, {"outcome", relationalText}, {"request_id", relationalText}}},
-	{"authorization_revision", []relationalColumn{{"id", relationalInteger}, {"epoch", relationalText}, {"sequence", relationalInteger}}},
-	{"catalog_recovery", []relationalColumn{{"deployment_id", relationalText}, {"epoch", relationalInteger}, {"gate_open", relationalInteger}, {"backend_id", relationalText}, {"evidence", relationalText}, {"bootstrap_allowed", relationalInteger}}},
+	{"audit_log", []relationalColumn{{"id", relationalInteger}, {"occurred_at", relationalText}, {actorColumn, relationalText}, {"action", relationalText}, {"subject", relationalText}, {"outcome", relationalText}, {"request_id", relationalText}}},
+	{"authorization_revision", []relationalColumn{{"id", relationalInteger}, {"epoch", relationalText}, {sequenceColumn, relationalInteger}}},
+	{"catalog_recovery", []relationalColumn{{deploymentIDColumn, relationalText}, {"epoch", relationalInteger}, {"gate_open", relationalInteger}, {"backend_id", relationalText}, {"evidence", relationalText}, {"bootstrap_allowed", relationalInteger}}},
 	{"team_budget_origins", []relationalColumn{{teamIDColumn, relationalText}, {"history_id", relationalText}, {"initialize_allowed", relationalInteger}}},
-	{"schema_migration_reconciliations", []relationalColumn{{"operation_id", relationalText}, {nameColumn, relationalText}, {"digest", relationalText}, {"outcome", relationalText}, {"actor", relationalText}, {"evidence_sha256", relationalText}, {"recorded_at", relationalTime}}},
+	{"schema_migration_reconciliations", []relationalColumn{{"operation_id", relationalText}, {nameColumn, relationalText}, {"digest", relationalText}, {"outcome", relationalText}, {actorColumn, relationalText}, {"evidence_sha256", relationalText}, {"recorded_at", relationalTime}}},
+	{"deployment_configuration_head", []relationalColumn{{deploymentIDColumn, relationalText}, {"namespace", relationalText}, {sequenceColumn, relationalInteger}, {"revision_id", relationalText}}},
+	{"deployment_configuration_revisions", []relationalColumn{{"revision_id", relationalText}, {deploymentIDColumn, relationalText}, {sequenceColumn, relationalInteger}, {"predecessor", relationalText}, {"operation_id", relationalText}, {actorColumn, relationalText}, {"checksum", relationalText}, {recordColumn, relationalText}, {createdColumn, relationalText}}},
 }
 
 type relationalQuery interface {

@@ -46,6 +46,8 @@ func seedRelationalTransfer(t *testing.T, db *DB) {
 		"INSERT INTO authorization_revision VALUES(1,'epoch',9223372036854775807)",
 		"INSERT INTO catalog_recovery VALUES('deployment',19,1,'old-primary','old-proof',1)",
 		"INSERT INTO team_budget_origins VALUES('team','history',0)",
+		"INSERT INTO deployment_configuration_head VALUES('deployment','namespace',1,'revision')",
+		"INSERT INTO deployment_configuration_revisions VALUES('revision','deployment',1,'','operation','operator','checksum','{\"values\":{}}','2026-10-01T00:00:00Z')",
 	}
 	for _, query := range statements {
 		_, err := db.ExecContext(t.Context(), query)

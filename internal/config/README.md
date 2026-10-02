@@ -11,6 +11,16 @@ Starport resolves each value in this order:
 2. The first environment file that defines the value.
 3. A built-in default.
 
+`STARPORT_CONFIG_MANAGEMENT` selects the authority for deployment-scope
+catalog settings. `local` and `external` use the order above. `shared` replaces
+every deployment-scope catalog value with the stored shared revision. The
+application applies that revision at startup through `ApplySharedRevision`.
+Starmap `ResolveAuthority` decides the winner. Local deployment values then
+appear in `EffectiveReport` as ignored, with their origin and the
+`shared-authority` reason. Bootstrap values and node-scope values always use
+the order above. A shared revision never supplies them. Requests read the
+loaded `Config` only.
+
 Permission clock settings also accept the canonical `STARMAP_CATALOG_PERMISSION_CLOCK_` names.
 The loader resolves each alias within its source, after the corresponding `STARPORT_` name.
 Thus, a process environment alias precedes a file value. An explicit empty value never selects an alias.

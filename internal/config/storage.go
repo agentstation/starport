@@ -64,6 +64,8 @@ func (c *Config) ConfigureDevelopmentRuntime() error {
 	// catalog routes nothing, and an operator who wants a quiet gateway
 	// sets STARPORT_CATALOG_ACQUISITION_ENABLED=false.
 	c.Storage.Mode = storageModeBadger
+	// A development gateway reads no shared revision.
+	c.Management = ManagementConfig{Mode: ManagementLocal}
 	c.Storage.Badger.inMemory = true
 	c.Storage.Badger.SyncWrites = false
 	c.Storage.SQL.Mode = sqlModeSQLite

@@ -1,6 +1,6 @@
 # Starport Architecture
 
-Last updated: 2026-08-19
+Last updated: 2026-10-01
 
 Starport is a single-binary Go LLM gateway. It exposes OpenAI-compatible and OpenRouter-compatible APIs over one provider-neutral inference core. `cmd/starport` loads configuration and starts the application. `internal/app` owns production composition and lifecycle. The OpenAI and OpenRouter HTTP adapters own their wire formats. `internal/proxy` owns gateway use cases. `internal/router` adapts requests to the pure planner and attempt executor. Starmap owns catalog facts. Concept repositories own durable schemas. `internal/storage` owns KV adapters only.
 
@@ -187,6 +187,7 @@ starport/
 ├── internal/storage/          # KVStore adapter interface and implementations
 ├── internal/sqlstore/         # relational contract: embedded SQLite, PostgreSQL/MySQL connect, per-dialect migrations
 ├── internal/config/           # environment/.env config loading and validation
+├── internal/configrevision/   # shared configuration revisions, authority switches, and their audit records
 ├── internal/setup/            # safe first-run configuration and API key creation
 ├── internal/diagnosis/        # read-only startup checks and exact check results
 └── internal/architecture/     # executable import and package-boundary rules
@@ -221,6 +222,21 @@ both scripts.
 `internal/app.New` receives one validated configuration value. It maps that
 value to adapter configuration. It then constructs storage, the Starmap
 control plane, repositories, providers, cache, routing, and HTTP.
+
+One authority supplies the deployment-scope catalog settings.
+`STARPORT_CONFIG_MANAGEMENT` selects `local`, `shared`, or `external`.
+Under `shared`, the `openConfigurationAuthority` startup step runs after the
+relational store opens. It reads the head revision from
+`internal/configrevision`, applies it to the configuration value, and then
+validates catalog storage. It reads the head by deployment ID. It refuses
+startup when the head is absent, the store is unavailable, the stored
+namespace differs from the deployment key prefix, or the master key cannot
+open a sealed source credential. The running gateway observes
+the head and reports drift. It applies a new revision only at restart.
+`starport config apply` commits the next revision in SQL and writes the applied
+policy record. It does not take the catalog refresh lease. The next lease
+acquisition or renewal compares the record, so a leader with another checksum
+loses the lease and keeps serving.
 
 `internal/diagnosis` checks the same configuration, Starmap catalog, adapter
 registry, storage, and API key contracts without server construction. Its

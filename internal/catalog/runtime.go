@@ -97,6 +97,7 @@ func openRuntimeWithRecovery(ctx context.Context, store storage.KVStore, db *sql
 	if err != nil {
 		return nil, err
 	}
+	fleet.fencePolicy(settings.AppliedPolicyChecksum)
 	if _, err := settings.starmapOptions(); err != nil {
 		return nil, fmt.Errorf("configure Starmap runtime: %w", err)
 	}
@@ -344,6 +345,15 @@ func (r *Runtime) Status() runtime.Status {
 		return runtime.Status{}
 	}
 	return r.runtime.Status()
+}
+
+// PolicyState reports the last comparison of this replica's applied
+// configuration with the applied fleet policy.
+func (r *Runtime) PolicyState() string {
+	if r == nil {
+		return ""
+	}
+	return r.fleet.PolicyState()
 }
 
 // AcceptedGeneration returns the head Starport accepted. A deployment that

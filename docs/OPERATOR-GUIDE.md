@@ -454,6 +454,80 @@ The command reads configuration without creating directories or opening database
 Use `starport config paths --json` to include selection origins and relative-path anchors.
 Origins distinguish configuration files, environment values, Starmap fallbacks, root-derived paths, and changed Go overrides.
 
+One authority supplies the deployment-scope catalog settings of a gateway. `STARPORT_CONFIG_MANAGEMENT` selects it:
+
+| Value | Authority |
+| --- | --- |
+| `local` | The configuration file and the environment of each process. This is the default for Badger storage. |
+| `shared` | One revision in the relational store, shared by every replica. This is the default for Valkey storage. |
+| `external` | Like `local`. The effective report names an external controller that owns the file. |
+
+Bootstrap values always stay local: the management mode, storage coordinates, deployment and instance identity, node paths, listeners, trust roots, and the master key.
+Node-scope catalog values, such as the workspace and state directories, also stay local.
+The shared configuration namespace is the deployment key prefix that `STARPORT_DEPLOYMENT_ID` derives. No setting overrides it.
+
+Show each catalog setting with its authority:
+
+```bash
+starport config effective
+```
+
+The report gives each setting its semantic ID, redacted value, scope, winning authority, and origin.
+It lists each local value that lost to the shared revision, with its origin and the `shared-authority` reason.
+Under shared management it also reports the desired and applied revisions. Use `--json` for the full report.
+
+Under shared management, startup reads the stored head after the relational store opens.
+Startup refuses when no head exists for the deployment ID, and the error names `starport config init --shared`.
+When the store holds heads for other deployment IDs, the error lists them. Check for a database that serves another deployment before you initialize.
+Startup also refuses when the store is unavailable, or when the stored namespace differs from the namespace that the deployment ID derives. The error names the stored namespace and deployment ID.
+A revision seals `STARMAP_CATALOG_SOURCE_API_KEY` and `STARMAP_CATALOG_SOURCE_TOKEN` with the master key. The checksum excludes them, and reports show only their presence.
+Startup refuses when the master key cannot open a sealed value. The error names the setting, never the value.
+No refusal falls back to local deployment values.
+The gateway logs the namespace, desired revision, applied revision, and checksum before it reports ready.
+
+After startup, each gateway reads the head every 30 seconds. A newer head changes only the desired revision.
+The gateway keeps its applied revision until it restarts. If the store becomes unavailable, the gateway keeps the applied revision and reports it as retained.
+A changed file or environment value never applies while the gateway runs.
+
+Seed the first shared revision from the validated local deployment values:
+
+```bash
+starport config init --shared        # preview the namespace and checksum
+starport config init --shared --yes  # write revision 1 and its audit record
+```
+
+Record an authority switch as a revision with an audit record:
+
+```bash
+starport config migrate --to shared
+starport config migrate --to local --yes
+```
+
+A switch to `shared` seeds the revision from the local deployment values.
+A switch to `local` records the final applied values and releases the shared authority. A shared-management gateway then refuses to start.
+
+Change shared values with an apply. Edit the deployment values in the configuration file of the operator host, and then run:
+
+```bash
+starport config apply --operation config-change-42
+```
+
+The apply commits the next revision in SQL. On Valkey storage it then writes the applied policy record. It does not take the catalog refresh lease, so a running gateway cannot block it.
+The next lease acquisition or renewal compares the record. A gateway whose applied checksum differs from the record cannot take or renew the lease.
+A leader with another checksum loses the lease at its next renewal. The lease grant fences its in-flight publication.
+Its catalog status reports `policy_mismatch`, and it keeps serving.
+Restart each gateway to apply the new revision.
+
+If the SQL commit succeeds and the record write fails, the error names the operation. Repeat only the fleet phase:
+
+```bash
+starport config apply --resume config-change-42
+```
+
+The same operation ID with different values refuses. To roll back, apply the previous values. The rollback is a new revision.
+Each command prints the operation ID. When `--operation` is absent, the command generates one.
+These commands change catalog deployment settings only. No HTTP route changes them.
+
 Use `starport config paths --files` to report file roles, selected backends, access requirements, and recovery rules.
 The report marks inactive database paths as disabled and identifies shared KV, SQL, and object storage without connection credentials.
 Accepted catalog generations use the selected KV backend. Each process keeps its private catalog runtime evidence under the runtime directory.

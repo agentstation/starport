@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
@@ -76,11 +77,28 @@ func Open(db *sqlstore.DB, retention time.Duration) (*Repository, error) {
 // Record appends one audit record and prunes entries past the retention
 // window. A zero time takes the clock's now.
 func (r *Repository) Record(ctx context.Context, record Record) error {
+	return r.record(ctx, r.db.DB, record)
+}
+
+// RecordTx appends one audit record inside the caller transaction. The record
+// commits or rolls back with the mutation it describes. It prunes like Record.
+func (r *Repository) RecordTx(ctx context.Context, tx *sql.Tx, record Record) error {
+	if tx == nil {
+		return ErrStoreRequired
+	}
+	return r.record(ctx, tx, record)
+}
+
+type execer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func (r *Repository) record(ctx context.Context, exec execer, record Record) error {
 	occurredAt := record.Time
 	if occurredAt.IsZero() {
 		occurredAt = r.now()
 	}
-	if _, err := r.db.ExecContext(ctx,
+	if _, err := exec.ExecContext(ctx,
 		r.db.Bind(`INSERT INTO audit_log (occurred_at, actor, action, subject, outcome, request_id) VALUES (?, ?, ?, ?, ?, ?)`),
 		occurredAt.UTC().Format(time.RFC3339Nano),
 		record.Actor, record.Action, record.Subject, record.Outcome, record.RequestID); err != nil {
@@ -89,7 +107,7 @@ func (r *Repository) Record(ctx context.Context, record Record) error {
 	// RFC 3339 strings in UTC order lexicographically, so the cutoff can be
 	// compared as text the way the rows are stored.
 	cutoff := r.now().UTC().Add(-r.retention).Format(time.RFC3339Nano)
-	if _, err := r.db.ExecContext(ctx,
+	if _, err := exec.ExecContext(ctx,
 		r.db.Bind(`DELETE FROM audit_log WHERE occurred_at < ?`), cutoff); err != nil {
 		return fmt.Errorf("prune audit log: %w", err)
 	}

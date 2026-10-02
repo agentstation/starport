@@ -83,6 +83,10 @@ type RuntimeReport struct {
 	FallbackReason string `json:"fallback_reason,omitempty"`
 	// Lease reports the runtime lease state.
 	Lease string `json:"lease,omitempty"`
+	// Policy reports the last comparison of the applied configuration with
+	// the applied fleet policy: match or policy_mismatch. A mismatch blocks
+	// leadership, and the runtime keeps serving.
+	Policy string `json:"policy,omitempty"`
 	// LastRunID identifies the last refresh run.
 	LastRunID string `json:"last_run_id,omitempty"`
 	// StartedAt is when the runtime opened.

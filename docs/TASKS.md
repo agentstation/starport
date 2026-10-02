@@ -1,7 +1,7 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-09-21
+Last Updated: 2026-10-01
 
 ## 🚀 Current Sprint: Starport v1
 
@@ -27,6 +27,10 @@ The canonical plan records current qualification and merge status.
 CSP6.2 repairs recognition billing and protocol facts across both projects.
 Its local implementation preserves actual units, measured usage, and charges after request failures.
 Paired qualification, review, module publication, and merges remain open.
+
+CSP16 selects one deployment configuration authority.
+Shared management stores catalog deployment settings as SQL revisions, with an audit record and a fleet policy fence.
+CSP16.1 owns the HTTP configuration API.
 
 ### Proposed Work
 

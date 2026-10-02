@@ -53,6 +53,9 @@ const (
 // Commands own their flag constants. Help screens use one description for the same output behavior.
 const jsonOutputUsage = "Write machine-readable JSON"
 
+// initCommand names the subcommands that create first shared state: fleet init and config init.
+const initCommand = "init"
+
 // GatewayOptions carries gateway choices for one command run.
 // Other settings come from the environment and configuration file.
 // These fields let an operator override settings without editing either source.
@@ -83,30 +86,36 @@ type usageErrorHandler = urfavecli.OnUsageErrorFunc
 
 // Dependencies contains all runtime boundaries used by commands.
 type Dependencies struct {
-	Stdin                     io.Reader
-	Stdout                    io.Writer
-	Stderr                    io.Writer
-	Build                     BuildInfo
-	RunServer                 ServerRunner
-	StartDevelopment          DevelopmentStarter
-	Initialize                Initializer
-	LoadConfig                ConfigLoader
-	ResolvePaths              PathResolver
-	Diagnose                  Diagnoser
-	MigrateRuntime            RuntimeMigrator
-	InitializeFleet           FleetInitializer
-	CloseBackupBoundary       BackupCloser
-	CaptureBackup             BackupCapturer
-	VerifyBackup              BackupVerifier
-	PrepareBackup             BackupPreparer
-	InspectImportedBackup     ImportedBackupInspector
-	ApplyImportedHistory      ImportedHistoryApplier
-	PublishBackupFiles        BackupFilePublisher
-	ActivateRecovery          RecoveryActivator
-	InspectRecoveryActivation RecoveryActivationInspector
-	PreparePopulatedRecovery  PopulatedRecoveryPreparer
-	ActivatePopulatedRecovery PopulatedRecoveryActivator
-	InspectPopulatedRecovery  PopulatedRecoveryInspector
+	Stdin            io.Reader
+	Stdout           io.Writer
+	Stderr           io.Writer
+	Build            BuildInfo
+	RunServer        ServerRunner
+	StartDevelopment DevelopmentStarter
+	Initialize       Initializer
+	LoadConfig       ConfigLoader
+	ResolvePaths     PathResolver
+	Diagnose         Diagnoser
+	MigrateRuntime   RuntimeMigrator
+	InitializeFleet  FleetInitializer
+	// The configuration authority commands. Each is optional: a command
+	// whose dependency is absent reports a runtime failure.
+	InitializeSharedConfiguration SharedConfigurationInitializer
+	MigrateConfiguration          ConfigurationMigrator
+	ApplyConfiguration            ConfigurationApplier
+	EffectiveConfiguration        EffectiveConfigurationReader
+	CloseBackupBoundary           BackupCloser
+	CaptureBackup                 BackupCapturer
+	VerifyBackup                  BackupVerifier
+	PrepareBackup                 BackupPreparer
+	InspectImportedBackup         ImportedBackupInspector
+	ApplyImportedHistory          ImportedHistoryApplier
+	PublishBackupFiles            BackupFilePublisher
+	ActivateRecovery              RecoveryActivator
+	InspectRecoveryActivation     RecoveryActivationInspector
+	PreparePopulatedRecovery      PopulatedRecoveryPreparer
+	ActivatePopulatedRecovery     PopulatedRecoveryActivator
+	InspectPopulatedRecovery      PopulatedRecoveryInspector
 	// Desktop provides browser and clipboard access. Dependency checks do not require these services.
 	// Commands print each link even when neither service is available.
 	Desktop Desktop

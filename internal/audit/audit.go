@@ -23,6 +23,9 @@ const (
 	// ActorUserPrefix marks an identity-provider user. The suffix is the
 	// subject the provider asserted.
 	ActorUserPrefix = "user:"
+	// ActorOperatorPrefix marks a command that an operator ran on a host.
+	// The suffix is the operating system user that ran it.
+	ActorOperatorPrefix = "operator:"
 	// ActorAnonymous names a request that carried no identity at all, which
 	// only a deployment with authentication disabled produces.
 	ActorAnonymous = "anonymous"
