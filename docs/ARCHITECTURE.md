@@ -188,6 +188,7 @@ starport/
 ├── internal/sqlstore/         # relational contract: embedded SQLite, PostgreSQL/MySQL connect, per-dialect migrations
 ├── internal/config/           # environment/.env config loading and validation
 ├── internal/configrevision/   # shared configuration revisions, authority switches, and their audit records
+├── internal/configops/        # admin configuration operations: field validation, saves, and receipts
 ├── internal/setup/            # safe first-run configuration and API key creation
 ├── internal/diagnosis/        # read-only startup checks and exact check results
 └── internal/architecture/     # executable import and package-boundary rules

@@ -30,7 +30,8 @@ Paired qualification, review, module publication, and merges remain open.
 
 CSP16 selects one deployment configuration authority.
 Shared management stores catalog deployment settings as SQL revisions, with an audit record and a fleet policy fence.
-CSP16.1 owns the HTTP configuration API.
+CSP16.1 adds the HTTP configuration API, the local file writer, shared credential saves, and operation receipts.
+Its draft pull request is in review. CSP16.2 owns the baseline promotion.
 
 ### Proposed Work
 
