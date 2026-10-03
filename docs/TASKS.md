@@ -32,7 +32,8 @@ CSP16 selects one deployment configuration authority.
 Shared management stores catalog deployment settings as SQL revisions, with an audit record and a fleet policy fence.
 CSP16.1 adds the HTTP configuration API, the local file writer, shared credential saves, and operation receipts.
 CSP16.2 adds explicit fleet baseline promotion with `starport catalog promote-baseline` and `starport catalog baseline-status`.
-The lease holder promotes the packaged baseline and records a receipt that makes a retry with the same operation ID exact.
+The command records a request in shared storage and never takes the publication lease.
+The lease holder executes the request and records a receipt that makes a retry with the same operation ID exact.
 Rollback and a console view remain out of scope.
 
 ### Proposed Work
