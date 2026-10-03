@@ -1,6 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import * as api from "./api";
+import * as configuration from "./configuration";
 import type { ActivityFilters, ActivityPage, AuditFilters } from "./api";
 
 // queries owns every query key and fetcher the console reads. A route or a
@@ -86,6 +87,14 @@ export const queries = {
     queryOptions({ queryKey: ["webhooks"], queryFn: ({ signal }) => api.webhookSummary({ signal }) }),
   authMode: () =>
     queryOptions({ queryKey: ["auth-mode"], queryFn: ({ signal }) => api.readAuthMode({ signal }) }),
+  configSchema: () =>
+    queryOptions({
+      queryKey: ["config-schema"],
+      queryFn: ({ signal }) => configuration.configSchema({ signal }),
+      staleTime: Infinity,
+    }),
+  configEffective: () =>
+    queryOptions({ queryKey: ["config-effective"], queryFn: ({ signal }) => configuration.configEffective({ signal }) }),
 
   models: () =>
     queryOptions({

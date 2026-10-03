@@ -4,6 +4,7 @@ import { Download, Eye, EyeOff, Monitor, Moon, Sun, Trash2 } from "lucide-react"
 import { useState, useSyncExternalStore } from "react";
 
 import { AuthModeControl } from "@/components/settings/AuthModeControl";
+import { ConfigurationSection } from "@/components/settings/Configuration";
 import {
   GuardrailsSection,
   ObservabilitySection,
@@ -371,6 +372,7 @@ function SettingsPage() {
       <div className="max-w-2xl">
         <ConnectionSection />
         <AuthenticationSection />
+        <ConfigurationSection />
         <SystemSection />
         <ObservabilitySection />
         <GuardrailsSection />

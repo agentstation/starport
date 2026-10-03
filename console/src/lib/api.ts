@@ -308,6 +308,19 @@ export type SystemInfo = {
   guardrails?: { checks?: string[]; pii_mode?: string; moderation_model?: string };
   retention?: { audit_seconds?: number; files_seconds?: number; job_assets_seconds?: number };
   webhooks?: WebhookSummary;
+  response_cache?: CacheFillStatus;
+  extraction_cache?: CacheFillStatus;
+};
+
+// CacheFillStatus is one optional cache: its limits, what it keeps now, and
+// the shared connection when one is configured.
+export type CacheFillStatus = {
+  enabled?: boolean;
+  shared?: { configured?: boolean; available?: boolean; state?: string; key_prefix?: string };
+  entry_limit?: number;
+  byte_limit?: number;
+  retained_entries?: number;
+  retained_bytes?: number;
 };
 
 // WebhookSummary is what GET /api/v1/admin/webhooks states: receivers with

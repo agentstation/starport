@@ -35,7 +35,7 @@ function FactList({ facts }: { facts: Fact[] }) {
 }
 
 // Gate gives each deployment section the same loading and access states.
-function Gate<T>({
+export function Gate<T>({
   query,
   what,
   children,
