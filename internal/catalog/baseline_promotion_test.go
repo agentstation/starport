@@ -427,6 +427,33 @@ func TestPromotionExactRetryReturnsOriginalReceipt(t *testing.T) {
 	require.Equal(t, current, replacementStatus.Head, "an exact retry publishes nothing")
 }
 
+func TestPromotionAcceptsTheHeadBeforeItsOwnTakeover(t *testing.T) {
+	fleet, leader, report := promotableFleet(t)
+	ctx := t.Context()
+	require.NoError(t, leader.Close(ctx))
+	// A command process takes the stopped leader's lease and republishes the reviewed head.
+	replacement := fleet.open(t)
+	head, err := replacement.fleet.CurrentHead(ctx)
+	require.NoError(t, err)
+	require.Greater(t, head.Revision, report.HeadRevision)
+	require.Equal(t, report.Retained.GenerationID, head.GenerationID)
+
+	older, err := replacement.PromoteBaseline(ctx, PromotionRequest{OperationID: "older-1", ExpectedRevision: report.HeadRevision - 1, Actor: "operator"})
+	require.NoError(t, err)
+	require.Equal(t, PromotionRefused, older.Status, "only the head before this process's own republication matches")
+	require.Contains(t, older.Refusal, "not the expected revision")
+
+	request := PromotionRequest{OperationID: "reviewed-1", ExpectedRevision: report.HeadRevision, Actor: "operator"}
+	receipt, err := replacement.PromoteBaseline(ctx, request)
+	require.NoError(t, err)
+	require.Equal(t, PromotionApplied, receipt.Status, receipt.Refusal)
+	require.Equal(t, PromotionIdentity{GenerationID: report.Retained.GenerationID, Checksum: report.Retained.Checksum, Revision: report.HeadRevision}, receipt.Previous)
+	require.Greater(t, receipt.Promoted.Revision, head.Revision)
+	retried, err := replacement.PromoteBaseline(ctx, request)
+	require.NoError(t, err)
+	require.Equal(t, receipt, retried)
+}
+
 func TestPromotionRefusesReusedOperationID(t *testing.T) {
 	fleet, leader, report := promotableFleet(t)
 	ctx := t.Context()

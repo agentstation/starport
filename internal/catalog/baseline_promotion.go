@@ -58,7 +58,8 @@ type PromotionRequest struct {
 	// OperationID is the stable operator ID that makes a retry exact.
 	OperationID string
 	// ExpectedRevision is the fleet head revision that the operator reviewed.
-	// Zero accepts the head that this replica observes.
+	// Zero accepts the head that this replica observes. The head before this
+	// process republished the same generation as it took the lease also matches.
 	ExpectedRevision uint64
 	// Actor names the operator for the receipt.
 	Actor string
@@ -146,8 +147,16 @@ func (r *Runtime) PromoteBaseline(ctx context.Context, request PromotionRequest)
 		}
 		return stored, nil
 	}
+	previous := status.Head.Revision
 	if request.ExpectedRevision != 0 && request.ExpectedRevision != status.Head.Revision {
-		return refused(fmt.Sprintf("the fleet head is at revision %d, not the expected revision %d", status.Head.Revision, request.ExpectedRevision)), nil
+		republished, err := r.fleet.republishedRevision(ctx, status.Head)
+		if err != nil {
+			return PromotionReceipt{}, err
+		}
+		if republished != request.ExpectedRevision {
+			return refused(fmt.Sprintf("the fleet head is at revision %d, not the expected revision %d", status.Head.Revision, request.ExpectedRevision)), nil
+		}
+		previous = republished
 	}
 	holder, foreign, err := r.fleet.promotionLeader(ctx)
 	if err != nil {
@@ -174,7 +183,7 @@ func (r *Runtime) PromoteBaseline(ctx context.Context, request PromotionRequest)
 	}
 	receipt := PromotionReceipt{
 		OperationID: request.OperationID, DeploymentID: r.fleet.identity.DeploymentID, Status: PromotionApplied,
-		Previous:      promotionIdentity(result.Previous, status.Head.Revision),
+		Previous:      promotionIdentity(result.Previous, previous),
 		Promoted:      promotionIdentity(result.Promoted, result.Head.Revision),
 		InertRemovals: append([]catalogs.CatalogRemovalTarget{}, result.InertRemovals...),
 		Actor:         request.Actor, CreatedAt: time.Now().UTC(),
@@ -242,6 +251,23 @@ func (s *FleetStore) promotionReceipt(ctx context.Context, operationID string) (
 		return PromotionReceipt{}, false, fleetStoreConflict("the stored promotion receipt is invalid")
 	}
 	return receipt, true, nil
+}
+
+// republishedRevision returns the revision of the predecessor head when this process
+// published the given head as a republication of the same generation. A process that
+// takes the lease republishes the retained generation at open. That republication
+// changes no baseline, so the predecessor is the head that the operator reviewed.
+// Zero means the head is not such a republication.
+func (s *FleetStore) republishedRevision(ctx context.Context, head runtime.FleetHead) (uint64, error) {
+	snapshot, err := s.Publication(ctx, head)
+	if err != nil {
+		return 0, err
+	}
+	publication := snapshot.Publication
+	if publication.Grant.SessionID != s.session || publication.Expected.GenerationID != head.GenerationID {
+		return 0, nil
+	}
+	return publication.Expected.Revision, nil
 }
 
 // promotionLeader names the current lease holder and reports whether another process holds it.
