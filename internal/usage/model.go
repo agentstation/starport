@@ -74,6 +74,19 @@ const (
 	CostReasonRerankUnpriced = "rerank_unpriced"
 )
 
+// Timing boundaries name what a record timing measures. Neither covers the
+// complete gateway path: authentication, limits, budgets, request decoding,
+// and the HTTP write before the proxy service starts are outside both, so a
+// reader must label a value from them as a partial measurement.
+const (
+	// TimingGatewayService bounds LatencyMS: from the start of the proxy
+	// service to the response, or to the end of a stream.
+	TimingGatewayService = "gateway_service"
+	// TimingGatewayAdded bounds OverheadMS: the gateway service time minus
+	// the upstream provider waits inside it.
+	TimingGatewayAdded = "gateway_added"
+)
+
 // ErrInvalidRecord reports a record that cannot be persisted.
 var ErrInvalidRecord = errors.New("invalid usage record")
 

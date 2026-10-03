@@ -2,16 +2,15 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { CatalogChangesSection } from "@/components/shell/CatalogChanges";
 import { CatalogChip, verdictOf } from "@/components/shell/CatalogChip";
+import { CatalogRefresh } from "@/components/shell/CatalogRefresh";
 import {
   ADMIN_ONLY_SENTENCE,
   UNAUTHORIZED_SENTENCE,
   useCatalogAdminStatus,
-  useCatalogRefresh,
   useCatalogSummary,
   type CatalogAdminRead,
   type CatalogSummaryRead,
 } from "@/components/shell/CatalogSummary";
-import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { Pill } from "@/components/ui/Pill";
 import { RelativeTime } from "@/components/ui/RelativeTime";
@@ -275,27 +274,10 @@ function ProvidersSection({ status }: { status: CatalogAdminStatus | undefined }
 }
 
 function ActionsSection({ admin, status }: { admin: CatalogAdminRead; status: string }) {
-  const { start, cancel } = useCatalogRefresh();
-  const working = admin.working;
   return (
     <Section title="Actions" testid="catalog-actions">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={working !== undefined || start.isPending}
-          onClick={() => start.mutate()}
-        >
-          Refresh catalog
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={working === undefined || cancel.isPending}
-          onClick={() => working && cancel.mutate(working.id)}
-        >
-          Cancel refresh
-        </Button>
+      <CatalogRefresh admin={admin} />
+      <div className="mt-2">
         <CopyButton text={status} label="status" />
       </div>
     </Section>

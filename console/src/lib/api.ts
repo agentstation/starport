@@ -308,6 +308,19 @@ export type SystemInfo = {
   guardrails?: { checks?: string[]; pii_mode?: string; moderation_model?: string };
   retention?: { audit_seconds?: number; files_seconds?: number; job_assets_seconds?: number };
   webhooks?: WebhookSummary;
+  response_cache?: CacheFillStatus;
+  extraction_cache?: CacheFillStatus;
+};
+
+// CacheFillStatus is one optional cache: its limits, what it keeps now, and
+// the shared connection when one is configured.
+export type CacheFillStatus = {
+  enabled?: boolean;
+  shared?: { configured?: boolean; available?: boolean; state?: string; key_prefix?: string };
+  entry_limit?: number;
+  byte_limit?: number;
+  retained_entries?: number;
+  retained_bytes?: number;
 };
 
 // WebhookSummary is what GET /api/v1/admin/webhooks states: receivers with
@@ -322,11 +335,16 @@ export type WebhookSummary = {
 
 export type SystemMetrics = {
   requests?: { total?: number; errors?: number; rate_1min?: number };
-  latency?: { p50?: number; p95?: number; p99?: number };
+  // Each timing names its boundary and says whether it covers the complete
+  // request path. lib/timing words both.
+  latency?: { p50?: number; p95?: number; p99?: number; boundary?: string; complete?: boolean };
   // Gateway-added latency only: total handling minus upstream waits.
-  overhead?: { p50?: number; p95?: number; p99?: number };
+  overhead?: { p50?: number; p95?: number; p99?: number; boundary?: string; complete?: boolean };
   tokens?: { total?: number };
   spend?: { nano_usd?: number; requests_without_cost?: number };
+  // sample is the record sample behind the timings. truncated means that it
+  // holds only the newest records of the window.
+  sample?: { records?: number; window?: string; truncated?: boolean };
 };
 
 // ProviderOfferingStatus answers two separate questions about one offering.
@@ -513,6 +531,9 @@ export type CatalogOperation = {
   changed?: boolean;
   // joined reports that a refresh request joined the run already in flight.
   joined?: boolean;
+  // permission_at_completion is the catalog admission when the run closed. It
+  // reports catalog permission only, not credential or budget eligibility.
+  permission_at_completion?: { new_attempts_allowed?: boolean; admitted_streams_may_finish?: boolean };
 };
 
 // CatalogAdminStatus is the operator view from GET
@@ -1020,6 +1041,12 @@ export function startCatalogRefresh(): Promise<CatalogOperation> {
   return request<CatalogOperation>("/api/v1/admin/catalog/refresh", {
     method: "POST",
   });
+}
+
+// catalogRefresh reads one run. A run that the registry no longer keeps
+// answers 404.
+export function catalogRefresh(runID: string, { signal }: ReadOptions = {}): Promise<CatalogOperation> {
+  return request<CatalogOperation>(`/api/v1/admin/catalog/refreshes/${encodeURIComponent(runID)}`, { signal });
 }
 
 // cancelCatalogRefresh ends one open run. A run that already closed answers

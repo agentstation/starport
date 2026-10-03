@@ -11,6 +11,7 @@ import {
 
 import { CompareView, useCompare } from "@/components/chat/Compare";
 import { Composer } from "@/components/chat/Composer";
+import { ReadinessNote } from "@/components/chat/Readiness";
 import { AssistantMessage, UserMessage } from "@/components/chat/Messages";
 import { supportsReasoning } from "@/components/chat/ModelPicker";
 import { ThreadList } from "@/components/chat/ThreadList";
@@ -22,7 +23,7 @@ import {
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import type { Attachment, ContentPart } from "@/lib/attachments";
-import { defaultChatModel } from "@/lib/modelFilter";
+import { chatReadiness, defaultChatModel } from "@/lib/modelFilter";
 import { useShellTier } from "@/lib/useMediaQuery";
 import {
   DEFAULT_PARAMS,
@@ -226,6 +227,13 @@ function ChatPage() {
     setDrafts((previous) => ({ ...previous, [draftKey]: value }));
 
   const model = active ? active.model : newModel;
+  // Readiness waits for the catalog and the credential picture, like the
+  // default rule above. A status error leaves readiness unknown.
+  const providers = status.data?.providers;
+  const readiness =
+    models.isPending || models.isError || status.isPending
+      ? undefined
+      : chatReadiness(model, models.data, providers);
   const params = active ? active.params : newParams;
 
   const setModel = (next: string) => {
@@ -668,7 +676,12 @@ function ChatPage() {
 
         {compare.active ? (
           <>
-            <CompareView compare={compare} models={models.data} />
+            <CompareView
+              compare={compare}
+              models={models.data}
+              providers={providers}
+              ready={!models.isPending && !status.isPending}
+            />
             <div className="relative mx-auto w-full max-w-[768px] px-4 pb-4">
               {composer}
             </div>
@@ -743,6 +756,7 @@ function ChatPage() {
                 Try a model through this gateway
               </h1>
               {composer}
+              {readiness && <ReadinessNote readiness={readiness} className="mt-2" />}
               {!startersDismissed && (
                 <div className="mt-4">
                   <div className="mb-2 flex items-center justify-between">

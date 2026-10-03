@@ -1,4 +1,4 @@
-import type { Model } from "@/lib/api";
+import type { Model, ProviderRuntimeStatus } from "@/lib/api";
 
 // The models-list filter predicate. Filter state lives in the URL, so
 // this seam defines what each search param means. Every facet param is
@@ -140,6 +140,65 @@ export function defaultChatModel(
       )
     : undefined;
   return (credentialed ?? candidates[0] ?? models[0])?.id ?? "";
+}
+
+// ChatReadiness says whether a chat turn on one model can get an answer for
+// this caller, and why. The console shows it beside each chat and compare
+// action, so a default the reader never chose is never silent.
+export type ChatReadiness = {
+  state: "ready" | "no_credential" | "unknown" | "unavailable";
+  text: string;
+};
+
+// chatReadiness reads the catalog and the provider credentials. A model is
+// ready when a provider that serves it for chat completions holds a usable
+// operator credential. Without provider status, for example for a key that
+// cannot read it, readiness is not known. A gateway with no catalog models
+// cannot answer at all.
+export function chatReadiness(
+  modelID: string,
+  models: Model[] | undefined,
+  providers: ProviderRuntimeStatus[] | undefined,
+): ChatReadiness {
+  if (modelID.startsWith(PRESET_PREFIX)) {
+    return { state: "unknown", text: "A preset routes this conversation. A send shows which provider answers." };
+  }
+  if (!models?.length) {
+    return {
+      state: "unavailable",
+      text: "The gateway serves no catalog models yet, so chat cannot send. The catalog panel says why.",
+    };
+  }
+  const model = models.find((candidate) => candidate.id === modelID);
+  if (!model) {
+    return { state: "unavailable", text: "The catalog does not list this model. Pick a model from the list." };
+  }
+  if (!chattableModels([model]).length) {
+    return { state: "unavailable", text: "This model does not answer chat completions. Pick a chat model." };
+  }
+  if (!providers) {
+    return {
+      state: "unknown",
+      text: "This key cannot read the provider credentials, so readiness is not known. A send shows whether a provider answers.",
+    };
+  }
+  const usable = new Set(
+    providers.filter((provider) => provider.operator_credential?.usable === true).map((provider) => provider.provider_id),
+  );
+  const serving = [
+    ...new Set(
+      (model.offerings ?? [])
+        .filter((offering) => answersChatTurn(offering) && usable.has(offering.provider))
+        .map((offering) => offering.provider_name ?? offering.provider),
+    ),
+  ];
+  if (serving.length) {
+    return { state: "ready", text: `Ready: ${serving.join(", ")} can answer chat completions with a usable credential.` };
+  }
+  return {
+    state: "no_credential",
+    text: "No provider that serves this model has a usable credential. A send fails until an operator adds one in Providers.",
+  };
 }
 
 export function hasCapability(model: Model, capability: string): boolean {

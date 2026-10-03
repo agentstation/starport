@@ -36,6 +36,7 @@ import type { GeneratedMedia } from "@/lib/attachments";
 import { turnAttachments } from "@/lib/chatStore";
 import type { ChatMessage } from "@/lib/chatStore";
 import { formatCount, formatMs, formatNanoUSD } from "@/lib/format";
+import { BROWSER_ROUND_TRIP, timingLabel } from "@/lib/timing";
 import { cn } from "@/lib/utils";
 
 const PLUGINS = { code, math, mermaid };
@@ -215,6 +216,8 @@ function costText(message: ChatMessage, model: Model | undefined): string | null
 
 // MetadataLine carries the legacy badge set: TTFT, total latency, tok/s,
 // token counts, reasoning tokens, cache state, cost, stopped, unenforced.
+// The browser measures TTFT and total itself, from its request to the last
+// byte, so the line labels them as complete and names that boundary.
 export function MetadataLine({
   message,
   model,
@@ -223,12 +226,16 @@ export function MetadataLine({
   model: Model | undefined;
 }) {
   const stats = message.stats;
-  const items: { key: string; text: string; tone?: string }[] = [];
+  const items: { key: string; text: string; tone?: string; title?: string }[] = [];
   if (stats?.ttftMs !== undefined) {
     items.push({ key: "ttft", text: `TTFT ${formatMs(stats.ttftMs)}` });
   }
   if (stats?.latencyMs !== undefined) {
     items.push({ key: "total", text: `${formatMs(stats.latencyMs)} total` });
+  }
+  if (stats?.ttftMs !== undefined || stats?.latencyMs !== undefined) {
+    const scope = timingLabel({ boundary: BROWSER_ROUND_TRIP, complete: true });
+    items.push({ key: "timing", text: scope.text, title: scope.sentence });
   }
   if (stats?.tps) {
     items.push({ key: "tps", text: `${stats.tps.toFixed(1)} tok/s` });
@@ -268,7 +275,7 @@ export function MetadataLine({
   return (
     <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs text-text-3">
       {items.map((item) => (
-        <span key={item.key} className={item.tone}>
+        <span key={item.key} className={item.tone} title={item.title}>
           {item.text}
         </span>
       ))}

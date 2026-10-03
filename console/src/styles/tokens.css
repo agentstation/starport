@@ -104,8 +104,9 @@
 
   --text-1: #18181b;
   --text-2: #3f3f46;
-  --text-3: #71717a;
-  --text-4: #a1a1aa;
+  /* 5.18:1 on raised and 4.82:1 on hover; #71717a measured 4.40 and 4.10. */
+  --text-3: #66666e;
+  --text-4: #a1a1aa; /* disabled only; documented non-AA */
 
   --accent: #b45309;
   --accent-hover: #92400e;

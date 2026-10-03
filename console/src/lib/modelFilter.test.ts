@@ -4,6 +4,7 @@ import type { Model } from "@/lib/api";
 
 import {
   authorIdsOf,
+  chatReadiness,
   chattableModels,
   defaultChatModel,
   facetValues,
@@ -209,6 +210,22 @@ test("without a usable provider the first chat model stands in", () => {
     "openai/text-embedding-3-small",
   );
   expect(defaultChatModel("", [], new Set())).toBe("");
+});
+
+test("chat readiness states each case a chat action can meet", () => {
+  const providers = [
+    { provider_id: "anthropic", operator_credential: { usable: false } },
+    { provider_id: "openai", operator_credential: { usable: true } },
+  ];
+  const catalog = [embedding, claude, gpt];
+  expect(chatReadiness("openai/gpt-x", catalog, providers)).toMatchObject({ state: "ready" });
+  expect(chatReadiness("anthropic/claude-fable-5", catalog, providers).state).toBe("no_credential");
+  // A key that cannot read provider status does not learn readiness.
+  expect(chatReadiness("anthropic/claude-fable-5", catalog, undefined).state).toBe("unknown");
+  expect(chatReadiness("@preset/fast", catalog, providers).state).toBe("unknown");
+  expect(chatReadiness("openai/text-embedding-3-small", catalog, providers).state).toBe("unavailable");
+  expect(chatReadiness("gone/model", catalog, providers).state).toBe("unavailable");
+  expect(chatReadiness("openai/gpt-x", [], providers).text).toMatch(/serves no catalog models/);
 });
 
 test("provider counts use distinct offering providers per model", () => {

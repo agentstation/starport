@@ -10,12 +10,18 @@ import (
 const originDefault = "default"
 
 // EffectiveReport is the operator view of each catalog setting and the
-// authority that supplied it. Values are redacted.
+// authority that supplied it. Values are redacted. Target names where a field
+// save writes. Paths and Storage report where this process keeps its files and
+// records, with the origin of each path. Paths.DeploymentID is the identity
+// that a field save names.
 type EffectiveReport struct {
 	Management string             `json:"management"`
 	Controller string             `json:"controller,omitempty"`
 	Namespace  string             `json:"namespace,omitempty"`
 	Revision   AppliedRevision    `json:"revision"`
+	Target     SaveTarget         `json:"target"`
+	Paths      Paths              `json:"paths"`
+	Storage    []StorageLifetime  `json:"storage"`
 	Settings   []EffectiveSetting `json:"settings"`
 }
 
@@ -42,7 +48,10 @@ type IgnoredValue struct {
 
 // EffectiveReport reads process memory only. It never opens the store or a file.
 func (c *Config) EffectiveReport() EffectiveReport {
-	report := EffectiveReport{Management: c.ManagementMode(), Revision: c.AppliedRevision(), Settings: []EffectiveSetting{}}
+	report := EffectiveReport{
+		Management: c.ManagementMode(), Revision: c.AppliedRevision(), Target: c.SaveTarget(),
+		Paths: c.EffectivePaths(), Storage: c.StorageLifetimes(), Settings: []EffectiveSetting{},
+	}
 	if report.Management == ManagementExternal {
 		report.Controller = ManagementExternal
 	}

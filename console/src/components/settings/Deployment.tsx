@@ -17,12 +17,12 @@ type Fact = { label: string; value: ReactNode; variable?: string; detail?: strin
 
 function FactList({ facts }: { facts: Fact[] }) {
   return (
-    <dl className="grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm @2xl:grid-cols-[auto_1fr_auto]">
+    <dl className="grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-md @2xl:grid-cols-[auto_1fr_auto]">
       {facts.map((fact) => (
         <div key={fact.label} className="contents">
           <dt className="text-text-3">{fact.label}</dt>
           <dd className="min-w-0 text-text-2">
-            <span className="font-mono">{fact.value}</span>
+            <span className="font-mono text-base">{fact.value}</span>
             {fact.detail && <span className="ml-2 text-text-3">{fact.detail}</span>}
           </dd>
           <dd className="col-start-2 break-words font-mono text-base text-text-2 @2xl:col-start-3 @2xl:text-right">
@@ -35,7 +35,7 @@ function FactList({ facts }: { facts: Fact[] }) {
 }
 
 // Gate gives each deployment section the same loading and access states.
-function Gate<T>({
+export function Gate<T>({
   query,
   what,
   children,
@@ -45,11 +45,11 @@ function Gate<T>({
   children: (data: T) => ReactNode;
 }) {
   if (query.isPending) {
-    return <p className="text-sm text-text-3">Reading {what}…</p>;
+    return <p className="text-md text-text-3">Reading {what}…</p>;
   }
   if (query.error) {
     if (query.error instanceof ApiError && query.error.needsKey) {
-      return <p className="text-sm text-text-3">Reading {what} needs an admin-scoped key.</p>;
+      return <p className="text-md text-text-3">Reading {what} needs an admin-scoped key.</p>;
     }
     return <LoadFailed what={what} error={query.error} onRetry={() => void query.refetch()} />;
   }

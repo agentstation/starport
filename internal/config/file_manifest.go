@@ -245,12 +245,12 @@ func (c *Config) addExternalStorage(report *productpaths.FileManifest) {
 	if c.Storage.Mode == storageModeValkey {
 		add("kv", storageModeValkey, "Preserve durable records and accepted catalog generations. Do not fall back to local Badger on an outage.")
 	} else if c.Storage.Badger.inMemory {
-		add("kv", "process-memory", "Development records expire with the process.")
+		add("kv", selectionProcessMemory, "Development records expire with the process.")
 	}
 	if c.Storage.SQL.Mode != sqlModeSQLite {
 		add("sql", c.Storage.SQL.Mode, "Restore SQL and KV records consistently. Do not fall back to SQLite on an outage.")
 	} else if c.Storage.Badger.inMemory {
-		add("sql", "process-memory", "Development records expire with the process.")
+		add("sql", selectionProcessMemory, "Development records expire with the process.")
 	}
 	if c.Files.SelectedBackend() == BlobBackendObjectStore {
 		add("blobs", BlobBackendObjectStore, "Restore object bytes and file records together. Endpoints and credentials are omitted.")

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { MessageSquare, SplitSquareHorizontal } from "lucide-react";
 
+import { ReadinessNote } from "@/components/chat/Readiness";
 import type {
   Model,
   ModelOffering,
@@ -16,33 +17,37 @@ import {
   providerLabel,
   shortGenerationID,
 } from "@/lib/format";
-import { operationsOf } from "@/lib/modelFilter";
+import { operationsOf, type ChatReadiness } from "@/lib/modelFilter";
 import { cn } from "@/lib/utils";
 
 // --- Actions: Open in chat seeds the composer's model; Compare lands
-// in chat with compare mode seeded from the same model.
+// in chat with compare mode seeded from the same model. The readiness note
+// under both says whether a chat turn on this model can get an answer.
 
-export function ModelActions({ modelId }: { modelId: string }) {
+export function ModelActions({ modelId, readiness }: { modelId: string; readiness?: ChatReadiness }) {
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      <Link
-        to="/chat"
-        search={{ model: modelId }}
-        data-testid="open-in-chat"
-        className="flex items-center gap-1.5 rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink transition-colors duration-150 ease-standard hover:bg-accent-hover"
-      >
-        <MessageSquare className="size-3.5" />
-        Open in chat
-      </Link>
-      <Link
-        to="/chat"
-        search={{ model: modelId, compare: true }}
-        data-testid="add-to-comparison"
-        className="flex items-center gap-1.5 rounded-sm border border-border-2 px-3 py-1.5 text-sm text-text-2 transition-colors duration-150 ease-standard hover:text-text-1"
-      >
-        <SplitSquareHorizontal className="size-3.5" />
-        Compare
-      </Link>
+    <div className="flex max-w-xs shrink-0 flex-col items-end gap-2">
+      <div className="flex items-center gap-2">
+        <Link
+          to="/chat"
+          search={{ model: modelId }}
+          data-testid="open-in-chat"
+          className="flex items-center gap-1.5 rounded-sm bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink transition-colors duration-150 ease-standard hover:bg-accent-hover"
+        >
+          <MessageSquare className="size-3.5" />
+          Open in chat
+        </Link>
+        <Link
+          to="/chat"
+          search={{ model: modelId, compare: true }}
+          data-testid="add-to-comparison"
+          className="flex items-center gap-1.5 rounded-sm border border-border-2 px-3 py-1.5 text-sm text-text-2 transition-colors duration-150 ease-standard hover:text-text-1"
+        >
+          <SplitSquareHorizontal className="size-3.5" />
+          Compare
+        </Link>
+      </div>
+      {readiness && <ReadinessNote readiness={readiness} className="text-right" />}
     </div>
   );
 }

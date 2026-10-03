@@ -1,6 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import * as api from "./api";
+import * as configuration from "./configuration";
 import type { ActivityFilters, ActivityPage, AuditFilters } from "./api";
 
 // queries owns every query key and fetcher the console reads. A route or a
@@ -86,6 +87,14 @@ export const queries = {
     queryOptions({ queryKey: ["webhooks"], queryFn: ({ signal }) => api.webhookSummary({ signal }) }),
   authMode: () =>
     queryOptions({ queryKey: ["auth-mode"], queryFn: ({ signal }) => api.readAuthMode({ signal }) }),
+  configSchema: () =>
+    queryOptions({
+      queryKey: ["config-schema"],
+      queryFn: ({ signal }) => configuration.configSchema({ signal }),
+      staleTime: Infinity,
+    }),
+  configEffective: () =>
+    queryOptions({ queryKey: ["config-effective"], queryFn: ({ signal }) => configuration.configEffective({ signal }) }),
 
   models: () =>
     queryOptions({
@@ -124,6 +133,14 @@ export const queries = {
   // The generation sits in the status key beside the session, so an activation
   // the summary reports draws exactly one new status request. The cadence
   // itself belongs to the panel, which knows whether a reader is looking.
+  // catalogRefresh follows one run at the operation cadence until it closes.
+  catalogRefresh: (runID: string) =>
+    queryOptions({
+      queryKey: ["catalog-refresh", runID],
+      queryFn: ({ signal }) => api.catalogRefresh(runID, { signal }),
+      refetchInterval: (query) =>
+        query.state.data?.state === "accepted" || query.state.data?.state === "running" ? OPERATION_INTERVAL : false,
+    }),
   catalogStatus: (session: string, generation: string) =>
     queryOptions({
       queryKey: ["catalog-status", session, generation],

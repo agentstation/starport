@@ -68,11 +68,11 @@ export function AuthModeControl() {
   });
 
   if (isPending) {
-    return <p className="text-sm text-text-3">Reading the gateway setting…</p>;
+    return <p className="text-md text-text-3">Reading the gateway setting…</p>;
   }
   if (!data) {
     return (
-      <p className="text-sm text-text-3">
+      <p className="text-md text-text-3">
         This gateway did not report an authentication mode.
       </p>
     );
@@ -109,7 +109,7 @@ export function AuthModeControl() {
           </button>
         ))}
       </div>
-      <p className="mt-3 text-sm text-text-3" aria-live="polite">
+      <p className="mt-3 text-md text-text-3" aria-live="polite">
         {failure ? (
           <span className="text-error">{failure}</span>
         ) : locked ? (
@@ -139,7 +139,7 @@ export function AuthModeControl() {
           }</DialogTitle>
             </DialogHeader>
             <DialogBody>
-              <p className="text-sm text-text-2">
+              <p className="text-md text-text-2">
                 {consequence(pending, storedKey !== "")}
               </p>
             </DialogBody>
