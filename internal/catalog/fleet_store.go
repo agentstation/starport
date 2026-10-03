@@ -53,11 +53,16 @@ func NewFleetStore(ctx context.Context, store storage.IncarnationProvider, witne
 	if err != nil {
 		return nil, err
 	}
+	return newFleetStore(bound, witness, approved, deployment), nil
+}
+
+// newFleetStore binds one process session to an approved backend incarnation.
+func newFleetStore(bound storage.IncarnationStore, witness fleetRecoveryWitness, approved recovery.Record, deployment string) *FleetStore {
 	return &FleetStore{
 		store: bound, witness: witness, approval: approved, session: rand.Text(),
 		identity: runtime.FleetIdentity{DeploymentID: deployment, RecoveryEpoch: uint64(approved.Epoch), BackendID: approved.BackendID},
 		prefix:   "catalog:fleet:{" + payloadDigest([]byte(deployment)) + "}:v1:",
-	}, nil
+	}
 }
 
 func (s *FleetStore) checkApproval(ctx context.Context) error {
