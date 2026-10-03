@@ -242,6 +242,23 @@ func TestCatalogBaselineStatusOpensReadOnlyObserver(t *testing.T) {
 	require.True(t, observer.closed, "the command closes the observer and removes its directory")
 }
 
+func TestCatalogBaselineStatusReportsNoFleetHead(t *testing.T) {
+	factories := explicitTestFactories(t)
+	cfg := validProductionConfig(t)
+	cfg.Storage.Mode = storage.StorageTypeValkey
+	cfg.Storage.Valkey.URL = "redis://127.0.0.1:6379"
+	useSharedRecipeWithLocalTestStores(t, cfg, &factories)
+	shared, err := factories.openStorage(storage.Config{})
+	require.NoError(t, err)
+	factories.openReadOnlyStorage = func(storage.Config) (storage.KVStore, error) { return uncloseableStore{shared}, nil }
+	factories.openBaselineObserver = func(context.Context, storage.KVStore, *sqlstore.DB, runtimecatalog.Settings, runtimecatalog.DeploymentLookup) (baselineObserver, error) {
+		return nil, runtimecatalog.ErrNoFleetHead
+	}
+	report, err := CatalogBaselineStatus(t.Context(), cfg, withRuntimeFactories(factories))
+	require.NoError(t, err, "a fleet without a head is a status, not an error")
+	require.Equal(t, runtimecatalog.BaselineReport{DeploymentID: cfg.EffectivePaths().DeploymentID, Refusal: runtimecatalog.ErrNoFleetHead.Error()}, report)
+}
+
 // promotionExpiry is the record lifetime end that scripted requests report.
 var promotionExpiry = time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 

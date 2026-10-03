@@ -148,6 +148,21 @@ func TestCatalogBaselineStatusCommandReportsBaselines(t *testing.T) {
 	require.Equal(t, ExitCodeRuntime, ExitCode(err))
 }
 
+func TestCatalogBaselineStatusCommandReportsNoFleetHead(t *testing.T) {
+	deps, output, _ := testDependencies()
+	deps.CatalogBaselineStatus = func(context.Context, *config.Config) (runtimecatalog.BaselineReport, error) {
+		return runtimecatalog.BaselineReport{DeploymentID: "deployment", Refusal: runtimecatalog.ErrNoFleetHead.Error()}, nil
+	}
+	require.NoError(t, Run(t.Context(), []string{"starport", "catalog", "baseline-status"}, deps), "a fleet without a head exits 0")
+	require.Equal(t, "Deployment deployment: no fleet head. A gateway publishes the first fleet head when it starts.\n", output.String())
+
+	output.Reset()
+	require.NoError(t, Run(t.Context(), []string{"starport", "catalog", "baseline-status", "--json"}, deps))
+	require.JSONEq(t, `{"deployment_id":"deployment","head_revision":0,"promotable":false,
+		"packaged":{"generation_id":"","checksum":""},"retained":{"generation_id":"","checksum":""},
+		"refusal":"no fleet head. A gateway publishes the first fleet head when it starts"}`, output.String())
+}
+
 func jsonFieldNames(fields map[string]json.RawMessage) []string {
 	names := make([]string, 0, len(fields))
 	for name := range fields {

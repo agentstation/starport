@@ -129,6 +129,11 @@ func writePromotionReceipt(w io.Writer, receipt runtimecatalog.PromotionReceipt)
 }
 
 func writeBaselineReport(w io.Writer, report runtimecatalog.BaselineReport) error {
+	// A fleet without a head has no baselines to compare. The refusal names the cause.
+	if report.HeadRevision == 0 {
+		_, err := fmt.Fprintf(w, "Deployment %s: %s.\n", report.DeploymentID, report.Refusal)
+		return err
+	}
 	_, err := fmt.Fprintf(w, "Deployment %s at fleet head revision %d.\nPackaged: generation %s, checksum %s\nRetained: generation %s, checksum %s\nPromotable: %t\n",
 		report.DeploymentID, report.HeadRevision,
 		report.Packaged.GenerationID, report.Packaged.Checksum,

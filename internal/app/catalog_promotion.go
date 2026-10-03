@@ -153,6 +153,7 @@ func pendingPromotion(ctx context.Context, requests promotionRequests, record ru
 // CatalogBaselineStatus compares the packaged baseline of this binary with the retained fleet baseline.
 // It reads shared storage without a write, never takes the publication lease, and replays the
 // fleet head in a temporary directory instead of the gateway state directory.
+// A fleet without a head is not an error. The report then has only the deployment and the refusal.
 func CatalogBaselineStatus(ctx context.Context, cfg *config.Config, options ...Option) (report runtimecatalog.BaselineReport, err error) {
 	factories, err := baselineCommandFactories(cfg, options)
 	if err != nil {
@@ -170,7 +171,11 @@ func CatalogBaselineStatus(ctx context.Context, cfg *config.Config, options ...O
 		return runtimecatalog.BaselineReport{}, fmt.Errorf("open relational storage: %w", err)
 	}
 	defer func() { err = errors.Join(err, db.Close()) }()
-	observer, err := factories.openBaselineObserver(ctx, store, db, catalogSettings(cfg), runtimecatalog.DeploymentLookup(cfg.LookupDeployment))
+	settings := catalogSettings(cfg)
+	observer, err := factories.openBaselineObserver(ctx, store, db, settings, runtimecatalog.DeploymentLookup(cfg.LookupDeployment))
+	if errors.Is(err, runtimecatalog.ErrNoFleetHead) {
+		return runtimecatalog.BaselineReport{DeploymentID: settings.DeploymentID, Refusal: err.Error()}, nil
+	}
 	if err != nil {
 		return runtimecatalog.BaselineReport{}, fmt.Errorf("open catalog: %w", err)
 	}
