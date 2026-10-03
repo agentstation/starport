@@ -122,10 +122,68 @@ export function initCopyButtons(doc: Document, win: Window): void {
   }
 }
 
+// ---- Sticky header and columns ----
+
+// stickyHeaderHeight is the height of the header while it is sticky, and 0
+// while it scrolls with the page.
+export function stickyHeaderHeight(doc: Document, win: Window): number {
+  const header = doc.querySelector<HTMLElement>(".site-header");
+  if (!header || win.getComputedStyle(header).position !== "sticky") return 0;
+  return Math.ceil(header.getBoundingClientRect().height);
+}
+
+// syncHeaderOffset writes the sticky header height to --docs-header-offset
+// on the root element. The header wraps to a second row when the build facts
+// do not fit, so a fixed offset can leave a fragment target under it. The
+// scroll padding and the sticky columns read the property. The stylesheet
+// value is the fallback without this script.
+export function syncHeaderOffset(doc: Document, win: Window): void {
+  const height = stickyHeaderHeight(doc, win);
+  if (height > 0) doc.documentElement.style.setProperty("--docs-header-offset", `${height}px`);
+  else doc.documentElement.style.removeProperty("--docs-header-offset");
+}
+
+// syncFooterOffset writes the footer height to --docs-footer-offset while
+// the header is sticky. A sticky column cannot leave the page body, so at the
+// page end the footer pushes a column up by the part that does not fit. The
+// columns subtract this height from their maximum height, so their top stays
+// below the header. The stylesheet value is the fallback without this script.
+export function syncFooterOffset(doc: Document, win: Window): void {
+  const footer = doc.querySelector<HTMLElement>(".site-footer");
+  if (footer && stickyHeaderHeight(doc, win) > 0) {
+    const height = Math.ceil(footer.getBoundingClientRect().height);
+    doc.documentElement.style.setProperty("--docs-footer-offset", `${height}px`);
+  } else {
+    doc.documentElement.style.removeProperty("--docs-footer-offset");
+  }
+}
+
+// trackStickyOffsets keeps both offsets current as the header and the
+// footer resize.
+export function trackStickyOffsets(doc: Document, win: Window): void {
+  const header = doc.querySelector<HTMLElement>(".site-header");
+  if (!header) return;
+  const update = () => {
+    syncHeaderOffset(doc, win);
+    syncFooterOffset(doc, win);
+  };
+  update();
+  const Observer = (win as Window & typeof globalThis).ResizeObserver;
+  if (Observer) {
+    const observer = new Observer(update);
+    observer.observe(header);
+    const footer = doc.querySelector<HTMLElement>(".site-footer");
+    if (footer) observer.observe(footer);
+  }
+  win.addEventListener("resize", update);
+}
+
 // ---- Table of contents ----
 
-// The offset below the sticky header where a heading counts as reached.
+// The offset where a heading counts as reached when no header is sticky. A
+// sticky header moves the line down by its height.
 const READ_LINE = 96;
+const READ_SLACK = 40;
 
 export function initTableOfContents(doc: Document, win: Window): void {
   const toc = doc.querySelector("[data-toc]");
@@ -164,9 +222,10 @@ export function initTableOfContents(doc: Document, win: Window): void {
   };
 
   const fromScroll = () => {
+    const readLine = Math.max(READ_LINE, stickyHeaderHeight(doc, win) + READ_SLACK);
     let current: string | null = null;
     for (const { target } of entries) {
-      if (target.getBoundingClientRect().top <= READ_LINE) current = target.id;
+      if (target.getBoundingClientRect().top <= readLine) current = target.id;
     }
     mark(current ?? entries[0]?.target.id ?? null);
   };
@@ -284,10 +343,31 @@ export function initSearchPage(doc: Document, win: Window): void {
   );
 }
 
+// ---- Fragment ----
+
+// restoreFragment brings the fragment target back to the top of the view
+// after the page loads. The browser scrolls to the target before the fonts
+// and the stylesheet settle, and a later layout shift can move it away. The
+// header can change height in the same frame, before the resize observer
+// reports it, so restore measures the offset again before it scrolls.
+export function restoreFragment(doc: Document, win: Window): void {
+  const restore = () => {
+    const id = decodeURIComponent(win.location.hash.slice(1));
+    const target = id ? doc.getElementById(id) : null;
+    if (!target) return;
+    syncHeaderOffset(doc, win);
+    target.scrollIntoView({ block: "start" });
+  };
+  if (doc.readyState === "complete") restore();
+  else win.addEventListener("load", restore, { once: true });
+}
+
 export function initDocs(doc: Document, win: Window): void {
   fixFileLinks(doc, win);
+  trackStickyOffsets(doc, win);
   initThemeToggle(doc);
   initCopyButtons(doc, win);
   initTableOfContents(doc, win);
   initSearchPage(doc, win);
+  restoreFragment(doc, win);
 }

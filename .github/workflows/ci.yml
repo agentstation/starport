@@ -741,6 +741,9 @@ jobs:
       - name: Build binary
         run: make build
 
+      - name: Test docs Pages assembler
+        run: bash scripts/test-docs-pages-assembler.sh
+
       - name: Test binary
         shell: bash
         run: |

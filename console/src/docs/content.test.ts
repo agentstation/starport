@@ -152,8 +152,11 @@ test("code blocks get a language label and a hidden copy control, tables scroll 
   expect(button?.hasAttribute("hidden")).toBe(true);
   expect(button?.getAttribute("type")).toBe("button");
   expect(block?.querySelector("pre")?.getAttribute("tabindex")).toBe("0");
+  expect(block?.querySelector("pre")?.getAttribute("role")).toBe("group");
+  expect(block?.querySelector("pre")?.getAttribute("aria-label")).toBe("bash code example");
   const region = doc.querySelector(".table-scroll");
   expect(region?.getAttribute("role")).toBe("region");
+  expect(region?.getAttribute("aria-label")).toBe("Run table");
   expect(region?.querySelector("table")).not.toBeNull();
   expect(rendered.sections.find((section) => section.id === "run")?.text).toContain("starport doctor");
 });

@@ -2,10 +2,10 @@
 title: Upgrade and shut down
 area: operate-starport
 order: 6
-summary: Set request limits, stop a gateway safely, run the release gate for a source build, and upgrade with steps that you can verify.
+summary: Set request limits, stop a gateway safely, run the release gate, upgrade with steps that you can verify, and publish the documentation site.
 ---
 
-This topic covers the request limits and graceful shutdown. It also gives the release gate for a source build and an upgrade procedure that you can verify.
+This topic covers the request limits and graceful shutdown. It also gives the release gate for a source build and an upgrade procedure that you can verify. The last section tells how to publish and roll back the public documentation site.
 
 ## Request limits
 
@@ -101,3 +101,47 @@ If `--legacy` lists a path, set explicit paths to keep the earlier locations. A 
 
 - `STARPORT_SERVER_SHUTDOWN_TIMEOUT` sets the drain time.
 - Refer to [Back up and restore](../storage/backup-and-restore.md).
+
+## Publish the documentation site
+
+Each release attaches the documentation site as `starport-docs-<tag>.tar.gz`. The `checksums.txt` file of the release lists its digest. The gateway serves the same build at `/docs/`.
+
+The public host is not yet enabled. GitHub Pages stays off for the repository. The `Docs Pages` workflow in `.github/workflows/docs-pages.yaml` is ready, and only a maintainer can start it.
+
+### Version paths
+
+| Path | Content |
+| --- | --- |
+| `/<tag>/` | The documentation archive of that release, unchanged |
+| `/latest/` | A copy of the release that the `latest` input names |
+| `/` | A redirect to `/latest/` with a list of the versions |
+| `/manifest.json` | Each version with its archive digest and its embedded manifest |
+
+Each version directory keeps its own `manifest.json`. That file names the release, the Starmap module version, and the content revision. It also lists the SHA-256 digest of each file. The root manifest entry for a version equals that file. To compare the public site with a gateway, compare the entry with `/docs/manifest.json` on the gateway.
+
+A deployment replaces the whole site. Each run downloads every release that has a documentation archive and builds the site again. The workflow checks each archive against `checksums.txt` and each file against its manifest. A failed check stops the run before the deployment. A prerelease joins the site only when `tag` or `latest` names it.
+
+### Before the first run
+
+- Set the GitHub Pages source of the repository to GitHub Actions.
+- Create the `github-pages` environment with required reviewers.
+
+### Publish a release
+
+1. Start the workflow with the release tag in `tag`.
+2. Leave `latest` empty to serve the same release at `/latest/`.
+3. Approve the deployment in the `github-pages` environment.
+
+```bash
+gh workflow run docs-pages.yaml -f tag=v1.4.0
+```
+
+### Roll back
+
+Start the workflow again with an earlier release in `latest`. Keep the newest release in `tag`. The run keeps every version path and moves `/latest/` to the earlier release.
+
+```bash
+gh workflow run docs-pages.yaml -f tag=v1.4.0 -f latest=v1.3.0
+```
+
+A failed run leaves the last deployment in place. The deploy step runs only after the assembly and the artifact upload succeed.

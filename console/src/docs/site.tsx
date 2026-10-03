@@ -94,7 +94,7 @@ function TableOfContents({ headings }: { headings: readonly Heading[] }) {
   const entries = headings.filter((heading) => heading.depth <= 3);
   if (entries.length === 0) return null;
   return (
-    <aside className="toc">
+    <div className="toc">
       <nav aria-label="On this page" data-toc="">
         <p className="toc-title">On this page</p>
         <ol>
@@ -105,33 +105,38 @@ function TableOfContents({ headings }: { headings: readonly Heading[] }) {
           ))}
         </ol>
       </nav>
-    </aside>
+    </div>
   );
 }
 
+// BuildFactsList names its group on a wrapper, because a list of terms
+// takes no accessible name of its own.
 function BuildFactsList({ facts }: { facts: BuildFacts }) {
   return (
-    <dl className="build-facts" aria-label="Build">
-      <div>
-        <dt>Release</dt>
-        <dd data-fact="release">{facts.release}</dd>
-      </div>
-      <div>
-        <dt>Starmap</dt>
-        <dd data-fact="starmap">{facts.starmapVersion}</dd>
-      </div>
-      <div>
-        <dt>Content</dt>
-        <dd data-fact="content" title={facts.contentRevision}>
-          {shortRevision(facts.contentRevision)}
-        </dd>
-      </div>
-    </dl>
+    <div role="group" aria-label="Build information">
+      <dl className="build-facts">
+        <div>
+          <dt>Release</dt>
+          <dd data-fact="release">{facts.release}</dd>
+        </div>
+        <div>
+          <dt>Starmap</dt>
+          <dd data-fact="starmap">{facts.starmapVersion}</dd>
+        </div>
+        <div>
+          <dt>Content</dt>
+          <dd data-fact="content" title={facts.contentRevision}>
+            {shortRevision(facts.contentRevision)}
+          </dd>
+        </div>
+      </dl>
+    </div>
   );
 }
 
 // VersionSelector lists the builds a reader can open. The embedded build
-// knows only itself; the public site build adds earlier releases.
+// knows only itself. The summary names the current version for a screen
+// reader, and the disclosure works from the keyboard without the script.
 function VersionSelector({ route, facts }: { route: string; facts: BuildFacts }) {
   return (
     <details className="version-selector">
@@ -187,10 +192,16 @@ function Page({
           Skip to content
         </a>
         <header className="site-header">
-          <a className="site-brand" href={root}>
+          <a className="site-brand" href={root} aria-current={route === "" ? "page" : undefined}>
             Starport docs
           </a>
-          <form className="site-search" role="search" action={relativeHref(route, SEARCH_ROUTE)} method="get">
+          <form
+            className="site-search"
+            role="search"
+            aria-label="Documentation search"
+            action={relativeHref(route, SEARCH_ROUTE)}
+            method="get"
+          >
             <label className="sr-only" htmlFor="site-search-input">
               Search the documentation
             </label>
@@ -312,7 +323,7 @@ function searchPage(topics: readonly Topic[], input: SiteInput): SitePage {
         <h1>Search</h1>
         <p className="article-summary">Search the headings, prose, and setting names in this build.</p>
       </header>
-      <form className="search-page-form" role="search" action="./" method="get">
+      <form className="search-page-form" role="search" aria-label="Search this build" action="./" method="get">
         <label htmlFor="search-page-input">Search terms</label>
         <input id="search-page-input" type="search" name="q" autoComplete="off" />
         <button type="submit">Search</button>

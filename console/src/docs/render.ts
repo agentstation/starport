@@ -141,19 +141,47 @@ function element(tagName: string, properties: Element["properties"], children: E
   return { type: "element", tagName, properties, children };
 }
 
+// headingText is the text of a heading without its appended anchor mark.
+function headingText(heading: Element): string {
+  const children = heading.children.filter(
+    (child) => !(child.type === "element" && (child.properties.className as string[] | undefined)?.includes("heading-anchor")),
+  );
+  return children.map((child) => textOf(child)).join("").trim();
+}
+
 // decorate wraps each code block with its language label and a copy
-// control, and wraps each table in a region that scrolls on its own. The
-// copy control stays hidden until the client script can make it work.
+// control, and wraps each table in a region that scrolls on its own. Each
+// scroll container takes keyboard focus and a name, so a keyboard reader
+// can scroll it and a screen reader announces it. A table takes the name
+// of the heading above it. The copy control stays hidden until the client
+// script can make it work.
 function decorate() {
   return (tree: HastRoot) => {
+    let section = "";
+    const tables = new Map<string, number>();
+    const tableName = () => {
+      const base = section ? `${section} table` : "Table";
+      const count = (tables.get(base) ?? 0) + 1;
+      tables.set(base, count);
+      return count === 1 ? base : `${base} ${count}`;
+    };
     const walk = (parent: HastRoot | Element) => {
       parent.children.forEach((child, index) => {
         if (child.type !== "element") return;
+        if (HEADING_TAGS.has(child.tagName)) {
+          section = headingText(child);
+          return;
+        }
         if (child.tagName === "pre") {
           const code = child.children.find((node): node is Element => node.type === "element" && node.tagName === "code");
           const classes = (code?.properties.className as string[] | undefined) ?? [];
           const language = classes.find((name) => name.startsWith("language-"))?.slice("language-".length) ?? "text";
-          child.properties = { ...child.properties, tabIndex: 0 };
+          child.properties = {
+            ...child.properties,
+            role: "group",
+            ariaLabel: language === "text" ? "Code example" : `${language} code example`,
+            tabIndex: 0,
+          };
           parent.children[index] = element("div", { className: ["code-block"] }, [
             element("div", { className: ["code-head"] }, [
               element("span", { className: ["code-lang"] }, [{ type: "text", value: language }]),
@@ -170,7 +198,7 @@ function decorate() {
         if (child.tagName === "table") {
           parent.children[index] = element(
             "div",
-            { className: ["table-scroll"], role: "region", ariaLabel: "Table", tabIndex: 0 },
+            { className: ["table-scroll"], role: "region", ariaLabel: tableName(), tabIndex: 0 },
             [child],
           );
           return;
