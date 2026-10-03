@@ -303,12 +303,9 @@ func (w *LocalWriter) prepare() (localFile, error) {
 	if w.cfg.SharedManagement() {
 		return localFile{}, &Refusal{Reason: RefusalUnavailable, Message: "a shared deployment saves configuration in the shared store"}
 	}
-	if len(w.cfg.fileInputs) != 1 {
-		return localFile{}, &Refusal{Reason: RefusalUnavailable, Message: "a local field save requires exactly one configuration file"}
-	}
-	path := w.cfg.fileInputs[0].location.Path
-	if !filepath.IsAbs(path) {
-		return localFile{}, &Refusal{Reason: RefusalUnavailable, Message: "the configuration file path is not absolute"}
+	path, refusal := w.cfg.localSaveFile()
+	if refusal != nil {
+		return localFile{}, refusal
 	}
 	return localFile{path: path}, nil
 }

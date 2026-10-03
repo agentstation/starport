@@ -654,3 +654,69 @@ func TestAdminConfigSaveRefusesMigration(t *testing.T) {
 	require.Equal(t, applied-1, after)
 	require.Equal(t, "1", fixture.revision(t))
 }
+
+// effectiveSaveFacts is the part of the effective payload that the console
+// reads to build a save. The test decodes the wire names, as the console does.
+type effectiveSaveFacts struct {
+	Management string `json:"management"`
+	Revision   struct {
+		Desired      int64  `json:"desired"`
+		FileChecksum string `json:"file_checksum"`
+	} `json:"revision"`
+	Target struct {
+		Kind        string `json:"kind"`
+		Path        string `json:"path"`
+		Unavailable string `json:"unavailable"`
+	} `json:"target"`
+	Paths struct {
+		ConfigFile   string `json:"config_file"`
+		DeploymentID string `json:"deployment_id"`
+		Origins      map[string]struct {
+			Path   string `json:"path"`
+			Origin string `json:"origin"`
+		} `json:"origins"`
+	} `json:"paths"`
+	Storage []struct {
+		ID        string `json:"id"`
+		Selection string `json:"selection"`
+		Lifetime  string `json:"lifetime"`
+	} `json:"storage"`
+}
+
+func TestAdminConfigEffectiveNamesTheSaveTarget(t *testing.T) {
+	t.Run("local file", func(t *testing.T) {
+		fixture := newLocalConfigurationFixture(t, config.ManagementLocal, "STARPORT_CATALOG_ACQUISITION_INTERVAL=7m\n")
+		facts := decodeConfiguration[effectiveSaveFacts](t, fixture.call(t, http.MethodGet, "/effective", nil))
+		require.Equal(t, config.SaveTargetLocalFile, facts.Target.Kind)
+		require.Equal(t, fixture.file, facts.Target.Path)
+		require.Empty(t, facts.Target.Unavailable)
+		require.Equal(t, configurationDeploymentID, facts.Paths.DeploymentID)
+		require.Equal(t, fixture.revision(t), facts.Revision.FileChecksum)
+		require.NotEmpty(t, facts.Paths.Origins["config"].Origin)
+		require.ElementsMatch(t, []string{"kv", "sql", "blobs"}, []string{facts.Storage[0].ID, facts.Storage[1].ID, facts.Storage[2].ID})
+
+		// A save built only from the payload writes the named file.
+		save := config.FieldSave{OperationID: "op-from-payload", DeploymentID: facts.Paths.DeploymentID, ExpectedRevision: facts.Revision.FileChecksum, Edits: edit("catalog_acquisition_interval", "9m")}
+		requireConfigurationStatus(t, fixture.call(t, http.MethodPost, "/save", save), http.StatusOK)
+		requireFileContent(t, facts.Target.Path, "STARPORT_CATALOG_ACQUISITION_INTERVAL='9m'\n")
+	})
+	t.Run("shared revision", func(t *testing.T) {
+		fixture := newSharedConfigurationFixture(t, sharedSourceValues(""))
+		facts := decodeConfiguration[effectiveSaveFacts](t, fixture.call(t, http.MethodGet, "/effective", nil))
+		require.Equal(t, config.SaveTargetSharedRevision, facts.Target.Kind)
+		require.Empty(t, facts.Target.Path)
+		require.Equal(t, int64(1), facts.Revision.Desired)
+
+		save := config.FieldSave{OperationID: "op-from-payload", DeploymentID: facts.Paths.DeploymentID, ExpectedRevision: strconv.FormatInt(facts.Revision.Desired, 10), Edits: edit(sourceKeyEdit, "payload-source-key")}
+		response := fixture.call(t, http.MethodPost, "/save", save)
+		requireConfigurationStatus(t, response, http.StatusOK)
+		require.Equal(t, int64(2), decodeConfiguration[config.Receipt](t, response).Saved.Sequence)
+		require.NotContains(t, fixture.call(t, http.MethodGet, "/effective", nil).Body.String(), "payload-source-key")
+	})
+	t.Run("external controller", func(t *testing.T) {
+		fixture := newLocalConfigurationFixture(t, config.ManagementExternal, "")
+		facts := decodeConfiguration[effectiveSaveFacts](t, fixture.call(t, http.MethodGet, "/effective", nil))
+		require.Equal(t, config.SaveTargetExternalController, facts.Target.Kind)
+		require.Empty(t, facts.Target.Path)
+	})
+}
