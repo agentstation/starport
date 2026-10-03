@@ -56,6 +56,9 @@ func kvSnapshot(t *testing.T, kv storage.KVStore) map[string][]byte {
 	return values
 }
 
+// runtimeDirectoryLockName is the Starmap runtime directory lock file name (runtime/directory.go).
+const runtimeDirectoryLockName = ".owner.lock"
+
 // directorySnapshot records the mode, size, modification time, and content digest of every entry under root.
 func directorySnapshot(t *testing.T, root string) map[string]string {
 	t.Helper()
@@ -69,7 +72,10 @@ func directorySnapshot(t *testing.T, root string) map[string]string {
 			return err
 		}
 		digest := ""
-		if info.Mode().IsRegular() {
+		// The live leader holds the Starmap runtime directory lock. Windows locks the
+		// file range for every other process, so the snapshot records the lock by its
+		// metadata only.
+		if info.Mode().IsRegular() && entry.Name() != runtimeDirectoryLockName {
 			data, err := os.ReadFile(path)
 			if err != nil {
 				return err
