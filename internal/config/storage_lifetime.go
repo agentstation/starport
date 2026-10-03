@@ -15,6 +15,13 @@ const (
 // in owned development scratch.
 const selectionProcessMemory = "process-memory"
 
+// The store IDs that StorageLifetime reports.
+const (
+	storeIDKV    = "kv"
+	storeIDSQL   = "sql"
+	storeIDBlobs = "blobs"
+)
+
 // StorageLifetime reports one selected store and how long it keeps records.
 // ID is kv, sql, or blobs. Location is a local path and is empty for a
 // process or service store. An endpoint or a credential is never reported.
@@ -34,28 +41,28 @@ func (c *Config) StorageLifetimes() []StorageLifetime {
 	var stores []StorageLifetime
 	switch {
 	case c.Storage.Mode == storageModeValkey:
-		stores = append(stores, StorageLifetime{ID: "kv", Selection: storageModeValkey, Lifetime: LifetimeService})
+		stores = append(stores, StorageLifetime{ID: storeIDKV, Selection: storageModeValkey, Lifetime: LifetimeService})
 	case c.Storage.Badger.inMemory:
-		stores = append(stores, StorageLifetime{ID: "kv", Selection: selectionProcessMemory, Lifetime: LifetimeProcess})
+		stores = append(stores, StorageLifetime{ID: storeIDKV, Selection: selectionProcessMemory, Lifetime: LifetimeProcess})
 	default:
-		stores = append(stores, StorageLifetime{ID: "kv", Selection: storageModeBadger, Lifetime: LifetimeLocal, Location: c.paths.BadgerDir})
+		stores = append(stores, StorageLifetime{ID: storeIDKV, Selection: storageModeBadger, Lifetime: LifetimeLocal, Location: c.paths.BadgerDir})
 	}
 	switch {
 	case c.Storage.SQL.Mode != sqlModeSQLite:
-		stores = append(stores, StorageLifetime{ID: "sql", Selection: c.Storage.SQL.Mode, Lifetime: LifetimeService})
+		stores = append(stores, StorageLifetime{ID: storeIDSQL, Selection: c.Storage.SQL.Mode, Lifetime: LifetimeService})
 	case c.Storage.Badger.inMemory:
-		stores = append(stores, StorageLifetime{ID: "sql", Selection: selectionProcessMemory, Lifetime: LifetimeProcess})
+		stores = append(stores, StorageLifetime{ID: storeIDSQL, Selection: selectionProcessMemory, Lifetime: LifetimeProcess})
 	default:
-		stores = append(stores, StorageLifetime{ID: "sql", Selection: sqlModeSQLite, Lifetime: LifetimeLocal, Location: c.paths.SQLiteFile})
+		stores = append(stores, StorageLifetime{ID: storeIDSQL, Selection: sqlModeSQLite, Lifetime: LifetimeLocal, Location: c.paths.SQLiteFile})
 	}
 	switch {
 	case c.Files.SelectedBackend() == BlobBackendObjectStore:
-		stores = append(stores, StorageLifetime{ID: "blobs", Selection: BlobBackendObjectStore, Lifetime: LifetimeService})
+		stores = append(stores, StorageLifetime{ID: storeIDBlobs, Selection: BlobBackendObjectStore, Lifetime: LifetimeService})
 	case c.Catalog.StateDirectoryIsScratch():
 		// Development binds file bytes to scratch that the session removes.
-		stores = append(stores, StorageLifetime{ID: "blobs", Selection: BlobBackendFilesystem, Lifetime: LifetimeProcess, Location: c.paths.FilesDir})
+		stores = append(stores, StorageLifetime{ID: storeIDBlobs, Selection: BlobBackendFilesystem, Lifetime: LifetimeProcess, Location: c.paths.FilesDir})
 	default:
-		stores = append(stores, StorageLifetime{ID: "blobs", Selection: BlobBackendFilesystem, Lifetime: LifetimeLocal, Location: c.paths.FilesDir})
+		stores = append(stores, StorageLifetime{ID: storeIDBlobs, Selection: BlobBackendFilesystem, Lifetime: LifetimeLocal, Location: c.paths.FilesDir})
 	}
 	return stores
 }
