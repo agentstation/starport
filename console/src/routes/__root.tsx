@@ -16,10 +16,11 @@ import { useGatewayAccessRejected } from "@/lib/useGatewayAccess";
 export type RouterContext = { queryClient: QueryClient };
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-  // Protect deployment routes before their loaders run. Static documentation
-  // and the access page do not require a console session.
+  // Protect deployment routes before their loaders run. The access page does
+  // not require a console session. The gateway serves the documentation as
+  // static pages under /docs/, outside this router.
   beforeLoad: ({ location }) => {
-    if (location.pathname === AUTH_PATH || location.pathname === "/docs") return;
+    if (location.pathname === AUTH_PATH) return;
     if (hasCredential()) return;
     // location.href is the path with its search and hash, so a reader who
     // followed a deep link comes back to it rather than to the overview.
@@ -32,9 +33,6 @@ function RootLayout() {
   const location = useRouterState({ select: (state) => state.location });
   const rejected = useGatewayAccessRejected();
 
-  if (location.pathname === "/docs") {
-    return <div className="documentation-shell"><Outlet /></div>;
-  }
   if (location.pathname === AUTH_PATH) {
     return <Outlet />;
   }

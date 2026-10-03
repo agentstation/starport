@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { CommandPalette } from "./CommandPalette";
@@ -156,4 +156,60 @@ test("finds a model by its exact id and announces the active option", async () =
   await waitFor(() => {
     expect(input.getAttribute("aria-activedescendant")).toBe(option.id);
   });
+});
+
+// The documentation is static pages outside the client router, so both
+// docs destinations are full page loads, never router navigations.
+// jsdom will not let `location.assign` be redefined, so the whole object
+// is stubbed.
+function interceptNavigation() {
+  const assign = vi.fn();
+  vi.stubGlobal("location", { ...window.location, assign });
+  return assign;
+}
+
+test("a typed query offers the documentation search as a full page load", async () => {
+  const assign = interceptNavigation();
+  try {
+    mount();
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+    const input = await screen.findByLabelText("Search everything");
+
+    fireEvent.change(input, { target: { value: "STARPORT_SERVER_PORT" } });
+    const group = await screen.findByRole("group", { name: "Documentation" });
+    fireEvent.click(within(group).getByText("Search documentation for “STARPORT_SERVER_PORT”"));
+
+    expect(assign).toHaveBeenCalledWith("/docs/search/?q=STARPORT_SERVER_PORT");
+    expect(navigate).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test("an empty query does not offer the documentation search", async () => {
+  // An earlier test opened a docs search, which the recents list keeps.
+  localStorage.removeItem("starport.palette.recents");
+  mount();
+  fireEvent.keyDown(document, { key: "k", metaKey: true });
+  await screen.findByRole("group", { name: "Pages" });
+  expect(screen.queryByRole("group", { name: "Documentation" })).toBeNull();
+  expect(screen.queryByText(/Search documentation for/)).toBeNull();
+});
+
+test("the Docs page entry opens the static documentation site", async () => {
+  const assign = interceptNavigation();
+  try {
+    mount();
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+    const input = await screen.findByLabelText("Search everything");
+
+    fireEvent.change(input, { target: { value: "Docs" } });
+    const group = await screen.findByRole("group", { name: "Pages" });
+    fireEvent.click(await within(group).findByText("Docs"));
+
+    expect(assign).toHaveBeenCalledWith("/docs/");
+    expect(navigate).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

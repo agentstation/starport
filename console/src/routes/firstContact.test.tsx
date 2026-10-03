@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { openSession } from "@/lib/api";
@@ -141,6 +141,27 @@ test("a browser holding a session gets the console, not the first-contact page",
   // the route that must keep working exactly as it did.
   expect(await screen.findByRole("navigation", { name: "Console" })).toBeTruthy();
   expect(screen.queryByRole("heading", { name: /open this console/i })).toBeNull();
+});
+
+// The documentation is static pages that the gateway serves without a
+// session, outside the client router. Both links into it are plain links, so
+// the browser loads the page instead of the router looking for a route.
+test("the access page links directly to the public documentation", async () => {
+  await open("/auth");
+
+  const link = await screen.findByRole("link", { name: "Read documentation without console access" });
+  expect(link.getAttribute("href")).toBe("/docs/");
+});
+
+test("the shell links to the documentation site as a full page", async () => {
+  document.cookie = "starport_session_present=1; path=/";
+
+  await open("/models");
+
+  const nav = await screen.findByRole("navigation", { name: "Console" });
+  const link = within(nav).getByRole("link", { name: "Docs" });
+  expect(link.getAttribute("href")).toBe("/docs/");
+  expect(link.hasAttribute("aria-current")).toBe(false);
 });
 
 // A reader who already has a session and lands on /auth — from a bookmark, or
