@@ -1326,6 +1326,83 @@ every case, so a gateway that cannot reach its source still routes. Both
 `starport doctor` and `starport doctor --probe` read the durable accepted
 generation with no source request.
 
+### Baseline promotion
+
+A fleet keeps its retained catalog baseline when you deploy a new binary. To
+make the packaged baseline of the new binary the retained fleet baseline, use
+an explicit promotion. Promotion is fleet-only. It needs Valkey and
+PostgreSQL storage. A local deployment refuses the two commands because it
+serves the baseline of its binary.
+
+Each command opens the fleet catalog runtime in its own process. It starts no
+gateway and adds no HTTP route. Run it on a host that has the fleet
+configuration and the new binary. Stop the gateway on that host first,
+because the command uses the same state directory. Only the holder of the
+publication lease can promote. When the command gets the lease, it
+republishes the retained head at a new revision, as a new leader does.
+
+Compare the packaged baseline with the retained baseline:
+
+```bash
+starport catalog baseline-status --json
+```
+
+The report names the deployment, the `packaged` and `retained` generation IDs
+and checksums, the `head_revision`, and the `promotable` verdict. When the
+verdict is `false`, `refusal` gives the reason.
+
+Promote the packaged baseline:
+
+```bash
+starport catalog promote-baseline \
+  --operation-id promote-2026-10-02 \
+  --expected-revision <head_revision> \
+  --json
+```
+
+The operation ID is your stable name for the promotion. It has 1 to 128
+letters, digits, `.`, `_`, `:`, or `-`. The ID binds the deployment, the
+expected head revision, and the packaged generation ID. Use the
+`head_revision` value from `baseline-status`. The command also accepts the
+head before its own takeover republication. Without `--expected-revision`,
+the command accepts the head that it observes.
+
+The command writes a receipt:
+
+| Field | Meaning |
+| --- | --- |
+| `operation_id` | The operation ID that you gave. |
+| `deployment_id` | The fleet deployment. |
+| `status` | `applied` or `refused`. |
+| `previous` | The `generation_id`, `checksum`, and `revision` of the retained head before the promotion. |
+| `promoted` | The `generation_id`, `checksum`, and `revision` of the promoted head. |
+| `inert_removals` | The retained removal targets that match nothing in the promoted catalog. |
+| `refusal` | The reason for a refusal. It is empty for an applied promotion. |
+| `actor` | The operating system account that ran the command. |
+| `created_at` | The time of the receipt. |
+
+The receipt contains no credential and no connection string. An `applied`
+receipt means that the promoted head passed fleet acceptance at a higher
+revision. Each gateway replays the new head from memory and continues to
+admit requests during the operation.
+
+A `refused` receipt does not change the retained baseline, and the command
+exits with status `1`. The fleet does not store a refused receipt.
+These conditions cause a refusal:
+
+- Another process holds the publication lease. The refusal names that leader.
+  Stop that process or wait until its lease ends. Then retry with the same
+  operation ID.
+- The fleet head is not at the expected revision. Read `baseline-status`
+  again before you choose a new operation ID.
+- The packaged baseline is not promotable. The refusal gives the reason.
+- The operation ID already has a receipt for a different deployment, packaged
+  generation, or expected revision. Use a new operation ID.
+
+A retry with the same operation ID and the same binding returns the stored
+receipt. It does not promote again. The fleet stores the receipt in shared
+storage under the deployment. Backups do not include receipts.
+
 ### The catalog routes
 
 | Route | Scope | Meaning |
