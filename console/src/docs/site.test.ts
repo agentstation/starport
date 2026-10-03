@@ -147,8 +147,10 @@ test("search covers headings, prose, and setting names", () => {
 });
 
 test("a generated page joins the site and the search index", () => {
+  // The committed pages stay in the fixture because the Configure content
+  // links to the generated settings reference.
   const files = [
-    ...SITE_FILES.filter((file) => !file.path.startsWith("docs/site/generated/")),
+    ...SITE_FILES,
     {
       path: "docs/site/generated/settings-reference.md",
       text: "# Settings reference\n\n## Server\n\n`STARPORT_TEST_SETTING` sets a test value.\n",

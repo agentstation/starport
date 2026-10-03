@@ -53,7 +53,7 @@ STARPORT_RELATIVE_PATH_BASE=config
 
 ## Bootstrap variables
 
-The loader reads these variables before it decodes the other settings. The generated settings reference (`docs/site/generated/settings.md`) does not list them. It lists the other settings.
+The loader reads these variables before it decodes the other settings. The [generated settings reference](../generated/settings.md) does not list them. It lists the other settings.
 
 | Variable | Source | Effect |
 | --- | --- | --- |
