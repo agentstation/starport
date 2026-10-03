@@ -20,6 +20,9 @@ import (
 const bundleMaxManifestBytes = 16 << 20
 const bundleMaxArtifacts = 100000
 
+// ErrBackupKey refuses a bundle whose key challenge the configured encryption key does not open.
+var ErrBackupKey = errors.New("backup encryption-key access could not be verified")
+
 func validBundlePath(name string) bool {
 	if !fs.ValidPath(name) || name == "." || len(name) > 4096 {
 		return false
@@ -250,7 +253,7 @@ func VerifyBundle(ctx context.Context, directory, expectedDigest string, encrypt
 	}
 	challenge, err := encryption.DecryptCredential(manifest.KeyChallenge)
 	if err != nil || challenge != bundleKeyChallenge+manifest.Request.OperationID {
-		return BundleManifest{}, errors.New("backup encryption-key access could not be verified")
+		return BundleManifest{}, ErrBackupKey
 	}
 	artifacts, err := inspectBundleArtifacts(ctx, root)
 	if err != nil {
