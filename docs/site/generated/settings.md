@@ -269,7 +269,7 @@ The `env` tags of the Starport configuration define these settings. The `starpor
 | Variable | Type | Default | Secret |
 | --- | --- | --- | --- |
 | `STARPORT_EVENTS_WEBHOOK_URLS` | `string` | None | No |
-| `STARPORT_EVENTS_WEBHOOK_SECRET` | `string` | None | No |
+| `STARPORT_EVENTS_WEBHOOK_SECRET` | `string` | None | Yes |
 
 ### guardrails
 

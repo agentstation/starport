@@ -12,7 +12,7 @@ type EventsConfig struct {
 	// WebhookSecret signs each delivery. A receiver verifies the
 	// X-Starport-Signature header with it. Empty signs with the empty
 	// secret, which authenticates nothing; set it with any endpoint.
-	WebhookSecret string `env:"WEBHOOK_SECRET"`
+	WebhookSecret string `env:"WEBHOOK_SECRET" secret:"true"`
 }
 
 // Endpoints returns the configured receiver URLs, trimmed, without

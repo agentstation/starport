@@ -1737,7 +1737,8 @@
       "section": "events",
       "field": "Events.WebhookSecret",
       "type": "string",
-      "secret": false
+      "secret": true,
+      "redaction": "value"
     },
     {
       "name": "STARPORT_GUARDRAILS_CHECKS",
