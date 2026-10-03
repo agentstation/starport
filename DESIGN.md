@@ -78,7 +78,9 @@ design-first theme; both themes ship together and both must pass review.
 
 Canvas `#ffffff`, panel `#fafafa`, raised `#f4f4f5`, hover `#ececee`.
 Borders: alpha-black `0.06 / 0.10 / 0.15`. Text: `#18181b / #3f3f46 /
-#71717a / #a1a1aa`. Same roles, same components, no per-component overrides.
+#66666e / #a1a1aa`. Same roles, same components, no per-component overrides.
+Light Text 3 keeps 4.5:1 on every ground, hover included (4.82:1). The
+earlier `#71717a` measured 4.40:1 on raised and 4.10:1 on hover.
 
 ### Accent — beacon amber
 

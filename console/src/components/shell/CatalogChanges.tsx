@@ -170,7 +170,7 @@ export function CatalogChangesSection() {
               <div key={provider}>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs text-text-2">{provider}</span>
-                  <span className="text-xs text-text-4">
+                  <span className="text-xs text-text-3">
                     {[
                       entry.added.length ? `+${entry.added.length} added` : null,
                       entry.removed.length ? `−${entry.removed.length} removed` : null,
@@ -186,7 +186,7 @@ export function CatalogChangesSection() {
                   >
                     + {change.provider_model_id}
                     {change.definition_id && (
-                      <span className="text-text-4"> ({change.definition_id})</span>
+                      <span className="text-text-3"> ({change.definition_id})</span>
                     )}
                   </div>
                 ))}
@@ -197,7 +197,7 @@ export function CatalogChangesSection() {
                   >
                     − {change.provider_model_id}
                     {change.definition_id && (
-                      <span className="text-text-4"> ({change.definition_id})</span>
+                      <span className="text-text-3"> ({change.definition_id})</span>
                     )}
                   </div>
                 ))}

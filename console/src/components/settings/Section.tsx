@@ -12,8 +12,8 @@ export function Section({
 }) {
   return (
     <section className="border-t border-border-1 py-6 first:border-t-0 first:pt-0">
-      <h2 className="text-sm font-medium text-text-1">{title}</h2>
-      {description && <p className="mt-1 text-base leading-relaxed text-text-2">{description}</p>}
+      <h2 className="text-md font-semibold text-text-1">{title}</h2>
+      {description && <p className="mt-1 text-md text-text-2">{description}</p>}
       <div className="mt-4">{children}</div>
     </section>
   );

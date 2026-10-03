@@ -97,10 +97,10 @@ function ConnectionSection() {
       description="The console talks to the gateway that served this page. A gateway API key is one way to reach it; a console session opened by `starport ui` is the other, and a session is preferred whenever this browser holds one."
     >
       {session && (
-        <p className="mb-4 max-w-xl rounded-sm border border-border-2 bg-bg-raised px-3 py-2 text-sm text-text-2">
-          This browser holds a console session from <code className="font-mono text-xs">starport ui</code>.
+        <p className="mb-4 max-w-xl rounded-sm border border-border-2 bg-bg-raised px-3 py-2 text-md text-text-2">
+          This browser holds a console session from <code className="font-mono text-base">starport ui</code>.
           It signs requests on its own, so no key below is needed or sent. Run{" "}
-          <code className="font-mono text-xs">starport auth rotate</code> on the gateway machine to end
+          <code className="font-mono text-base">starport auth rotate</code> on the gateway machine to end
           every session at once.
         </p>
       )}
@@ -126,7 +126,7 @@ function ConnectionSection() {
             type="button"
             onClick={() => setReveal((value) => !value)}
             aria-label={reveal ? "Hide key" : "Show key"}
-            className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-text-4 transition-colors duration-150 ease-standard hover:text-text-2"
+            className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-text-3 transition-colors duration-150 ease-standard hover:text-text-2"
           >
             {reveal ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
           </button>
@@ -139,7 +139,7 @@ function ConnectionSection() {
         </PrimaryButton>
         {storedKey && <GhostButton onClick={() => void clear()}>Clear</GhostButton>}
       </form>
-      <p className="mt-3 text-sm text-text-3" aria-live="polite">
+      <p className="mt-3 text-md text-text-3" aria-live="polite">
         {status.kind === "valid" ? (
           <span className="text-success">
             Key valid · {status.models} models visible
@@ -149,7 +149,7 @@ function ConnectionSection() {
         ) : storedKey ? (
           <>
             Current key{" "}
-            <code className="rounded-xs bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-2">
+            <code className="rounded-xs bg-bg-raised px-1.5 py-0.5 font-mono text-base text-text-2">
               {maskKey(storedKey)}
             </code>
           </>
@@ -219,8 +219,8 @@ function AppearanceSection() {
         ))}
       </div>
       <div className="mt-5">
-        <p className="text-sm text-text-2">Provider marks</p>
-        <p className="mt-0.5 text-sm text-text-3">
+        <p className="text-md text-text-2">Provider marks</p>
+        <p className="mt-0.5 text-md text-text-3">
           Monochrome flattens every provider and author mark to one ink, so
           mixed-brand lists read as a single set.
         </p>
@@ -287,7 +287,7 @@ function ChatDataSection() {
       title="Chat data"
       description="Conversations live in this browser — the gateway never stores console state."
     >
-      <p className="text-sm text-text-2">
+      <p className="text-md text-text-2">
         {count} conversation{count === 1 ? "" : "s"} stored locally
       </p>
       <div className="mt-3 flex gap-2">
@@ -317,7 +317,7 @@ function ChatDataSection() {
               <DialogTitle>Delete all conversations</DialogTitle>
             </DialogHeader>
             <DialogBody>
-              <p className="text-sm text-text-2">
+              <p className="text-md text-text-2">
                 This removes all{" "}
                 <strong className="font-semibold text-text-1">
                   {count} conversation{count === 1 ? "" : "s"}
@@ -364,7 +364,7 @@ function SettingsPage() {
     <div>
       <div className="mb-8">
         <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="mt-1 text-sm text-text-3">
+        <p className="mt-1 text-base text-text-3">
           Connection, the gateway as configured, appearance, and local chat data.
         </p>
       </div>
