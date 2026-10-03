@@ -104,9 +104,11 @@ jobs:
           fi
           # The complete catalog package exceeds Go's default ten-minute
           # package allowance. The memory-fleet promotion and observer tests
-          # open the full embedded catalog under the race detector and grew it
-          # past thirty minutes. Individual contract deadlines remain unchanged.
-          go test -json -count=1 -timeout 45m ${{ matrix.race }} "${coverage[@]}" ./internal/catalog | tee -a native-catalog/tests.jsonl
+          # open the full embedded catalog under the race detector. The package
+          # measured 2,437 s and 2,450 s on macOS and Windows and then exceeded
+          # 2,700 s on a slower macOS runner, so the budget is sixty minutes.
+          # Individual contract deadlines remain unchanged.
+          go test -json -count=1 -timeout 60m ${{ matrix.race }} "${coverage[@]}" ./internal/catalog | tee -a native-catalog/tests.jsonl
           coverage=()
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             coverage=(-coverprofile=native-catalog/app.coverage.txt -covermode=atomic)
