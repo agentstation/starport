@@ -1395,6 +1395,27 @@ func defaultRuntimeFactories() runtimeFactories {
 			}
 			return runtime, nil
 		},
+		openReadOnlyStorage: storage.OpenReadOnly,
+		openPromotionRequests: func(ctx context.Context, store storage.KVStore, db *sqlstore.DB, deployment string) (promotionRequests, error) {
+			requests, err := runtimecatalog.OpenPromotionRequests(ctx, store, db, deployment)
+			if err != nil {
+				return nil, err
+			}
+			return requests, nil
+		},
+		openBaselineObserver: func(
+			ctx context.Context,
+			store storage.KVStore,
+			db *sqlstore.DB,
+			settings runtimecatalog.Settings,
+			lookup runtimecatalog.DeploymentLookup,
+		) (baselineObserver, error) {
+			observer, err := runtimecatalog.OpenBaselineObserver(ctx, store, db, settings, lookup)
+			if err != nil {
+				return nil, err
+			}
+			return observer, nil
+		},
 		newConnector: func(
 			provider string,
 			endpointTypes []catalogs.EndpointType,

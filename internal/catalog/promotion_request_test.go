@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starmap"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/runtime"
 	"github.com/stretchr/testify/require"
@@ -210,9 +211,12 @@ func TestLeaseRenewalSignalsPromotionWithoutExecuting(t *testing.T) {
 func TestStartedLeaderExecutesTheRecordedRequest(t *testing.T) {
 	fleet, leader, report := promotableFleet(t)
 	ctx := t.Context()
+	generation, err := starmap.EmbeddedGeneration()
+	require.NoError(t, err)
+	require.Equal(t, generation.Manifest.GenerationID, report.Packaged.GenerationID, "the command derives the packaged generation that the leader reports")
 	require.NoError(t, leader.Start(ctx))
 	requests := fleet.promotionCommand()
-	_, err := requests.Submit(ctx, PromotionRequest{OperationID: "started-1", ExpectedRevision: report.HeadRevision, PackagedGenerationID: report.Packaged.GenerationID, Actor: "operator"})
+	_, err = requests.Submit(ctx, PromotionRequest{OperationID: "started-1", ExpectedRevision: report.HeadRevision, PackagedGenerationID: report.Packaged.GenerationID, Actor: "operator"})
 	require.NoError(t, err)
 	_, err = leader.fleet.Renew(ctx, fleet.heldLease(t, leader), time.Minute)
 	require.NoError(t, err)

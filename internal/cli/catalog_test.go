@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -25,19 +26,33 @@ func TestCatalogPromoteBaselineCommandReportsReceipt(t *testing.T) {
 	refused.Status = runtimecatalog.PromotionRefused
 	refused.Promoted = refused.Previous
 	refused.Refusal = "the fleet head is at revision 9, not the expected revision 7"
-	for _, mode := range []string{"json", "text", "refused", "fleet-only", "missing-operation", "invalid-operation", "extra-argument"} {
+	pending := errors.New("baseline promotion is still pending. Request promote-2026-10 stays recorded until 2026-10-02T12:10:00Z")
+	for _, mode := range []string{"json", "text", "refused", "fleet-only", "pending", "wait", "no-leader", "invalid-wait", "missing-operation", "invalid-operation", "extra-argument"} {
 		t.Run(mode, func(t *testing.T) {
-			deps, output, _ := testDependencies()
+			deps, output, errOutput := testDependencies()
 			calls := 0
-			deps.PromoteCatalogBaseline = func(_ context.Context, cfg *config.Config, request runtimecatalog.PromotionRequest) (runtimecatalog.PromotionReceipt, error) {
+			deps.PromoteCatalogBaseline = func(_ context.Context, cfg *config.Config, request runtimecatalog.PromotionRequest, wait time.Duration, recorded PromotionRecorded) (runtimecatalog.PromotionReceipt, error) {
 				calls++
 				require.NotNil(t, cfg)
 				require.Equal(t, runtimecatalog.PromotionRequest{OperationID: "promote-2026-10", ExpectedRevision: 7}, request)
+				expectedWait := 3 * time.Minute
+				if mode == "wait" {
+					expectedWait = 30 * time.Second
+				}
+				require.Equal(t, expectedWait, wait)
+				leader := "gateway-a"
+				if mode == "no-leader" {
+					leader = ""
+				}
+				recorded(runtimecatalog.PromotionRecord{OperationID: request.OperationID, Status: runtimecatalog.PromotionPending,
+					Expires: time.Date(2026, 10, 2, 12, 10, 0, 0, time.UTC)}, leader)
 				switch mode {
 				case "refused":
 					return refused, nil
 				case "fleet-only":
 					return runtimecatalog.PromotionReceipt{}, runtimecatalog.ErrBaselinePromotionFleetOnly
+				case "pending", "no-leader":
+					return runtimecatalog.PromotionReceipt{}, pending
 				}
 				return applied, nil
 			}
@@ -45,6 +60,10 @@ func TestCatalogPromoteBaselineCommandReportsReceipt(t *testing.T) {
 			switch mode {
 			case "text":
 				args = args[:len(args)-1]
+			case "wait":
+				args = append(args, "--wait", "30s")
+			case "invalid-wait":
+				args = append(args, "--wait", "0s")
 			case "missing-operation":
 				args = []string{"starport", "catalog", "promote-baseline", "--expected-revision", "7"}
 			case "invalid-operation":
@@ -64,6 +83,11 @@ func TestCatalogPromoteBaselineCommandReportsReceipt(t *testing.T) {
 				require.NoError(t, json.Unmarshal(output.Bytes(), &receipt))
 				require.Equal(t, applied, receipt)
 				require.JSONEq(t, `[]`, string(fields["inert_removals"]))
+				require.Contains(t, errOutput.String(), "Recorded promotion request promote-2026-10. Gateway gateway-a leads the fleet and executes the request at its next lease renewal. Waiting up to 3m0s.",
+					"progress goes to the error stream, so the JSON receipt stays pure")
+			case "wait":
+				require.NoError(t, err)
+				require.Contains(t, errOutput.String(), "Waiting up to 30s.")
 			case "text":
 				require.NoError(t, err)
 				require.Contains(t, output.String(), "Baseline promotion promote-2026-10 applied for deployment deployment.")
@@ -80,6 +104,13 @@ func TestCatalogPromoteBaselineCommandReportsReceipt(t *testing.T) {
 				require.Equal(t, ExitCodeRuntime, ExitCode(err))
 				require.Contains(t, err.Error(), "fleet-only")
 				require.Empty(t, output.String())
+			case "pending":
+				require.ErrorIs(t, err, pending)
+				require.Equal(t, ExitCodeRuntime, ExitCode(err), "a wait timeout exits 1")
+				require.Empty(t, output.String(), "a pending request prints no receipt")
+			case "no-leader":
+				require.ErrorIs(t, err, pending)
+				require.Contains(t, errOutput.String(), "No gateway leads the fleet. Start a gateway with the new binary. The request stays recorded until 2026-10-02T12:10:00Z.")
 			default:
 				require.Error(t, err)
 				require.Zero(t, calls)

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
@@ -88,21 +89,42 @@ func TestCatalogPromotionKeepsRequestPathInMemory(t *testing.T) {
 		Promoted:      runtimecatalog.PromotionIdentity{GenerationID: promoted.GenerationID, Checksum: promoted.PayloadChecksum, Revision: 5},
 		InertRemovals: []catalogs.CatalogRemovalTarget{}, Actor: "operator", CreatedAt: time.Now().UTC(),
 	}
-	var command *promotingCatalogRuntime
+	generation, err := starmap.EmbeddedGeneration()
+	require.NoError(t, err)
+	var recordedLeader string
+	requests := &scriptedPromotionRequests{leader: "gateway-a", during: serve}
+	requests.submit = func(request runtimecatalog.PromotionRequest) (runtimecatalog.PromotionRecord, error) {
+		return pendingRecord(request), nil
+	}
+	requests.read = func(operationID string) (runtimecatalog.PromotionRecord, bool, error) {
+		record := pendingRecord(requests.submitted[0])
+		record.Status, record.Receipt = runtimecatalog.PromotionApplied, &receipt
+		return record, true, nil
+	}
 	commandFactories := factories
 	commandFactories.openStorage = func(storage.Config) (storage.KVStore, error) { return uncloseableStore{shared}, nil }
-	commandFactories.openCatalog = func(ctx context.Context, store storage.KVStore, _ *sqlstore.DB, settings runtimecatalog.Settings, _ runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
-		require.Equal(t, cfg.EffectivePaths().DeploymentID, settings.DeploymentID)
-		opened, err := newLifecycleCatalogRuntime(ctx, store)
-		command = &promotingCatalogRuntime{lifecycleCatalogRuntime: opened, receipt: receipt, during: serve}
-		return command, err
+	commandFactories.openCatalog = func(context.Context, storage.KVStore, *sqlstore.DB, runtimecatalog.Settings, runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
+		return nil, errors.New("the promotion command must not open a catalog runtime")
 	}
-	got, err := PromoteCatalogBaseline(t.Context(), cfg, runtimecatalog.PromotionRequest{OperationID: "promote-1", ExpectedRevision: 4}, withRuntimeFactories(commandFactories))
+	commandFactories.openPromotionRequests = func(_ context.Context, store storage.KVStore, _ *sqlstore.DB, deployment string) (promotionRequests, error) {
+		require.Equal(t, cfg.EffectivePaths().DeploymentID, deployment)
+		require.Equal(t, uncloseableStore{shared}, store)
+		return requests, nil
+	}
+	got, err := PromoteCatalogBaseline(t.Context(), cfg, runtimecatalog.PromotionRequest{OperationID: "promote-1", ExpectedRevision: 4}, time.Minute,
+		func(record runtimecatalog.PromotionRecord, leader string) {
+			require.Equal(t, runtimecatalog.PromotionPending, record.Status)
+			recordedLeader = leader
+		}, withRuntimeFactories(commandFactories))
 	require.NoError(t, err)
 	require.Equal(t, receipt, got)
-	require.Equal(t, uint64(4), command.request.ExpectedRevision)
-	require.NotEmpty(t, command.request.Actor, "the command names the operator account")
-	require.True(t, command.closed, "the command releases its catalog runtime")
+	require.Equal(t, "gateway-a", recordedLeader, "the command names the lease holder that executes the request")
+	require.Len(t, requests.submitted, 1)
+	request := requests.submitted[0]
+	require.Equal(t, uint64(4), request.ExpectedRevision)
+	require.NotEmpty(t, request.Actor, "the command names the operator account")
+	require.Equal(t, generation.Manifest.GenerationID, request.PackagedGenerationID, "the request names the packaged baseline of this binary")
+	require.Positive(t, requests.reads, "the command waits for the outcome")
 
 	// The gateway replays the promoted head and keeps answering from memory.
 	require.NoError(t, application.activateRuntimeState(t.Context(), runtimecatalog.Candidate{State: promoted}))
@@ -116,8 +138,11 @@ func TestCatalogPromotionRefusesLocalDeployment(t *testing.T) {
 	opened := func(storage.Config) (storage.KVStore, error) {
 		return nil, errors.New("a local deployment must not open storage for promotion")
 	}
-	refuse := func(options *buildOptions) { options.factories.openStorage = opened }
-	_, err := PromoteCatalogBaseline(t.Context(), cfg, runtimecatalog.PromotionRequest{OperationID: "local-1"}, refuse)
+	refuse := func(options *buildOptions) {
+		options.factories.openStorage = opened
+		options.factories.openReadOnlyStorage = opened
+	}
+	_, err := PromoteCatalogBaseline(t.Context(), cfg, runtimecatalog.PromotionRequest{OperationID: "local-1"}, time.Minute, nil, refuse)
 	require.ErrorIs(t, err, runtimecatalog.ErrBaselinePromotionFleetOnly)
 	_, err = CatalogBaselineStatus(t.Context(), cfg, refuse)
 	require.ErrorIs(t, err, runtimecatalog.ErrBaselinePromotionFleetOnly)
@@ -125,29 +150,152 @@ func TestCatalogPromotionRefusesLocalDeployment(t *testing.T) {
 	_, err = CatalogBaselineStatus(t.Context(), cfg, refuse)
 	require.ErrorIs(t, err, runtimecatalog.ErrBaselinePromotionFleetOnly, "shared key-value storage without PostgreSQL is not a fleet")
 	cfg.Storage.SQL.Mode = sqlstore.TypePostgres
-	_, err = PromoteCatalogBaseline(t.Context(), cfg, runtimecatalog.PromotionRequest{OperationID: "bad id"}, refuse)
+	_, err = PromoteCatalogBaseline(t.Context(), cfg, runtimecatalog.PromotionRequest{OperationID: "bad id"}, time.Minute, nil, refuse)
 	require.Error(t, err)
 	require.NotErrorIs(t, err, runtimecatalog.ErrBaselinePromotionFleetOnly, "an invalid operation ID fails before storage opens")
+	_, err = PromoteCatalogBaseline(t.Context(), cfg, runtimecatalog.PromotionRequest{OperationID: "fleet-1"}, 0, nil, refuse)
+	require.ErrorContains(t, err, "wait must be positive")
 }
 
-// promotingCatalogRuntime stands in for the fleet runtime of the promotion command.
-// The catalog package proves the promotion itself. This runtime serves gateway
-// requests while the command holds the promotion open.
-type promotingCatalogRuntime struct {
-	*lifecycleCatalogRuntime
-	receipt runtimecatalog.PromotionReceipt
-	request runtimecatalog.PromotionRequest
-	during  func()
+func TestCatalogPromotionWaitTimeoutNamesTheContinuation(t *testing.T) {
+	for _, leader := range []string{"gateway-a", ""} {
+		requests := &scriptedPromotionRequests{leader: leader}
+		requests.submit = func(request runtimecatalog.PromotionRequest) (runtimecatalog.PromotionRecord, error) {
+			return pendingRecord(request), nil
+		}
+		var recorded int
+		_, err := awaitPromotion(t.Context(), requests, runtimecatalog.PromotionRequest{OperationID: "wait-1"}, 20*time.Millisecond,
+			func(_ runtimecatalog.PromotionRecord, holder string) {
+				recorded++
+				require.Equal(t, leader, holder)
+			})
+		require.ErrorIs(t, err, ErrBaselinePromotionPending)
+		require.Equal(t, 1, recorded, "the command reports the lease holder once")
+		require.ErrorContains(t, err, "Request wait-1 stays recorded until "+promotionExpiry.Format(time.RFC3339))
+		require.ErrorContains(t, err, "Run the command again with the same operation ID to continue the wait")
+		if leader == "" {
+			require.ErrorContains(t, err, "No gateway leads the fleet. Start a gateway with the new binary")
+		} else {
+			require.NotContains(t, err.Error(), "No gateway leads")
+		}
+	}
 }
 
-func (r *promotingCatalogRuntime) BaselineReport() (runtimecatalog.BaselineReport, error) {
-	return runtimecatalog.BaselineReport{}, nil
+func TestCatalogPromotionReportsAnotherPendingOperation(t *testing.T) {
+	requests := &scriptedPromotionRequests{leader: "gateway-a"}
+	conflict := errors.New("promotion request first-1 is pending until 2026-10-03T12:00:00Z. Wait for it with its operation ID, or retry after its lifetime ends")
+	requests.submit = func(runtimecatalog.PromotionRequest) (runtimecatalog.PromotionRecord, error) {
+		return runtimecatalog.PromotionRecord{}, conflict
+	}
+	_, err := awaitPromotion(t.Context(), requests, runtimecatalog.PromotionRequest{OperationID: "second-1"}, time.Minute,
+		func(runtimecatalog.PromotionRecord, string) { t.Fatal("a refused write records no request") })
+	require.ErrorIs(t, err, conflict)
+	require.Zero(t, requests.reads)
 }
 
-func (r *promotingCatalogRuntime) PromoteBaseline(_ context.Context, request runtimecatalog.PromotionRequest) (runtimecatalog.PromotionReceipt, error) {
-	r.request = request
-	r.during()
-	return r.receipt, nil
+func TestCatalogPromotionResubmitsAnExpiredRequest(t *testing.T) {
+	applied := runtimecatalog.PromotionReceipt{OperationID: "expired-1", Status: runtimecatalog.PromotionApplied}
+	requests := &scriptedPromotionRequests{leader: "gateway-a"}
+	requests.submit = func(request runtimecatalog.PromotionRequest) (runtimecatalog.PromotionRecord, error) {
+		record := pendingRecord(request)
+		if len(requests.submitted) > 1 {
+			// The leader executes the written request again and returns the durable receipt.
+			record.Status, record.Receipt = runtimecatalog.PromotionApplied, &applied
+		}
+		return record, nil
+	}
+	requests.read = func(string) (runtimecatalog.PromotionRecord, bool, error) {
+		return runtimecatalog.PromotionRecord{}, false, nil
+	}
+	receipt, err := awaitPromotion(t.Context(), requests, runtimecatalog.PromotionRequest{OperationID: "expired-1"}, time.Minute, nil)
+	require.NoError(t, err)
+	require.Equal(t, applied, receipt)
+	require.Len(t, requests.submitted, 2, "a missing record is written again with the same operation ID")
+	require.Equal(t, requests.submitted[0], requests.submitted[1])
+}
+
+func TestCatalogBaselineStatusOpensReadOnlyObserver(t *testing.T) {
+	factories := explicitTestFactories(t)
+	cfg := validProductionConfig(t)
+	cfg.Storage.Mode = storage.StorageTypeValkey
+	cfg.Storage.Valkey.URL = "redis://127.0.0.1:6379"
+	useSharedRecipeWithLocalTestStores(t, cfg, &factories)
+	shared, err := factories.openStorage(storage.Config{})
+	require.NoError(t, err)
+	factories.openStorage = func(storage.Config) (storage.KVStore, error) {
+		return nil, errors.New("baseline-status must not open writable storage")
+	}
+	factories.openReadOnlyStorage = func(storage.Config) (storage.KVStore, error) { return uncloseableStore{shared}, nil }
+	factories.openCatalog = func(context.Context, storage.KVStore, *sqlstore.DB, runtimecatalog.Settings, runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
+		return nil, errors.New("baseline-status must not open a gateway catalog runtime")
+	}
+	expected := runtimecatalog.BaselineReport{DeploymentID: cfg.EffectivePaths().DeploymentID, HeadRevision: 7, Promotable: true}
+	observer := &reportingObserver{report: expected}
+	factories.openBaselineObserver = func(_ context.Context, store storage.KVStore, _ *sqlstore.DB, settings runtimecatalog.Settings, _ runtimecatalog.DeploymentLookup) (baselineObserver, error) {
+		require.Equal(t, uncloseableStore{shared}, store)
+		require.Equal(t, catalogSettings(cfg), settings, "the observer receives the gateway settings and moves the directories itself")
+		return observer, nil
+	}
+	report, err := CatalogBaselineStatus(t.Context(), cfg, withRuntimeFactories(factories))
+	require.NoError(t, err)
+	require.Equal(t, expected, report)
+	require.True(t, observer.closed, "the command closes the observer and removes its directory")
+}
+
+// promotionExpiry is the record lifetime end that scripted requests report.
+var promotionExpiry = time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+
+func pendingRecord(request runtimecatalog.PromotionRequest) runtimecatalog.PromotionRecord {
+	return runtimecatalog.PromotionRecord{
+		OperationID: request.OperationID, ExpectedRevision: request.ExpectedRevision, PackagedGenerationID: request.PackagedGenerationID,
+		Actor: request.Actor, Status: runtimecatalog.PromotionPending, Expires: promotionExpiry,
+	}
+}
+
+// scriptedPromotionRequests stands in for the shared request record.
+// The catalog package proves the record and the leader execution.
+type scriptedPromotionRequests struct {
+	submit    func(runtimecatalog.PromotionRequest) (runtimecatalog.PromotionRecord, error)
+	read      func(string) (runtimecatalog.PromotionRecord, bool, error)
+	leader    string
+	during    func()
+	submitted []runtimecatalog.PromotionRequest
+	reads     int
+}
+
+func (r *scriptedPromotionRequests) Submit(_ context.Context, request runtimecatalog.PromotionRequest) (runtimecatalog.PromotionRecord, error) {
+	r.submitted = append(r.submitted, request)
+	if r.during != nil {
+		r.during()
+	}
+	return r.submit(request)
+}
+
+func (r *scriptedPromotionRequests) Read(_ context.Context, operationID string) (runtimecatalog.PromotionRecord, bool, error) {
+	r.reads++
+	if r.during != nil {
+		r.during()
+	}
+	return r.read(operationID)
+}
+
+func (r *scriptedPromotionRequests) Leader(context.Context) (string, error) {
+	return r.leader, nil
+}
+
+// reportingObserver stands in for the lease-free fleet catalog runtime.
+type reportingObserver struct {
+	report runtimecatalog.BaselineReport
+	closed bool
+}
+
+func (o *reportingObserver) BaselineReport() (runtimecatalog.BaselineReport, error) {
+	return o.report, nil
+}
+
+func (o *reportingObserver) Close(context.Context) error {
+	o.closed = true
+	return nil
 }
 
 // uncloseableStore lets the command close its storage handle without closing the gateway's store.
