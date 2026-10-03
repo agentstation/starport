@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -344,7 +346,8 @@ func activateLocalMigration(t *testing.T, source localMigrationSource, cfg *conf
 }
 
 // requireLocalMigrationFleetHead checks the compiled fleet head before any gateway refreshes it.
-func requireLocalMigrationFleetHead(t *testing.T, cfg *config.Config, request RecoveryActivationRequest, generation string) {
+// It returns the revision of the accepted head.
+func requireLocalMigrationFleetHead(t *testing.T, cfg *config.Config, request RecoveryActivationRequest, generation string) uint64 {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
@@ -366,6 +369,30 @@ func requireLocalMigrationFleetHead(t *testing.T, cfg *config.Config, request Re
 	prefix := fmt.Sprintf("catalog:fleet:{%x}:v1:", sha256.Sum256([]byte(cfg.EffectivePaths().DeploymentID)))
 	_, err = native.store.Get(ctx, prefix+"lease")
 	require.ErrorIs(t, err, storage.ErrNotFound, "recovery must not invent a live refresh lease")
+	// Activation opens the gate without a bootstrap grant. Only fleet init writes bootstrap_allowed=1.
+	db, err := openBackupSQL(cfg)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, db.Close()) }()
+	var bootstrap int
+	require.NoError(t, db.QueryRowContext(ctx, db.Bind("SELECT bootstrap_allowed FROM catalog_recovery WHERE deployment_id=?"), approved.DeploymentID).Scan(&bootstrap))
+	require.Zero(t, bootstrap)
+	return accepted.Head.Revision
+}
+
+// requireLocalMigrationProcessRecords enumerates the process-scoped key families on the target.
+// The transfer has no key filter. A local source writes none of these families: the health and
+// latency exchange starts only with distributed storage, and only `migrate runtime prepare`
+// writes a catalog migration receipt.
+func requireLocalMigrationProcessRecords(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	store, err := storage.OpenValkey(cfg.RuntimeStorage().Valkey)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, store.Close()) }()
+	for _, prefix := range []string{"provider-health:instance:", "provider-latency:instance:", "catalog_migration:v1:"} {
+		keys, err := store.ScanWithPrefix(t.Context(), prefix, 1000)
+		require.NoError(t, err)
+		require.Empty(t, keys, prefix)
+	}
 }
 
 // TestLocalToSharedMigrationPopulatedWorkload moves a populated local recipe into Valkey, PostgreSQL, and object storage.
@@ -380,6 +407,7 @@ func TestLocalToSharedMigrationPopulatedWorkload(t *testing.T) {
 		inspected.Inspection.References.FileRecords, inspected.Inspection.References.Identity.Users, inspected.Inspection.References.Identity.Teams, inspected.Inspection.References.Identity.Memberships,
 		inspected.Inspection.References.Identity.Grants, inspected.Inspection.References.BudgetWindows, inspected.Inspection.References.BudgetRecords, len(source.census.Usage), len(source.census.Audit))
 	requireLocalMigrationFleetHead(t, cfg, request, source.generation)
+	requireLocalMigrationProcessRecords(t, cfg)
 	// Credentials decrypt with the same master key to the same values, and file bytes are unchanged.
 	require.Equal(t, source.census, readLocalMigrationCensus(t, cfg))
 
@@ -507,6 +535,80 @@ func TestLocalToSharedMigrationRefusals(t *testing.T) {
 		require.ErrorIs(t, err, recovery.ErrClosed)
 		require.NoDirExists(t, destination)
 	})
+}
+
+// TestLocalToSharedMigrationPromotionAfterMove promotes the packaged baseline over the moved fleet head.
+// The source accepted a generation from the fixture catalog baseline, so the moved head retains a
+// baseline that differs from the packaged one. The operator reviews the head before a gateway starts.
+// The first gateway takes the lease and executes the recorded request.
+func TestLocalToSharedMigrationPromotionAfterMove(t *testing.T) {
+	valkey, postgres, endpoint := localMigrationFixtures(t)
+	source, cfg, prepare := populatedLocalMigrationSource(t)
+	configureSharedRestore(t, cfg, valkey, postgres, endpoint)
+	clearLocalMigrationValkey(t, cfg)
+	request, _ := activateLocalMigration(t, source, cfg, prepare)
+	revision := requireLocalMigrationFleetHead(t, cfg, request, source.generation)
+
+	moved, err := CatalogBaselineStatus(t.Context(), cfg)
+	require.NoError(t, err)
+	t.Logf("moved head: revision=%d retained=%s packaged=%s promotable=%t", moved.HeadRevision, moved.Retained.GenerationID, moved.Packaged.GenerationID, moved.Promotable)
+	require.Equal(t, cfg.EffectivePaths().DeploymentID, moved.DeploymentID)
+	require.Equal(t, revision, moved.HeadRevision)
+	require.True(t, moved.Promotable, moved.Refusal)
+	require.NotEqual(t, moved.Packaged.GenerationID, moved.Retained.GenerationID)
+
+	// Only a running gateway starts the leader executor, so the test runs it on a private port.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	cfg.Server.Host, cfg.Server.Port = "127.0.0.1", int(listener.Addr().(*net.TCPAddr).AddrPort().Port())
+	require.NoError(t, listener.Close())
+	application, err := New(cfg)
+	require.NoError(t, err)
+	runCtx, stop := context.WithCancel(context.WithoutCancel(t.Context()))
+	done := make(chan error, 1)
+	go func() { done <- application.Run(runCtx) }()
+	t.Cleanup(func() {
+		stop()
+		select {
+		case err := <-done:
+			require.NoError(t, err, "running gateway did not stop cleanly")
+		case <-time.After(30 * time.Second):
+			t.Error("running gateway did not stop within its shutdown bound")
+		}
+	})
+	client := &http.Client{Timeout: 5 * time.Second}
+	require.Eventually(t, func() bool {
+		response, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/health/ready", cfg.Server.Port))
+		if err != nil {
+			return false
+		}
+		_ = response.Body.Close()
+		return response.StatusCode == http.StatusOK
+	}, budgetFleetReadinessTimeout, 25*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	defer cancel()
+	var leader string
+	receipt, err := PromoteCatalogBaseline(ctx, cfg, catalog.PromotionRequest{OperationID: "promote-after-move", ExpectedRevision: moved.HeadRevision, Actor: "operator"}, 3*time.Minute,
+		func(record catalog.PromotionRecord, holder string) {
+			require.Equal(t, catalog.PromotionPending, record.Status)
+			leader = holder
+		})
+	require.NoError(t, err)
+	t.Logf("promotion: status=%s previous=%d promoted=%d leader_named=%t", receipt.Status, receipt.Previous.Revision, receipt.Promoted.Revision, leader != "")
+	require.Equal(t, catalog.PromotionApplied, receipt.Status, receipt.Refusal)
+	require.NotEmpty(t, leader, "the started gateway leads the fleet")
+	require.Equal(t, catalog.PromotionIdentity{GenerationID: moved.Retained.GenerationID, Checksum: moved.Retained.Checksum, Revision: moved.HeadRevision}, receipt.Previous)
+	require.Equal(t, moved.Packaged.GenerationID, receipt.Promoted.GenerationID)
+	require.Equal(t, moved.Packaged.Checksum, receipt.Promoted.Checksum)
+	require.Greater(t, receipt.Promoted.Revision, receipt.Previous.Revision)
+
+	promoted, err := CatalogBaselineStatus(ctx, cfg)
+	require.NoError(t, err)
+	require.False(t, promoted.Promotable)
+	require.Equal(t, promoted.Packaged, promoted.Retained)
+	require.GreaterOrEqual(t, promoted.HeadRevision, receipt.Promoted.Revision)
+	// The moved records stay readable after the promotion.
+	require.Equal(t, source.census, readLocalMigrationCensus(t, cfg))
 }
 
 // TestLocalToSharedMigrationSecondReplicaJoins starts a second process with its own instance and catalog state.
