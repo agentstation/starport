@@ -52,6 +52,8 @@ func TestBackupInventoryAccountsForEveryCanonicalRole(t *testing.T) {
 	require.Equal(t, "sql-snapshot", captures["sqlite"])
 	require.Equal(t, "blob-snapshot", captures["files"])
 	require.Equal(t, "rebuild-under-source-policy", captures["source-http"])
+	// No configuration file is selected, so no local save journal exists.
+	require.Equal(t, "not-selected", captures["config-operation-journal"])
 	require.Equal(t, "not-selected", captures["logs"])
 	sourcePaths := map[string]bool{}
 	for _, file := range inventory.Files {
@@ -79,6 +81,17 @@ func TestBackupInventoryTracksLoadedConfigurationDigest(t *testing.T) {
 	require.Len(t, inventory.Files, 1)
 	require.Equal(t, "configuration", inventory.Files[0].Role)
 	require.Len(t, inventory.Files[0].ExpectedSHA256, 64)
+	// A local save journal next to the selected file is captured with it.
+	journal := filepath.Join(filepath.Dir(configFile), localJournalName)
+	writeInventoryFixture(t, journal, `{"operations":[]}`)
+	inventory, err = cfg.CollectBackupInventory(t.Context(), "test", 1000)
+	require.NoError(t, err)
+	require.Len(t, inventory.Files, 2)
+	roles := map[string]string{}
+	for _, file := range inventory.Files {
+		roles[file.Role] = file.Source
+	}
+	require.Equal(t, journal, roles["config-operation-journal"])
 	require.NoError(t, os.Remove(configFile))
 	_, err = cfg.CollectBackupInventory(t.Context(), "test", 1000)
 	require.ErrorContains(t, err, "selected configuration")

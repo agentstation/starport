@@ -109,7 +109,7 @@ func TestFileManifestSharedBackendsOmitCredentialsAndLocalSelection(t *testing.T
 			}
 			report, err := cfg.FileManifest("test")
 			require.NoError(t, err)
-			for _, role := range []string{"badger", "sqlite", "sqlite-wal", "files", "setup-transaction", "setup-storage-guard", "setup-database-stage", "setup-config-publications"} {
+			for _, role := range []string{"badger", "sqlite", "sqlite-wal", "files", "setup-transaction", "setup-storage-guard", "setup-database-stage", "setup-config-publications", "config-operation-journal"} {
 				require.Equal(t, fileDisabled, manifestEntry(t, report, role).Availability)
 			}
 			external := make(map[string]string)
@@ -191,6 +191,7 @@ func TestFileManifestIncludesSetupArtifactsAtSelectedLeaves(t *testing.T) {
 		"setup-storage-guard":       filepath.Join(filepath.Dir(database), ".starport-setup-"+filepath.Base(database)),
 		"setup-database-stage":      filepath.Dir(database),
 		"setup-config-publications": filepath.Join(filepath.Dir(configuration), ".record-publications"),
+		"config-operation-journal":  filepath.Join(filepath.Dir(configuration), localJournalName),
 		"local-token-lock":          cfg.EffectivePaths().LocalTokenFile + ".lock",
 	} {
 		entry := manifestEntry(t, report, id)
@@ -200,6 +201,8 @@ func TestFileManifestIncludesSetupArtifactsAtSelectedLeaves(t *testing.T) {
 	}
 	require.Equal(t, []string{".starport-init-*/**"}, manifestEntry(t, report, "setup-database-stage").Patterns)
 	require.Equal(t, "environment", manifestEntry(t, report, "setup-transaction").Location.Origin)
+	require.Equal(t, "environment", manifestEntry(t, report, "config-operation-journal").Location.Origin)
+	require.Equal(t, "file", manifestEntry(t, report, "config-operation-journal").Kind)
 	require.Equal(t, "file:"+configuration, manifestEntry(t, report, "setup-storage-guard").Location.Origin)
 	require.NoDirExists(t, filepath.Dir(database))
 	require.NoDirExists(t, filepath.Join(filepath.Dir(configuration), ".starport-setup"))

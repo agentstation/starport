@@ -672,6 +672,7 @@ Read a receipt again at `GET /api/v1/admin/config/operations/{operation_id}`. An
 
 Under local management, a save rewrites the single configuration file in its private directory. The expected revision is the SHA-256 checksum of the file.
 An operation journal, `.starport-config-operations.json`, is kept next to the file. It makes a retry complete an interrupted save.
+The file manifest lists the journal as `config-operation-journal`, and a backup captures it with the configuration file.
 A local save refuses a setting that the process environment overrides. It also refuses when the gateway reads more than one configuration file.
 A value with a quote, a line break, or a trailing backslash refuses.
 

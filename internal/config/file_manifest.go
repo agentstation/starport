@@ -42,6 +42,9 @@ const (
 	fileRoleTLSCertificate  = "tls-certificate"
 	fileRoleTLSKey          = "tls-key"
 
+	// fileRoleOperationJournal names the local save journal in the manifest.
+	fileRoleOperationJournal = "config-operation-journal"
+
 	fileKindTree             = "tree"
 	fileRoleBaselineRecovery = "baseline-recovery"
 	fileAvailable            = "available"
@@ -119,6 +122,19 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 			entry.Patterns = []string{".starport-init-*/**"}
 		}
 	}
+	// The local writer keeps its operation journal next to the one file it
+	// saves. The manifest mirrors the writer's selection, so a backup
+	// captures the receipts that a retry reads.
+	journal := siblingPath(p.ConfigFile, localJournalName)
+	localSave := !c.SharedManagement() && len(c.fileInputs) == 1
+	if localSave {
+		journal = siblingPath(c.fileInputs[0].location.Path, localJournalName)
+	}
+	add(fileRoleOperationJournal, journal, fileKindRegular, selectedAvailability(localSave), policy.OwnerOnly,
+		"A local configuration save records its operation receipts next to the file.",
+		"Keep the journal with the configuration file. A retry reads it to complete an interrupted save or to return the first receipt.",
+		"STARPORT_CONFIG_FILE", managementEnvironment)
+	report.Files[len(report.Files)-1].Location = manifestPath(p, pathRoleConfiguration, journal)
 	sqlite := selectedAvailability(c.Storage.SQL.Mode == sqlModeSQLite && !c.Storage.Badger.inMemory)
 	add(pathRoleSQLite, p.SQLiteFile, fileKindRegular, sqlite, policy.OwnerOnly,
 		"The local SQL backend opens this database.", "Use a consistent SQLite backup with the matching KV records and encryption key access.", sqlitePathEnvironment)

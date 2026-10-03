@@ -140,7 +140,7 @@ func validateRestoreRelative(relative, kind string) error {
 func restoreFileDestination(file BackupFile, targets map[string]productpaths.FileEntry, sameInstance bool) (destination, action, reason string, err error) {
 	action, reason = "owner-recovery", "The owning component must verify retained state before publication."
 	switch file.Role {
-	case pathRoleConfiguration, fileRoleSourceFile, fileRoleTLSCertificate, fileRoleTLSKey, cacheCAFileRole, valkeyCAFileRole:
+	case pathRoleConfiguration, fileRoleOperationJournal, fileRoleSourceFile, fileRoleTLSCertificate, fileRoleTLSKey, cacheCAFileRole, valkeyCAFileRole:
 		action, reason = "target-configuration", "Keep current target settings and trust. Reconcile the captured input explicitly."
 	case fileRoleLocalToken, "local-token-lock":
 		action, reason = "operator-credential", "Reconcile administrator access before creating or restoring a local token."
