@@ -13,6 +13,7 @@ import {
 } from "@/components/models/ModelDetail";
 import { queries, settle } from "@/lib/queries";
 import { formatContext } from "@/lib/format";
+import { chatReadiness } from "@/lib/modelFilter";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/models_/$modelId")({
@@ -131,7 +132,10 @@ function ModelDetailPage() {
             )}
           </div>
         </div>
-        <ModelActions modelId={model.id} />
+        <ModelActions
+          modelId={model.id}
+          readiness={status.isLoading ? undefined : chatReadiness(model.id, [model], status.data?.providers)}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-4 text-sm text-text-2">

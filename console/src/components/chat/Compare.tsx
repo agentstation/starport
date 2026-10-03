@@ -14,7 +14,9 @@ import {
   ReasoningFold,
 } from "@/components/chat/Messages";
 import { IconButton } from "@/components/ui/IconButton";
-import { ApiError, streamChat, type Model } from "@/lib/api";
+import { ReadinessNote } from "@/components/chat/Readiness";
+import { ApiError, streamChat, type Model, type ProviderRuntimeStatus } from "@/lib/api";
+import { chatReadiness } from "@/lib/modelFilter";
 import {
   providerPreferences,
   requestHeaders,
@@ -408,13 +410,20 @@ function ColumnCard({
 
 // CompareView fills the main chat area while compare mode is active:
 // a welcome explainer before the first send, then the prompt echo and
-// the responsive column grid.
+// the responsive column grid. Before the first send it states the
+// readiness of each attached model, so a race never starts on a model that
+// cannot answer without saying so.
 export function CompareView({
   compare,
   models,
+  providers,
+  ready = false,
 }: {
   compare: CompareState;
   models: Model[] | undefined;
+  providers?: ProviderRuntimeStatus[];
+  // ready is true when the catalog and the credential picture have loaded.
+  ready?: boolean;
 }) {
   if (!compare.columns) {
     return (
@@ -433,6 +442,13 @@ export function CompareView({
               ? ` — add ${MIN_COMPARE - compare.models.length} more to start`
               : ""}
           </p>
+          {ready && compare.models.length > 0 && (
+            <div className="mt-3 flex flex-col gap-1 text-left">
+              {compare.models.map((id) => (
+                <ReadinessNote key={id} model={id} readiness={chatReadiness(id, models, providers)} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
