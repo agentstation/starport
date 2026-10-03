@@ -64,6 +64,16 @@ archives:
       - src: build/release-artifacts/manpages/*
         dst: manpages
         strip_parent: true
+  # The documentation site that the binaries embed, for a static host or
+  # offline reading. scripts/verify-release-archives.sh checks the tree.
+  - id: docs
+    meta: true
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}-docs-v{{ .Version }}"
+    wrap_in_directory: "{{ .ProjectName }}-docs-v{{ .Version }}"
+    files:
+      - src: internal/console/dist/docs
+        dst: .
 
 homebrew_casks:
   - name: starport
@@ -120,7 +130,10 @@ checksum:
   algorithm: sha256
 
 sboms:
+  # The docs archive holds no software package, so it has no SBOM.
   - artifacts: archive
+    ids:
+      - starport
     documents:
       - "${artifact}.sbom.json"
 
