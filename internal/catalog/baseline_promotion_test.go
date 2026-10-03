@@ -10,6 +10,7 @@ import (
 	jsonv2 "encoding/json/v2"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/pkg/sources"
 	"github.com/agentstation/starmap/runtime"
+	"github.com/gofrs/flock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/recovery"
@@ -244,8 +246,32 @@ func (f *memoryFleet) openWith(t *testing.T, settings Settings) *Runtime {
 	t.Helper()
 	opened, err := openRuntime(t.Context(), f.kv, settings, runtimeCollectors{fleet: f.session()})
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = opened.Close(context.Background()) })
+	t.Cleanup(func() { closeRuntimeDirectory(t, opened, settings.StateDirectory) })
 	return opened
+}
+
+// closeRuntimeDirectory closes one gateway process and waits for the release of its
+// state directory. Starmap bounds Close to five seconds and keeps the directory lock
+// until its cancelled work ends. Windows refuses to remove a locked file, so the
+// test directory cleanup needs the release. A lock that stays held is a leak.
+func closeRuntimeDirectory(t *testing.T, opened *Runtime, stateDirectory string) {
+	t.Helper()
+	err := opened.Close(context.Background())
+	var timedOut *starmaperrors.TimeoutError
+	if !errors.As(err, &timedOut) {
+		return
+	}
+	t.Logf("runtime close timed out, waiting for the state directory release: %v", err)
+	lockPath := filepath.Join(stateDirectory, runtimeDirectoryLockName)
+	if _, err := os.Stat(lockPath); err != nil {
+		return
+	}
+	lock := flock.New(lockPath)
+	require.Eventually(t, func() bool {
+		held, err := lock.TryLock()
+		return err == nil && held
+	}, promotionRunTimeout, 100*time.Millisecond, "the runtime did not release its state directory after Close")
+	require.NoError(t, lock.Unlock())
 }
 
 // leaseHolder reads the holder name from the native publication lease.
