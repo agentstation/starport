@@ -136,6 +136,20 @@ func (s *memoryIncarnationStore) CompareAndSwap(ctx context.Context, mutations [
 	return nil
 }
 
+// clone copies every key into a new independent store. It keeps no armed lease loss.
+func (s *memoryIncarnationStore) clone() *memoryIncarnationStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	copied := newMemoryIncarnationStore()
+	for key, value := range s.values {
+		copied.values[key] = bytes.Clone(value)
+	}
+	for key, expiry := range s.expires {
+		copied.expires[key] = expiry
+	}
+	return copied
+}
+
 // expire ends the lifetime of one key now, as a lapsed native lease does.
 func (s *memoryIncarnationStore) expire(key string) {
 	s.mu.Lock()
@@ -326,11 +340,41 @@ func replayCompatibility(t *testing.T, baseline catalogs.GenerationManifest, sta
 	return payloadDigest(data)
 }
 
+// olderBaselineTemplate is the shared store of one memory fleet that retains an older baseline.
+// One build opens a runtime over the full embedded catalog, accepts it, and closes it, which
+// costs about one minute under the race detector. The package builds it once. Each promotable
+// fleet starts from a private copy, so a test never observes a write from another test.
+// The build leaves the local key-value store empty, so every fleet gets a fresh one.
+var olderBaselineTemplate struct {
+	once     sync.Once
+	ready    bool
+	store    *memoryIncarnationStore
+	witness  memoryFleetWitness
+	retained catalogs.GenerationIdentity
+}
+
 // promotableFleet opens one leader that retains an older baseline than its packaged baseline.
 func promotableFleet(t *testing.T) (*memoryFleet, *Runtime, BaselineReport) {
 	t.Helper()
-	fleet := newMemoryFleet()
-	retained, _ := retainOlderBaseline(t, fleet.kv, fleet.session, fleet.settings(t))
+	template := &olderBaselineTemplate
+	template.once.Do(func() {
+		fleet := newMemoryFleet()
+		retained, _ := retainOlderBaseline(t, fleet.kv, fleet.session, fleet.settings(t))
+		keys, err := fleet.kv.(*storage.MockStore).Scan(t.Context(), "*", 1)
+		require.NoError(t, err)
+		require.Empty(t, keys, "the template must leave the local key-value store empty")
+		require.Empty(t, fleet.store.expires, "the template must carry no lifetime-bound key")
+		template.store, template.retained = fleet.store, retained
+		template.witness = memoryFleetWitness{record: fleet.witness.record, consumed: fleet.witness.consumed}
+		template.ready = true
+	})
+	require.True(t, template.ready, "the first promotable fleet did not retain the older baseline")
+	retained := template.retained
+	fleet := &memoryFleet{
+		store:   template.store.clone(),
+		witness: &memoryFleetWitness{record: template.witness.record, consumed: template.witness.consumed},
+		kv:      storage.NewMockStore(),
+	}
 	leader := fleet.open(t)
 	report, err := leader.BaselineReport()
 	require.NoError(t, err)
