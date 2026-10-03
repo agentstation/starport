@@ -55,10 +55,11 @@ const SmallScreenNav = lazy(() => import("@/components/shell/SmallScreenNav"));
 // architecture): the catalog everyone browses, the account surface a
 // caller owns, and the gateway surface an operator runs. A local
 // developer is all three at once, so nothing hides — the labels only
-// say which hat a page belongs to.
+// say which hat a page belongs to. A fullPage item leaves the client
+// router: the gateway serves the documentation as static pages.
 export const NAV_SECTIONS: ReadonlyArray<{
   label: string | null;
-  items: ReadonlyArray<{ to: string; label: string; icon: typeof LayoutDashboard }>;
+  items: ReadonlyArray<{ to: string; label: string; icon: typeof LayoutDashboard; fullPage?: boolean }>;
 }> = [
   {
     label: null,
@@ -98,7 +99,7 @@ export const NAV_SECTIONS: ReadonlyArray<{
   },
   {
     label: null,
-    items: [{ to: "/docs", label: "Docs", icon: BookOpen }],
+    items: [{ to: "/docs/", label: "Docs", icon: BookOpen, fullPage: true }],
   },
 ];
 
@@ -303,6 +304,26 @@ function SidebarBody({
               ))}
             {section.items.map((item) => {
               const Icon = item.icon;
+              const rowClassName = cn(
+                "relative flex",
+                rowHeight,
+                "items-center gap-2.5 rounded-sm px-3 text-base font-medium transition-colors duration-150 ease-standard",
+                collapsed && "justify-center px-0",
+              );
+              if (item.fullPage) {
+                return (
+                  <a
+                    key={item.to}
+                    href={item.to}
+                    aria-label={item.label}
+                    title={collapsed ? item.label : undefined}
+                    className={cn(rowClassName, "text-text-3 hover:bg-bg-hover hover:text-text-2")}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </a>
+                );
+              }
               // The link owns its active state. Every page except the
               // overview matches by prefix, so a detail route keeps its
               // list highlighted.
@@ -315,12 +336,7 @@ function SidebarBody({
                   title={collapsed ? item.label : undefined}
                   activeOptions={{ exact: item.to === "/" }}
                   activeProps={{ "aria-current": "page" }}
-                  className={cn(
-                    "relative flex",
-                    rowHeight,
-                    "items-center gap-2.5 rounded-sm px-3 text-base font-medium transition-colors duration-150 ease-standard",
-                    collapsed && "justify-center px-0",
-                  )}
+                  className={rowClassName}
                   inactiveProps={{
                     className: "text-text-3 hover:bg-bg-hover hover:text-text-2",
                   }}

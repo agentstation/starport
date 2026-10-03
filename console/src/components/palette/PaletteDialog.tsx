@@ -65,10 +65,21 @@ const PAGES: { path: string; label: string; icon: typeof LayoutDashboard }[] = [
   { path: "/usage", label: "Usage", icon: BarChart3 },
   { path: "/presets", label: "Presets", icon: SlidersHorizontal },
   { path: "/settings", label: "Settings", icon: Settings },
-  { path: "/docs", label: "Docs", icon: BookOpen },
+  { path: "/docs/", label: "Docs", icon: BookOpen },
 ];
 
 const PAGE_ICONS = new Map(PAGES.map((page) => [page.path, page.icon]));
+
+// The gateway serves the documentation as static pages outside the client
+// router, so a docs destination is a full page load. A recent saved before
+// the docs left the router names "/docs", which the gateway redirects.
+function isDocsPath(path: string): boolean {
+  return path === "/docs" || path.startsWith("/docs/");
+}
+
+function docsSearchHref(query: string): string {
+  return `/docs/search/?q=${encodeURIComponent(query)}`;
+}
 
 function Kbd({ children }: { children: string }) {
   return (
@@ -183,7 +194,24 @@ export default function PaletteDialog({
     [models.data, providers.data, authors.data, keys.data, theme],
   );
 
-  const visible = useMemo(() => searchPalette(query, items), [query, items]);
+  // A typed query also offers the documentation search, which covers the
+  // headings, prose, and setting names that the palette does not index.
+  const searchable = useMemo<PaletteItem[]>(() => {
+    const trimmed = query.trim();
+    if (!trimmed) return items;
+    return [
+      ...items,
+      {
+        kind: "docs" as const,
+        id: trimmed,
+        label: `Search documentation for “${trimmed}”`,
+        hint: "/docs/search/",
+        keywords: [trimmed],
+      },
+    ];
+  }, [items, query]);
+
+  const visible = useMemo(() => searchPalette(query, searchable), [query, searchable]);
   const groups = useMemo(
     () => groupResults(query, visible, recents),
     [query, visible, recents],
@@ -197,7 +225,11 @@ export default function PaletteDialog({
   const run = (item: PaletteItem) => {
     close();
     setRecents(rememberRecent(item));
-    if (item.kind === "page") {
+    if (item.kind === "docs") {
+      window.location.assign(docsSearchHref(item.id));
+    } else if (item.kind === "page" && isDocsPath(item.id)) {
+      window.location.assign(item.id);
+    } else if (item.kind === "page") {
       void navigate({ to: item.id });
     } else if (item.kind === "model") {
       void navigate({ to: "/models/$modelId", params: { modelId: item.id } });
@@ -238,6 +270,7 @@ export default function PaletteDialog({
       );
     }
     if (item.kind === "key") return <Key className="size-4 shrink-0 text-text-4" />;
+    if (item.kind === "docs") return <BookOpen className="size-4 shrink-0 text-text-3" />;
     return <Sparkles className="size-4 shrink-0 text-text-4" />;
   };
 

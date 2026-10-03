@@ -61,7 +61,7 @@ export function FirstContact({ next }: { next?: string }) {
         </p>
       </header>
 
-      <a href="/docs?audience=operate" className="text-base text-accent-link hover:underline">
+      <a href="/docs/" className="text-base text-accent-link hover:underline">
         Read documentation without console access
       </a>
 

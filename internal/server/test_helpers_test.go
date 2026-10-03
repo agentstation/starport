@@ -13,6 +13,7 @@ import (
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/blob"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/jobs"
@@ -52,6 +53,8 @@ type testServerConfig struct {
 	catalogOperations controllers.CatalogOperations
 	// configurationOperations answers the configuration admin surface.
 	configurationOperations controllers.ConfigurationOperations
+	// console serves the console pages and the documentation site.
+	console console.PageServer
 }
 
 type testRegistryAdapter struct{ registry *registry.Registry }
@@ -113,6 +116,12 @@ func withTestCatalogOperations(operations controllers.CatalogOperations) testSer
 // withTestConfigurationOperations supplies the configuration admin surface.
 func withTestConfigurationOperations(operations controllers.ConfigurationOperations) testServerOption {
 	return func(config *testServerConfig) { config.configurationOperations = operations }
+}
+
+// withTestConsole serves console pages and the documentation site from the
+// given handler, so a route test needs no frontend build.
+func withTestConsole(pages console.PageServer) testServerOption {
+	return func(config *testServerConfig) { config.console = pages }
 }
 
 type staticTestProviderOperations struct{}
@@ -322,6 +331,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
 		Catalog:           testConfig.catalogOperations,
 		Configuration:     testConfig.configurationOperations,
+		Console:           testConfig.console,
 		DiscoveryRegistry: reg,
 		Templates:         templates,
 		Files:             fileService, Jobs: jobService, Batches: batchService,

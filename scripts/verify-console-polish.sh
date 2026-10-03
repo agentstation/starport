@@ -279,10 +279,10 @@ check CPL-V43 "chat.test.tsx exists" \
   files_exist $C/routes/chat.test.tsx
 
 check CPL-V44 "the docs cite the real health paths" \
-  all_present '/health/live' '/health/ready' -- $C/routes/docs.tsx
+  all_present '/health/live' '/health/ready' -- docs/site/troubleshoot/recovery.md
 
-check CPL-V45 "docs.test.tsx exists" \
-  files_exist $C/routes/docs.test.tsx
+check CPL-V45 "docs/recovery.test.ts exists" \
+  files_exist $C/docs/recovery.test.ts
 
 # --- Phase G, small screens ---
 

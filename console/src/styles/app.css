@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "./tokens.css";
-@import "./docs.css";
 @import "streamdown/styles.css";
 @import "katex/dist/katex.min.css";
 

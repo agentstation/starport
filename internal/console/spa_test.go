@@ -22,13 +22,37 @@ func builtDist() fstest.MapFS {
 		"assets/index-abc123.js": &fstest.MapFile{
 			Data: []byte("console.log(\"starport\")"),
 		},
+		"docs/index.html": &fstest.MapFile{
+			Data: []byte("<!doctype html><h1>Starport documentation</h1>"),
+		},
+		"docs/start/index.html": &fstest.MapFile{
+			Data: []byte("<!doctype html><h1>Start</h1>"),
+		},
+		"docs/start/keys-and-roles/index.html": &fstest.MapFile{
+			Data: []byte("<!doctype html><h1>Keys and roles</h1>"),
+		},
+		"docs/manifest.json": &fstest.MapFile{
+			Data: []byte(`{"starport_release":"dev"}`),
+		},
+		"docs/search-index.json": &fstest.MapFile{Data: []byte(`{}`)},
+		"docs/search-index.js":   &fstest.MapFile{Data: []byte(`window.__STARPORT_DOCS_SEARCH__ = "{}";`)},
+		"docs/assets/docs-abc123.css": &fstest.MapFile{
+			Data: []byte("body{}"),
+		},
 	}
+}
+
+func serve(router http.Handler, path string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodGet, path, nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	return recorder
 }
 
 func newSPARouter(t *testing.T, dist fstest.MapFS) *chi.Mux {
 	t.Helper()
 	logger := zerolog.Nop()
-	handler := newSPAHandler(&logger, dist)
+	handler := NewSPAHandlerFS(&logger, dist)
 	router := chi.NewRouter()
 	handler.Register(router)
 	return router
@@ -37,7 +61,7 @@ func newSPARouter(t *testing.T, dist fstest.MapFS) *chi.Mux {
 func TestSPAHandlerServesIndexForEveryPagePath(t *testing.T) {
 	router := newSPARouter(t, builtDist())
 	for _, path := range []string{
-		"/", "/accounts", "/auth", "/chat", "/docs", "/documents",
+		"/", "/accounts", "/auth", "/chat", "/documents",
 		"/files", "/jobs", "/keys", "/models", "/presets", "/providers",
 		"/settings", "/usage",
 	} {
@@ -162,6 +186,109 @@ func TestSPAHandlerRejectsMissingAndTraversalAssets(t *testing.T) {
 		if recorder.Code == http.StatusOK {
 			t.Fatalf("GET %s status = 200, want a non-200 rejection", path)
 		}
+	}
+}
+
+func TestSPAHandlerServesDocsPages(t *testing.T) {
+	router := newSPARouter(t, builtDist())
+	for path, want := range map[string]string{
+		"/docs/":                      "Starport documentation",
+		"/docs/start/":                "<h1>Start</h1>",
+		"/docs/start/keys-and-roles/": "<h1>Keys and roles</h1>",
+	} {
+		recorder := serve(router, path)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want %d", path, recorder.Code, http.StatusOK)
+		}
+		if body := recorder.Body.String(); !strings.Contains(body, want) {
+			t.Fatalf("GET %s body = %q, want it to contain %q", path, body, want)
+		}
+		if strings.Contains(recorder.Body.String(), "id=\"root\"") {
+			t.Fatalf("GET %s served the SPA shell, want the static page", path)
+		}
+		if got := recorder.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
+			t.Fatalf("GET %s Content-Type = %q, want text/html", path, got)
+		}
+		if cache := recorder.Header().Get("Cache-Control"); cache != "no-cache" {
+			t.Fatalf("GET %s Cache-Control = %q, want no-cache", path, cache)
+		}
+		if csp := recorder.Header().Get("Content-Security-Policy"); csp != spaContentSecurityPolicy {
+			t.Fatalf("GET %s CSP = %q, want the console CSP", path, csp)
+		}
+	}
+}
+
+func TestSPAHandlerServesDocsDataNoCacheAndAssetsImmutable(t *testing.T) {
+	router := newSPARouter(t, builtDist())
+	for path, wantCache := range map[string]string{
+		"/docs/manifest.json":          "no-cache",
+		"/docs/search-index.json":      "no-cache",
+		"/docs/search-index.js":        "no-cache",
+		"/docs/assets/docs-abc123.css": "public, max-age=31536000, immutable",
+	} {
+		recorder := serve(router, path)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want %d", path, recorder.Code, http.StatusOK)
+		}
+		if cache := recorder.Header().Get("Cache-Control"); cache != wantCache {
+			t.Fatalf("GET %s Cache-Control = %q, want %q", path, cache, wantCache)
+		}
+	}
+}
+
+func TestSPAHandlerRedirectsDocsDirectories(t *testing.T) {
+	router := newSPARouter(t, builtDist())
+	for path, wantLocation := range map[string]string{
+		"/docs":               "/docs/",
+		"/docs?q=health":      "/docs/?q=health",
+		"/docs/start":         "/docs/start/",
+		"/docs/start?q=roles": "/docs/start/?q=roles",
+	} {
+		recorder := serve(router, path)
+		if recorder.Code != http.StatusMovedPermanently {
+			t.Fatalf("GET %s status = %d, want %d", path, recorder.Code, http.StatusMovedPermanently)
+		}
+		if location := recorder.Header().Get("Location"); location != wantLocation {
+			t.Fatalf("GET %s Location = %q, want %q", path, location, wantLocation)
+		}
+	}
+}
+
+func TestSPAHandlerRejectsMissingAndTraversalDocs(t *testing.T) {
+	router := newSPARouter(t, builtDist())
+	for _, path := range []string{
+		"/docs/missing/",
+		"/docs/start/missing",
+		"/docs/assets/missing.css",
+		"/docs/../index.html",
+		"/docs/start/../../index.html",
+		"/docs//start/",
+	} {
+		recorder := serve(router, path)
+		if recorder.Code != http.StatusNotFound {
+			t.Fatalf("GET %s status = %d, want %d", path, recorder.Code, http.StatusNotFound)
+		}
+	}
+}
+
+func TestSPAHandlerWithoutDocsServesNotice(t *testing.T) {
+	dist := builtDist()
+	for name := range dist {
+		if strings.HasPrefix(name, "docs/") {
+			delete(dist, name)
+		}
+	}
+	router := newSPARouter(t, dist)
+	recorder := serve(router, "/docs/")
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, "documentation was not built") {
+		t.Fatalf("body %q does not explain the missing documentation build", body)
+	}
+	// The console itself still serves.
+	if recorder := serve(router, "/"); recorder.Code != http.StatusOK {
+		t.Fatalf("GET / status = %d, want %d", recorder.Code, http.StatusOK)
 	}
 }
 
