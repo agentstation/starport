@@ -190,7 +190,8 @@ The local gateway serves the records of the capture. Records that the shared dep
 - The tests use a populated fixture: two accounts, three gateway keys, two provider credentials, two files, two users, one team, two grants, four usage records, and three audit records. The team in the fixture has no budget. Team budget history is not in the test.
 - The container recipe test runs capture, preparation, inspection, and the refusals with the image. It stops before activation, because activation needs the independent history package. The in-process tests cover activation, a second replica, and rollback.
 - The tests use plaintext Valkey on a private network. A production fleet uses TLS.
-- A catalog baseline promotion after the move has no test.
+- After the move, the fleet head has a recovery origin and no lease. The first gateway that gets the lease publishes the same generation again at the next revision. A promotion after the move completes only while a running gateway holds the fleet lease. A test promotes a newer packaged baseline through a running shared gateway after the move, with a request that names the moved revision. Refer to [Baseline promotion](../../OPERATOR-GUIDE.md#baseline-promotion).
+- The move copies the deployment keys without a filter. The tests find no `provider-health:instance:`, `provider-latency:instance:`, or `catalog_migration:v1:` keys on the target, because a local gateway does not write them. If you ran `starport migrate runtime prepare` on the local deployment, its receipt moves too. On the shared target, the same operation ID then refuses because the store identity is different. Use a new operation ID.
 - This release does not qualify this procedure for production.
 
 The `--unprefixed-valkey` flag of `starport backup create` captures a dedicated Valkey database that has no deployment prefix. Use it only with a recovery procedure that names it.

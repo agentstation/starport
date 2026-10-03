@@ -40,7 +40,8 @@ CSP19.1 qualifies the move of a populated local deployment to the shared recipe.
 Its tests capture Badger, SQLite, and file storage, then prepare, inspect, and activate into Valkey, PostgreSQL, and object storage.
 They cover record parity, typed refusals, a second replica, and rollback to the local stores.
 A local gateway does not refuse a start after `backup close`, so the external writer fence is mandatory.
-A catalog baseline promotion after the move waits for CSP16.2.
+Catalog and fixture tests prove that the fleet leader promotes a newer packaged baseline over the moved head. The fixture test runs the shared gateway, because only a running gateway executes a promotion request.
+The move copies process-scoped keys without a filter. A local source writes none, and a moved runtime migration receipt fails closed.
 
 ### Proposed Work
 
