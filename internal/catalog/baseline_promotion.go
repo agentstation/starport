@@ -163,7 +163,7 @@ func (r *Runtime) PromoteBaseline(ctx context.Context, request PromotionRequest)
 		return PromotionReceipt{}, err
 	}
 	if foreign {
-		return refused(fmt.Sprintf("the fleet leader %q holds the publication lease. Stop that process or wait until its lease ends. Then retry with the same operation ID", holder)), nil
+		return refused(fmt.Sprintf("the fleet leader %q holds the publication lease. A running gateway renews its lease until it stops. Stop the gateways of the old binary or use the fleet upgrade window. Then retry with the same operation ID", holder)), nil
 	}
 	if !status.Promotable {
 		return refused(status.Refusal), nil

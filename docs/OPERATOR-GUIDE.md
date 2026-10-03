@@ -1338,7 +1338,9 @@ Each command opens the fleet catalog runtime in its own process. It starts no
 gateway and adds no HTTP route. Run it on a host that has the fleet
 configuration and the new binary. Stop the gateway on that host first,
 because the command uses the same state directory. Only the holder of the
-publication lease can promote. When the command gets the lease, it
+publication lease can promote. A running gateway leader renews the lease
+until it stops. Thus run the promotion in the fleet upgrade window, after
+you stop the gateways of the old binary. When the command gets the lease, it
 republishes the retained head at a new revision, as a new leader does.
 
 Compare the packaged baseline with the retained baseline:
@@ -1391,8 +1393,9 @@ exits with status `1`. The fleet does not store a refused receipt.
 These conditions cause a refusal:
 
 - Another process holds the publication lease. The refusal names that leader.
-  Stop that process or wait until its lease ends. Then retry with the same
-  operation ID.
+  A running gateway renews its lease until it stops, so the command cannot get
+  the lease while the fleet runs. Stop the gateways of the old binary or use
+  the fleet upgrade window. Then retry with the same operation ID.
 - The fleet head is not at the expected revision. Read `baseline-status`
   again before you choose a new operation ID.
 - The packaged baseline is not promotable. The refusal gives the reason.

@@ -226,6 +226,9 @@ func (f *memoryFleet) leaseHolder(t *testing.T, fleet *FleetStore) string {
 
 // retainOlderBaseline publishes the packaged catalog bytes under an older baseline identity, as an older binary did.
 // The forged recovery record keeps the Starmap version 2 format and recomputes its replay compatibility.
+// This couples the test to the private Starmap recovery record and compatibility formula
+// (CSP16.2 decision 16.2-9). Starmap has no public test hook for this. The self-check against
+// the real record fails loudly when the Starmap composition changes.
 // It returns the retained identity and the accepted head.
 func retainOlderBaseline(t *testing.T, kv storage.KVStore, fleet func() *FleetStore, settings Settings) (catalogs.GenerationIdentity, runtime.FleetHead) {
 	t.Helper()
@@ -330,6 +333,8 @@ func TestFleetPromotionAdvancesHeadWithIncreasingRevision(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, PromotionRefused, refused.Status)
 	require.Contains(t, refused.Refusal, holder)
+	require.Contains(t, refused.Refusal, "A running gateway renews its lease until it stops")
+	require.Contains(t, refused.Refusal, "Stop the gateways of the old binary or use the fleet upgrade window")
 	require.Contains(t, refused.Refusal, "retry with the same operation ID")
 	_, found, err := follower.fleet.promotionReceipt(ctx, "follower-1")
 	require.NoError(t, err)
