@@ -101,7 +101,7 @@ func (s *Store) Initialize(ctx context.Context, seed map[string]string, actor, o
 		return Revision{}, err
 	}
 	revision := s.newRevision(target, seed, actor, operationID, "")
-	err = s.write(ctx, ActionInitialize, revision, func(tx *sql.Tx) (bool, error) {
+	err = s.write(ctx, ActionInitialize, nil, revision, func(tx *sql.Tx) (bool, error) {
 		_, err := tx.ExecContext(ctx, s.db.Bind(`INSERT INTO deployment_configuration_head (deployment_id, namespace, sequence, revision_id) VALUES (?, ?, 1, ?)`),
 			s.deploymentID, s.namespace, revision.RevisionID)
 		return err == nil, err
@@ -123,7 +123,17 @@ func (s *Store) Initialize(ctx context.Context, seed map[string]string, actor, o
 // transaction with its audit record. A head that moved is a
 // *StaleRevisionError. A repeated operation ID returns the original revision.
 func (s *Store) Commit(ctx context.Context, expectedSequence int64, values map[string]string, actor, operationID string) (Revision, error) {
-	return s.commit(ctx, expectedSequence, AuthorityShared, values, actor, operationID)
+	return s.commit(ctx, expectedSequence, AuthorityShared, values, actor, operationID, nil)
+}
+
+// SaveFields commits a field save as revision expectedSequence+1. It is
+// Commit with the field-save audit action and an audit subject that names the
+// changed setting keys, never their values.
+func (s *Store) SaveFields(ctx context.Context, expectedSequence int64, values map[string]string, settings []string, actor, operationID string) (Revision, error) {
+	if settings == nil {
+		settings = []string{}
+	}
+	return s.commit(ctx, expectedSequence, AuthorityShared, values, actor, operationID, settings)
 }
 
 // Migrate records an authority switch as a revision. To shared, it writes
@@ -134,7 +144,7 @@ func (s *Store) Migrate(ctx context.Context, target string, seed map[string]stri
 	if err := s.validateWrite(seed, actor, operationID); err != nil {
 		return Revision{}, err
 	}
-	if revision, found, err := s.operation(ctx, operationID); err != nil || found {
+	if revision, found, err := s.operation(ctx, operationID, false); err != nil || found {
 		if err == nil && (revision.Authority != target || (target == AuthorityShared && revision.Checksum != config.SharedValuesChecksum(seed))) {
 			err = ErrOperationConflict
 		}
@@ -152,7 +162,7 @@ func (s *Store) Migrate(ctx context.Context, target string, seed map[string]stri
 		if head.Authority == AuthorityShared {
 			return Revision{}, fmt.Errorf("deployment already uses shared configuration at revision %d", head.Sequence)
 		}
-		return s.commit(ctx, head.Sequence, AuthorityShared, seed, actor, operationID)
+		return s.commit(ctx, head.Sequence, AuthorityShared, seed, actor, operationID, nil)
 	case AuthorityLocal:
 		current, err := s.Current(ctx)
 		if err != nil {
@@ -161,13 +171,15 @@ func (s *Store) Migrate(ctx context.Context, target string, seed map[string]stri
 		if current.Authority == AuthorityLocal {
 			return Revision{}, fmt.Errorf("deployment already released shared configuration at revision %d", current.Sequence)
 		}
-		return s.commit(ctx, current.Sequence, AuthorityLocal, current.Values, actor, operationID)
+		return s.commit(ctx, current.Sequence, AuthorityLocal, current.Values, actor, operationID, nil)
 	default:
 		return Revision{}, fmt.Errorf("migration target %q is not shared or local", target)
 	}
 }
 
-func (s *Store) commit(ctx context.Context, expected int64, authority string, values map[string]string, actor, operationID string) (Revision, error) {
+// commit writes revision expected+1. Nil settings record a commit. Non-nil
+// settings record a field save that names them.
+func (s *Store) commit(ctx context.Context, expected int64, authority string, values map[string]string, actor, operationID string, settings []string) (Revision, error) {
 	if err := s.validateWrite(values, actor, operationID); err != nil {
 		return Revision{}, err
 	}
@@ -186,7 +198,11 @@ func (s *Store) commit(ctx context.Context, expected int64, authority string, va
 		return Revision{}, &StaleRevisionError{Expected: expected, Current: head.Sequence}
 	}
 	revision := s.newRevision(target, values, actor, operationID, head.RevisionID)
-	err = s.write(ctx, ActionCommit, revision, func(tx *sql.Tx) (bool, error) {
+	action := ActionCommit
+	if settings != nil {
+		action = config.ActionSave
+	}
+	err = s.write(ctx, action, settings, revision, func(tx *sql.Tx) (bool, error) {
 		result, err := tx.ExecContext(ctx, s.db.Bind(`UPDATE deployment_configuration_head SET sequence = ?, revision_id = ? WHERE deployment_id = ? AND sequence = ?`),
 			target.sequence, revision.RevisionID, s.deploymentID, expected)
 		if err != nil {
@@ -215,8 +231,9 @@ func (s *Store) commit(ctx context.Context, expected int64, authority string, va
 var errHeadMoved = errors.New("shared configuration head moved")
 
 // write runs the head mutation, the revision insert, and the audit record in
-// one transaction. moveHead reports false when the head did not move.
-func (s *Store) write(ctx context.Context, action string, revision writtenRevision, moveHead func(*sql.Tx) (bool, error)) error {
+// one transaction. moveHead reports false when the head did not move. The
+// audit subject is the revision ID, with the setting keys of a field save.
+func (s *Store) write(ctx context.Context, action string, settings []string, revision writtenRevision, moveHead func(*sql.Tx) (bool, error)) error {
 	record, err := s.encode(revision.Authority, revision.Values)
 	if err != nil {
 		return err
@@ -237,8 +254,12 @@ func (s *Store) write(ctx context.Context, action string, revision writtenRevisi
 		revision.RevisionID, s.deploymentID, revision.Sequence, revision.predecessor, revision.OperationID, revision.Actor, revision.Checksum, record, revision.CreatedAt); err != nil {
 		return fmt.Errorf("write shared configuration revision: %w", err)
 	}
+	subject := revision.RevisionID
+	if settings != nil {
+		subject = config.AuditSubject(revision.RevisionID, settings)
+	}
 	if err := s.trail.RecordTx(ctx, tx, audit.Record{
-		Actor: revision.Actor, Action: action, Subject: revision.RevisionID, Outcome: audit.OutcomeOK,
+		Actor: revision.Actor, Action: action, Subject: subject, Outcome: audit.OutcomeOK,
 	}); err != nil {
 		return err
 	}
@@ -278,7 +299,7 @@ type writtenRevision struct {
 // replay returns the revision of a repeated operation ID. A different target
 // is ErrOperationConflict.
 func (s *Store) replay(ctx context.Context, operationID string, target revisionTarget) (Revision, bool, error) {
-	revision, found, err := s.operation(ctx, operationID)
+	revision, found, err := s.operation(ctx, operationID, false)
 	if err != nil || !found {
 		return Revision{}, false, err
 	}
@@ -294,10 +315,48 @@ func (s *Store) Operation(ctx context.Context, operationID string) (Revision, bo
 	if err := validIdentifier("operation ID", operationID); err != nil {
 		return Revision{}, false, err
 	}
-	return s.operation(ctx, operationID)
+	return s.operation(ctx, operationID, false)
 }
 
-func (s *Store) operation(ctx context.Context, operationID string) (Revision, bool, error) {
+// OperationRevision returns the revision that an operation ID committed, with
+// its unsealed values. A field save compares the values to tell an exact
+// retry from a reused operation ID, because the checksum omits credentials.
+func (s *Store) OperationRevision(ctx context.Context, operationID string) (Revision, bool, error) {
+	if err := validIdentifier("operation ID", operationID); err != nil {
+		return Revision{}, false, err
+	}
+	return s.operation(ctx, operationID, true)
+}
+
+// CheckSchema refuses a store behind the schema of this binary or behind an
+// open import barrier. It changes nothing, so a field save never migrates.
+func (s *Store) CheckSchema(ctx context.Context) error {
+	if err := s.db.CheckSchemaCurrent(ctx); err != nil {
+		return err
+	}
+	return s.db.CheckImportBarrier(ctx)
+}
+
+// RevisionAt returns the revision at one sequence of the deployment, with
+// its unsealed values. It reports false when no revision has that sequence.
+func (s *Store) RevisionAt(ctx context.Context, sequence int64) (Revision, bool, error) {
+	revision := Revision{Head: Head{DeploymentID: s.deploymentID, Namespace: s.namespace, Sequence: sequence}}
+	var record string
+	err := s.db.QueryRowContext(ctx, s.db.Bind(`SELECT revision_id, operation_id, actor, checksum, record, created_at FROM deployment_configuration_revisions WHERE deployment_id = ? AND sequence = ?`), s.deploymentID, sequence).
+		Scan(&revision.RevisionID, &revision.OperationID, &revision.Actor, &revision.Checksum, &record, &revision.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Revision{}, false, nil
+	}
+	if err != nil {
+		return Revision{}, false, &UnavailableError{Err: err}
+	}
+	if err := s.decode(&revision, record, true); err != nil {
+		return Revision{}, true, err
+	}
+	return revision, true, nil
+}
+
+func (s *Store) operation(ctx context.Context, operationID string, unseal bool) (Revision, bool, error) {
 	var revision Revision
 	var record string
 	err := s.db.QueryRowContext(ctx, s.db.Bind(`SELECT revision_id, deployment_id, sequence, operation_id, actor, checksum, record, created_at FROM deployment_configuration_revisions WHERE operation_id = ?`), operationID).
@@ -312,7 +371,7 @@ func (s *Store) operation(ctx context.Context, operationID string) (Revision, bo
 		return Revision{}, true, ErrOperationConflict
 	}
 	revision.Namespace = s.namespace
-	if err := s.decode(&revision, record, false); err != nil {
+	if err := s.decode(&revision, record, unseal); err != nil {
 		return Revision{}, true, err
 	}
 	return revision, true, nil

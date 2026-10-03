@@ -282,6 +282,53 @@ func TestCommitRefusesStaleRevisionAndReplaysOperation(t *testing.T) {
 	}
 }
 
+func TestCommitAbortsWithoutAuditRecord(t *testing.T) {
+	for name, selected := range backendConfigs(t) {
+		t.Run(name, func(t *testing.T) {
+			db := openDatabase(t, selected)
+			sealer, err := credentials.NewEncryptionService([]byte(strings.Repeat("k", 32)))
+			require.NoError(t, err)
+			store, trail := openStore(t, db, sealer)
+			first, err := store.Initialize(t.Context(), map[string]string{catalogconfig.AcquisitionInterval: "5m"}, "operator:test", "initialize")
+			require.NoError(t, err)
+			require.NoError(t, store.CheckSchema(t.Context()))
+
+			// The audit table is gone, so the transaction cannot record the commit.
+			_, err = db.ExecContext(t.Context(), renameAudit(db, "audit_log", "audit_log_hidden"))
+			require.NoError(t, err)
+			values := map[string]string{catalogconfig.AcquisitionInterval: "7m"}
+			_, err = store.Commit(t.Context(), first.Sequence, values, "operator:test", "commit-without-audit")
+			require.ErrorContains(t, err, "record audit entry")
+			head, err := store.Head(t.Context())
+			require.NoError(t, err)
+			require.Equal(t, first.Head, head, "the head did not move")
+			var revisions int
+			require.NoError(t, db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM deployment_configuration_revisions").Scan(&revisions))
+			require.Equal(t, 1, revisions, "the revision row rolled back")
+			_, found, err := store.OperationRevision(t.Context(), "commit-without-audit")
+			require.NoError(t, err)
+			require.False(t, found, "the operation ID committed nothing")
+
+			// With the audit table back, the same operation commits once with its record.
+			_, err = db.ExecContext(t.Context(), renameAudit(db, "audit_log_hidden", "audit_log"))
+			require.NoError(t, err)
+			committed, err := store.Commit(t.Context(), first.Sequence, values, "operator:test", "commit-without-audit")
+			require.NoError(t, err)
+			require.Equal(t, first.Sequence+1, committed.Sequence)
+			stored, found, err := store.OperationRevision(t.Context(), "commit-without-audit")
+			require.NoError(t, err)
+			require.True(t, found)
+			require.Equal(t, values, stored.Values)
+			page, err := trail.List(t.Context(), audit.Query{Action: configrevision.ActionCommit})
+			require.NoError(t, err)
+			require.Len(t, page.Records, 1)
+			require.Equal(t, committed.RevisionID, page.Records[0].Subject)
+			heads, revisions, records := countRows(t, db)
+			require.Equal(t, [3]int{1, 2, 2}, [3]int{heads, revisions, records})
+		})
+	}
+}
+
 func TestSealedCredentialFailsClosed(t *testing.T) {
 	for name, selected := range backendConfigs(t) {
 		t.Run(name, func(t *testing.T) {

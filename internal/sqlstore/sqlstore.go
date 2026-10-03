@@ -41,6 +41,8 @@ var (
 	ErrUnknownType = errors.New("unknown sqlstore type")
 	// ErrClosed is returned when an operation reaches a closed store.
 	ErrClosed = errors.New("sqlstore closed")
+	// ErrSchemaBehind is returned when a store lacks a migration of this binary.
+	ErrSchemaBehind = errors.New("relational schema is behind this binary")
 )
 
 // Config selects and configures a relational backend, the way

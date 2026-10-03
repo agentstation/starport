@@ -526,7 +526,7 @@ starport config apply --resume config-change-42
 
 The same operation ID with different values refuses. To roll back, apply the previous values. The rollback is a new revision.
 Each command prints the operation ID. When `--operation` is absent, the command generates one.
-These commands change catalog deployment settings only. No HTTP route changes them.
+These commands change catalog deployment settings only. The configuration routes can change only source credentials of a shared deployment.
 
 Use `starport config paths --files` to report file roles, selected backends, access requirements, and recovery rules.
 The report marks inactive database paths as disabled and identifies shared KV, SQL, and object storage without connection credentials.
@@ -633,6 +633,56 @@ marks the storage and identity checks as skipped. Start and stop
 Badger does not support read-only mode on Windows. On Windows, the probe marks
 the storage and identity checks as skipped. Use `starport serve` to verify the
 normal writable startup.
+
+### Configuration operations
+
+The admin routes under `/api/v1/admin/config` read and save catalog settings. Each route requires the `admin` scope.
+The catalog routes table lists them. Each response uses `Cache-Control: no-store`.
+
+The schema and effective routes read process memory only. They never open the store or a file.
+The schema marks `config_management` as `migration-only`. The effective route returns the report of `starport config effective`.
+
+The validate, test-connection, and save routes are writes. Each body names `operation_id`, `deployment_id`, `expected_revision`, and `edits`.
+An edit maps a field-save key, such as `catalog_source_api_key`, or a Starport variable name to a value. A `null` value removes the setting.
+A write checks the origin, the deployment, and the management mode before it reads a store or a file:
+
+- A request with an `Origin` header must name the gateway's own origin. A cross-site request gets `403`.
+- A console session write must send the `Origin` header.
+- A `deployment_id` that does not name this gateway gets `403` with the `foreign_deployment` reason.
+- External management refuses each write with `423`. Reads continue and name the external controller.
+
+Validation writes nothing. It reports the changed setting keys and the revision that the save would write, or the refusal.
+The connection test probes the catalog source with the edits applied. The result never holds a credential or the source address.
+
+A save returns a receipt. The receipt names the operation, the deployment, the management mode, the actor, and the status.
+`saved` is the revision that the save wrote. `applied` is the revision that this process serves.
+The status is `saved` until a process starts with the new revision. A gateway applies a saved revision only at restart.
+A receipt read by a process that cannot apply the revision states the cause in `activation_error`.
+Read a receipt again at `GET /api/v1/admin/config/operations/{operation_id}`. An unknown operation gets `404`.
+
+| Answer | Cause |
+| --- | --- |
+| `200` | A new save, or an exact retry of a saved operation. The retry returns the original receipt. |
+| `409` | `stale_revision`: the expected revision is not current. The refusal names the expected and current revisions. |
+| `409` | `operation_conflict`: the operation ID already names a different change. |
+| `409` | `busy` or `incomplete`: another writer holds the file, or a local save did not finish. The message names the next step. |
+| `422` | `migration_boundary`, `policy_change`, or `invalid_edit`. |
+| `423` | `external_management`. |
+| `503` | `schema_behind` or `unavailable`. |
+
+Under local management, a save rewrites the single configuration file in its private directory. The expected revision is the SHA-256 checksum of the file.
+An operation journal, `.starport-config-operations.json`, is kept next to the file. It makes a retry complete an interrupted save.
+The file manifest lists the journal as `config-operation-journal`, and a backup captures it with the configuration file.
+A local save refuses a setting that the process environment overrides. It also refuses when the gateway reads more than one configuration file.
+A value with a quote, a line break, or a trailing backslash refuses.
+
+Under shared management, the expected revision is the decimal head sequence. A save commits the next revision and its audit record in one transaction.
+A field save can change only `catalog_source_api_key` and `catalog_source_token`. A change to the acquisition policy refuses with `policy_change`. Use `starport config apply` for it.
+A save never migrates the relational schema. When the store is behind this binary, the save refuses with `schema_behind`.
+Start a gateway of this version to migrate the store, and then save again.
+
+No response holds a credential. A sealed value shows only as a presence marker, and the revision checksum identifies the revision.
+Audit records name the setting keys and the revision, never a value.
 
 ### Read the Running Gateway
 
@@ -1263,6 +1313,12 @@ generation with no source request.
 | `POST /api/v1/admin/catalog/refresh` | `admin` | Start one refresh run. |
 | `GET /api/v1/admin/catalog/refreshes/{run_id}` | `admin` | Read one run. |
 | `DELETE /api/v1/admin/catalog/refreshes/{run_id}` | `admin` | Cancel one run. |
+| `GET /api/v1/admin/config/schema` | `admin` | The catalog setting descriptors, without values. |
+| `GET /api/v1/admin/config/effective` | `admin` | The redacted effective configuration of this process. |
+| `POST /api/v1/admin/config/validate` | `admin` | Check a field save. It writes nothing. |
+| `POST /api/v1/admin/config/test-connection` | `admin` | Probe the catalog source with the edits applied. |
+| `POST /api/v1/admin/config/save` | `admin` | Save a field change and return its receipt. |
+| `GET /api/v1/admin/config/operations/{operation_id}` | `admin` | Read the receipt of one save. |
 
 The safe summary is an allowlist and not a redaction. It carries the generation
 identity, the age, the usable verdict, and the freshness grade. It also carries

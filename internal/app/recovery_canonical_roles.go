@@ -174,5 +174,5 @@ func canonicalRecoveryFileDisposition(file recovery.FileDisposition, topology bo
 }
 
 func canonicalCurrentTargetRole(role string) bool {
-	return strings.HasPrefix(role, "dotenv-") || slices.Contains([]string{"configuration", "source-file", "tls-certificate", "tls-key", "valkey-ca", "cache-ca", "local-token", "local-token-lock"}, role)
+	return strings.HasPrefix(role, "dotenv-") || slices.Contains([]string{"configuration", "config-operation-journal", "source-file", "tls-certificate", "tls-key", "valkey-ca", "cache-ca", "local-token", "local-token-lock"}, role)
 }

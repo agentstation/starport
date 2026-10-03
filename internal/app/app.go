@@ -25,6 +25,7 @@ import (
 	"github.com/agentstation/starport/internal/cache"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/configops"
 	"github.com/agentstation/starport/internal/configrevision"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
@@ -124,6 +125,8 @@ type App struct {
 	// configuration is the shared configuration store, or nil under local
 	// or external management.
 	configuration *configrevision.Store
+	// configurationOps serves the configuration admin surface.
+	configurationOps *configops.Service
 	// build is the provenance the admin and health surfaces report, with
 	// the start time New recorded.
 	build controllers.BuildInfo
@@ -1014,6 +1017,11 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	serverCfg := serverConfig(b.config, b.auth)
 	serverCfg.TLSCertificate = b.serverCertificate
 	serverCfg.Build = b.application.build
+	configuration, err := b.configurationOperations()
+	if err != nil {
+		return fmt.Errorf("open configuration operations: %w", err)
+	}
+	b.application.configurationOps = configuration
 	httpServer, err := b.factories.newServer(serverCfg, server.Dependencies{
 		Readiness:           b.application.admissionReady,
 		RecoveryAdmission:   b.application.recoveryAdmission,
@@ -1023,7 +1031,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		PermissionClock: b.application.authorization.clock,
 		ProviderKeys:    b.providerKeys,
 		RateLimits:      b.rateLimits, ProviderOperations: b.application, Console: b.console,
-		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
+		Usage: b.usageRecords, Catalog: b.application, Configuration: configuration, Presets: b.presets,
 		DiscoveryRegistry: b.application.registry,
 		Templates:         b.templates,
 		Files:             b.files,

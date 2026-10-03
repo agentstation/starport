@@ -42,6 +42,9 @@ func InitializeSharedConfiguration(ctx context.Context, cfg *config.Config, requ
 		result.Revision = configrevision.Revision{Head: head, OperationID: request.OperationID}
 		return result, nil
 	}
+	if err := refuseExternalManagement(cfg); err != nil {
+		return result, err
+	}
 	store, closeStore, err := openConfigurationForWrite(cfg)
 	if err != nil {
 		return result, err
@@ -67,6 +70,9 @@ func MigrateConfiguration(ctx context.Context, cfg *config.Config, target string
 	}
 	if request.Preview {
 		return result, errors.New("configuration migration has no preview")
+	}
+	if err := refuseExternalManagement(cfg); err != nil {
+		return result, err
 	}
 	request.OperationID = configurationOperationID(request.OperationID)
 	store, db, closeStore, err := openConfigurationStoreForWrite(cfg)
@@ -265,6 +271,15 @@ func openConfigurationStoreForWrite(cfg *config.Config) (*configrevision.Store, 
 		return nil, nil, nil, errors.Join(err, db.Close())
 	}
 	return store, db, db.Close, nil
+}
+
+// refuseExternalManagement refuses a configuration write when an external
+// controller owns the configuration. Reads continue.
+func refuseExternalManagement(cfg *config.Config) error {
+	if cfg.ManagementMode() == config.ManagementExternal {
+		return &config.Refusal{Reason: config.RefusalExternalManagement, Message: "an external controller manages this configuration. Change it through that controller"}
+	}
+	return nil
 }
 
 func requirePersistentConfiguration(cfg *config.Config) error {

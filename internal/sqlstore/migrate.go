@@ -27,6 +27,50 @@ func (db *DB) Migrate(ctx context.Context) error {
 	return db.migrate(ctx, migrations)
 }
 
+// CheckSchemaCurrent refuses a store that lacks an embedded migration or that
+// records a migration this binary does not know. It changes nothing, so a
+// write path can refuse instead of migrating.
+func (db *DB) CheckSchemaCurrent(ctx context.Context) error {
+	return db.checkSchemaCurrent(ctx, migrations)
+}
+
+func (db *DB) checkSchemaCurrent(ctx context.Context, fsys fs.FS) (err error) {
+	if db == nil || db.DB == nil {
+		return ErrClosed
+	}
+	names, err := migrationNames(fsys, db.dialect)
+	if err != nil {
+		return err
+	}
+	known := make(map[string]bool, len(names))
+	for _, name := range names {
+		known[name] = true
+	}
+	rows, err := db.QueryContext(ctx, "SELECT name FROM schema_migrations")
+	if err != nil {
+		return fmt.Errorf("%w: read schema history: %w", ErrSchemaBehind, err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	applied := 0
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		if !known[name] {
+			return fmt.Errorf("unsupported schema migration %q", name)
+		}
+		applied++
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if applied != len(names) {
+		return fmt.Errorf("%w: %d of %d migrations applied", ErrSchemaBehind, applied, len(names))
+	}
+	return nil
+}
+
 // migrate is Migrate over an explicit filesystem, so a test can prove the
 // runner's contract without shipping a test schema in the binary.
 func (db *DB) migrate(ctx context.Context, fsys fs.FS) (err error) {

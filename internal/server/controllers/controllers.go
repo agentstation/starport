@@ -44,6 +44,7 @@ type Controllers struct {
 	Members              *MembersController
 	ProviderOperations   *ProviderOperationsController
 	Catalog              *CatalogController
+	Configuration        *ConfigurationController
 	Discovery            *DiscoveryController
 	Files                *FilesController
 	Videos               *VideosController
@@ -68,6 +69,7 @@ type Config struct {
 	Usage               usage.Repository
 	ProviderOperations  ProviderOperations
 	Catalog             CatalogOperations
+	Configuration       ConfigurationOperations
 	DiscoveryRegistry   connectors.LeasingRegistry
 	DiscoveryViewer     DiscoveryViewerReader
 	Presets             presets.Repository
@@ -167,6 +169,7 @@ func NewControllers(cfg Config) *Controllers {
 		Members:            NewMembersController(cfg.Identity, cfg.Usage),
 		ProviderOperations: NewProviderOperationsController(cfg.ProviderOperations),
 		Catalog:            NewCatalogController(cfg.Catalog),
+		Configuration:      NewConfigurationController(cfg.Configuration),
 		Discovery:          NewDiscoveryController(cfg.DiscoveryRegistry, cfg.DiscoveryViewer),
 		Files:              NewFilesController(cfg.Files, cfg.FileUploadBound),
 		Videos:             NewVideosController(cfg.Service, cfg.Jobs),

@@ -50,6 +50,8 @@ type testServerConfig struct {
 	// catalogOperations answers the catalog read routes and the admin catalog
 	// surface. A test that reads them supplies its own.
 	catalogOperations controllers.CatalogOperations
+	// configurationOperations answers the configuration admin surface.
+	configurationOperations controllers.ConfigurationOperations
 }
 
 type testRegistryAdapter struct{ registry *registry.Registry }
@@ -106,6 +108,11 @@ func withRoutableCatalog() testServerOption {
 // needs both answers under its own control.
 func withTestCatalogOperations(operations controllers.CatalogOperations) testServerOption {
 	return func(config *testServerConfig) { config.catalogOperations = operations }
+}
+
+// withTestConfigurationOperations supplies the configuration admin surface.
+func withTestConfigurationOperations(operations controllers.ConfigurationOperations) testServerOption {
+	return func(config *testServerConfig) { config.configurationOperations = operations }
 }
 
 type staticTestProviderOperations struct{}
@@ -314,6 +321,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		ProviderKeys: providerKeys, RateLimits: rateLimits,
 		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
 		Catalog:           testConfig.catalogOperations,
+		Configuration:     testConfig.configurationOperations,
 		DiscoveryRegistry: reg,
 		Templates:         templates,
 		Files:             fileService, Jobs: jobService, Batches: batchService,
