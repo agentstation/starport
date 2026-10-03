@@ -22,6 +22,14 @@ files=(
   internal/config/README.md
 )
 
+# The documentation site tree is checked in full, so a new topic needs no
+# entry here.
+if [[ -d docs/site ]]; then
+  while IFS= read -r file; do
+    files+=("$file")
+  done < <(find docs/site -type f -name '*.md' | LC_ALL=C sort)
+fi
+
 if (($# > 0)); then
   files=("$@")
 fi
