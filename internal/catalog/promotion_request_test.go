@@ -107,6 +107,17 @@ func TestPromotionRequestOldBinaryLeaderRefuses(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, report.HeadRevision, head.Revision)
 	require.Equal(t, promotionOutcomeLifetime, fleet.requestLifetime(t, requests).Round(time.Minute))
+
+	// A refused outcome is not durable. The same operation ID records the request again for a new evaluation.
+	again, err := requests.Submit(ctx, PromotionRequest{OperationID: "upgrade-1", PackagedGenerationID: report.Packaged.GenerationID, Actor: "operator"})
+	require.NoError(t, err)
+	require.Equal(t, PromotionPending, again.Status)
+	require.Equal(t, PromotionRequestLifetime, fleet.requestLifetime(t, requests).Round(time.Minute))
+	require.NoError(t, leader.executePromotionRequest(ctx))
+	applied, found, err := requests.Read(ctx, "upgrade-1")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, PromotionApplied, applied.Status, applied.Receipt.Refusal)
 }
 
 func TestPromotionRequestRefusesAnotherPendingOperation(t *testing.T) {

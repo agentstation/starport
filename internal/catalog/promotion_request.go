@@ -80,7 +80,8 @@ func (s *FleetStore) readPromotionRequest(ctx context.Context) (PromotionRecord,
 
 // submitPromotion writes one pending request. A pending request with another
 // operation ID refuses the write. The same operation ID returns the current
-// record, so a repeated command continues the wait.
+// record, so a repeated command continues the wait. A refused outcome is not
+// durable, so the same operation ID replaces it and the leader evaluates the request again.
 func (s *FleetStore) submitPromotion(ctx context.Context, request PromotionRequest) (PromotionRecord, error) {
 	if err := ValidatePromotionOperationID(request.OperationID); err != nil {
 		return PromotionRecord{}, err
@@ -96,10 +97,11 @@ func (s *FleetStore) submitPromotion(ctx context.Context, request PromotionReque
 		return PromotionRecord{}, err
 	}
 	if previous != nil {
-		if current.OperationID == request.OperationID {
+		same := current.OperationID == request.OperationID
+		if same && current.Status != PromotionRefused {
 			return current, nil
 		}
-		if current.Status == PromotionPending {
+		if !same && current.Status == PromotionPending {
 			return PromotionRecord{}, fleetStoreConflict(fmt.Sprintf("promotion request %s is pending until %s. Wait for it with its operation ID, or retry after its lifetime ends",
 				current.OperationID, current.Expires.Format(time.RFC3339)))
 		}
