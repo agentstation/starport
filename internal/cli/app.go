@@ -98,6 +98,10 @@ type Dependencies struct {
 	Diagnose         Diagnoser
 	MigrateRuntime   RuntimeMigrator
 	InitializeFleet  FleetInitializer
+	// The catalog baseline commands. Each is optional: a command whose
+	// dependency is absent reports a runtime failure.
+	PromoteCatalogBaseline BaselinePromoter
+	CatalogBaselineStatus  BaselineStatusReader
 	// The configuration authority commands. Each is optional: a command
 	// whose dependency is absent reports a runtime failure.
 	InitializeSharedConfiguration SharedConfigurationInitializer
@@ -339,7 +343,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 	auth := newAuthCommand(deps, usageError)
 	ui := newUICommand(deps, usageError)
 
-	commands := []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand, newMigrationCommand(deps, usageError), newFleetCommand(deps, usageError), newBackupCommand(deps, usageError), newDocsCommand(deps, usageError)}
+	commands := []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand, newMigrationCommand(deps, usageError), newFleetCommand(deps, usageError), newCatalogCommand(deps, usageError), newBackupCommand(deps, usageError), newDocsCommand(deps, usageError)}
 	commands = append(commands, deps.ExtraCommands...)
 	commands = append(commands, version, man, help)
 	root := &urfavecli.Command{

@@ -15,6 +15,7 @@ import (
 
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/app"
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	starportcli "github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/console"
@@ -93,6 +94,12 @@ func runContext(
 		},
 		InspectPopulatedRecovery: func(ctx context.Context, cfg *config.Config, request starportcli.PopulatedRecoveryRequest) (recovery.ActivationResult, error) {
 			return app.InspectPopulatedRecovery(ctx, cfg, app.PopulatedRecoveryRequest(request))
+		},
+		PromoteCatalogBaseline: func(ctx context.Context, cfg *config.Config, request runtimecatalog.PromotionRequest) (runtimecatalog.PromotionReceipt, error) {
+			return app.PromoteCatalogBaseline(ctx, cfg, request)
+		},
+		CatalogBaselineStatus: func(ctx context.Context, cfg *config.Config) (runtimecatalog.BaselineReport, error) {
+			return app.CatalogBaselineStatus(ctx, cfg)
 		},
 	})
 	if err == nil {
