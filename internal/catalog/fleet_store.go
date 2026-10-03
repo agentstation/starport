@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
@@ -38,6 +39,8 @@ type FleetStore struct {
 	promotions chan struct{}
 	// observe refuses the publication lease, so the runtime only consumes the fleet head.
 	observe bool
+	// refusedWrites counts the shared writes that observe mode refused. See observeOnly.
+	refusedWrites atomic.Int64
 }
 
 // NewFleetStore requires an existing open recovery approval and a matching live backend.

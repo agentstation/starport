@@ -222,7 +222,13 @@ func (f *memoryFleet) settings(t *testing.T) Settings {
 // open starts one gateway process over a private state directory.
 func (f *memoryFleet) open(t *testing.T) *Runtime {
 	t.Helper()
-	opened, err := openRuntime(t.Context(), f.kv, f.settings(t), runtimeCollectors{fleet: f.session()})
+	return f.openWith(t, f.settings(t))
+}
+
+// openWith starts one gateway process over the given settings.
+func (f *memoryFleet) openWith(t *testing.T, settings Settings) *Runtime {
+	t.Helper()
+	opened, err := openRuntime(t.Context(), f.kv, settings, runtimeCollectors{fleet: f.session()})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = opened.Close(context.Background()) })
 	return opened
