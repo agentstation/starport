@@ -17,6 +17,7 @@ import (
 	"github.com/agentstation/starport/internal/app"
 	starportcli "github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/diagnosis"
 	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/setup"
@@ -62,6 +63,7 @@ func runContext(
 		Build: buildInformation(), RunServer: server,
 		StartDevelopment: development, Initialize: initializer,
 		ExtraCommands: processCommands(),
+		Docs:          console.DocsFS,
 		LoadConfig: func(loadCtx context.Context) (*config.Config, error) {
 			return config.LoadWithDefaults(loadCtx)
 		},

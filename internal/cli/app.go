@@ -116,6 +116,9 @@ type Dependencies struct {
 	PreparePopulatedRecovery      PopulatedRecoveryPreparer
 	ActivatePopulatedRecovery     PopulatedRecoveryActivator
 	InspectPopulatedRecovery      PopulatedRecoveryInspector
+	// Docs supplies the embedded documentation site for docs export. An
+	// absent source reports that the build has no documentation site.
+	Docs DocsSource
 	// Desktop provides browser and clipboard access. Dependency checks do not require these services.
 	// Commands print each link even when neither service is available.
 	Desktop Desktop
@@ -336,7 +339,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 	auth := newAuthCommand(deps, usageError)
 	ui := newUICommand(deps, usageError)
 
-	commands := []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand, newMigrationCommand(deps, usageError), newFleetCommand(deps, usageError), newBackupCommand(deps, usageError)}
+	commands := []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand, newMigrationCommand(deps, usageError), newFleetCommand(deps, usageError), newBackupCommand(deps, usageError), newDocsCommand(deps, usageError)}
 	commands = append(commands, deps.ExtraCommands...)
 	commands = append(commands, version, man, help)
 	root := &urfavecli.Command{
