@@ -39,6 +39,14 @@
   },
   "overrides": [
     {
+      // The static documentation site does not run Tailwind. Its classes
+      // come from src/docs/site.css, which reads the same role tokens.
+      "files": ["src/docs/**"],
+      "rules": {
+        "shadcn/no-unknown-classes": "off"
+      }
+    },
+    {
       "files": ["src/components/ui/**"],
       "rules": {
         "shadcn/no-restyle": "off",

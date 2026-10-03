@@ -5,7 +5,12 @@ RUN npm install -g pnpm@11.22.0
 COPY console/package.json console/pnpm-lock.yaml ./console/
 RUN pnpm -C console install --frozen-lockfile
 COPY console ./console
-RUN pnpm -C console build
+COPY go.mod ./
+COPY docs ./docs
+ARG VERSION=dev
+ARG COMMIT=unknown
+RUN if [ "$COMMIT" != unknown ]; then export STARPORT_DOCS_COMMIT="$COMMIT"; fi \
+    && STARPORT_DOCS_RELEASE="$VERSION" pnpm -C console build
 
 FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine@sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125 AS build
 
