@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import tokens from "@/styles/tokens.css?raw";
 import { buildTestSite, loadPage, parsePage, TEST_FACTS } from "@/test/docsSite";
 
-import { initDocs, restoreFragment } from "./client/behavior";
+import { initDocs, initTableOfContents, restoreFragment, trackHeaderHeight } from "./client/behavior";
 import sheet from "./site.css?raw";
 
 // CSP18 accessibility. The specification section 10.3 sets the targets.
@@ -427,4 +427,92 @@ test("a link to a heading fragment resolves on every page, and the client brings
   window.dispatchEvent(new Event("load"));
   expect(scrolled.mock.contexts).toEqual([document.getElementById("steps")]);
   expect(fetch).not.toHaveBeenCalled();
+});
+
+test("the header search form and its input can shrink below their content width, so the header fits a 320 px viewport", () => {
+  // A flex item keeps its content width unless it sets min-width: 0. The
+  // input alone cannot shrink when the form around it does not.
+  expect(declared(".site-search", "min-width")).toBe("0");
+  expect(declared(".site-search input", "min-width")).toBe("0");
+  expect(px(declared(".site-search", "flex")?.split(" ")[2])).toBeLessThanOrEqual(320 - 2 * 16);
+  expect(declared(".site-header", "flex-wrap")).toBe("wrap");
+  for (const page of pages.values()) {
+    const form = page.querySelector("header form.site-search");
+    expect(form?.querySelector("input")).not.toBeNull();
+    expect(form?.querySelector("button")).not.toBeNull();
+    expect(form?.getAttribute("style")).toBeNull();
+  }
+});
+
+test("the scroll padding and the sticky columns follow the measured height of the sticky header", () => {
+  // The stylesheet reads one offset. Its fallback is one header row.
+  const below = "calc(var(--docs-header-offset) + 1rem)";
+  expect(declared(":root", "--docs-header-offset")).toBe("var(--docs-header)");
+  expect(declared("html", "scroll-padding-top", "(min-width: 64rem)")).toBe(below);
+  expect(declared(".site-nav", "top", "(min-width: 64rem)")).toBe(below);
+  expect(declared(".toc", "top", "(min-width: 80rem)")).toBe(below);
+  for (const rule of RULES) {
+    for (const [property, value] of rule.declarations) {
+      if (!value.includes("var(--docs-header)")) continue;
+      const where = `${rule.selectors.join(", ")} ${property}`;
+      expect([":root --docs-header-offset", ".site-header min-height"], where).toContain(where);
+    }
+  }
+
+  // The client writes the measured height while the header is sticky, and
+  // it follows each resize.
+  loadPage(site.pages.find((page) => page.path === "troubleshoot/recovery/index.html")?.html ?? "");
+  const observed: Array<() => void> = [];
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: () => void) {
+        observed.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const header = document.querySelector<HTMLElement>(".site-header");
+  if (!header) throw new Error("no header");
+  const height = vi.spyOn(header, "getBoundingClientRect").mockReturnValue({ height: 108.4 } as DOMRect);
+  header.style.position = "sticky";
+  const offset = () => document.documentElement.style.getPropertyValue("--docs-header-offset");
+  trackHeaderHeight(document, window);
+  expect(offset()).toBe("109px");
+  height.mockReturnValue({ height: 56 } as DOMRect);
+  for (const callback of observed) callback();
+  expect(offset()).toBe("56px");
+
+  // The header can grow before the observer reports it. The fragment
+  // restore measures it again before it scrolls.
+  height.mockReturnValue({ height: 114 } as DOMRect);
+  history.replaceState(null, "", "/docs/troubleshoot/recovery/#steps");
+  let offsetAtScroll = "";
+  vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {
+    offsetAtScroll = offset();
+  });
+  restoreFragment(document, window);
+  expect(offsetAtScroll).toBe("114px");
+  history.replaceState(null, "", "/docs/troubleshoot/recovery/");
+
+  // A heading that a fragment brings to 16 px under a two-row header counts
+  // as reached, so the table of contents marks it.
+  height.mockReturnValue({ height: 109 } as DOMRect);
+  const entries = Array.from(document.querySelectorAll<HTMLAnchorElement>("[data-toc] a"));
+  const second = document.getElementById(decodeURIComponent(entries[1]?.hash.slice(1) ?? ""));
+  for (const link of entries) {
+    const target = document.getElementById(decodeURIComponent(link.hash.slice(1)));
+    if (!target) continue;
+    const top = target === second ? 109 + 16 : link === entries[0] ? -100 : 500;
+    vi.spyOn(target, "getBoundingClientRect").mockReturnValue({ top } as DOMRect);
+  }
+  initTableOfContents(document, window);
+  expect(document.querySelector('[data-toc] a[aria-current="location"]')).toBe(entries[1]);
+
+  // The header scrolls with the page at narrow widths, so no offset applies.
+  header.style.position = "static";
+  for (const callback of observed) callback();
+  expect(offset()).toBe("");
+  document.documentElement.removeAttribute("style");
 });
