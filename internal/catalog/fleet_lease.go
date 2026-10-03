@@ -32,6 +32,10 @@ func (s *FleetStore) AcquireLease(ctx context.Context, holder string, ttl time.D
 	if strings.TrimSpace(holder) == "" || len(holder) > 1024 || ttl <= 0 {
 		return runtime.Lease{}, errors.New("fleet lease requires a bounded holder and positive lifetime")
 	}
+	// The runtime treats this conflict as another owner and consumes the fleet head.
+	if s.observe {
+		return runtime.Lease{}, fleetStoreConflict("this process observes the fleet and never takes the catalog refresh lease")
+	}
 	if err := s.checkApproval(ctx); err != nil {
 		return runtime.Lease{}, err
 	}

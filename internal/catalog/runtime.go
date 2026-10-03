@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -57,6 +58,9 @@ type Runtime struct {
 	cancel   context.CancelFunc
 	watch    chan struct{}
 	lastSeen catalogStateIdentity
+
+	// temporary is the private directory of a baseline observer. Close removes it.
+	temporary string
 }
 
 // catalogStateIdentity is the pair that decides whether a candidate is new.
@@ -97,6 +101,12 @@ func openRuntimeWithRecovery(ctx context.Context, store storage.KVStore, db *sql
 	if err != nil {
 		return nil, err
 	}
+	return openRuntimeWithFleet(ctx, store, fleet, settings, lookup)
+}
+
+// openRuntimeWithFleet composes the connected runtime and its collectors over one fleet store.
+// A nil fleet selects the single-process runtime.
+func openRuntimeWithFleet(ctx context.Context, store storage.KVStore, fleet *FleetStore, settings Settings, lookup DeploymentLookup) (*Runtime, error) {
 	fleet.fencePolicy(settings.AppliedPolicyChecksum)
 	if _, err := settings.starmapOptions(); err != nil {
 		return nil, fmt.Errorf("configure Starmap runtime: %w", err)
@@ -432,6 +442,11 @@ func (r *Runtime) Close(ctx context.Context) error {
 	if r.cascade != nil {
 		if cascadeErr := r.cascade.Close(); err == nil {
 			err = cascadeErr
+		}
+	}
+	if r.temporary != "" {
+		if removeErr := os.RemoveAll(r.temporary); err == nil {
+			err = removeErr
 		}
 	}
 	return err

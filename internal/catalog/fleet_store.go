@@ -36,6 +36,8 @@ type FleetStore struct {
 	policy   fleetPolicy
 	// promotions wakes the leader executor when lease renewal reads a pending request.
 	promotions chan struct{}
+	// observe refuses the publication lease, so the runtime only consumes the fleet head.
+	observe bool
 }
 
 // NewFleetStore requires an existing open recovery approval and a matching live backend.

@@ -108,6 +108,11 @@ func (r *Runtime) BaselineReport() (BaselineReport, error) {
 	if !ok {
 		return BaselineReport{}, ErrBaselinePromotionFleetOnly
 	}
+	// A replica that cannot replay the fleet inputs keeps its packaged baseline.
+	// The report refuses instead of naming a baseline that the fleet does not retain.
+	if fleet, ok := r.runtime.FleetStatus(); ok && !fleet.ReplayReady {
+		return BaselineReport{}, fleetStoreConflict("this process cannot replay the accepted fleet inputs, so the retained baseline is unknown. Run the command with the catalog configuration of the fleet")
+	}
 	return BaselineReport{
 		DeploymentID: r.fleet.identity.DeploymentID,
 		Packaged:     baselineIdentity(status.Packaged),
