@@ -193,7 +193,8 @@ func newMemoryFleet() *memoryFleet {
 }
 
 func (f *memoryFleet) session() *FleetStore {
-	return newFleetStore(f.store, f.witness, f.witness.record, f.witness.record.DeploymentID)
+	record := f.witness.record
+	return newFleetStore(f.store, f.witness, record, runtime.FleetIdentity{DeploymentID: record.DeploymentID, RecoveryEpoch: uint64(record.Epoch), BackendID: record.BackendID})
 }
 
 func (f *memoryFleet) settings(t *testing.T) Settings {

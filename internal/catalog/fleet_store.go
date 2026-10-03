@@ -49,19 +49,19 @@ func NewFleetStore(ctx context.Context, store storage.IncarnationProvider, witne
 	if approved.Epoch <= 0 {
 		return nil, errors.New("catalog recovery epoch must be positive")
 	}
+	identity := runtime.FleetIdentity{DeploymentID: deployment, RecoveryEpoch: uint64(approved.Epoch), BackendID: approved.BackendID}
 	bound, err := store.BindIncarnation(ctx, approved.BackendID)
 	if err != nil {
 		return nil, err
 	}
-	return newFleetStore(bound, witness, approved, deployment), nil
+	return newFleetStore(bound, witness, approved, identity), nil
 }
 
 // newFleetStore binds one process session to an approved backend incarnation.
-func newFleetStore(bound storage.IncarnationStore, witness fleetRecoveryWitness, approved recovery.Record, deployment string) *FleetStore {
+func newFleetStore(bound storage.IncarnationStore, witness fleetRecoveryWitness, approved recovery.Record, identity runtime.FleetIdentity) *FleetStore {
 	return &FleetStore{
-		store: bound, witness: witness, approval: approved, session: rand.Text(),
-		identity: runtime.FleetIdentity{DeploymentID: deployment, RecoveryEpoch: uint64(approved.Epoch), BackendID: approved.BackendID},
-		prefix:   "catalog:fleet:{" + payloadDigest([]byte(deployment)) + "}:v1:",
+		store: bound, witness: witness, approval: approved, session: rand.Text(), identity: identity,
+		prefix: "catalog:fleet:{" + payloadDigest([]byte(identity.DeploymentID)) + "}:v1:",
 	}
 }
 
