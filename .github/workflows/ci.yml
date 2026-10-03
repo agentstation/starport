@@ -103,8 +103,10 @@ jobs:
             coverage=(-coverprofile=native-catalog/catalog.coverage.txt -covermode=atomic)
           fi
           # The complete catalog package exceeds Go's default ten-minute
-          # package allowance. Individual contract deadlines remain unchanged.
-          go test -json -count=1 -timeout 30m ${{ matrix.race }} "${coverage[@]}" ./internal/catalog | tee -a native-catalog/tests.jsonl
+          # package allowance. The memory-fleet promotion and observer tests
+          # open the full embedded catalog under the race detector and grew it
+          # past thirty minutes. Individual contract deadlines remain unchanged.
+          go test -json -count=1 -timeout 45m ${{ matrix.race }} "${coverage[@]}" ./internal/catalog | tee -a native-catalog/tests.jsonl
           coverage=()
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             coverage=(-coverprofile=native-catalog/app.coverage.txt -covermode=atomic)
