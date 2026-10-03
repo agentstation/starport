@@ -133,6 +133,14 @@ export const queries = {
   // The generation sits in the status key beside the session, so an activation
   // the summary reports draws exactly one new status request. The cadence
   // itself belongs to the panel, which knows whether a reader is looking.
+  // catalogRefresh follows one run at the operation cadence until it closes.
+  catalogRefresh: (runID: string) =>
+    queryOptions({
+      queryKey: ["catalog-refresh", runID],
+      queryFn: ({ signal }) => api.catalogRefresh(runID, { signal }),
+      refetchInterval: (query) =>
+        query.state.data?.state === "accepted" || query.state.data?.state === "running" ? OPERATION_INTERVAL : false,
+    }),
   catalogStatus: (session: string, generation: string) =>
     queryOptions({
       queryKey: ["catalog-status", session, generation],

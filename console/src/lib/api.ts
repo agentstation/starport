@@ -526,6 +526,9 @@ export type CatalogOperation = {
   changed?: boolean;
   // joined reports that a refresh request joined the run already in flight.
   joined?: boolean;
+  // permission_at_completion is the catalog admission when the run closed. It
+  // reports catalog permission only, not credential or budget eligibility.
+  permission_at_completion?: { new_attempts_allowed?: boolean; admitted_streams_may_finish?: boolean };
 };
 
 // CatalogAdminStatus is the operator view from GET
@@ -1033,6 +1036,12 @@ export function startCatalogRefresh(): Promise<CatalogOperation> {
   return request<CatalogOperation>("/api/v1/admin/catalog/refresh", {
     method: "POST",
   });
+}
+
+// catalogRefresh reads one run. A run that the registry no longer keeps
+// answers 404.
+export function catalogRefresh(runID: string, { signal }: ReadOptions = {}): Promise<CatalogOperation> {
+  return request<CatalogOperation>(`/api/v1/admin/catalog/refreshes/${encodeURIComponent(runID)}`, { signal });
 }
 
 // cancelCatalogRefresh ends one open run. A run that already closed answers

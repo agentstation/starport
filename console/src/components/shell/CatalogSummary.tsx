@@ -168,13 +168,14 @@ export function useCatalogAdminStatus(read: CatalogSummaryRead, open: boolean): 
 }
 
 // useCatalogRefresh accepts one refresh run and ends one open run. Both
-// actions read the operator status again as soon as the gateway answers, so
-// the panel states the new run without a wait for the next poll.
+// actions read the operator status and the run again as soon as the gateway
+// answers, so the panel states the new run without a wait for the next poll.
 export function useCatalogRefresh() {
   const client = useQueryClient();
   const reread = () => {
     void client.invalidateQueries({ queryKey: ["catalog-status"] });
     void client.invalidateQueries({ queryKey: ["catalog-summary"] });
+    void client.invalidateQueries({ queryKey: ["catalog-refresh"] });
   };
   const start = useMutation({ mutationFn: () => startCatalogRefresh(), onSettled: reread });
   const cancel = useMutation({
