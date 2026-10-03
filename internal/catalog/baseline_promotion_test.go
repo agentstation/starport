@@ -32,6 +32,8 @@ type memoryIncarnationStore struct {
 	mu      sync.Mutex
 	values  map[string][]byte
 	expires map[string]time.Time
+	// lossTrigger and lossLease arm one lease loss. See loseLeaseBefore.
+	lossTrigger, lossLease string
 }
 
 func newMemoryIncarnationStore() *memoryIncarnationStore {
@@ -101,6 +103,11 @@ func (s *memoryIncarnationStore) CompareAndSwap(ctx context.Context, mutations [
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
+	if s.lossTrigger != "" && seen[s.lossTrigger] {
+		delete(s.values, s.lossLease)
+		delete(s.expires, s.lossLease)
+		s.lossTrigger, s.lossLease = "", ""
+	}
 	for _, m := range mutations {
 		current, ok := s.currentLocked(m.Key, now)
 		if m.ExpectedValue == nil {
@@ -136,6 +143,14 @@ func (s *memoryIncarnationStore) expire(key string) {
 	if _, ok := s.values[key]; ok {
 		s.expires[key] = time.Now()
 	}
+}
+
+// loseLeaseBefore ends the lease once, just before the next swap that writes the trigger key.
+// It stands for a leader that loses the lease while its write is in flight.
+func (s *memoryIncarnationStore) loseLeaseBefore(trigger, lease string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lossTrigger, s.lossLease = trigger, lease
 }
 
 // memoryFleetWitness approves one backend and grants first use once.

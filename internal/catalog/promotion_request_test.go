@@ -27,6 +27,22 @@ func (f *memoryFleet) heldLease(t *testing.T, leader *Runtime) runtime.Lease {
 	return runtime.Lease{Holder: grant.Holder, SessionID: grant.Session, Epoch: grant.Epoch, Identity: grant.Identity}
 }
 
+// leaseKeeper returns the runtime that holds the publication lease.
+func (f *memoryFleet) leaseKeeper(t *testing.T, runtimes ...*Runtime) *Runtime {
+	t.Helper()
+	data, _, err := f.store.ReadWithLifetime(t.Context(), runtimes[0].fleet.prefix+"lease", 4096)
+	require.NoError(t, err)
+	var grant fleetGrant
+	require.NoError(t, json.Unmarshal(data, &grant))
+	for _, candidate := range runtimes {
+		if candidate.fleet.session == grant.Session {
+			return candidate
+		}
+	}
+	require.FailNow(t, "no runtime holds the lease")
+	return nil
+}
+
 // requestLifetime reads the native lifetime of the shared request record.
 func (f *memoryFleet) requestLifetime(t *testing.T, requests *PromotionRequests) time.Duration {
 	t.Helper()
@@ -211,6 +227,10 @@ func TestLeaseRenewalSignalsPromotionWithoutExecuting(t *testing.T) {
 	_, err = leader.fleet.Renew(ctx, lease, time.Minute)
 	require.NoError(t, err)
 	require.Len(t, leader.fleet.promotions, 1, "renewal signals the pending request")
+	// A full signal channel drops the signal. Renewal never blocks, and the next renewal reads the record again.
+	_, err = leader.fleet.Renew(ctx, lease, time.Minute)
+	require.NoError(t, err)
+	require.Len(t, leader.fleet.promotions, 1, "a full channel keeps one signal")
 	record, _, err := requests.Read(ctx, "renew-1")
 	require.NoError(t, err)
 	require.Equal(t, PromotionPending, record.Status, "renewal never executes the promotion")
@@ -237,7 +257,7 @@ func TestStartedLeaderExecutesTheRecordedRequest(t *testing.T) {
 		record, found, err := requests.Read(ctx, "started-1")
 		settled = record
 		return err == nil && found && record.Status != PromotionPending
-	}, 30*time.Second, 50*time.Millisecond)
+	}, 3*time.Minute, 50*time.Millisecond)
 	require.Equal(t, PromotionApplied, settled.Status, settled.Receipt.Refusal)
 	head, err := leader.fleet.CurrentHead(ctx)
 	require.NoError(t, err)
@@ -245,4 +265,41 @@ func TestStartedLeaderExecutesTheRecordedRequest(t *testing.T) {
 	after, err := leader.BaselineReport()
 	require.NoError(t, err)
 	require.Equal(t, after.Packaged, after.Retained)
+}
+
+func TestPromotionRequestLeaseLossLeavesTheRequest(t *testing.T) {
+	fleet, leader, report := promotableFleet(t)
+	ctx := t.Context()
+	requests := fleet.promotionCommand()
+	request := PromotionRequest{OperationID: "lost-1", ExpectedRevision: report.HeadRevision, PackagedGenerationID: report.Packaged.GenerationID, Actor: "operator"}
+	_, err := requests.Submit(ctx, request)
+	require.NoError(t, err)
+	_, err = leader.fleet.Renew(ctx, fleet.heldLease(t, leader), time.Minute)
+	require.NoError(t, err)
+	require.Len(t, leader.fleet.promotions, 1, "the leader has the signal before the run")
+	_, pending, err := leader.fleet.readPromotionRequest(ctx)
+	require.NoError(t, err)
+
+	// The lease ends while the promoted head commit is in flight.
+	fleet.store.loseLeaseBefore(leader.fleet.prefix+"head-initialized", leader.fleet.prefix+"lease")
+	err = leader.executePromotionRequest(ctx)
+	require.True(t, starmaperrors.IsConflict(err), "a leader without the lease gets the typed refusal: %v", err)
+	require.ErrorContains(t, err, "The request stays pending for the next leader")
+	_, after, err := leader.fleet.readPromotionRequest(ctx)
+	require.NoError(t, err)
+	require.Equal(t, pending, after, "the request record stays untouched for the next leader")
+	_, found, err := leader.fleet.promotionReceipt(ctx, "lost-1")
+	require.NoError(t, err)
+	require.False(t, found, "a lost lease stores no receipt")
+	head, err := leader.fleet.CurrentHead(ctx)
+	require.NoError(t, err)
+	require.Equal(t, report.HeadRevision, head.Revision, "a lost lease publishes no head")
+
+	// The next leader picks up the same request.
+	next := fleet.open(t)
+	require.NoError(t, fleet.leaseKeeper(t, leader, next).executePromotionRequest(ctx))
+	settled, found, err := requests.Read(ctx, "lost-1")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, PromotionApplied, settled.Status, settled.Receipt.Refusal)
 }

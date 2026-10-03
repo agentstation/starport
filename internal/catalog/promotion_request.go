@@ -127,16 +127,36 @@ func (s *FleetStore) submitPromotion(ctx context.Context, request PromotionReque
 	return record, nil
 }
 
-// settlePromotion replaces the pending request with its outcome. The outcome
-// of a fresh applied promotion is written by recordPromotion instead.
+// settlePromotion replaces the pending request with its outcome under the live
+// grant of this process. A process that lost the lease leaves the request pending
+// for the next leader. The outcome of a fresh applied promotion is written by
+// recordPromotion instead.
 func (s *FleetStore) settlePromotion(ctx context.Context, pending []byte, record PromotionRecord, receipt PromotionReceipt) error {
 	mutation, err := promotionOutcome(s.promotionRequestKey(), pending, record, receipt)
 	if err != nil {
 		return err
 	}
-	err = s.store.CompareAndSwap(ctx, []storage.CompareAndSwapMutation{mutation})
+	lost := fleetStoreConflict("this process lost the publication lease before the outcome. The request stays pending for the next leader")
+	grant, _, err := s.store.ReadWithLifetime(ctx, s.prefix+"lease", 4096)
+	if errors.Is(err, storage.ErrNotFound) {
+		return lost
+	}
+	if err != nil {
+		return err
+	}
+	var held fleetGrant
+	if err := json.Unmarshal(grant, &held); err != nil {
+		return err
+	}
+	if held.Session != s.session {
+		return lost
+	}
+	err = s.store.CompareAndSwap(ctx, []storage.CompareAndSwapMutation{
+		{Key: s.prefix + "lease", ExpectedValue: grant, NewValue: grant},
+		mutation,
+	}, s.prefix+"lease")
 	if errors.Is(err, storage.ErrConflict) {
-		return fleetStoreConflict("the promotion request changed before its outcome")
+		return fleetStoreConflict("the publication lease ended or the promotion request changed before its outcome")
 	}
 	return err
 }
@@ -184,7 +204,8 @@ func (r *Runtime) executePromotions(ctx context.Context) {
 
 // executePromotionRequest runs the pending request under the publication lease of this replica.
 // A follower, or a replica without the lease, leaves the request for the leader.
-// The outcome replaces the request.
+// The outcome replaces the request under the live grant. A replica that loses the
+// lease during the run gets a conflict and leaves the request for the next leader.
 func (r *Runtime) executePromotionRequest(ctx context.Context) error {
 	if r == nil || r.runtime == nil || r.fleet == nil {
 		return ErrBaselinePromotionFleetOnly
