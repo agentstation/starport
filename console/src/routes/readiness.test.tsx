@@ -43,9 +43,9 @@ const STATUS = {
   ],
 };
 
-function gateway(status: object = STATUS) {
+function gateway(status: object = STATUS, models: object = MODELS) {
   stubGateway({
-    "/api/v1/models": MODELS,
+    "/api/v1/models": models,
     "/api/v1/admin/providers": status,
     "/api/v1/presets": { data: [] },
     "/api/v1/providers": { providers: [] },
@@ -87,6 +87,15 @@ test("chat says readiness is not known when the key cannot read credentials", as
   const note = await screen.findByTestId("chat-readiness");
   await waitFor(() => expect(note.getAttribute("data-state")).toBe("unknown"));
   expect(note.textContent).toMatch(/readiness is not known/);
+});
+
+test("chat says it cannot send when the gateway serves no catalog models", async () => {
+  gateway(STATUS, { data: [] });
+  openConsole("/chat");
+
+  const note = await screen.findByTestId("chat-readiness");
+  await waitFor(() => expect(note.getAttribute("data-state")).toBe("unavailable"));
+  expect(note.textContent).toMatch(/serves no catalog models yet, so chat cannot send/);
 });
 
 test("compare states readiness for each model", async () => {

@@ -1358,7 +1358,8 @@ click. After the click it reads the run at
 `GET /api/v1/admin/catalog/refreshes/{run_id}` until the run closes, and it
 shows the run state: Queued, Running, Done, Failed, or Canceled. The panel does
 not pin a generation. It points to the generation pin in Settings,
-Configuration.
+Configuration. The console shows no removal targets. Starmap owns removal and
+rename behavior.
 
 The discovery route uses one accepted generation and the current key and account policy.
 Missing provider credentials do not remove permitted entries.
