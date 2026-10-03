@@ -1,0 +1,88 @@
+# Docs Pages publishes the versioned documentation site to GitHub Pages.
+#
+# This workflow is prepared and not enabled. Pages stays off for the
+# repository, and no event starts this workflow. A maintainer starts it by
+# hand.
+#
+# Before the first run, a maintainer creates the github-pages environment
+# with required reviewers. Each run then waits for a reviewer.
+#
+# The site serves each release at /<tag>/ and the latest input at /latest/.
+# A deployment replaces the whole site, so each run reassembles every
+# release from its docs archive. Rollback is a re-run with an earlier
+# release tag as latest.
+#
+# A failed run leaves the last deployment in place. The deploy step runs
+# only after the assembly and the artifact upload succeed.
+name: Docs Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to deploy, for example v1.3.0"
+        required: true
+        type: string
+      latest:
+        description: "Release tag that /latest/ serves (empty: the tag above)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy documentation site
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Validate release tags
+        env:
+          TAG: ${{ inputs.tag }}
+          LATEST: ${{ inputs.latest || inputs.tag }}
+        run: |
+          pattern='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'
+          for value in "$TAG" "$LATEST"; do
+            if [[ ! "$value" =~ $pattern ]]; then
+              printf 'not a release tag: %s\n' "$value" >&2
+              exit 1
+            fi
+          done
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Assemble site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          LATEST: ${{ inputs.latest || inputs.tag }}
+        run: bash scripts/assemble-docs-pages.sh "$TAG" "$LATEST" _site
+
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+          include-hidden-files: true
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
