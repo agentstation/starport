@@ -1,0 +1,1807 @@
+{
+  "generator": "scripts/docsgen",
+  "schema": [
+    {
+      "id": "catalog.source",
+      "key": "catalog_source",
+      "environment": "STARPORT_CATALOG_SOURCE",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "public",
+      "allowed_values": [
+        "public",
+        "github",
+        "starmap",
+        "file",
+        "embedded"
+      ],
+      "description": "Selects the upstream catalog source."
+    },
+    {
+      "id": "catalog.source.url",
+      "key": "catalog_source_url",
+      "environment": "STARPORT_CATALOG_SOURCE_URL",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "starmap",
+        "file"
+      ],
+      "origin": "starmap",
+      "default_meaning": "required for a custom URL or file source",
+      "description": "Names the Starmap endpoint or catalog file."
+    },
+    {
+      "id": "catalog.source.api.key",
+      "key": "catalog_source_api_key",
+      "environment": "STARPORT_CATALOG_SOURCE_API_KEY",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": true,
+      "applicability": [
+        "starmap"
+      ],
+      "origin": "starmap",
+      "default_meaning": "no transport credential",
+      "description": "Authenticates transport to the selected catalog source. It is separate from provider credentials."
+    },
+    {
+      "id": "catalog.source.repository",
+      "key": "catalog_source_repository",
+      "environment": "STARPORT_CATALOG_SOURCE_REPOSITORY",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "public",
+        "github"
+      ],
+      "origin": "starmap",
+      "default": "agentstation/starmap",
+      "description": "Names the GitHub repository that publishes the catalog channel."
+    },
+    {
+      "id": "catalog.source.channel",
+      "key": "catalog_source_channel",
+      "environment": "STARPORT_CATALOG_SOURCE_CHANNEL",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "public",
+        "github"
+      ],
+      "origin": "starmap",
+      "default": "catalog/v2",
+      "description": "Names the branch that holds the catalog channel document."
+    },
+    {
+      "id": "catalog.source.signer.workflow",
+      "key": "catalog_source_signer_workflow",
+      "environment": "STARPORT_CATALOG_SOURCE_SIGNER_WORKFLOW",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "public",
+        "github"
+      ],
+      "origin": "starmap",
+      "default_meaning": "source adapter's default signing workflow",
+      "description": "Pins the accepted build provenance workflow."
+    },
+    {
+      "id": "catalog.source.token",
+      "key": "catalog_source_token",
+      "environment": "STARPORT_CATALOG_SOURCE_TOKEN",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": true,
+      "applicability": [
+        "public",
+        "github"
+      ],
+      "origin": "starmap",
+      "default_meaning": "no transport credential",
+      "description": "Authenticates transport to the selected catalog source. It is separate from provider credentials."
+    },
+    {
+      "id": "catalog.source.refresh.mode",
+      "key": "catalog_source_refresh_mode",
+      "environment": "STARPORT_CATALOG_SOURCE_REFRESH_MODE",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "automatic",
+      "allowed_values": [
+        "automatic",
+        "manual"
+      ],
+      "description": "Selects automatic source refresh or explicit manual reads. Manual mode suppresses startup reads, polling, and source watchers."
+    },
+    {
+      "id": "catalog.generation.pin",
+      "key": "catalog_generation_pin",
+      "environment": "STARPORT_CATALOG_GENERATION_PIN",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default_meaning": "no generation pin",
+      "description": "Selects a retained generation and blocks catalog changes. Permission observation continues. An empty value clears the pin."
+    },
+    {
+      "id": "catalog.network.mode",
+      "key": "catalog_network_mode",
+      "environment": "STARPORT_CATALOG_NETWORK_MODE",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "configured",
+      "allowed_values": [
+        "configured",
+        "offline"
+      ],
+      "description": "Controls catalog network acquisition. Offline mode preserves local imports and does not change inference or selected storage access."
+    },
+    {
+      "id": "catalog.source.poll.interval",
+      "key": "catalog_source_poll_interval",
+      "environment": "STARPORT_CATALOG_SOURCE_POLL_INTERVAL",
+      "type": "duration",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "1h0m0s",
+      "unit": "duration",
+      "description": "Sets the period between automatic catalog checks. Zero disables periodic catalog checks."
+    },
+    {
+      "id": "catalog.source.startup.policy",
+      "key": "catalog_source_startup_policy",
+      "environment": "STARPORT_CATALOG_SOURCE_STARTUP_POLICY",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "prefer_source",
+      "allowed_values": [
+        "prefer_source",
+        "require_source",
+        "require_authority",
+        "prefer_local"
+      ],
+      "description": "Selects catalog availability before the first upstream reply."
+    },
+    {
+      "id": "catalog.source.authority.id",
+      "key": "catalog_source_authority_id",
+      "environment": "STARPORT_CATALOG_SOURCE_AUTHORITY_ID",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "restart",
+      "sensitive": false,
+      "applicability": [
+        "starmap"
+      ],
+      "origin": "starmap",
+      "default_meaning": "no internal authority selected",
+      "description": "Pins an internal authority or permission policy. The require_authority policy needs both identities."
+    },
+    {
+      "id": "catalog.source.policy.id",
+      "key": "catalog_source_policy_id",
+      "environment": "STARPORT_CATALOG_SOURCE_POLICY_ID",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "restart",
+      "sensitive": false,
+      "applicability": [
+        "starmap"
+      ],
+      "origin": "starmap",
+      "default_meaning": "no internal authority selected",
+      "description": "Pins an internal authority or permission policy. The require_authority policy needs both identities."
+    },
+    {
+      "id": "catalog.source.max.age",
+      "key": "catalog_source_max_age",
+      "environment": "STARPORT_CATALOG_SOURCE_MAX_AGE",
+      "type": "duration",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "6h0m0s",
+      "unit": "duration",
+      "description": "Sets the source freshness warning threshold. Zero keeps the default channel freshness thresholds."
+    },
+    {
+      "id": "catalog.source.max.hops",
+      "key": "catalog_source_max_hops",
+      "environment": "STARPORT_CATALOG_SOURCE_MAX_HOPS",
+      "type": "integer",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "8",
+      "unit": "hops",
+      "description": "Limits the accepted source chain length."
+    },
+    {
+      "id": "catalog.source.aliases",
+      "key": "catalog_source_aliases",
+      "environment": "STARPORT_CATALOG_SOURCE_ALIASES",
+      "type": "string-list",
+      "scope": "node",
+      "mutability": "restart",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "description": "Names other identities of this runtime for source cycle detection."
+    },
+    {
+      "id": "catalog.acquisition.enabled",
+      "key": "catalog_acquisition_enabled",
+      "environment": "STARPORT_CATALOG_ACQUISITION_ENABLED",
+      "type": "boolean",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "true",
+      "description": "Enables automatic acquisition from configured provider and metadata sources."
+    },
+    {
+      "id": "catalog.acquisition.sources",
+      "key": "catalog_acquisition_sources",
+      "environment": "STARPORT_CATALOG_ACQUISITION_SOURCES",
+      "type": "string-list",
+      "scope": "deployment",
+      "mutability": "restart",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default_meaning": "omission keeps host acquisition defaults and existing retained source evidence",
+      "allowed_values": [
+        "providers",
+        "local_catalog",
+        "models_dev_http",
+        "models_dev_git"
+      ],
+      "description": "Selects permitted local acquisition inputs. An empty list excludes every acquisition source."
+    },
+    {
+      "id": "catalog.models.dev.git.commit",
+      "key": "catalog_models_dev_git_commit",
+      "environment": "STARPORT_CATALOG_MODELS_DEV_GIT_COMMIT",
+      "type": "string",
+      "scope": "deployment",
+      "mutability": "restart",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default_meaning": "omission keeps the collector pin. Git acquisition requires an exact commit",
+      "description": "Pins models.dev Git acquisition to one exact hexadecimal commit. An empty value clears the pin."
+    },
+    {
+      "id": "catalog.acquisition.interval",
+      "key": "catalog_acquisition_interval",
+      "environment": "STARPORT_CATALOG_ACQUISITION_INTERVAL",
+      "type": "duration",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "4h0m0s",
+      "unit": "duration",
+      "description": "Sets the acquisition period. Zero permits one startup pass when automatic acquisition is on."
+    },
+    {
+      "id": "catalog.provider.bindings",
+      "key": "catalog_provider_bindings",
+      "environment": "STARPORT_CATALOG_PROVIDER_BINDINGS",
+      "type": "provider-bindings",
+      "scope": "deployment",
+      "mutability": "restart",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default_meaning": "omission retains legacy unscoped acquisition; an explicit array selects only its declared bindings",
+      "description": "Selects the complete active provider binding set. An empty array permits no local provider acquisition."
+    },
+    {
+      "id": "catalog.coalesce.window",
+      "key": "catalog_coalesce_window",
+      "environment": "STARPORT_CATALOG_COALESCE_WINDOW",
+      "type": "duration",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "30s",
+      "unit": "duration",
+      "description": "Bounds the wait before completed provider observations publish."
+    },
+    {
+      "id": "catalog.workspace.path",
+      "key": "catalog_workspace_path",
+      "environment": "STARPORT_CATALOG_WORKSPACE_PATH",
+      "type": "string",
+      "scope": "node",
+      "mutability": "restart",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default_meaning": "hosting application's workspace",
+      "description": "Names the reviewed operator catalog input."
+    },
+    {
+      "id": "catalog.startup.spread",
+      "key": "catalog_startup_spread",
+      "environment": "STARPORT_CATALOG_STARTUP_SPREAD",
+      "type": "duration",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "15m0s",
+      "unit": "duration",
+      "description": "Spreads cold automatic work across a stable time window. Zero disables the spread."
+    },
+    {
+      "id": "catalog.transfer.idle.timeout",
+      "key": "catalog_transfer_idle_timeout",
+      "environment": "STARPORT_CATALOG_TRANSFER_IDLE_TIMEOUT",
+      "type": "duration",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "2m0s",
+      "unit": "duration",
+      "description": "Bounds a transfer that makes no progress."
+    },
+    {
+      "id": "catalog.transfer.max.duration",
+      "key": "catalog_transfer_max_duration",
+      "environment": "STARPORT_CATALOG_TRANSFER_MAX_DURATION",
+      "type": "duration",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "1h0m0s",
+      "unit": "duration",
+      "description": "Bounds one finite HTTP body transfer. It does not bound an open event stream."
+    },
+    {
+      "id": "catalog.refresh.timeout",
+      "key": "catalog_refresh_timeout",
+      "environment": "STARPORT_CATALOG_REFRESH_TIMEOUT",
+      "type": "duration",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "0s",
+      "unit": "duration",
+      "description": "Limits the time for one refresh. Zero adds no cap."
+    },
+    {
+      "id": "state.dir",
+      "key": "state_dir",
+      "environment": "STARPORT_CATALOG_STATE_DIR",
+      "type": "string",
+      "scope": "node",
+      "mutability": "restart",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default_meaning": "hosting application's state directory",
+      "description": "Names the runtime state directory for this process."
+    },
+    {
+      "id": "scheduler.identity",
+      "key": "scheduler_identity",
+      "environment": "STARPORT_SCHEDULER_IDENTITY",
+      "type": "string",
+      "scope": "node",
+      "mutability": "restart",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default_meaning": "runtime-derived instance identity",
+      "description": "Sets a stable identity for this runtime instance."
+    },
+    {
+      "id": "catalog.retention.enabled",
+      "key": "catalog_retention_enabled",
+      "environment": "STARPORT_CATALOG_RETENTION_ENABLED",
+      "type": "boolean",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "true",
+      "description": "Enables automatic retention maintenance. Offline mode and generation pins still permit local cleanup."
+    },
+    {
+      "id": "catalog.retention.interval",
+      "key": "catalog_retention_interval",
+      "environment": "STARPORT_CATALOG_RETENTION_INTERVAL",
+      "type": "duration",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "1h0m0s",
+      "unit": "duration",
+      "description": "Sets the positive automatic collection interval. Disable scheduling with catalog_retention_enabled."
+    },
+    {
+      "id": "catalog.retention.max.generations",
+      "key": "catalog_retention_max_generations",
+      "environment": "STARPORT_CATALOG_RETENTION_MAX_GENERATIONS",
+      "type": "integer",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "32",
+      "unit": "generations",
+      "description": "Sets the retained generation count target. Required generations can exceed this limit."
+    },
+    {
+      "id": "catalog.retention.max.bytes",
+      "key": "catalog_retention_max_bytes",
+      "environment": "STARPORT_CATALOG_RETENTION_MAX_BYTES",
+      "type": "integer",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "536870912",
+      "unit": "bytes",
+      "description": "Sets the retained generation byte target. Required generations can exceed this limit."
+    },
+    {
+      "id": "catalog.retention.scan.entries",
+      "key": "catalog_retention_scan_entries",
+      "environment": "STARPORT_CATALOG_RETENTION_SCAN_ENTRIES",
+      "type": "integer",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "4096",
+      "unit": "entries",
+      "description": "Bounds one collection scan to at most 100000 entries. An incomplete scan refuses deletion."
+    },
+    {
+      "id": "catalog.retention.input.max.bytes",
+      "key": "catalog_retention_input_max_bytes",
+      "environment": "STARPORT_CATALOG_RETENTION_INPUT_MAX_BYTES",
+      "type": "integer",
+      "scope": "deployment",
+      "mutability": "runtime-replacement",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starmap",
+      "default": "268435456",
+      "unit": "bytes",
+      "description": "Bounds raw retained input bytes captured during one scan. It excludes decoder and filesystem overhead."
+    },
+    {
+      "id": "config.management",
+      "key": "config_management",
+      "environment": "STARPORT_CONFIG_MANAGEMENT",
+      "type": "string",
+      "scope": "node",
+      "mutability": "migration-only",
+      "sensitive": false,
+      "applicability": [
+        "all"
+      ],
+      "origin": "starport"
+    }
+  ],
+  "environment": [
+    {
+      "name": "STARPORT_SERVER_PORT",
+      "section": "server",
+      "field": "Server.Port",
+      "type": "int",
+      "default": "8080",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SERVER_HOST",
+      "section": "server",
+      "field": "Server.Host",
+      "type": "string",
+      "default": "127.0.0.1",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SERVER_READ_TIMEOUT",
+      "section": "server",
+      "field": "Server.ReadTimeout",
+      "type": "time.Duration",
+      "default": "30s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SERVER_WRITE_TIMEOUT",
+      "section": "server",
+      "field": "Server.WriteTimeout",
+      "type": "time.Duration",
+      "default": "30s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SERVER_IDLE_TIMEOUT",
+      "section": "server",
+      "field": "Server.IdleTimeout",
+      "type": "time.Duration",
+      "default": "120s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SERVER_REQUEST_TIMEOUT",
+      "section": "server",
+      "field": "Server.RequestTimeout",
+      "type": "time.Duration",
+      "default": "60s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SERVER_MAX_REQUEST_SIZE",
+      "section": "server",
+      "field": "Server.MaxRequestSize",
+      "type": "int64",
+      "default": "33554432",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SERVER_MAX_HEADER_BYTES",
+      "section": "server",
+      "field": "Server.MaxHeaderBytes",
+      "type": "int",
+      "default": "1048576",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SERVER_SHUTDOWN_TIMEOUT",
+      "section": "server",
+      "field": "Server.ShutdownTimeout",
+      "type": "time.Duration",
+      "default": "30s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SERVER_ENABLE_PROFILING",
+      "section": "server",
+      "field": "Server.EnableProfiling",
+      "type": "bool",
+      "default": "false",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SERVER_ENABLE_HEALTH_CHECK",
+      "section": "server",
+      "field": "Server.EnableHealthCheck",
+      "type": "bool",
+      "default": "true",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_MODE",
+      "section": "storage",
+      "field": "Storage.Mode",
+      "type": "string",
+      "default": "badger",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_BADGER_PATH",
+      "section": "storage",
+      "field": "Storage.Badger.Path",
+      "type": "string",
+      "default_source": "platform-path",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_BADGER_SYNC_WRITES",
+      "section": "storage",
+      "field": "Storage.Badger.SyncWrites",
+      "type": "bool",
+      "default": "true",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_BADGER_COMPRESSION",
+      "section": "storage",
+      "field": "Storage.Badger.Compression",
+      "type": "string",
+      "default": "snappy",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_BADGER_GC_INTERVAL",
+      "section": "storage",
+      "field": "Storage.Badger.GCInterval",
+      "type": "time.Duration",
+      "default": "5m",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_BADGER_GC_DISCARD_RATIO",
+      "section": "storage",
+      "field": "Storage.Badger.GCDiscardRatio",
+      "type": "float64",
+      "default": "0.5",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_USERNAME",
+      "section": "storage",
+      "field": "Storage.Valkey.Username",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_CA_FILE",
+      "section": "storage",
+      "field": "Storage.Valkey.CAFile",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_ALLOW_INSECURE",
+      "section": "storage",
+      "field": "Storage.Valkey.AllowInsecure",
+      "type": "bool",
+      "default": "false",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_URL",
+      "section": "storage",
+      "field": "Storage.Valkey.URL",
+      "type": "string",
+      "default": "valkey://localhost:6379",
+      "default_source": "tag",
+      "secret": true,
+      "redaction": "url"
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_MAX_CONNECTIONS",
+      "section": "storage",
+      "field": "Storage.Valkey.MaxConnections",
+      "type": "int",
+      "default": "50",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_MIN_IDLE_CONNS",
+      "section": "storage",
+      "field": "Storage.Valkey.MinIdleConns",
+      "type": "int",
+      "default": "10",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_DIAL_TIMEOUT",
+      "section": "storage",
+      "field": "Storage.Valkey.DialTimeout",
+      "type": "time.Duration",
+      "default": "5s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_READ_TIMEOUT",
+      "section": "storage",
+      "field": "Storage.Valkey.ReadTimeout",
+      "type": "time.Duration",
+      "default": "3s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_WRITE_TIMEOUT",
+      "section": "storage",
+      "field": "Storage.Valkey.WriteTimeout",
+      "type": "time.Duration",
+      "default": "3s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_IDLE_TIMEOUT",
+      "section": "storage",
+      "field": "Storage.Valkey.IdleTimeout",
+      "type": "time.Duration",
+      "default": "5m",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_CLUSTER_MODE",
+      "section": "storage",
+      "field": "Storage.Valkey.ClusterMode",
+      "type": "bool",
+      "default": "false",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_VALKEY_PASSWORD",
+      "section": "storage",
+      "field": "Storage.Valkey.Password",
+      "type": "string",
+      "secret": true,
+      "redaction": "value"
+    },
+    {
+      "name": "STARPORT_STORAGE_SQL_MODE",
+      "section": "storage",
+      "field": "Storage.SQL.Mode",
+      "type": "string",
+      "default": "sqlite",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_SQL_SQLITE_PATH",
+      "section": "storage",
+      "field": "Storage.SQL.SQLite.Path",
+      "type": "string",
+      "default_source": "platform-path",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_STORAGE_SQL_POSTGRES_URL",
+      "section": "storage",
+      "field": "Storage.SQL.Postgres.URL",
+      "type": "string",
+      "secret": true,
+      "redaction": "url"
+    },
+    {
+      "name": "STARPORT_STORAGE_SQL_MYSQL_DSN",
+      "section": "storage",
+      "field": "Storage.SQL.MySQL.DSN",
+      "type": "string",
+      "secret": true,
+      "redaction": "value"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE",
+      "section": "catalog",
+      "field": "Catalog.Source",
+      "type": "string",
+      "default": "public",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.source"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_URL",
+      "section": "catalog",
+      "field": "Catalog.SourceURL",
+      "type": "string",
+      "secret": true,
+      "redaction": "url",
+      "schema_id": "catalog.source.url"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_API_KEY",
+      "section": "catalog",
+      "field": "Catalog.SourceAPIKey",
+      "type": "string",
+      "secret": true,
+      "redaction": "value",
+      "schema_id": "catalog.source.api.key"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_REPOSITORY",
+      "section": "catalog",
+      "field": "Catalog.SourceRepository",
+      "type": "string",
+      "default": "agentstation/starmap",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.source.repository"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_CHANNEL",
+      "section": "catalog",
+      "field": "Catalog.SourceChannel",
+      "type": "string",
+      "default": "catalog/v2",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.source.channel"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_SIGNER_WORKFLOW",
+      "section": "catalog",
+      "field": "Catalog.SourceSignerWorkflow",
+      "type": "string",
+      "secret": false,
+      "schema_id": "catalog.source.signer.workflow"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_TOKEN",
+      "section": "catalog",
+      "field": "Catalog.SourceToken",
+      "type": "string",
+      "secret": true,
+      "redaction": "value",
+      "schema_id": "catalog.source.token"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_POLL_INTERVAL",
+      "section": "catalog",
+      "field": "Catalog.SourcePollInterval",
+      "type": "time.Duration",
+      "default": "1h0m0s",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.source.poll.interval"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_STARTUP_POLICY",
+      "section": "catalog",
+      "field": "Catalog.SourceStartupPolicy",
+      "type": "string",
+      "default": "prefer_source",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.source.startup.policy"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_AUTHORITY_ID",
+      "section": "catalog",
+      "field": "Catalog.SourceAuthorityID",
+      "type": "string",
+      "secret": false,
+      "schema_id": "catalog.source.authority.id"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_POLICY_ID",
+      "section": "catalog",
+      "field": "Catalog.SourcePolicyID",
+      "type": "string",
+      "secret": false,
+      "schema_id": "catalog.source.policy.id"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_MAX_AGE",
+      "section": "catalog",
+      "field": "Catalog.SourceMaxAge",
+      "type": "time.Duration",
+      "default": "6h0m0s",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.source.max.age"
+    },
+    {
+      "name": "STARPORT_CATALOG_SOURCE_MAX_HOPS",
+      "section": "catalog",
+      "field": "Catalog.SourceMaxHops",
+      "type": "int",
+      "default": "8",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.source.max.hops"
+    },
+    {
+      "name": "STARPORT_CATALOG_ACQUISITION_ENABLED",
+      "section": "catalog",
+      "field": "Catalog.AcquisitionEnabled",
+      "type": "bool",
+      "default": "true",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.acquisition.enabled"
+    },
+    {
+      "name": "STARPORT_CATALOG_ACQUISITION_INTERVAL",
+      "section": "catalog",
+      "field": "Catalog.AcquisitionInterval",
+      "type": "time.Duration",
+      "default": "4h0m0s",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.acquisition.interval"
+    },
+    {
+      "name": "STARPORT_CATALOG_WORKSPACE_PATH",
+      "section": "catalog",
+      "field": "Catalog.WorkspacePath",
+      "type": "string",
+      "secret": false,
+      "schema_id": "catalog.workspace.path"
+    },
+    {
+      "name": "STARPORT_CATALOG_STATE_DIR",
+      "section": "catalog",
+      "field": "Catalog.StateDirectory",
+      "type": "string",
+      "secret": false,
+      "schema_id": "state.dir"
+    },
+    {
+      "name": "STARPORT_CATALOG_STARTUP_SPREAD",
+      "section": "catalog",
+      "field": "Catalog.StartupSpread",
+      "type": "time.Duration",
+      "default": "15m0s",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.startup.spread"
+    },
+    {
+      "name": "STARPORT_CATALOG_TRANSFER_IDLE_TIMEOUT",
+      "section": "catalog",
+      "field": "Catalog.TransferIdleTimeout",
+      "type": "time.Duration",
+      "default": "2m0s",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.transfer.idle.timeout"
+    },
+    {
+      "name": "STARPORT_CATALOG_TRANSFER_MAX_DURATION",
+      "section": "catalog",
+      "field": "Catalog.TransferMaxDuration",
+      "type": "time.Duration",
+      "default": "1h0m0s",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.transfer.max.duration"
+    },
+    {
+      "name": "STARPORT_CATALOG_REFRESH_TIMEOUT",
+      "section": "catalog",
+      "field": "Catalog.RefreshTimeout",
+      "type": "time.Duration",
+      "default": "0s",
+      "default_source": "catalog-descriptor",
+      "secret": false,
+      "schema_id": "catalog.refresh.timeout"
+    },
+    {
+      "name": "STARPORT_CONFIG_MANAGEMENT",
+      "section": "management",
+      "field": "Management.Mode",
+      "type": "string",
+      "secret": false,
+      "schema_id": "config.management"
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_MANAGED_ENTRIES",
+      "section": "credential_sources",
+      "field": "CredentialSources.Managed.Entries",
+      "type": "int",
+      "default": "1024",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_MANAGED_SECRET_BYTES",
+      "section": "credential_sources",
+      "field": "CredentialSources.Managed.SecretBytes",
+      "type": "int",
+      "default": "16777216",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_MANAGED_CONCURRENT_LOADS",
+      "section": "credential_sources",
+      "field": "CredentialSources.Managed.ConcurrentLoads",
+      "type": "int",
+      "default": "4",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_MANAGED_TENANT_CONCURRENT_LOADS",
+      "section": "credential_sources",
+      "field": "CredentialSources.Managed.TenantConcurrentLoads",
+      "type": "int",
+      "default": "2",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_MANAGED_VALIDITY",
+      "section": "credential_sources",
+      "field": "CredentialSources.Managed.Validity",
+      "type": "time.Duration",
+      "default": "5s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_MANAGED_LOAD_TIMEOUT",
+      "section": "credential_sources",
+      "field": "CredentialSources.Managed.LoadTimeout",
+      "type": "time.Duration",
+      "default": "1s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_MANAGED_IDLE",
+      "section": "credential_sources",
+      "field": "CredentialSources.Managed.Idle",
+      "type": "time.Duration",
+      "default": "1m",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_MANAGED_REFRESH_INTERVAL",
+      "section": "credential_sources",
+      "field": "CredentialSources.Managed.RefreshInterval",
+      "type": "time.Duration",
+      "default": "1s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_ALLOW_STARMAP_FALLBACK",
+      "section": "credential_sources",
+      "field": "CredentialSources.AllowStarmapFallback",
+      "type": "bool",
+      "default": "false",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_REMOTE_REFRESH_INTERVAL",
+      "section": "credential_sources",
+      "field": "CredentialSources.RemoteRefreshInterval",
+      "type": "time.Duration",
+      "default": "5m",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_RECONCILE_INTERVAL",
+      "section": "credential_sources",
+      "field": "CredentialSources.ReconcileInterval",
+      "type": "time.Duration",
+      "default": "1m",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CREDENTIAL_SOURCES_RECONCILE_TIMEOUT",
+      "section": "credential_sources",
+      "field": "CredentialSources.ReconcileTimeout",
+      "type": "time.Duration",
+      "default": "10s",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_RATE_LIMITING_DEFAULT_REQUESTS_PER_MINUTE",
+      "section": "rate_limiting",
+      "field": "RateLimiting.DefaultRequestsPerMinute",
+      "type": "int",
+      "default": "60",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_RATE_LIMITING_WINDOW_SIZE",
+      "section": "rate_limiting",
+      "field": "RateLimiting.WindowSize",
+      "type": "time.Duration",
+      "default": "1m",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_BUDGET_ADMISSION_MODE",
+      "section": "budget_admission",
+      "field": "BudgetAdmission.Mode",
+      "type": "string",
+      "default": "atomic",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SECURITY_MASTER_KEY",
+      "section": "security",
+      "field": "Security.MasterKey",
+      "type": "string",
+      "secret": true,
+      "redaction": "value"
+    },
+    {
+      "name": "STARPORT_SECURITY_TLS_CERT_PATH",
+      "section": "security",
+      "field": "Security.TLSCertPath",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SECURITY_TLS_KEY_PATH",
+      "section": "security",
+      "field": "Security.TLSKeyPath",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SECURITY_ENABLE_TLS",
+      "section": "security",
+      "field": "Security.EnableTLS",
+      "type": "bool",
+      "default": "false",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SECURITY_ALLOWED_ORIGINS",
+      "section": "security",
+      "field": "Security.AllowedOrigins",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SECURITY_ENABLE_CORS",
+      "section": "security",
+      "field": "Security.EnableCORS",
+      "type": "bool",
+      "default": "false",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SECURITY_JWT_SECRET",
+      "section": "security",
+      "field": "Security.JWTSecret",
+      "type": "string",
+      "secret": true,
+      "redaction": "value"
+    },
+    {
+      "name": "STARPORT_SECURITY_API_KEY_HEADER",
+      "section": "security",
+      "field": "Security.APIKeyHeader",
+      "type": "string",
+      "default": "Authorization",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SECURITY_ENABLE_RATE_LIMITING",
+      "section": "security",
+      "field": "Security.EnableRateLimiting",
+      "type": "bool",
+      "default": "true",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SECURITY_AUTH_MODE",
+      "section": "security",
+      "field": "Security.AuthMode",
+      "type": "authmode.Mode",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SECURITY_ALLOW_REMOTE_NO_AUTH",
+      "section": "security",
+      "field": "Security.AllowRemoteNoAuth",
+      "type": "bool",
+      "default": "false",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SECURITY_UNAUTHENTICATED_SCOPES",
+      "section": "security",
+      "field": "Security.UnauthenticatedScopes",
+      "type": "[]string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_LOGGING_LEVEL",
+      "section": "logging",
+      "field": "Logging.Level",
+      "type": "string",
+      "default": "info",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_LOGGING_FORMAT",
+      "section": "logging",
+      "field": "Logging.Format",
+      "type": "string",
+      "default": "json",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_LOGGING_OUTPUT",
+      "section": "logging",
+      "field": "Logging.Output",
+      "type": "string",
+      "default": "stdout",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_LOGGING_FILE_PATH",
+      "section": "logging",
+      "field": "Logging.FilePath",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_LOGGING_MAX_SIZE",
+      "section": "logging",
+      "field": "Logging.MaxSize",
+      "type": "int",
+      "default": "100",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_LOGGING_MAX_BACKUPS",
+      "section": "logging",
+      "field": "Logging.MaxBackups",
+      "type": "int",
+      "default": "3",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_LOGGING_MAX_AGE",
+      "section": "logging",
+      "field": "Logging.MaxAge",
+      "type": "int",
+      "default": "7",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_LOGGING_COMPRESS",
+      "section": "logging",
+      "field": "Logging.Compress",
+      "type": "bool",
+      "default": "true",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CACHE_CHAT_ENABLED",
+      "section": "cache",
+      "field": "Cache.ChatEnabled",
+      "type": "bool",
+      "default": "true",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CACHE_EMBEDDINGS_ENABLED",
+      "section": "cache",
+      "field": "Cache.EmbeddingsEnabled",
+      "type": "bool",
+      "default": "true",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CACHE_MODELS_ENABLED",
+      "section": "cache",
+      "field": "Cache.ModelsEnabled",
+      "type": "bool",
+      "default": "true",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CACHE_PROVIDERS_ENABLED",
+      "section": "cache",
+      "field": "Cache.ProvidersEnabled",
+      "type": "bool",
+      "default": "true",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CACHE_EXTRACTIONS_ENABLED",
+      "section": "cache",
+      "field": "Cache.ExtractionsEnabled",
+      "type": "bool",
+      "default": "true",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CACHE_CA_FILE",
+      "section": "cache",
+      "field": "Cache.CAFile",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CACHE_ENABLED",
+      "section": "cache",
+      "field": "Cache.Enabled",
+      "type": "bool",
+      "default": "true",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CACHE_BACKEND",
+      "section": "cache",
+      "field": "Cache.Backend",
+      "type": "string",
+      "default": "local",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CACHE_URL",
+      "section": "cache",
+      "field": "Cache.URL",
+      "type": "string",
+      "secret": true,
+      "redaction": "url"
+    },
+    {
+      "name": "STARPORT_CACHE_ALLOW_INSECURE",
+      "section": "cache",
+      "field": "Cache.AllowInsecure",
+      "type": "bool",
+      "default": "false",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_FILES_BACKEND",
+      "section": "files",
+      "field": "Files.Backend",
+      "type": "string",
+      "default": "filesystem",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_FILES_PATH",
+      "section": "files",
+      "field": "Files.Path",
+      "type": "string",
+      "default_source": "platform-path",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_FILES_MAX_UPLOAD_BYTES",
+      "section": "files",
+      "field": "Files.MaxUploadBytes",
+      "type": "int64",
+      "default": "536870912",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_FILES_RETENTION",
+      "section": "files",
+      "field": "Files.Retention",
+      "type": "time.Duration",
+      "default": "720h",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_FILES_SWEEP_INTERVAL",
+      "section": "files",
+      "field": "Files.SweepInterval",
+      "type": "time.Duration",
+      "default": "1h",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_FILES_OBJECT_STORE_BUCKET",
+      "section": "files",
+      "field": "Files.ObjectStore.Bucket",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_FILES_OBJECT_STORE_REGION",
+      "section": "files",
+      "field": "Files.ObjectStore.Region",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_FILES_OBJECT_STORE_ENDPOINT",
+      "section": "files",
+      "field": "Files.ObjectStore.Endpoint",
+      "type": "string",
+      "secret": true,
+      "redaction": "url"
+    },
+    {
+      "name": "STARPORT_FILES_OBJECT_STORE_PREFIX",
+      "section": "files",
+      "field": "Files.ObjectStore.Prefix",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_FILES_OBJECT_STORE_ACCESS_KEY_ID",
+      "section": "files",
+      "field": "Files.ObjectStore.AccessKeyID",
+      "type": "string",
+      "secret": true,
+      "redaction": "value"
+    },
+    {
+      "name": "STARPORT_FILES_OBJECT_STORE_SECRET_ACCESS_KEY",
+      "section": "files",
+      "field": "Files.ObjectStore.SecretAccessKey",
+      "type": "string",
+      "secret": true,
+      "redaction": "value"
+    },
+    {
+      "name": "STARPORT_JOBS_ASSET_DOWNLOAD_ORIGINS",
+      "section": "jobs",
+      "field": "Jobs.AssetDownloadOrigins",
+      "type": "[]string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_JOBS_MAX_WORKERS",
+      "section": "jobs",
+      "field": "Jobs.MaxWorkers",
+      "type": "int",
+      "default": "2",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_JOBS_EXECUTION_TIMEOUT",
+      "section": "jobs",
+      "field": "Jobs.ExecutionTimeout",
+      "type": "time.Duration",
+      "default": "10m",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_JOBS_ASSET_RETENTION",
+      "section": "jobs",
+      "field": "Jobs.AssetRetention",
+      "type": "time.Duration",
+      "default": "24h",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_JOBS_MAX_ASSET_BYTES",
+      "section": "jobs",
+      "field": "Jobs.MaxAssetBytes",
+      "type": "int64",
+      "default": "268435456",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_JOBS_SWEEP_INTERVAL",
+      "section": "jobs",
+      "field": "Jobs.SweepInterval",
+      "type": "time.Duration",
+      "default": "1h",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_CONSOLE_ENABLED",
+      "section": "console",
+      "field": "Console.Enabled",
+      "type": "bool",
+      "default": "true",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_IDENTITY_CALLBACK_BASE_URL",
+      "section": "identity",
+      "field": "Identity.CallbackBaseURL",
+      "type": "string",
+      "secret": true,
+      "redaction": "url"
+    },
+    {
+      "name": "STARPORT_IDENTITY_OAUTH_GOOGLE_CLIENT_ID",
+      "section": "identity",
+      "field": "Identity.OAuth.Google.ClientID",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_IDENTITY_OAUTH_GOOGLE_CLIENT_SECRET",
+      "section": "identity",
+      "field": "Identity.OAuth.Google.ClientSecret",
+      "type": "string",
+      "secret": true,
+      "redaction": "value"
+    },
+    {
+      "name": "STARPORT_IDENTITY_OAUTH_GITHUB_CLIENT_ID",
+      "section": "identity",
+      "field": "Identity.OAuth.GitHub.ClientID",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_IDENTITY_OAUTH_GITHUB_CLIENT_SECRET",
+      "section": "identity",
+      "field": "Identity.OAuth.GitHub.ClientSecret",
+      "type": "string",
+      "secret": true,
+      "redaction": "value"
+    },
+    {
+      "name": "STARPORT_IDENTITY_WORKOS_API_KEY",
+      "section": "identity",
+      "field": "Identity.WorkOS.APIKey",
+      "type": "string",
+      "secret": true,
+      "redaction": "value"
+    },
+    {
+      "name": "STARPORT_IDENTITY_WORKOS_CLIENT_ID",
+      "section": "identity",
+      "field": "Identity.WorkOS.ClientID",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_IDENTITY_WORKOS_ORGANIZATION",
+      "section": "identity",
+      "field": "Identity.WorkOS.Organization",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_IDENTITY_WORKOS_CONNECTION",
+      "section": "identity",
+      "field": "Identity.WorkOS.Connection",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_TELEMETRY_METRICS",
+      "section": "telemetry",
+      "field": "Telemetry.Metrics",
+      "type": "string",
+      "default": "on",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_TELEMETRY_USAGE_EXPORT",
+      "section": "telemetry",
+      "field": "Telemetry.UsageExport",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_AUDIT_RETENTION",
+      "section": "audit",
+      "field": "Audit.Retention",
+      "type": "time.Duration",
+      "default": "9600h",
+      "default_source": "tag",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_EVENTS_WEBHOOK_URLS",
+      "section": "events",
+      "field": "Events.WebhookURLs",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_EVENTS_WEBHOOK_SECRET",
+      "section": "events",
+      "field": "Events.WebhookSecret",
+      "type": "string",
+      "secret": true,
+      "redaction": "value"
+    },
+    {
+      "name": "STARPORT_GUARDRAILS_CHECKS",
+      "section": "guardrails",
+      "field": "Guardrails.Checks",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_GUARDRAILS_PII_MODE",
+      "section": "guardrails",
+      "field": "Guardrails.PIIMode",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_GUARDRAILS_MODERATION_MODEL",
+      "section": "guardrails",
+      "field": "Guardrails.ModerationModel",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_GUARDRAILS_MODERATION_THRESHOLD",
+      "section": "guardrails",
+      "field": "Guardrails.ModerationThreshold",
+      "type": "float64",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_GUARDRAILS_MODERATION_THRESHOLDS",
+      "section": "guardrails",
+      "field": "Guardrails.ModerationThresholds",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SEMANTIC_CACHE_ENABLED",
+      "section": "semantic_cache",
+      "field": "SemanticCache.Enabled",
+      "type": "bool",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SEMANTIC_CACHE_MODEL",
+      "section": "semantic_cache",
+      "field": "SemanticCache.Model",
+      "type": "string",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SEMANTIC_CACHE_THRESHOLD",
+      "section": "semantic_cache",
+      "field": "SemanticCache.Threshold",
+      "type": "float64",
+      "secret": false
+    },
+    {
+      "name": "STARPORT_SEMANTIC_CACHE_MAX_ENTRIES",
+      "section": "semantic_cache",
+      "field": "SemanticCache.MaxEntries",
+      "type": "int",
+      "secret": false
+    }
+  ]
+}

@@ -31,8 +31,19 @@ func Redacted(cfg *Config) map[string]any {
 	return redacted
 }
 
+// secretField reports whether inspection hides the whole value of a field.
+func secretField(field reflect.StructField) bool {
+	return field.Tag.Get("secret") == "true"
+}
+
+// urlRedactedField reports whether inspection hides the credentials of a
+// connection string field.
+func urlRedactedField(field reflect.StructField) bool {
+	return field.Tag.Get("redact") == "url"
+}
+
 func redactValue(value reflect.Value, field reflect.StructField) (any, bool) {
-	if field.Tag.Get("secret") == "true" {
+	if secretField(field) {
 		if value.Kind() == reflect.String && value.String() == "" {
 			return "", true
 		}
@@ -41,7 +52,7 @@ func redactValue(value reflect.Value, field reflect.StructField) (any, bool) {
 	if value.Type() == durationType {
 		return time.Duration(value.Int()).String(), true
 	}
-	if field.Tag.Get("redact") == "url" && value.Kind() == reflect.String {
+	if urlRedactedField(field) && value.Kind() == reflect.String {
 		return redactURL(value.String()), true
 	}
 	switch value.Kind() {

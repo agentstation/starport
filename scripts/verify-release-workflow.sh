@@ -98,6 +98,9 @@ done
 
 require_goreleaser_text 'bash scripts/build-console.sh' 'the mandatory console build'
 require_goreleaser_text 'python3 scripts/verify-embedded-console.py' 'embedded console verification for every binary'
+require_goreleaser_text 'name_template: "\{\{ \.ProjectName \}\}-docs-v\{\{ \.Version \}\}"$' 'the docs archive name'
+require_goreleaser_text 'wrap_in_directory: "\{\{ \.ProjectName \}\}-docs-v\{\{ \.Version \}\}"$' 'the docs archive root directory'
+require_goreleaser_text '^[[:space:]]+- src: internal/console/dist/docs$' 'the embedded docs tree as the docs archive source'
 require_text 'python3 scripts/verify-console-binary.py' 'installed console verification'
 python3 "$repository_root/scripts/test-console-release.py"
 python3 "$repository_root/scripts/test-native-release.py"

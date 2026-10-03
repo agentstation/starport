@@ -1,0 +1,629 @@
+{
+  "schema_version": 1,
+  "product": "starport",
+  "build_version": "",
+  "deployment_id": "local",
+  "instance_id": "default",
+  "relative_path_base": "",
+  "relative_path_base_origin": "default",
+  "roots": {
+    "cache": {
+      "path": "%LocalAppData%\\starport\\cache",
+      "origin": "platform-default"
+    },
+    "config": {
+      "path": "%AppData%\\starport",
+      "origin": "platform-default"
+    },
+    "data": {
+      "path": "%LocalAppData%\\starport\\data",
+      "origin": "platform-default"
+    },
+    "state": {
+      "path": "%LocalAppData%\\starport\\state",
+      "origin": "platform-default"
+    }
+  },
+  "files": [
+    {
+      "id": "configuration",
+      "location": {
+        "path": "%AppData%\\starport\\config.env",
+        "origin": "derived:config"
+      },
+      "kind": "file",
+      "availability": "available",
+      "creation": "The loader reads the selected primary file.",
+      "recovery": "Preserve configuration and required secret access.",
+      "policy": {
+        "selectors": [
+          "STARPORT_CONFIG_FILE",
+          "STARPORT_CONFIG_DIR",
+          "STARPORT_CONFIG_ACCESS"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "badger",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\badger",
+        "origin": "derived:data"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "available",
+      "creation": "The local KV backend opens this directory.",
+      "recovery": "Back up durable KV records and accepted catalog generations consistently. Do not share this directory between processes.",
+      "policy": {
+        "selectors": [
+          "STARPORT_STORAGE_BADGER_PATH"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "setup-transaction",
+      "location": {
+        "path": "%AppData%\\starport\\.starport-setup",
+        "origin": "default"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "available",
+      "creation": "Local setup retains its transaction and stable lock.",
+      "recovery": "Preserve stable locks and pending records. Recovery must verify ownership before removal.",
+      "policy": {
+        "selectors": [
+          "STARPORT_CONFIG_FILE",
+          "STARPORT_STORAGE_BADGER_PATH"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "setup-config-publications",
+      "location": {
+        "path": "%AppData%\\starport\\.record-publications",
+        "origin": "default"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "available",
+      "creation": "Local setup publishes configuration through private records.",
+      "recovery": "Preserve stable locks and pending records. Recovery must verify ownership before removal.",
+      "policy": {
+        "selectors": [
+          "STARPORT_CONFIG_FILE",
+          "STARPORT_STORAGE_BADGER_PATH"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "setup-storage-guard",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\.starport-setup-badger",
+        "origin": "derived:data"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "available",
+      "creation": "Local setup and gateway startup coordinate database ownership.",
+      "recovery": "Preserve stable locks and pending records. Recovery must verify ownership before removal.",
+      "policy": {
+        "selectors": [
+          "STARPORT_CONFIG_FILE",
+          "STARPORT_STORAGE_BADGER_PATH"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "setup-database-stage",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data",
+        "origin": "derived:data"
+      },
+      "kind": "patterns",
+      "patterns": [
+        ".starport-init-*/**"
+      ],
+      "availability": "available",
+      "creation": "Local setup stages databases and retains interrupted rollback state.",
+      "recovery": "Preserve stable locks and pending records. Recovery must verify ownership before removal.",
+      "policy": {
+        "selectors": [
+          "STARPORT_CONFIG_FILE",
+          "STARPORT_STORAGE_BADGER_PATH"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "config-operation-journal",
+      "location": {
+        "path": "%AppData%\\starport\\.starport-config-operations.json",
+        "origin": "default"
+      },
+      "kind": "file",
+      "availability": "available",
+      "creation": "A local configuration save records its operation receipts next to the file.",
+      "recovery": "Keep the journal with the configuration file. A retry reads it to complete an interrupted save or to return the first receipt.",
+      "policy": {
+        "selectors": [
+          "STARPORT_CONFIG_FILE",
+          "STARPORT_CONFIG_MANAGEMENT"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "sqlite",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\sqlite\\starport.db",
+        "origin": "derived:data"
+      },
+      "kind": "file",
+      "availability": "available",
+      "creation": "The local SQL backend opens this database.",
+      "recovery": "Use a consistent SQLite backup with the matching KV records and encryption key access.",
+      "policy": {
+        "selectors": [
+          "STARPORT_STORAGE_SQL_SQLITE_PATH"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "sqlite-wal",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\sqlite\\starport.db-wal",
+        "origin": "derived:data"
+      },
+      "kind": "file",
+      "availability": "available",
+      "creation": "SQLite creates sidecars when its journal mode requires them.",
+      "recovery": "Keep database sidecars with the live database. Do not delete them during operation.",
+      "policy": {
+        "selectors": [
+          "STARPORT_STORAGE_SQL_SQLITE_PATH"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "sqlite-shm",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\sqlite\\starport.db-shm",
+        "origin": "derived:data"
+      },
+      "kind": "file",
+      "availability": "available",
+      "creation": "SQLite creates sidecars when its journal mode requires them.",
+      "recovery": "Keep database sidecars with the live database. Do not delete them during operation.",
+      "policy": {
+        "selectors": [
+          "STARPORT_STORAGE_SQL_SQLITE_PATH"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "sqlite-journal",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\sqlite\\starport.db-journal",
+        "origin": "derived:data"
+      },
+      "kind": "file",
+      "availability": "available",
+      "creation": "SQLite creates sidecars when its journal mode requires them.",
+      "recovery": "Keep database sidecars with the live database. Do not delete them during operation.",
+      "policy": {
+        "selectors": [
+          "STARPORT_STORAGE_SQL_SQLITE_PATH"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "files",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\files",
+        "origin": "derived:data"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "available",
+      "creation": "The filesystem blob backend stores uploaded bytes.",
+      "recovery": "Restore file records and bytes together. File retention controls normal removal.",
+      "policy": {
+        "selectors": [
+          "STARPORT_FILES_PATH"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "local-token",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\local-admin-token.json",
+        "origin": "derived:data"
+      },
+      "kind": "file",
+      "availability": "available",
+      "creation": "Persistent startup creates the local administrator token. Development only reads an existing token.",
+      "recovery": "Treat this file as an administrator credential.",
+      "policy": {
+        "selectors": [],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "local-token-lock",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\local-admin-token.json.lock",
+        "origin": "derived:data"
+      },
+      "kind": "file",
+      "availability": "available",
+      "creation": "Persistent token reads and writes acquire this stable lock.",
+      "recovery": "Preserve the lock while token operations can run.",
+      "policy": {
+        "selectors": [],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "welcome-stamp",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\welcomed",
+        "origin": "derived:data"
+      },
+      "kind": "file",
+      "availability": "available",
+      "creation": "Persistent onboarding records completion.",
+      "recovery": "Removal repeats the first-use notice.",
+      "policy": {
+        "selectors": [],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "baseline",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\catalog\\baseline",
+        "origin": "derived:data"
+      },
+      "kind": "tree",
+      "patterns": [
+        "*/manifest.json",
+        "*/catalog.json",
+        ".baseline-*/**"
+      ],
+      "availability": "available",
+      "creation": "Persistent catalog startup exports the embedded catalog.",
+      "recovery": "Reproduce from the same binary or preserve the verified export.",
+      "policy": {
+        "selectors": [],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "public-read",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "baseline-recovery",
+      "location": {
+        "path": "%LocalAppData%\\starport\\data\\catalog\\baseline\\.starmap-baseline",
+        "origin": "derived:data"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "available",
+      "creation": "Embedded export records publication and recovery state.",
+      "recovery": "Keep locks and journals until verified recovery completes.",
+      "policy": {
+        "selectors": [],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "runtime-evidence",
+      "location": {
+        "path": "%LocalAppData%\\starport\\state\\catalog\\runtime\\default",
+        "origin": "derived:state"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "available",
+      "creation": "The connected catalog runtime saves private identity and acquisition evidence.",
+      "recovery": "Preserve runtime identity, layer evidence, replay floors, migration records, and locks. Accepted generations live in the selected KV backend.",
+      "policy": {
+        "selectors": [],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "credential-policy",
+      "location": {
+        "path": "%LocalAppData%\\starport\\state\\credentials\\catalog\\default",
+        "origin": "platform-default"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "available",
+      "creation": "Catalog startup records the acquisition policy before it creates catalog state.",
+      "recovery": "Preserve policy records with the deployment. Resolve conflicts through explicit credential references.",
+      "policy": {
+        "selectors": [
+          "STARPORT_STATE_ROOT",
+          "STARPORT_INSTANCE_ID"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "inference-credential-policy",
+      "location": {
+        "path": "%LocalAppData%\\starport\\state\\credentials\\inference\\default",
+        "origin": "platform-default"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "available",
+      "creation": "Gateway startup records inference selection policy before provider activation.",
+      "recovery": "Preserve accepted policy records. Resolve conflicts with explicit inference references.",
+      "policy": {
+        "selectors": [
+          "STARPORT_STATE_ROOT",
+          "STARPORT_INSTANCE_ID"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "workspace",
+      "location": {
+        "path": "",
+        "origin": "default"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "disabled",
+      "creation": "Explicit catalog authoring or projection.",
+      "recovery": "Preserve operator content and projection receipts.",
+      "policy": {
+        "selectors": [
+          "STARPORT_CATALOG_WORKSPACE_PATH"
+        ],
+        "applicability": "Only the selected workspace and explicit authoring operations use these files.",
+        "access": "deployment-controlled",
+        "retention": "Preserve operator input and recovery evidence until verified recovery permits removal.",
+        "removal": "This inventory does not authorize deletion."
+      }
+    },
+    {
+      "id": "tls-certificate",
+      "location": {
+        "path": "",
+        "origin": "default"
+      },
+      "kind": "file",
+      "availability": "disabled",
+      "creation": "The operator supplies TLS material.",
+      "recovery": "Renew through the deployment certificate procedure.",
+      "policy": {
+        "selectors": [],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "deployment-controlled",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "tls-key",
+      "location": {
+        "path": "",
+        "origin": "default"
+      },
+      "kind": "file",
+      "availability": "disabled",
+      "creation": "The operator supplies TLS material.",
+      "recovery": "Renew through the deployment certificate procedure.",
+      "policy": {
+        "selectors": [],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "cache-ca",
+      "location": {
+        "path": "",
+        "origin": "default"
+      },
+      "kind": "file",
+      "availability": "disabled",
+      "creation": "The operator supplies cache trust roots.",
+      "recovery": "Replace the trust bundle and restart the gateway to apply it.",
+      "policy": {
+        "selectors": [
+          "STARPORT_CACHE_CA_FILE"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "deployment-controlled",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "valkey-ca",
+      "location": {
+        "path": "",
+        "origin": "default"
+      },
+      "kind": "file",
+      "availability": "disabled",
+      "creation": "The operator supplies durable KV trust roots.",
+      "recovery": "Replace the trust bundle and restart the gateway to apply it.",
+      "policy": {
+        "selectors": [
+          "STARPORT_STORAGE_VALKEY_CA_FILE"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "deployment-controlled",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "logs",
+      "location": {
+        "path": "",
+        "origin": "default"
+      },
+      "kind": "file",
+      "availability": "planned",
+      "creation": "File logging has no implemented application writer.",
+      "recovery": "Current application logging uses streams.",
+      "policy": {
+        "selectors": [
+          "STARPORT_LOGGING_FILE_PATH"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "source-http",
+      "location": {
+        "path": "%LocalAppData%\\starport\\cache\\models.dev",
+        "origin": "derived:cache"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "available",
+      "creation": "Permitted explicit or scheduled source acquisition creates this cache.",
+      "recovery": "Rebuild only through permitted source access. Preserve accepted catalog evidence in runtime state.",
+      "policy": {
+        "selectors": [
+          "STARPORT_CACHE_DIR",
+          "STARPORT_CATALOG_ACQUISITION_SOURCES"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "deployment-controlled",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
+      "id": "source-checkout",
+      "location": {
+        "path": "%LocalAppData%\\starport\\cache\\sources\\models.dev-git",
+        "origin": "derived:cache"
+      },
+      "kind": "tree",
+      "patterns": [
+        "**"
+      ],
+      "availability": "disabled",
+      "creation": "Permitted explicit or scheduled source acquisition creates this cache.",
+      "recovery": "Rebuild only through permitted source access. Preserve accepted catalog evidence in runtime state.",
+      "policy": {
+        "selectors": [
+          "STARPORT_CACHE_DIR",
+          "STARPORT_CATALOG_ACQUISITION_SOURCES"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "deployment-controlled",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    }
+  ],
+  "external": []
+}

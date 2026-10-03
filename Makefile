@@ -76,6 +76,10 @@ build: console-build ## Build the binary
 console-build: ## Build the embedded SPA console
 	bash scripts/build-console.sh
 
+.PHONY: docs-generate
+docs-generate: ## Generate the settings and file reference pages
+	$(GO) run ./scripts/docsgen
+
 .PHONY: build-race
 build-race: ## Build with race detector enabled
 	@echo "Building with race detector..."

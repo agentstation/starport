@@ -23,6 +23,9 @@ type Loader struct {
 	prefix       string
 	environment  envconfig.Lookuper
 	resolvePaths func() (Paths, error)
+	// platformDefaults supplies a root that no layer selects. It is the
+	// native user-directory lookup except in the generated file inventory.
+	platformDefaults productpaths.Lookup
 }
 
 type loadFailure struct {
@@ -54,8 +57,9 @@ func newLoadFailure(message string, cause error) error {
 // NewLoader creates a loader for the process environment and platform paths.
 func NewLoader() *Loader {
 	return &Loader{
-		prefix:      "STARPORT_",
-		environment: envconfig.OsLookuper(),
+		prefix:           "STARPORT_",
+		environment:      envconfig.OsLookuper(),
+		platformDefaults: productpaths.UserDefaults(productpaths.Starport),
 	}
 }
 

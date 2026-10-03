@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 distribution_directory="${1:-dist}"
 metadata_file="$distribution_directory/metadata.json"
 checksum_file="$distribution_directory/checksums.txt"
@@ -16,7 +17,9 @@ version="${2:-$(jq -r .version "$metadata_file")}"
 expected_names="$(mktemp "${TMPDIR:-/tmp}/starport-release-assets.XXXXXX")"
 actual_names="$(mktemp "${TMPDIR:-/tmp}/starport-release-checksums.XXXXXX")"
 archive_names="$(mktemp "${TMPDIR:-/tmp}/starport-release-archives.XXXXXX")"
-trap 'rm -f "$expected_names" "$actual_names" "$archive_names"' EXIT
+docs_entries="$(mktemp "${TMPDIR:-/tmp}/starport-docs-entries.XXXXXX")"
+docs_extract="$(mktemp -d "${TMPDIR:-/tmp}/starport-docs-archive.XXXXXX")"
+trap 'rm -f "$expected_names" "$actual_names" "$archive_names" "$docs_entries"; rm -rf "$docs_extract"' EXIT
 
 for platform in darwin_arm64 linux_arm64 linux_x86_64; do
 	archive="starport_${version}_${platform}.tar.gz"
@@ -28,6 +31,10 @@ for platform in windows_arm64 windows_x86_64; do
 	printf '%s\n%s\n' "$archive" "$archive.sbom.json" >>"$expected_names"
 	printf '%s\n' "$archive" >>"$archive_names"
 done
+
+docs_root="starport-docs-v${version}"
+docs_archive="${docs_root}.tar.gz"
+printf '%s\n' "$docs_archive" >>"$expected_names"
 
 awk '{print $2}' "$checksum_file" | LC_ALL=C sort >"$actual_names"
 LC_ALL=C sort -o "$expected_names" "$expected_names"
@@ -92,4 +99,28 @@ while IFS= read -r archive; do
 	fi
 done <"$archive_names"
 
-printf 'PASS 5 release archives, 5 Syft SBOMs, and the checksum manifest\n'
+# The docs archive holds the embedded documentation site below one root
+# directory. A checkout that built the site must match it exactly. A
+# recovery checkout has no build output, so it checks the layout only.
+tar -tzf "$distribution_directory/$docs_archive" >"$docs_entries"
+if awk -v root="$docs_root" '
+	$0 != root && $0 != root "/" && (index($0, root "/") != 1 || $0 ~ /(^|\/)\.\.(\/|$)/) { unsafe = 1; print }
+	END { exit !unsafe }
+' "$docs_entries" >&2; then
+	printf 'docs archive has an entry outside %s/\n' "$docs_root" >&2
+	exit 1
+fi
+tar -xzf "$distribution_directory/$docs_archive" -C "$docs_extract"
+for page in index.html manifest.json; do
+	if [ ! -f "$docs_extract/$docs_root/$page" ]; then
+		printf 'docs archive is missing %s/%s\n' "$docs_root" "$page" >&2
+		exit 1
+	fi
+done
+docs_source="$repository_root/internal/console/dist/docs"
+if [ -f "$docs_source/index.html" ] && ! diff -r "$docs_source" "$docs_extract/$docs_root"; then
+	printf 'docs archive differs from %s\n' "$docs_source" >&2
+	exit 1
+fi
+
+printf 'PASS 5 release archives, 5 Syft SBOMs, the docs archive, and the checksum manifest\n'

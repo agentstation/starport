@@ -2,8 +2,9 @@ import { UsersRound } from "lucide-react";
 
 import { ExternalLink } from "@/components/ui/ExternalLink";
 
-const GUIDE =
-  "https://github.com/agentstation/starport/blob/main/docs/OPERATOR-GUIDE.md#identity";
+// The docs site ships in this binary, so the link stays on the gateway and
+// matches the running release.
+const GUIDE = "/docs/operate-starport/identity/";
 
 // IdentityRequired is the empty state a people page shows when the
 // deployment has no identity provider. Nobody can arrive, so the page

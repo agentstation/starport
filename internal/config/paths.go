@@ -119,7 +119,7 @@ func (l *Loader) bootstrapPaths() (Paths, error) {
 			paths.Origins = make(map[string]productpaths.Path)
 		}
 	} else {
-		root, err := productpaths.ResolveRoot(productpaths.Config, productpaths.UserDefaults(productpaths.Starport), rootLayer("environment", l.environment))
+		root, err := productpaths.ResolveRoot(productpaths.Config, l.platformDefaults, rootLayer("environment", l.environment))
 		if err != nil {
 			return Paths{}, err
 		}
@@ -152,7 +152,7 @@ func (l *Loader) managedPaths(bootstrap Paths, source envconfig.Lookuper, layers
 	}
 	// The selected file cannot move the configuration root that selected it.
 	layers = append([]productpaths.Layer{{Name: "bootstrap", Values: map[productpaths.Root]string{productpaths.Config: bootstrap.ConfigDir}}}, layers...)
-	roots, err := productpaths.Resolve(productpaths.UserDefaults(productpaths.Starport), layers...)
+	roots, err := productpaths.Resolve(l.platformDefaults, layers...)
 	if err != nil {
 		return Paths{}, err
 	}
