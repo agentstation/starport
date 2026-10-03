@@ -26,9 +26,10 @@ type fleetProcessRequest struct {
 	Partial          bool
 }
 type fleetProcessReply struct {
-	Error  string
-	Head   runtime.FleetHead
-	Models []string
+	Error    string
+	Head     runtime.FleetHead
+	Models   []string
+	Baseline BaselineReport
 }
 type fleetProcess struct {
 	command   *exec.Cmd
@@ -165,6 +166,115 @@ func TestFleetRuntimeProcessesRecoverAfterLeaderDirectoryLoss(t *testing.T) {
 	replacement.close(t)
 }
 
+// TestFleetRuntimeRollbackKeepsPromotedBaseline records a promotion request through the command path.
+// The follower process ignores it, and the leader process executes it. Followers, a fresh replacement
+// after leader loss, and an exact retry replay the promoted baseline. No replica falls back to an older
+// retained or packaged baseline.
+func TestFleetRuntimeRollbackKeepsPromotedBaseline(t *testing.T) {
+	fleet, kv, witness, db := fleetTestStoreWithSQL(t)
+	deployment := fleet.identity.DeploymentID
+	settings := identityTestSettings(filepath.Join(t.TempDir(), "state"), "", "127.0.0.1:0")
+	settings.DeploymentID = deployment
+	session := func() *FleetStore {
+		store, err := NewFleetStore(t.Context(), kv.(storage.IncarnationProvider), witness, deployment)
+		require.NoError(t, err)
+		return store
+	}
+	retained, _ := retainOlderBaseline(t, kv, session, settings)
+	root := t.TempDir()
+	leaderDirectory := filepath.Join(root, "leader")
+	leader := startFleetProcess(t, deployment, leaderDirectory, "")
+	before := leader.request(t, fleetProcessRequest{Operation: "status"})
+	require.Empty(t, before.Error)
+	require.True(t, before.Baseline.Promotable, before.Baseline.Refusal)
+	require.Equal(t, baselineIdentity(retained), before.Baseline.Retained)
+	follower := startFleetProcess(t, deployment, filepath.Join(root, "follower"), "")
+	following := follower.request(t, fleetProcessRequest{Operation: "status"})
+	require.Empty(t, following.Error)
+	require.Equal(t, before.Baseline.Retained, following.Baseline.Retained, "a follower replays the retained baseline, not its packaged baseline")
+	require.Equal(t, before.Head, following.Head)
+
+	// The command process opens only the shared request record. It takes no lease.
+	requests, err := OpenPromotionRequests(t.Context(), kv, db, deployment)
+	require.NoError(t, err)
+	request := PromotionRequest{OperationID: "rollback-" + deployment, ExpectedRevision: before.Head.Revision, PackagedGenerationID: before.Baseline.Packaged.GenerationID, Actor: "operator"}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		require.NoError(t, kv.BatchDelete(ctx, []string{fleet.promotionKey(request.OperationID), fleet.promotionRequestKey()}))
+	})
+	holder, err := requests.Leader(t.Context())
+	require.NoError(t, err)
+	require.NotEmpty(t, holder)
+	submitted, err := requests.Submit(t.Context(), request)
+	require.NoError(t, err)
+	require.Equal(t, PromotionPending, submitted.Status)
+	ignored := follower.request(t, fleetProcessRequest{Operation: "execute"})
+	require.Empty(t, ignored.Error)
+	require.Equal(t, before.Head, ignored.Head, "a follower never executes the request")
+	pending, found, err := requests.Read(t.Context(), request.OperationID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, PromotionPending, pending.Status)
+
+	promoted := leader.request(t, fleetProcessRequest{Operation: "execute"})
+	require.Empty(t, promoted.Error)
+	settled, found, err := requests.Read(t.Context(), request.OperationID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, PromotionApplied, settled.Status)
+	receipt := *settled.Receipt
+	require.Equal(t, PromotionApplied, receipt.Status, receipt.Refusal)
+	require.Equal(t, PromotionIdentity{GenerationID: retained.GenerationID, Checksum: retained.PayloadChecksum, Revision: before.Head.Revision}, receipt.Previous)
+	require.Equal(t, before.Baseline.Packaged.GenerationID, receipt.Promoted.GenerationID)
+	require.Greater(t, receipt.Promoted.Revision, receipt.Previous.Revision)
+	require.Equal(t, receipt.Promoted.Revision, promoted.Head.Revision)
+	stored, found, err := session().promotionReceipt(t.Context(), request.OperationID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, receipt, stored)
+	accepted, _, err := session().readAcceptance(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, promoted.Head, accepted.Head)
+	caughtUp := follower.request(t, fleetProcessRequest{Operation: "status"})
+	require.Empty(t, caughtUp.Error)
+	require.Equal(t, promoted.Head, caughtUp.Head)
+	require.Equal(t, promoted.Baseline.Retained, caughtUp.Baseline.Retained)
+	require.Equal(t, before.Baseline.Packaged, caughtUp.Baseline.Retained)
+
+	require.NoError(t, leader.command.Process.Kill())
+	require.Error(t, <-leader.done)
+	leader.stopped = true
+	require.NoError(t, os.RemoveAll(leaderDirectory))
+	// Expire the dead owner's native lease without waiting its production 90-second TTL.
+	require.NoError(t, kv.ExpireAt(t.Context(), fleet.prefix+"lease", time.Now().Add(-time.Second)))
+	retried, err := requests.Submit(t.Context(), request)
+	require.NoError(t, err)
+	require.Equal(t, PromotionApplied, retried.Status)
+	require.Equal(t, receipt, *retried.Receipt, "an exact retry returns the original receipt")
+	holder, err = requests.Leader(t.Context())
+	require.NoError(t, err)
+	require.Empty(t, holder, "no gateway leads after the leader stops")
+	follower.close(t)
+
+	// After the outcome expires, a replacement leader returns the durable receipt for the same operation ID.
+	require.NoError(t, kv.ExpireAt(t.Context(), fleet.promotionRequestKey(), time.Now().Add(-time.Second)))
+	_, err = requests.Submit(t.Context(), request)
+	require.NoError(t, err)
+	replacement := startFleetProcess(t, deployment, filepath.Join(root, "replacement"), "")
+	recovered := replacement.request(t, fleetProcessRequest{Operation: "execute"})
+	require.Empty(t, recovered.Error)
+	require.Equal(t, before.Baseline.Packaged, recovered.Baseline.Retained)
+	require.False(t, recovered.Baseline.Promotable)
+	require.GreaterOrEqual(t, recovered.Head.Revision, receipt.Promoted.Revision)
+	again, found, err := requests.Read(t.Context(), request.OperationID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, PromotionApplied, again.Status, "the replacement takes the free lease at open and executes the request")
+	require.Equal(t, receipt, *again.Receipt, "the replacement returns the original receipt")
+	replacement.close(t)
+}
+
 func TestFleetRuntimeProcessHelper(t *testing.T) {
 	deployment := os.Getenv("CSP11_RUNTIME_DEPLOYMENT")
 	if deployment == "" {
@@ -175,8 +285,11 @@ func TestFleetRuntimeProcessHelper(t *testing.T) {
 	require.NoError(t, err)
 	settings := identityTestSettings(os.Getenv("CSP11_RUNTIME_DIRECTORY"), "", "127.0.0.1:0")
 	settings.DeploymentID = deployment
-	settings.Source = string(runtime.SourceFile)
-	settings.SourceURL = os.Getenv("CSP11_RUNTIME_SOURCE")
+	// A process without a source file serves the embedded baseline alone.
+	if source := os.Getenv("CSP11_RUNTIME_SOURCE"); source != "" {
+		settings.Source = string(runtime.SourceFile)
+		settings.SourceURL = source
+	}
 	connected, err := openRuntime(t.Context(), kv, settings, runtimeCollectors{fleet: fleet})
 	require.NoError(t, err)
 	defer func() { require.NoError(t, connected.Close(context.Background())) }()
@@ -204,6 +317,9 @@ func TestFleetRuntimeProcessHelper(t *testing.T) {
 			workErr = connected.RefreshFleet(t.Context())
 		case "publish":
 			_, workErr = connected.runtime.PublishObservations(t.Context(), fleetProcessObservation(t, request.Model, request.Partial))
+		case "status", "execute":
+			send(fleetProcessBaseline(t, connected, request))
+			continue
 		default:
 			t.Fatalf("unknown process operation %q", request.Operation)
 		}
@@ -227,6 +343,27 @@ func TestFleetRuntimeProcessHelper(t *testing.T) {
 		}
 		send(reply)
 	}
+}
+
+// fleetProcessBaseline catches up with the shared head. It executes the recorded request as
+// the leader executor does, then reports the retained baseline.
+func fleetProcessBaseline(t *testing.T, connected *Runtime, request fleetProcessRequest) fleetProcessReply {
+	t.Helper()
+	var reply fleetProcessReply
+	err := connected.RefreshFleet(t.Context())
+	if err == nil && request.Operation == "execute" {
+		err = connected.executePromotionRequest(t.Context())
+	}
+	if err == nil {
+		reply.Baseline, err = connected.BaselineReport()
+	}
+	if status, ok := connected.runtime.FleetStatus(); ok {
+		reply.Head = status.Head
+	}
+	if err != nil {
+		reply.Error = err.Error()
+	}
+	return reply
 }
 
 func fleetProcessObservation(t *testing.T, model string, partial bool) sources.Observation {

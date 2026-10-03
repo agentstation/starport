@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
@@ -34,6 +35,12 @@ type FleetStore struct {
 	prefix   string
 	session  string
 	policy   fleetPolicy
+	// promotions wakes the leader executor when lease renewal reads a pending request.
+	promotions chan struct{}
+	// observe refuses the publication lease, so the runtime only consumes the fleet head.
+	observe bool
+	// refusedWrites counts the shared writes that observe mode refused. See observeOnly.
+	refusedWrites atomic.Int64
 }
 
 // NewFleetStore requires an existing open recovery approval and a matching live backend.
@@ -49,15 +56,21 @@ func NewFleetStore(ctx context.Context, store storage.IncarnationProvider, witne
 	if approved.Epoch <= 0 {
 		return nil, errors.New("catalog recovery epoch must be positive")
 	}
+	identity := runtime.FleetIdentity{DeploymentID: deployment, RecoveryEpoch: uint64(approved.Epoch), BackendID: approved.BackendID}
 	bound, err := store.BindIncarnation(ctx, approved.BackendID)
 	if err != nil {
 		return nil, err
 	}
+	return newFleetStore(bound, witness, approved, identity), nil
+}
+
+// newFleetStore binds one process session to an approved backend incarnation.
+func newFleetStore(bound storage.IncarnationStore, witness fleetRecoveryWitness, approved recovery.Record, identity runtime.FleetIdentity) *FleetStore {
 	return &FleetStore{
-		store: bound, witness: witness, approval: approved, session: rand.Text(),
-		identity: runtime.FleetIdentity{DeploymentID: deployment, RecoveryEpoch: uint64(approved.Epoch), BackendID: approved.BackendID},
-		prefix:   "catalog:fleet:{" + payloadDigest([]byte(deployment)) + "}:v1:",
-	}, nil
+		store: bound, witness: witness, approval: approved, session: rand.Text(), identity: identity,
+		prefix:     "catalog:fleet:{" + payloadDigest([]byte(identity.DeploymentID)) + "}:v1:",
+		promotions: make(chan struct{}, 1),
+	}
 }
 
 func (s *FleetStore) checkApproval(ctx context.Context) error {

@@ -103,8 +103,12 @@ jobs:
             coverage=(-coverprofile=native-catalog/catalog.coverage.txt -covermode=atomic)
           fi
           # The complete catalog package exceeds Go's default ten-minute
-          # package allowance. Individual contract deadlines remain unchanged.
-          go test -json -count=1 -timeout 30m ${{ matrix.race }} "${coverage[@]}" ./internal/catalog | tee -a native-catalog/tests.jsonl
+          # package allowance. The memory-fleet promotion and observer tests
+          # open the full embedded catalog under the race detector. The package
+          # measured 2,437 s and 2,450 s on macOS and Windows and then exceeded
+          # 2,700 s on a slower macOS runner, so the budget is sixty minutes.
+          # Individual contract deadlines remain unchanged.
+          go test -json -count=1 -timeout 60m ${{ matrix.race }} "${coverage[@]}" ./internal/catalog | tee -a native-catalog/tests.jsonl
           coverage=()
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             coverage=(-coverprofile=native-catalog/app.coverage.txt -covermode=atomic)
@@ -377,7 +381,7 @@ jobs:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
           TEST_VALKEY_REPLACEMENT_URL: redis://127.0.0.1:${{ job.services.valkey-replacement.ports['6379'] }}
           TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/starport_test?sslmode=disable
-        run: go test -json -race -count=1 -timeout 7m ./internal/catalog ./internal/recovery ./internal/storage -run '^(TestFleet|TestFreshFleet|TestRecoveryWitness|TestBudgetAuthority|TestValkeyIncarnation)' -skip '^TestFleetAdoption' > fleet-catalog.jsonl
+        run: go test -json -race -count=1 -timeout 20m ./internal/catalog ./internal/recovery ./internal/storage -run '^(TestFleet|TestFreshFleet|TestRecoveryWitness|TestBudgetAuthority|TestValkeyIncarnation)' -skip '^TestFleetAdoption' > fleet-catalog.jsonl
       - name: Verify controlled catalog adoption
         env:
           TEST_VALKEY_URL: redis://127.0.0.1:${{ job.services.valkey.ports['6379'] }}
