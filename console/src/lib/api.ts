@@ -335,11 +335,16 @@ export type WebhookSummary = {
 
 export type SystemMetrics = {
   requests?: { total?: number; errors?: number; rate_1min?: number };
-  latency?: { p50?: number; p95?: number; p99?: number };
+  // Each timing names its boundary and says whether it covers the complete
+  // request path. lib/timing words both.
+  latency?: { p50?: number; p95?: number; p99?: number; boundary?: string; complete?: boolean };
   // Gateway-added latency only: total handling minus upstream waits.
-  overhead?: { p50?: number; p95?: number; p99?: number };
+  overhead?: { p50?: number; p95?: number; p99?: number; boundary?: string; complete?: boolean };
   tokens?: { total?: number };
   spend?: { nano_usd?: number; requests_without_cost?: number };
+  // sample is the record sample behind the timings. truncated means that it
+  // holds only the newest records of the window.
+  sample?: { records?: number; window?: string; truncated?: boolean };
 };
 
 // ProviderOfferingStatus answers two separate questions about one offering.

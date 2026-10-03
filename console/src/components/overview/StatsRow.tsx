@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { ACTIVITY_24H_LIMIT, queries } from "@/lib/queries";
 import { formatCount, formatMs, formatNanoUSD } from "@/lib/format";
+import { timingLabel, type TimingLabel } from "@/lib/timing";
 
 // bucketize folds activity records into hourly counts for the last day,
 // oldest bucket first. The sparkline stays neutral trend data only.
@@ -55,6 +56,7 @@ function Stat({
   trend,
   max,
   delta,
+  scope,
 }: {
   label: string;
   value: string;
@@ -62,6 +64,8 @@ function Stat({
   trend?: number[];
   max?: number;
   delta?: string | null;
+  // scope states the boundary of a timing and whether it is complete.
+  scope?: TimingLabel;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -81,6 +85,11 @@ function Stat({
         {trend && <Sparkline points={trend} max={max} />}
         {detail && <span className="text-xs text-text-3">{detail}</span>}
       </div>
+      {scope && (
+        <span className="text-xs text-text-3" title={scope.sentence}>
+          {scope.text}
+        </span>
+      )}
     </div>
   );
 }
@@ -180,14 +189,16 @@ export function StatsRow() {
           }
         />
         <Stat
-          label="Latency p50"
+          label="Gateway latency p50"
           value={formatMs(latency.p50)}
           detail={`p95 ${formatMs(latency.p95)}`}
+          scope={timingLabel(latency, metrics.data?.sample)}
         />
         <Stat
           label="Starport overhead p50"
           value={formatMs(overhead.p50)}
           detail={`p99 ${formatMs(overhead.p99)}`}
+          scope={timingLabel(overhead, metrics.data?.sample)}
         />
       </div>
       {capped && (

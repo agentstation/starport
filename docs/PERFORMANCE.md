@@ -28,6 +28,18 @@ constant and context facade live in `internal/proxy`.
 - The console Overview shows Starport overhead p50/p99 from
   `GET /api/v1/admin/metrics` (`overhead.p50/p95/p99`, nearest-rank over
   the 24-hour sample window).
+- `latency` and `overhead` in `GET /api/v1/admin/metrics` each carry
+  `boundary` and `complete`. `latency.boundary` is `gateway_service`: from
+  the start of the proxy service to the response or the stream end.
+  `overhead.boundary` is `gateway_added`: that time minus the provider
+  waits. Authentication, limits, budgets, and request decoding are outside
+  both, so `complete` is `false`. `sample.truncated` is `true` when the
+  sample holds only the newest records.
+- The console labels each timing from these fields: "Partial: gateway
+  service", "Partial: gateway added", and ", partial sample" for a
+  truncated sample. The chat metadata line measures TTFT and total in the
+  browser, from the request to the last byte, and labels them "Complete:
+  browser round trip".
 
 ## Benchmark harness
 

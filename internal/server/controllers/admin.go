@@ -843,16 +843,22 @@ func metricsFromSample(records []usage.Record, now time.Time) map[string]any {
 			"errors":    failures,
 			"rate_1min": lastMinute,
 		},
+		// Each timing names its boundary, so a reader never presents a
+		// component timing as a complete request timing.
 		"latency": map[string]any{
-			"p50": latencyPercentile(latencies, 0.50),
-			"p95": latencyPercentile(latencies, 0.95),
-			"p99": latencyPercentile(latencies, 0.99),
+			"p50":      latencyPercentile(latencies, 0.50),
+			"p95":      latencyPercentile(latencies, 0.95),
+			"p99":      latencyPercentile(latencies, 0.99),
+			"boundary": usage.TimingGatewayService,
+			"complete": false,
 		},
 		// Gateway-added latency only: total handling minus upstream waits.
 		"overhead": map[string]any{
-			"p50": latencyPercentile(overheads, 0.50),
-			"p95": latencyPercentile(overheads, 0.95),
-			"p99": latencyPercentile(overheads, 0.99),
+			"p50":      latencyPercentile(overheads, 0.50),
+			"p95":      latencyPercentile(overheads, 0.95),
+			"p99":      latencyPercentile(overheads, 0.99),
+			"boundary": usage.TimingGatewayAdded,
+			"complete": false,
 		},
 		fieldTokens: map[string]any{
 			"total": tokens,

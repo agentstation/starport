@@ -47,6 +47,7 @@ import {
   providerLabel,
 } from "@/lib/format";
 import { RANGE_LABELS, RANGE_SECONDS, rangeOf } from "@/lib/timeRange";
+import { GATEWAY_ADDED, GATEWAY_SERVICE, TIMING_BOUNDARY, timingLabel } from "@/lib/timing";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import { bucketize, describeBuckets, type Bucket } from "@/lib/usageBuckets";
 import { cn } from "@/lib/utils";
@@ -289,6 +290,10 @@ function rowTime(record: ActivityRecord, rangeSeconds: number | undefined): Reac
 
 // --- Detail panel ---
 
+// RECORD_TIMING labels the timings of one usage record. The gateway measures
+// them inside the proxy service, so they are partial.
+const RECORD_TIMING = timingLabel({ boundary: GATEWAY_SERVICE, complete: false });
+
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-border-1 py-2 text-sm last:border-b-0">
@@ -394,13 +399,16 @@ function RequestDetail({
             {Number.isFinite(record.routing_ms) && record.routing_ms ? (
               <DetailRow label="Routing">{formatMs(record.routing_ms)}</DetailRow>
             ) : null}
-            <DetailRow label="Latency">{formatMs(record.latency_ms)}</DetailRow>
+            <DetailRow label="Gateway latency">{formatMs(record.latency_ms)}</DetailRow>
             {record.overhead_ms !== undefined && (
               <DetailRow label="Starport overhead">{formatMs(record.overhead_ms)}</DetailRow>
             )}
             {record.streaming && record.ttft_ms !== undefined && (
               <DetailRow label="TTFT">{formatMs(record.ttft_ms)}</DetailRow>
             )}
+            <DetailRow label="Timing">
+              <span title={RECORD_TIMING.sentence}>{RECORD_TIMING.text}</span>
+            </DetailRow>
             {record.cache_status && (
               <DetailRow label="Cache">
                 <CacheCell record={record} />
@@ -1072,7 +1080,7 @@ function UsagePage() {
             </ChartCard>
 
             <ChartCard
-              title="Latency"
+              title="Gateway latency"
               value={totals.avgLatency !== undefined ? `${formatMs(totals.avgLatency)} avg` : "—"}
               caption={caption}
             >
@@ -1142,9 +1150,9 @@ function UsagePage() {
                 <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Provider</div>
                 <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Status</div>
                 <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">Tokens</div>
-                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3" title="Gateway-added latency: total handling minus provider time">Overhead</div>
-                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3" title="Time to first token (streamed requests)">TTFT</div>
-                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">Latency</div>
+                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3" title={`Partial: ${TIMING_BOUNDARY[GATEWAY_ADDED]?.sentence ?? ""}`}>Overhead</div>
+                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3" title="Partial: from the start of the gateway service to the first stream event (streamed requests)">TTFT</div>
+                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3" title={`Partial: ${RECORD_TIMING.sentence}`}>Latency</div>
                 <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">Cost</div>
                 <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Cache</div>
                 <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3" title="How a guardrail closed the turn">Guardrail</div>
