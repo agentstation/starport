@@ -284,10 +284,26 @@ export function initSearchPage(doc: Document, win: Window): void {
   );
 }
 
+// ---- Fragment ----
+
+// restoreFragment brings the fragment target back to the top of the view
+// after the page loads. The browser scrolls to the target before the fonts
+// and the stylesheet settle, and a later layout shift can move it away.
+export function restoreFragment(doc: Document, win: Window): void {
+  const restore = () => {
+    const id = decodeURIComponent(win.location.hash.slice(1));
+    const target = id ? doc.getElementById(id) : null;
+    target?.scrollIntoView({ block: "start" });
+  };
+  if (doc.readyState === "complete") restore();
+  else win.addEventListener("load", restore, { once: true });
+}
+
 export function initDocs(doc: Document, win: Window): void {
   fixFileLinks(doc, win);
   initThemeToggle(doc);
   initCopyButtons(doc, win);
   initTableOfContents(doc, win);
   initSearchPage(doc, win);
+  restoreFragment(doc, win);
 }
