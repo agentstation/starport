@@ -93,6 +93,8 @@ benchmarks/
 docs/_build/
 docs/.hugo_build.lock
 site/
+# The docs site source and its generated reference pages are tracked.
+!docs/site/
 
 # Node modules (for web UI)
 node_modules/
