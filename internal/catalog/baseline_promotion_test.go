@@ -379,8 +379,8 @@ var olderBaselineTemplate struct {
 	retained catalogs.GenerationIdentity
 }
 
-// promotableFleet opens one leader that retains an older baseline than its packaged baseline.
-func promotableFleet(t *testing.T) (*memoryFleet, *Runtime, BaselineReport) {
+// olderBaselineFleet returns a private copy of the memory fleet that retains an older baseline.
+func olderBaselineFleet(t *testing.T) (*memoryFleet, catalogs.GenerationIdentity) {
 	t.Helper()
 	template := &olderBaselineTemplate
 	template.once.Do(func() {
@@ -395,12 +395,17 @@ func promotableFleet(t *testing.T) (*memoryFleet, *Runtime, BaselineReport) {
 		template.ready = true
 	})
 	require.True(t, template.ready, "the first promotable fleet did not retain the older baseline")
-	retained := template.retained
-	fleet := &memoryFleet{
+	return &memoryFleet{
 		store:   template.store.clone(),
 		witness: &memoryFleetWitness{record: template.witness.record, consumed: template.witness.consumed},
 		kv:      storage.NewMockStore(),
-	}
+	}, template.retained
+}
+
+// promotableFleet opens one leader that retains an older baseline than its packaged baseline.
+func promotableFleet(t *testing.T) (*memoryFleet, *Runtime, BaselineReport) {
+	t.Helper()
+	fleet, retained := olderBaselineFleet(t)
 	leader := fleet.open(t)
 	report, err := leader.BaselineReport()
 	require.NoError(t, err)
