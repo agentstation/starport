@@ -1,7 +1,7 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-10-01
+Last Updated: 2026-10-03
 
 ## 🚀 Current Sprint: Starport v1
 
@@ -35,6 +35,12 @@ CSP16.2 adds explicit fleet baseline promotion with `starport catalog promote-ba
 The command records a request in shared storage and never takes the publication lease.
 The lease holder executes the request and records a receipt that makes a retry with the same operation ID exact.
 Rollback and a console view remain out of scope.
+
+CSP19.1 qualifies the move of a populated local deployment to the shared recipe.
+Its tests capture Badger, SQLite, and file storage, then prepare, inspect, and activate into Valkey, PostgreSQL, and object storage.
+They cover record parity, typed refusals, a second replica, and rollback to the local stores.
+A local gateway does not refuse a start after `backup close`, so the external writer fence is mandatory.
+A catalog baseline promotion after the move waits for CSP16.2.
 
 ### Proposed Work
 
