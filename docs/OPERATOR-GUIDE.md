@@ -684,6 +684,21 @@ Start a gateway of this version to migrate the store, and then save again.
 No response holds a credential. A sealed value shows only as a presence marker, and the revision checksum identifies the revision.
 Audit records name the setting keys and the revision, never a value.
 
+The effective report also names where a save writes and where the process keeps its data:
+
+| Field | Meaning |
+| --- | --- |
+| `target.kind` | `local-file`, `shared-revision`, or `external-controller`. The management mode selects it. |
+| `target.path` | The local configuration file that a save rewrites. |
+| `target.unavailable` | Why a local save refuses, for example more than one configuration file. Empty when a save can write. |
+| `paths` | The effective directories and files, the deployment ID that a save names, and the origin of each path in `paths.origins`. |
+| `storage` | One entry for each selected store (`kv`, `sql`, `blobs`): the `selection`, the `lifetime` (`process`, `local`, or `service`), and the local `location`. A service endpoint or credential never appears. |
+
+The console Settings page shows this report in its Configuration section. The section groups the settings by task: Catalog source and Inference access. Every other setting, with the paths, the storage, and the caches, is under Advanced details.
+Each setting shows its value, origin, and authority exactly as the report gives them. A sealed value shows only its presence marker.
+Each edit control states its target before the save: `local file <path>`, `shared revision <n>`, or `external controller (read only, shows the diff)`.
+The console then runs the check, the connection test, and the save through the routes above, and it shows the receipt or the refusal.
+
 ### Read the Running Gateway
 
 A running gateway states what it is and how it runs at one admin route:
@@ -1050,6 +1065,15 @@ process the operator started.
 shows all three on the provider screen: what the environment holds, what the
 operator applied, and which plane actually paid over the last hour.
 
+The chat composer, the compare view, and each model page state chat
+readiness for the model. Readiness is `ready` when a provider that serves the
+model for chat completions holds a usable operator credential, and the
+statement names that provider. It is `no credential` when no such provider
+holds one. It is `not known` for a key that cannot read
+`GET /api/v1/admin/providers`. Readiness counts operator credentials only, so
+an account BYOK credential does not make a model ready. The models list keeps
+every catalog model, also a model with no usable credential.
+
 ### Choosing between them
 
 An account's `provider_credential_strategy` decides the order. Set it on the
@@ -1328,6 +1352,13 @@ It carries no source address, no source identity, no publication chain, no
 lease, no run identifier, and no failure reason. Those values reach the admin
 status route alone. A gateway with no catalog answers the safe route with a
 sanitized `503`.
+
+The console catalog panel states the effect of Refresh sources before the
+click. After the click it reads the run at
+`GET /api/v1/admin/catalog/refreshes/{run_id}` until the run closes, and it
+shows the run state: Queued, Running, Done, Failed, or Canceled. The panel does
+not pin a generation. It points to the generation pin in Settings,
+Configuration.
 
 The discovery route uses one accepted generation and the current key and account policy.
 Missing provider credentials do not remove permitted entries.
