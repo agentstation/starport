@@ -23,6 +23,7 @@ import (
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/configrevision"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/sqlstore"
@@ -77,6 +78,7 @@ func populatedAdoptionFixture(t *testing.T) *populatedFixture {
 	activated, err := ActivateRecovery(ctx, cfg, first)
 	require.NoError(t, err)
 	require.True(t, activated.CurrentAdmissionValid)
+	populatedSharedConfiguration(t, cfg)
 	// The open deployment acknowledged these records before the fence. C captures them, and adoption keeps them in place.
 	store, err := storage.OpenValkey(cfg.RuntimeStorage().Valkey)
 	require.NoError(t, err)
@@ -93,6 +95,21 @@ func populatedAdoptionFixture(t *testing.T) *populatedFixture {
 	issued, err := issuer.IssueInitial(ctx, apikey.IssueRequest{Name: "adopted", AccountID: populatedAccount, Scopes: []string{"inference:write"}})
 	require.NoError(t, err)
 	return &populatedFixture{cfg: cfg, environment: environment, valkey: valkey, prior: populatedWitness(t, cfg).approved, key: issued.APIKey}
+}
+
+// populatedSharedConfiguration seeds the first shared configuration revision.
+// The populated deployment selects distributed storage, so shared management
+// owns its deployment-scope catalog settings. Startup refuses a deployment
+// without a stored head, so the operator runs this step after activation and
+// before any gateway starts. The store lives in the shared SQL database, so
+// the step also precedes capture. It matches `starport config init --shared --yes`.
+func populatedSharedConfiguration(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	require.True(t, cfg.SharedManagement(), "the populated deployment selects shared management")
+	result, err := InitializeSharedConfiguration(t.Context(), cfg, configrevision.Request{OperationID: "initialize-populated-" + rand.Text()})
+	require.NoError(t, err)
+	require.True(t, result.Written)
+	require.Equal(t, int64(1), result.Revision.Sequence)
 }
 
 // capture closes the live boundary, captures C, and retains H and the private operator request.
