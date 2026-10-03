@@ -61,6 +61,10 @@ type PromotionRequest struct {
 	// Zero accepts the head that this replica observes. The head before this
 	// process republished the same generation as it took the lease also matches.
 	ExpectedRevision uint64
+	// PackagedGenerationID names the packaged baseline of the binary that wrote the request.
+	// The leader promotes only its own packaged generation. Empty selects the packaged
+	// generation of this replica.
+	PackagedGenerationID string
 	// Actor names the operator for the receipt.
 	Actor string
 }
@@ -118,16 +122,25 @@ func (r *Runtime) BaselineReport() (BaselineReport, error) {
 // Only the publication lease holder promotes. The promoted head passes fleet acceptance
 // before the receipt reports it applied. An exact retry returns the stored receipt
 // without a promotion. A refusal returns a receipt that the fleet does not store.
+// The leader calls it for a recorded request. See executePromotionRequest.
 func (r *Runtime) PromoteBaseline(ctx context.Context, request PromotionRequest) (PromotionReceipt, error) {
+	receipt, _, err := r.promoteBaseline(ctx, request, nil, PromotionRecord{})
+	return receipt, err
+}
+
+// promoteBaseline runs one promotion. With the bytes of a pending request, the
+// applied receipt and the outcome that replaces the request share one native
+// transaction, and settled reports that the outcome is stored.
+func (r *Runtime) promoteBaseline(ctx context.Context, request PromotionRequest, pending []byte, record PromotionRecord) (receipt PromotionReceipt, settled bool, err error) {
 	if err := ValidatePromotionOperationID(request.OperationID); err != nil {
-		return PromotionReceipt{}, err
+		return PromotionReceipt{}, false, err
 	}
 	if r == nil || r.runtime == nil || r.fleet == nil {
-		return PromotionReceipt{}, ErrBaselinePromotionFleetOnly
+		return PromotionReceipt{}, false, ErrBaselinePromotionFleetOnly
 	}
 	status, ok := r.runtime.BaselineStatus()
 	if !ok {
-		return PromotionReceipt{}, ErrBaselinePromotionFleetOnly
+		return PromotionReceipt{}, false, ErrBaselinePromotionFleetOnly
 	}
 	refused := func(message string) PromotionReceipt {
 		return PromotionReceipt{
@@ -137,61 +150,66 @@ func (r *Runtime) PromoteBaseline(ctx context.Context, request PromotionRequest)
 			InertRemovals: []catalogs.CatalogRemovalTarget{}, Refusal: message, Actor: request.Actor, CreatedAt: time.Now().UTC(),
 		}
 	}
+	// An old binary cannot promote the request of a new binary, or the reverse.
+	if request.PackagedGenerationID != "" && request.PackagedGenerationID != status.Packaged.GenerationID {
+		return refused(fmt.Sprintf("the leader runs packaged generation %s, and the request names packaged generation %s. A leader promotes only its own packaged generation. Finish the gateway upgrade, or run the command with the binary of the leader",
+			status.Packaged.GenerationID, request.PackagedGenerationID)), false, nil
+	}
 	stored, found, err := r.fleet.promotionReceipt(ctx, request.OperationID)
 	if err != nil {
-		return PromotionReceipt{}, err
+		return PromotionReceipt{}, false, err
 	}
 	if found {
 		if conflict := stored.bindingConflict(r.fleet.identity.DeploymentID, status.Packaged.GenerationID, request.ExpectedRevision); conflict != "" {
-			return refused(conflict), nil
+			return refused(conflict), false, nil
 		}
-		return stored, nil
+		return stored, false, nil
 	}
 	previous := status.Head.Revision
 	if request.ExpectedRevision != 0 && request.ExpectedRevision != status.Head.Revision {
 		republished, err := r.fleet.republishedRevision(ctx, status.Head)
 		if err != nil {
-			return PromotionReceipt{}, err
+			return PromotionReceipt{}, false, err
 		}
 		if republished != request.ExpectedRevision {
-			return refused(fmt.Sprintf("the fleet head is at revision %d, not the expected revision %d", status.Head.Revision, request.ExpectedRevision)), nil
+			return refused(fmt.Sprintf("the fleet head is at revision %d, not the expected revision %d", status.Head.Revision, request.ExpectedRevision)), false, nil
 		}
 		previous = republished
 	}
 	holder, foreign, err := r.fleet.promotionLeader(ctx)
 	if err != nil {
-		return PromotionReceipt{}, err
+		return PromotionReceipt{}, false, err
 	}
 	if foreign {
-		return refused(fmt.Sprintf("the fleet leader %q holds the publication lease. A running gateway renews its lease until it stops. Stop the gateways of the old binary or use the fleet upgrade window. Then retry with the same operation ID", holder)), nil
+		return refused(fmt.Sprintf("the fleet leader %q holds the publication lease. Only the leader promotes. The leader executes a recorded request at its next lease renewal. Retry with the same operation ID", holder)), false, nil
 	}
 	if !status.Promotable {
-		return refused(status.Refusal), nil
+		return refused(status.Refusal), false, nil
 	}
 	result, err := r.runtime.PromoteEmbeddedBaseline(ctx, runtime.BaselinePromotion{ExpectedHead: status.Head, PackagedGenerationID: status.Packaged.GenerationID})
 	if err != nil {
 		if starmaperrors.IsConflict(err) {
-			return refused(err.Error()), nil
+			return refused(err.Error()), false, nil
 		}
-		return PromotionReceipt{}, err
+		return PromotionReceipt{}, false, err
 	}
 	if result.Head.Revision <= status.Head.Revision {
-		return PromotionReceipt{}, fleetStoreConflict("the promoted fleet head did not advance its revision")
+		return PromotionReceipt{}, false, fleetStoreConflict("the promoted fleet head did not advance its revision")
 	}
 	if err := r.acceptPromotedHead(ctx, result.Head); err != nil {
-		return PromotionReceipt{}, fmt.Errorf("accept promoted fleet head %d: %w", result.Head.Revision, err)
+		return PromotionReceipt{}, false, fmt.Errorf("accept promoted fleet head %d: %w", result.Head.Revision, err)
 	}
-	receipt := PromotionReceipt{
+	receipt = PromotionReceipt{
 		OperationID: request.OperationID, DeploymentID: r.fleet.identity.DeploymentID, Status: PromotionApplied,
 		Previous:      promotionIdentity(result.Previous, previous),
 		Promoted:      promotionIdentity(result.Promoted, result.Head.Revision),
 		InertRemovals: append([]catalogs.CatalogRemovalTarget{}, result.InertRemovals...),
 		Actor:         request.Actor, CreatedAt: time.Now().UTC(),
 	}
-	if err := r.fleet.recordPromotion(ctx, result.Head, receipt); err != nil {
-		return PromotionReceipt{}, fmt.Errorf("record the receipt of accepted fleet head %d: %w", result.Head.Revision, err)
+	if err := r.fleet.recordPromotion(ctx, result.Head, receipt, pending, record); err != nil {
+		return PromotionReceipt{}, false, fmt.Errorf("record the receipt of accepted fleet head %d: %w", result.Head.Revision, err)
 	}
-	return receipt, nil
+	return receipt, pending != nil, nil
 }
 
 // acceptPromotedHead runs the fleet acceptance that every replica replays.
@@ -287,8 +305,9 @@ func (s *FleetStore) promotionLeader(ctx context.Context) (string, bool, error) 
 }
 
 // recordPromotion creates the receipt under the live grant that committed the promoted head.
-// A lost or replaced grant refuses the write.
-func (s *FleetStore) recordPromotion(ctx context.Context, head runtime.FleetHead, receipt PromotionReceipt) error {
+// With the bytes of a pending request, the same transaction replaces the request with its outcome.
+// A lost or replaced grant, or a changed request, refuses the write.
+func (s *FleetStore) recordPromotion(ctx context.Context, head runtime.FleetHead, receipt PromotionReceipt, pending []byte, record PromotionRecord) error {
 	encoded, err := json.Marshal(receipt)
 	if err != nil {
 		return err
@@ -304,12 +323,20 @@ func (s *FleetStore) recordPromotion(ctx context.Context, head runtime.FleetHead
 	if err != nil {
 		return err
 	}
-	err = s.store.CompareAndSwap(ctx, []storage.CompareAndSwapMutation{
+	mutations := []storage.CompareAndSwapMutation{
 		{Key: s.prefix + "lease", ExpectedValue: grant, NewValue: grant},
 		{Key: s.promotionKey(receipt.OperationID), NewValue: encoded},
-	}, s.prefix+"lease")
+	}
+	if pending != nil {
+		outcome, err := promotionOutcome(s.promotionRequestKey(), pending, record, receipt)
+		if err != nil {
+			return err
+		}
+		mutations = append(mutations, outcome)
+	}
+	err = s.store.CompareAndSwap(ctx, mutations, s.prefix+"lease")
 	if errors.Is(err, storage.ErrConflict) {
-		return fleetStoreConflict("the publication lease ended or the operation ID gained a receipt before the write")
+		return fleetStoreConflict("the publication lease ended, the operation ID gained a receipt, or the request changed before the write")
 	}
 	return err
 }

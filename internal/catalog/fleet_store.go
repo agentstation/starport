@@ -34,6 +34,8 @@ type FleetStore struct {
 	prefix   string
 	session  string
 	policy   fleetPolicy
+	// promotions wakes the leader executor when lease renewal reads a pending request.
+	promotions chan struct{}
 }
 
 // NewFleetStore requires an existing open recovery approval and a matching live backend.
@@ -61,7 +63,8 @@ func NewFleetStore(ctx context.Context, store storage.IncarnationProvider, witne
 func newFleetStore(bound storage.IncarnationStore, witness fleetRecoveryWitness, approved recovery.Record, identity runtime.FleetIdentity) *FleetStore {
 	return &FleetStore{
 		store: bound, witness: witness, approval: approved, session: rand.Text(), identity: identity,
-		prefix: "catalog:fleet:{" + payloadDigest([]byte(identity.DeploymentID)) + "}:v1:",
+		prefix:     "catalog:fleet:{" + payloadDigest([]byte(identity.DeploymentID)) + "}:v1:",
+		promotions: make(chan struct{}, 1),
 	}
 }
 

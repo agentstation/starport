@@ -24,14 +24,12 @@ import (
 type fleetProcessRequest struct {
 	Operation, Model string
 	Partial          bool
-	Promotion        PromotionRequest
 }
 type fleetProcessReply struct {
 	Error    string
 	Head     runtime.FleetHead
 	Models   []string
 	Baseline BaselineReport
-	Receipt  PromotionReceipt
 }
 type fleetProcess struct {
 	command   *exec.Cmd
@@ -168,11 +166,12 @@ func TestFleetRuntimeProcessesRecoverAfterLeaderDirectoryLoss(t *testing.T) {
 	replacement.close(t)
 }
 
-// TestFleetRuntimeRollbackKeepsPromotedBaseline promotes the packaged baseline in one gateway process.
-// Followers, a successor after leader loss, and a fresh replacement replay the promoted baseline.
-// No replica falls back to an older retained or packaged baseline.
+// TestFleetRuntimeRollbackKeepsPromotedBaseline records a promotion request through the command path.
+// The follower process ignores it, and the leader process executes it. Followers, a fresh replacement
+// after leader loss, and an exact retry replay the promoted baseline. No replica falls back to an older
+// retained or packaged baseline.
 func TestFleetRuntimeRollbackKeepsPromotedBaseline(t *testing.T) {
-	fleet, kv, witness := fleetTestStore(t)
+	fleet, kv, witness, db := fleetTestStoreWithSQL(t)
 	deployment := fleet.identity.DeploymentID
 	settings := identityTestSettings(filepath.Join(t.TempDir(), "state"), "", "127.0.0.1:0")
 	settings.DeploymentID = deployment
@@ -195,25 +194,45 @@ func TestFleetRuntimeRollbackKeepsPromotedBaseline(t *testing.T) {
 	require.Equal(t, before.Baseline.Retained, following.Baseline.Retained, "a follower replays the retained baseline, not its packaged baseline")
 	require.Equal(t, before.Head, following.Head)
 
-	request := PromotionRequest{OperationID: "rollback-" + deployment, ExpectedRevision: before.Head.Revision, Actor: "operator"}
+	// The command process opens only the shared request record. It takes no lease.
+	requests, err := OpenPromotionRequests(t.Context(), kv, db, deployment)
+	require.NoError(t, err)
+	request := PromotionRequest{OperationID: "rollback-" + deployment, ExpectedRevision: before.Head.Revision, PackagedGenerationID: before.Baseline.Packaged.GenerationID, Actor: "operator"}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		require.NoError(t, kv.BatchDelete(ctx, []string{fleet.promotionKey(request.OperationID)}))
+		require.NoError(t, kv.BatchDelete(ctx, []string{fleet.promotionKey(request.OperationID), fleet.promotionRequestKey()}))
 	})
-	refused := follower.request(t, fleetProcessRequest{Operation: "promote", Promotion: request})
-	require.Empty(t, refused.Error)
-	require.Equal(t, PromotionRefused, refused.Receipt.Status)
-	require.Contains(t, refused.Receipt.Refusal, "holds the publication lease")
-	require.Equal(t, before.Head, refused.Head, "a follower refusal leaves the head unchanged")
-	promoted := leader.request(t, fleetProcessRequest{Operation: "promote", Promotion: request})
+	holder, err := requests.Leader(t.Context())
+	require.NoError(t, err)
+	require.NotEmpty(t, holder)
+	submitted, err := requests.Submit(t.Context(), request)
+	require.NoError(t, err)
+	require.Equal(t, PromotionPending, submitted.Status)
+	ignored := follower.request(t, fleetProcessRequest{Operation: "execute"})
+	require.Empty(t, ignored.Error)
+	require.Equal(t, before.Head, ignored.Head, "a follower never executes the request")
+	pending, found, err := requests.Read(t.Context(), request.OperationID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, PromotionPending, pending.Status)
+
+	promoted := leader.request(t, fleetProcessRequest{Operation: "execute"})
 	require.Empty(t, promoted.Error)
-	receipt := promoted.Receipt
+	settled, found, err := requests.Read(t.Context(), request.OperationID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, PromotionApplied, settled.Status)
+	receipt := *settled.Receipt
 	require.Equal(t, PromotionApplied, receipt.Status, receipt.Refusal)
 	require.Equal(t, PromotionIdentity{GenerationID: retained.GenerationID, Checksum: retained.PayloadChecksum, Revision: before.Head.Revision}, receipt.Previous)
 	require.Equal(t, before.Baseline.Packaged.GenerationID, receipt.Promoted.GenerationID)
 	require.Greater(t, receipt.Promoted.Revision, receipt.Previous.Revision)
 	require.Equal(t, receipt.Promoted.Revision, promoted.Head.Revision)
+	stored, found, err := session().promotionReceipt(t.Context(), request.OperationID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, receipt, stored)
 	accepted, _, err := session().readAcceptance(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, promoted.Head, accepted.Head)
@@ -229,18 +248,30 @@ func TestFleetRuntimeRollbackKeepsPromotedBaseline(t *testing.T) {
 	require.NoError(t, os.RemoveAll(leaderDirectory))
 	// Expire the dead owner's native lease without waiting its production 90-second TTL.
 	require.NoError(t, kv.ExpireAt(t.Context(), fleet.prefix+"lease", time.Now().Add(-time.Second)))
-	retried := follower.request(t, fleetProcessRequest{Operation: "promote", Promotion: request})
-	require.Empty(t, retried.Error)
-	require.Equal(t, receipt, retried.Receipt, "an exact retry from the successor returns the original receipt")
-	require.Equal(t, before.Baseline.Packaged, retried.Baseline.Retained)
+	retried, err := requests.Submit(t.Context(), request)
+	require.NoError(t, err)
+	require.Equal(t, PromotionApplied, retried.Status)
+	require.Equal(t, receipt, *retried.Receipt, "an exact retry returns the original receipt")
+	holder, err = requests.Leader(t.Context())
+	require.NoError(t, err)
+	require.Empty(t, holder, "no gateway leads after the leader stops")
 	follower.close(t)
 
+	// After the outcome expires, a replacement leader returns the durable receipt for the same operation ID.
+	require.NoError(t, kv.ExpireAt(t.Context(), fleet.promotionRequestKey(), time.Now().Add(-time.Second)))
+	_, err = requests.Submit(t.Context(), request)
+	require.NoError(t, err)
 	replacement := startFleetProcess(t, deployment, filepath.Join(root, "replacement"), "")
-	recovered := replacement.request(t, fleetProcessRequest{Operation: "status"})
+	recovered := replacement.request(t, fleetProcessRequest{Operation: "execute"})
 	require.Empty(t, recovered.Error)
 	require.Equal(t, before.Baseline.Packaged, recovered.Baseline.Retained)
 	require.False(t, recovered.Baseline.Promotable)
 	require.GreaterOrEqual(t, recovered.Head.Revision, receipt.Promoted.Revision)
+	again, found, err := requests.Read(t.Context(), request.OperationID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, PromotionApplied, again.Status, "the replacement takes the free lease at open and executes the request")
+	require.Equal(t, receipt, *again.Receipt, "the replacement returns the original receipt")
 	replacement.close(t)
 }
 
@@ -286,7 +317,7 @@ func TestFleetRuntimeProcessHelper(t *testing.T) {
 			workErr = connected.RefreshFleet(t.Context())
 		case "publish":
 			_, workErr = connected.runtime.PublishObservations(t.Context(), fleetProcessObservation(t, request.Model, request.Partial))
-		case "status", "promote":
+		case "status", "execute":
 			send(fleetProcessBaseline(t, connected, request))
 			continue
 		default:
@@ -314,13 +345,14 @@ func TestFleetRuntimeProcessHelper(t *testing.T) {
 	}
 }
 
-// fleetProcessBaseline catches up with the shared head, then reports or promotes the retained baseline.
+// fleetProcessBaseline catches up with the shared head. It executes the recorded request as
+// the leader executor does, then reports the retained baseline.
 func fleetProcessBaseline(t *testing.T, connected *Runtime, request fleetProcessRequest) fleetProcessReply {
 	t.Helper()
 	var reply fleetProcessReply
 	err := connected.RefreshFleet(t.Context())
-	if err == nil && request.Operation == "promote" {
-		reply.Receipt, err = connected.PromoteBaseline(t.Context(), request.Promotion)
+	if err == nil && request.Operation == "execute" {
+		err = connected.executePromotionRequest(t.Context())
 	}
 	if err == nil {
 		reply.Baseline, err = connected.BaselineReport()

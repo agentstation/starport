@@ -102,7 +102,9 @@ func (s *FleetStore) AcquireLease(ctx context.Context, holder string, ttl time.D
 }
 
 // Renew extends only the original live native grant. A leader whose applied
-// configuration differs from the applied fleet policy loses the lease.
+// configuration differs from the applied fleet policy loses the lease. After
+// the renewal, a pending promotion request wakes the leader executor. Renewal
+// never runs the promotion itself.
 func (s *FleetStore) Renew(ctx context.Context, lease runtime.Lease, ttl time.Duration) (runtime.Lease, error) {
 	if ttl <= 0 {
 		return runtime.Lease{}, errors.New("fleet lease renewal requires a positive lifetime")
@@ -126,6 +128,7 @@ func (s *FleetStore) Renew(ctx context.Context, lease runtime.Lease, ttl time.Du
 		return runtime.Lease{}, err
 	}
 	lease.ExpiresAt = time.Now().Add(ttl).UTC()
+	s.signalPromotion(ctx)
 	return lease, nil
 }
 
