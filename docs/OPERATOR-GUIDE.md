@@ -1365,6 +1365,11 @@ it with the catalog configuration of the fleet. With a different catalog
 configuration, the command cannot replay the fleet head, and it refuses to
 report the retained baseline.
 
+Before the first gateway starts, the fleet has no head. Then the command
+exits with status `0`. The report has only the deployment, a `head_revision`
+of `0`, and a `refusal` that says that the fleet has no head. Start a gateway
+to publish the first fleet head.
+
 Promote the packaged baseline:
 
 ```bash
@@ -1426,8 +1431,6 @@ record for 5 minutes. These conditions cause a refusal:
   generation of the leader and the generation of the request. Finish the
   gateway upgrade, or run the command with the binary of the leader. Then
   retry with the same operation ID.
-- The publication lease moved to another gateway during the execution. The
-  refusal names that leader. Retry with the same operation ID.
 - The fleet head is not at the expected revision. Read `baseline-status`
   again before you choose a new operation ID.
 - The packaged baseline is not promotable. The refusal gives the reason.
@@ -1441,7 +1444,9 @@ It does not promote again. The fleet stores the applied receipt in shared
 storage under the deployment. Backups do not include receipts.
 
 If the leader stops before it writes the outcome, the request stays pending,
-and the next leader executes it. If the command or its host stops before the
+and the next leader executes it. If the publication lease moves to another
+gateway during the execution, the old leader writes no outcome. The request
+stays pending, and the new leader executes it. If the command or its host stops before the
 command reads the outcome, you have no receipt. Then run `baseline-status`.
 When the `retained` generation equals the `packaged` generation, the
 promotion applied. A retry with the same operation ID also returns the stored
