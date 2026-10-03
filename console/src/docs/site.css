@@ -22,6 +22,10 @@
   /* The client script sets the measured height of the sticky header on
    * the root element. This value is the fallback for one header row. */
   --docs-header-offset: var(--docs-header);
+  /* The client script also sets the measured footer height. A sticky
+   * column subtracts it, so the footer cannot push the column under the
+   * header at the page end. */
+  --docs-footer-offset: 5rem;
 }
 
 *,
@@ -328,11 +332,14 @@ main:focus {
     display: none;
   }
 
+  /* A sticky column stays inside .site-body. At the page end it must fit
+   * between the header and the footer: 1rem above it and the 3rem body
+   * padding below it. */
   .site-nav {
     position: sticky;
     top: calc(var(--docs-header-offset) + 1rem);
     align-self: start;
-    max-height: calc(100vh - var(--docs-header-offset) - 2rem);
+    max-height: calc(100vh - var(--docs-header-offset) - var(--docs-footer-offset) - 4rem);
     overflow-y: auto;
   }
 }
@@ -348,7 +355,7 @@ main:focus {
     position: sticky;
     top: calc(var(--docs-header-offset) + 1rem);
     align-self: start;
-    max-height: calc(100vh - var(--docs-header-offset) - 2rem);
+    max-height: calc(100vh - var(--docs-header-offset) - var(--docs-footer-offset) - 4rem);
     overflow-y: auto;
   }
 }

@@ -122,7 +122,7 @@ export function initCopyButtons(doc: Document, win: Window): void {
   }
 }
 
-// ---- Sticky header ----
+// ---- Sticky header and columns ----
 
 // stickyHeaderHeight is the height of the header while it is sticky, and 0
 // while it scrolls with the page.
@@ -143,14 +143,38 @@ export function syncHeaderOffset(doc: Document, win: Window): void {
   else doc.documentElement.style.removeProperty("--docs-header-offset");
 }
 
-// trackHeaderHeight keeps the offset current as the header resizes.
-export function trackHeaderHeight(doc: Document, win: Window): void {
+// syncFooterOffset writes the footer height to --docs-footer-offset while
+// the header is sticky. A sticky column cannot leave the page body, so at the
+// page end the footer pushes a column up by the part that does not fit. The
+// columns subtract this height from their maximum height, so their top stays
+// below the header. The stylesheet value is the fallback without this script.
+export function syncFooterOffset(doc: Document, win: Window): void {
+  const footer = doc.querySelector<HTMLElement>(".site-footer");
+  if (footer && stickyHeaderHeight(doc, win) > 0) {
+    const height = Math.ceil(footer.getBoundingClientRect().height);
+    doc.documentElement.style.setProperty("--docs-footer-offset", `${height}px`);
+  } else {
+    doc.documentElement.style.removeProperty("--docs-footer-offset");
+  }
+}
+
+// trackStickyOffsets keeps both offsets current as the header and the
+// footer resize.
+export function trackStickyOffsets(doc: Document, win: Window): void {
   const header = doc.querySelector<HTMLElement>(".site-header");
   if (!header) return;
-  const update = () => syncHeaderOffset(doc, win);
+  const update = () => {
+    syncHeaderOffset(doc, win);
+    syncFooterOffset(doc, win);
+  };
   update();
   const Observer = (win as Window & typeof globalThis).ResizeObserver;
-  if (Observer) new Observer(update).observe(header);
+  if (Observer) {
+    const observer = new Observer(update);
+    observer.observe(header);
+    const footer = doc.querySelector<HTMLElement>(".site-footer");
+    if (footer) observer.observe(footer);
+  }
   win.addEventListener("resize", update);
 }
 
@@ -340,7 +364,7 @@ export function restoreFragment(doc: Document, win: Window): void {
 
 export function initDocs(doc: Document, win: Window): void {
   fixFileLinks(doc, win);
-  trackHeaderHeight(doc, win);
+  trackStickyOffsets(doc, win);
   initThemeToggle(doc);
   initCopyButtons(doc, win);
   initTableOfContents(doc, win);

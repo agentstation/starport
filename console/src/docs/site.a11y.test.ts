@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import tokens from "@/styles/tokens.css?raw";
 import { buildTestSite, loadPage, parsePage, TEST_FACTS } from "@/test/docsSite";
 
-import { initDocs, initTableOfContents, restoreFragment, trackHeaderHeight } from "./client/behavior";
+import { initDocs, initTableOfContents, restoreFragment, trackStickyOffsets } from "./client/behavior";
 import sheet from "./site.css?raw";
 
 // CSP18 accessibility. The specification section 10.3 sets the targets.
@@ -478,7 +478,7 @@ test("the scroll padding and the sticky columns follow the measured height of th
   const height = vi.spyOn(header, "getBoundingClientRect").mockReturnValue({ height: 108.4 } as DOMRect);
   header.style.position = "sticky";
   const offset = () => document.documentElement.style.getPropertyValue("--docs-header-offset");
-  trackHeaderHeight(document, window);
+  trackStickyOffsets(document, window);
   expect(offset()).toBe("109px");
   height.mockReturnValue({ height: 56 } as DOMRect);
   for (const callback of observed) callback();
@@ -513,6 +513,58 @@ test("the scroll padding and the sticky columns follow the measured height of th
   // The header scrolls with the page at narrow widths, so no offset applies.
   header.style.position = "static";
   for (const callback of observed) callback();
+  expect(offset()).toBe("");
+  document.documentElement.removeAttribute("style");
+});
+
+test("a sticky column fits between the sticky header and the footer at the page end", () => {
+  // A sticky column cannot leave .site-body. At the page end the body ends
+  // its bottom padding above the footer. The column starts 1rem under the
+  // header, so its maximum height leaves the header, the footer, the 1rem,
+  // and the body padding.
+  const fit = "calc(100vh - var(--docs-header-offset) - var(--docs-footer-offset) - 4rem)";
+  expect(declared(".site-nav", "max-height", "(min-width: 64rem)")).toBe(fit);
+  expect(declared(".toc", "max-height", "(min-width: 80rem)")).toBe(fit);
+  const bodyEnd = px(declared(".site-body", "padding")?.split(" ")[2]);
+  const gap = px(/\+ ([\d.]+rem)\)$/.exec(declared(".site-nav", "top", "(min-width: 64rem)") ?? "")?.[1]);
+  expect(gap + bodyEnd).toBe(px("4rem"));
+  expect(declared(":root", "--docs-footer-offset")).toBe("5rem");
+  expect(declared(".site-footer", "height")).toBeUndefined();
+
+  // The client writes the measured footer height while the header is
+  // sticky, and it follows each footer resize.
+  loadPage(site.pages.find((page) => page.path === "troubleshoot/recovery/index.html")?.html ?? "");
+  const observed: Element[] = [];
+  const callbacks: Array<() => void> = [];
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: () => void) {
+        callbacks.push(callback);
+      }
+      observe(element: Element) {
+        observed.push(element);
+      }
+      disconnect() {}
+    },
+  );
+  const header = document.querySelector<HTMLElement>(".site-header");
+  const footer = document.querySelector<HTMLElement>(".site-footer");
+  if (!header || !footer) throw new Error("no header or footer");
+  vi.spyOn(header, "getBoundingClientRect").mockReturnValue({ height: 67 } as DOMRect);
+  const height = vi.spyOn(footer, "getBoundingClientRect").mockReturnValue({ height: 80 } as DOMRect);
+  header.style.position = "sticky";
+  const offset = () => document.documentElement.style.getPropertyValue("--docs-footer-offset");
+  trackStickyOffsets(document, window);
+  expect(observed).toEqual([header, footer]);
+  expect(offset()).toBe("80px");
+  height.mockReturnValue({ height: 103.2 } as DOMRect);
+  for (const callback of callbacks) callback();
+  expect(offset()).toBe("104px");
+
+  // No column is sticky at narrow widths, so no offset applies.
+  header.style.position = "static";
+  for (const callback of callbacks) callback();
   expect(offset()).toBe("");
   document.documentElement.removeAttribute("style");
 });
