@@ -884,6 +884,8 @@ jobs:
     name: Release Snapshot
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    outputs:
+      version: ${{ fromJSON(steps.goreleaser.outputs.metadata).version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -913,6 +915,7 @@ jobs:
         uses: Homebrew/actions/setup-homebrew@e99025eb970cfa124b8284a35463d87426917478 # 2026.09.28.1
 
       - name: Build release snapshot
+        id: goreleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
@@ -936,6 +939,61 @@ jobs:
             dist/checksums.txt
             dist/homebrew/Casks/starport.rb
           retention-days: 7
+
+  candidate-install:
+    name: Candidate install (${{ matrix.runner }})
+    timeout-minutes: 15
+    runs-on: ${{ matrix.runner }}
+    needs: [release-snapshot]
+    permissions:
+      contents: read
+      actions: read
+    env:
+      STARPORT_CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      STARPORT_CANDIDATE_VERSION: ${{ needs.release-snapshot.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: windows, arch: x86_64, python_arch: x64, runner: windows-2025}
+          - {os: windows, arch: arm64, python_arch: arm64, runner: windows-11-arm}
+          - {os: linux, arch: x86_64, python_arch: x64, runner: ubuntu-24.04}
+          - {os: linux, arch: arm64, python_arch: arm64, runner: ubuntu-24.04-arm}
+          - {os: darwin, arch: arm64, python_arch: arm64, runner: macos-15}
+    steps:
+      - name: Checkout verifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up native Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.python_arch }}
+      - name: Download this run's release snapshot
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${{ github.run_id }}" --repo "${{ github.repository }}" --name starport-release-snapshot --dir candidate
+      - name: Install and run the candidate archive natively
+        shell: bash
+        run: |
+          suffix=tar.gz
+          if [ "${{ matrix.os }}" = windows ]; then suffix=zip; fi
+          python scripts/verify-native-release.py \
+            --archive "candidate/starport_${STARPORT_CANDIDATE_VERSION}_${{ matrix.os }}_${{ matrix.arch }}.$suffix" \
+            --checksums candidate/checksums.txt \
+            --expected-version "$STARPORT_CANDIDATE_VERSION" \
+            --expected-os ${{ matrix.os }} --expected-arch ${{ matrix.arch }} \
+            --output native-install/result.json
+      - name: Retain native install evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-catalog-install-${{ matrix.runner }}
+          path: native-install/result.json
+          retention-days: 14
+          if-no-files-found: error
 
   action-pins:
     name: Action Pin Provenance
