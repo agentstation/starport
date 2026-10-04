@@ -3,8 +3,6 @@ package config
 import (
 	"encoding/json"
 	"maps"
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -12,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/agentstation/starport/internal/markdowntest"
 )
 
 var recipeTargets = []string{
@@ -33,93 +33,10 @@ var recipeSections = []string{
 	"Recovery",
 }
 
-// markdownSection is one heading and the body lines up to the next heading of
-// the same or a higher level. Fenced code lines stay in the body but never
-// start a section.
-type markdownSection struct {
-	heading     string
-	body        []string
-	subsections []markdownSection
-}
-
-func (s markdownSection) text() string {
-	return strings.Join(s.body, "\n")
-}
-
-func (s markdownSection) subsection(heading string) (markdownSection, bool) {
-	for _, child := range s.subsections {
-		if child.heading == heading {
-			return child, true
-		}
-	}
-	return markdownSection{}, false
-}
-
-// parseRecipePage splits a page into its h2 sections and their h3 sections.
-// Text before the first h2 is the intro.
-func parseRecipePage(source string) (intro []string, sections []markdownSection) {
-	fenced := false
-	for _, line := range strings.Split(source, "\n") {
-		if strings.HasPrefix(line, "```") {
-			fenced = !fenced
-		}
-		switch {
-		case !fenced && strings.HasPrefix(line, "## "):
-			sections = append(sections, markdownSection{heading: strings.TrimPrefix(line, "## ")})
-		case !fenced && strings.HasPrefix(line, "### ") && len(sections) > 0:
-			parent := &sections[len(sections)-1]
-			parent.subsections = append(parent.subsections, markdownSection{heading: strings.TrimPrefix(line, "### ")})
-		case len(sections) == 0:
-			intro = append(intro, line)
-		default:
-			parent := &sections[len(sections)-1]
-			if len(parent.subsections) == 0 {
-				parent.body = append(parent.body, line)
-			} else {
-				child := &parent.subsections[len(parent.subsections)-1]
-				child.body = append(child.body, line)
-			}
-		}
-	}
-	return intro, sections
-}
-
-func readRepositoryDoc(t *testing.T, path string) string {
-	t.Helper()
-	repository, err := filepath.Abs("../..")
-	require.NoError(t, err)
-	source, err := os.ReadFile(filepath.Join(repository, filepath.FromSlash(path)))
-	require.NoError(t, err)
-	// A Windows checkout converts the docs to CRLF. The tests compare lines.
-	return strings.ReplaceAll(string(source), "\r\n", "\n")
-}
-
-// headingSlug returns the GitHub-style anchor that rehype-slug assigns.
-func headingSlug(heading string) string {
-	var slug strings.Builder
-	for _, r := range strings.ToLower(heading) {
-		switch {
-		case r == ' ':
-			slug.WriteRune('-')
-		case r == '-' || r == '_' || ('a' <= r && r <= 'z') || ('0' <= r && r <= '9'):
-			slug.WriteRune(r)
-		}
-	}
-	return slug.String()
-}
-
-func tableCells(line string) []string {
-	cells := strings.Split(strings.Trim(strings.TrimSpace(line), "|"), "|")
-	for index := range cells {
-		cells[index] = strings.TrimSpace(cells[index])
-	}
-	return cells
-}
-
 // recipeStatus returns the status line that opens a recipe, or false when the
 // first body line is not a status line.
-func recipeStatus(section markdownSection) (string, bool) {
-	for _, line := range section.body {
+func recipeStatus(section markdowntest.Section) (string, bool) {
+	for _, line := range section.Body {
 		if strings.TrimSpace(line) != "" {
 			return strings.CutPrefix(line, "**Status:** ")
 		}
@@ -133,38 +50,38 @@ func recipeStatus(section markdownSection) (string, bool) {
 func TestDeclaredRecipePages(t *testing.T) {
 	t.Parallel()
 
-	_, sections := parseRecipePage(readRepositoryDoc(t, "docs/site/architecture/recipes.md"))
-	var targets []markdownSection
+	_, sections := markdowntest.Parse(markdowntest.ReadFile(t, "docs/site/architecture/recipes.md"))
+	var targets []markdowntest.Section
 	for _, section := range sections {
-		if section.heading != "Latency profiles" {
+		if section.Heading != "Latency profiles" {
 			targets = append(targets, section)
 		}
 	}
 	headings := make([]string, 0, len(targets))
 	for _, target := range targets {
-		headings = append(headings, target.heading)
+		headings = append(headings, target.Heading)
 	}
 	require.Equal(t, recipeTargets, headings)
 
 	tableStatus := map[string]string{}
-	for _, line := range strings.Split(readRepositoryDoc(t, "docs/site/architecture/targets.md"), "\n") {
-		if cells := tableCells(line); strings.HasPrefix(line, "| T") && len(cells) == 4 {
+	for _, line := range strings.Split(markdowntest.ReadFile(t, "docs/site/architecture/targets.md"), "\n") {
+		if cells := markdowntest.TableCells(line); strings.HasPrefix(line, "| T") && len(cells) == 4 {
 			tableStatus[cells[0]] = cells[3]
 		}
 	}
 	require.Len(t, tableStatus, len(recipeTargets))
 
 	for _, target := range targets {
-		id := strings.Fields(target.heading)[0]
+		id := strings.Fields(target.Heading)[0]
 		status, found := recipeStatus(target)
 		require.True(t, found, "%s has no status line", id)
 		require.Equal(t, tableStatus[id], status, "%s status differs from the target table", id)
 		require.Equal(t, id == "T2" || id == "T7", status == "Supported", "%s status %q", id, status)
 
-		subheadings := make([]string, 0, len(target.subsections))
-		for _, section := range target.subsections {
-			subheadings = append(subheadings, section.heading)
-			require.NotEmpty(t, strings.TrimSpace(section.text()), "%s %s is empty", id, section.heading)
+		subheadings := make([]string, 0, len(target.Subsections))
+		for _, section := range target.Subsections {
+			subheadings = append(subheadings, section.Heading)
+			require.NotEmpty(t, strings.TrimSpace(section.Text()), "%s %s is empty", id, section.Heading)
 		}
 		require.Equal(t, recipeSections, subheadings, "%s sections", id)
 	}
@@ -172,16 +89,16 @@ func TestDeclaredRecipePages(t *testing.T) {
 	require.Contains(t, tableStatus["T3"], "Single-process recovery tested")
 	require.Contains(t, tableStatus["T4"], "Valkey 7.2.14")
 	require.Contains(t, tableStatus["T4"], "PostgreSQL 16.15")
-	recovery, _ := targets[3].subsection("Recovery")
-	require.Contains(t, recovery.text(), "`master_replid`")
-	require.Contains(t, recovery.text(), "A replica promotion can lose each write that only the old primary acknowledged.")
-	require.Contains(t, targets[0].text(), "(../operate-starmap/central-server.md)")
+	recovery, _ := targets[3].Subsection("Recovery")
+	require.Contains(t, recovery.Text(), "`master_replid`")
+	require.Contains(t, recovery.Text(), "A replica promotion can lose each write that only the old primary acknowledged.")
+	require.Contains(t, targets[0].Text(), "(../operate-starmap/central-server.md)")
 
-	updates := readRepositoryDoc(t, "docs/site/operate-starport/catalog-updates.md")
+	updates := markdowntest.ReadFile(t, "docs/site/operate-starport/catalog-updates.md")
 	require.Contains(t, updates, "## Update policy selector")
 	for _, heading := range recipeTargets {
 		id := strings.Fields(heading)[0]
-		require.Contains(t, updates, "| ["+id+"](../architecture/recipes.md#"+headingSlug(heading)+") |")
+		require.Contains(t, updates, "| ["+id+"](../architecture/recipes.md#"+markdowntest.HeadingSlug(heading)+") |")
 	}
 }
 
@@ -203,23 +120,23 @@ func TestRecipeLatencyProfiles(t *testing.T) {
 			LatencyMillisec map[string]float64 `json:"latency_ms"`
 		} `json:"recipes"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(readRepositoryDoc(t, "docs/performance-targets-v1.json")), &targets))
+	require.NoError(t, json.Unmarshal([]byte(markdowntest.ReadFile(t, "docs/performance-targets-v1.json")), &targets))
 	require.Equal(t, "UNVERIFIED", targets.Qualification)
 	require.Equal(t, "CSP22", targets.Runner.QualificationOwner)
 	profiles := []string{"local", "fleet"}
 	require.ElementsMatch(t, profiles, slices.Collect(maps.Keys(targets.Recipes)))
 
-	_, sections := parseRecipePage(readRepositoryDoc(t, "docs/site/architecture/recipes.md"))
+	_, sections := markdowntest.Parse(markdowntest.ReadFile(t, "docs/site/architecture/recipes.md"))
 	require.NotEmpty(t, sections)
 	profileSection := sections[0]
-	require.Equal(t, "Latency profiles", profileSection.heading)
-	require.Contains(t, profileSection.text(), "UNVERIFIED")
-	require.Contains(t, profileSection.text(), "CSP22")
-	require.Contains(t, profileSection.text(), "`docs/performance-targets-v1.json`")
+	require.Equal(t, "Latency profiles", profileSection.Heading)
+	require.Contains(t, profileSection.Text(), "UNVERIFIED")
+	require.Contains(t, profileSection.Text(), "CSP22")
+	require.Contains(t, profileSection.Text(), "`docs/performance-targets-v1.json`")
 
 	rows := map[string][]string{}
-	for _, line := range profileSection.body {
-		if cells := tableCells(line); strings.HasPrefix(line, "| ") && len(cells) == 3 {
+	for _, line := range profileSection.Body {
+		if cells := markdowntest.TableCells(line); strings.HasPrefix(line, "| ") && len(cells) == 3 {
 			rows[cells[0]] = cells[1:]
 		}
 	}
@@ -279,10 +196,10 @@ func TestRecipeLatencyProfiles(t *testing.T) {
 	}
 	profileName := regexp.MustCompile("`(local|fleet)` profile")
 	for _, target := range sections[1:] {
-		id := strings.Fields(target.heading)[0]
-		latency, found := target.subsection("Latency targets")
+		id := strings.Fields(target.Heading)[0]
+		latency, found := target.Subsection("Latency targets")
 		require.True(t, found, "%s has no latency section", id)
-		text := latency.text()
+		text := latency.Text()
 		require.Contains(t, text, "UNVERIFIED", id)
 		require.Contains(t, text, "CSP22", id)
 		require.Contains(t, text, "[Latency profiles](#latency-profiles)", id)
