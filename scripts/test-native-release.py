@@ -161,6 +161,110 @@ class NativeReleaseTests(unittest.TestCase):
         run.assert_not_called()
         self.assertEqual(json.loads(output.read_text())['verdict'], 'FAIL')
 
+    def test_exact_candidate_version(self):
+        self.assertEqual(verifier.candidate_archive_name('1.2.2-next', 'windows', 'arm64'), 'starport_1.2.2-next_windows_arm64.zip')
+        self.assertEqual(verifier.candidate_archive_name('1.2.2-next', 'linux', 'x86_64'), 'starport_1.2.2-next_linux_x86_64.tar.gz')
+        for version in ('1.2.2', 'v1.2.2-next', '1.2.2-rc.1', '../1.2.2-next', '1.2.2-next\n', '--help'):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                verifier.candidate_archive_name(version, 'windows', 'arm64')
+
+    def test_candidate_checksum_requires_one_exact_entry(self):
+        archive = self.root / 'candidate.zip'
+        archive.write_bytes(b'archive content')
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        checksums = self.root / 'checksums.txt'
+        checksums.write_text(digest + '  candidate.zip\n')
+        self.assertEqual(verifier.verify_checksum_entry(archive, checksums), digest)
+        for text in ('', (digest + '  candidate.zip\n') * 2, '0' * 64 + '  candidate.zip\n', digest + '  other.zip\n'):
+            checksums.write_text(text)
+            with self.subTest(checksums=text), self.assertRaises(ValueError):
+                verifier.verify_checksum_entry(archive, checksums)
+
+    def test_catalog_generation_requires_an_identity(self):
+        base = 'http://127.0.0.1:3000'
+        with patch.object(verifier, 'request_json', return_value=(200, {'generation_id': 'gen-1.a:b', 'models': []})) as request:
+            self.assertEqual(verifier.catalog_generation(base, 'key'), 'gen-1.a:b')
+        request.assert_called_once_with(base + '/api/v1/catalog/discovery', 'key')
+        for response in [(200, {}), (200, {'generation_id': ''}), (200, {'generation_id': 7}),
+                         (200, {'generation_id': 'a b'}), (200, []), (203, {'generation_id': 'gen'})]:
+            with self.subTest(response=response), patch.object(verifier, 'request_json', return_value=response), self.assertRaises(ValueError):
+                verifier.catalog_generation(base, 'key')
+
+    def run_candidate(self, archive_name='starport_1.2.2-next_windows_x86_64.zip', version='starport version 1.2.2-next', extra=()):
+        archive, _ = self.make_archive('zip')
+        candidate = self.root / 'snapshot' / archive_name
+        candidate.parent.mkdir(exist_ok=True)
+        archive.rename(candidate)
+        checksums = self.root / 'snapshot' / 'checksums.txt'
+        checksums.write_text(hashlib.sha256(candidate.read_bytes()).hexdigest() + '  ' + candidate.name + '\n')
+        output = self.root / 'result.json'
+        detail = {'id': 'openai/gpt-4o-mini', 'object': 'model', 'name': 'GPT-4o mini'}
+        def binary(_binary, arguments, _environment, _home):
+            return {'--version': version + '\n', 'search': json.dumps({'data': [detail]}), 'show': json.dumps(detail)}[
+                arguments[0] if arguments[0] == '--version' else arguments[1]]
+        def development(_binary, _environment, _home, _port, report, record_generation=False):
+            self.assertTrue(record_generation)
+            report['catalog_generation'] = 'gen-1'
+        arguments = ['verify', '--archive', str(candidate), '--checksums', str(checksums), '--expected-version', '1.2.2-next',
+                     '--expected-os', 'windows', '--expected-arch', 'x86_64', '--output', str(output), *extra]
+        with patch.object(sys, 'argv', arguments), patch.dict(os.environ, {'STARPORT_CANDIDATE_HEAD_SHA': 'a' * 40}), \
+                patch.object(verifier, 'native_target', return_value=('windows', 'x86_64')), \
+                patch.object(verifier.platform, 'platform', return_value='test-platform'), \
+                patch.object(verifier, 'run_binary', side_effect=binary) as run_binary, \
+                patch.object(verifier, 'verify_development', side_effect=development), \
+                patch.object(verifier.subprocess, 'run') as run, patch('builtins.print'):
+            status = verifier.main()
+        run.assert_not_called()
+        return status, json.loads(output.read_text()), candidate, run_binary, detail
+
+    def test_candidate_mode_skips_the_release_and_records_digests(self):
+        status, report, candidate, _, detail = self.run_candidate()
+        self.assertEqual(status, 0, report)
+        self.assertEqual(report['verdict'], 'PASS')
+        self.assertEqual(report['mode'], 'candidate')
+        self.assertIsNone(report['release'])
+        self.assertNotIn('release_url', report)
+        self.assertEqual(report['candidate_version'], '1.2.2-next')
+        self.assertEqual(report['workflow_head'], 'a' * 40)
+        self.assertEqual(report['archive'], candidate.name)
+        self.assertEqual(report['archive_sha256'], hashlib.sha256(candidate.read_bytes()).hexdigest())
+        self.assertEqual(report['binary_sha256'], hashlib.sha256(b'target').hexdigest())
+        self.assertEqual(report['catalog_model_sha256'], verifier.catalog_model_digest(detail))
+        self.assertEqual(report['catalog_generation'], 'gen-1')
+        self.assertEqual(report['keyless_catalog_commands'], 2)
+        self.assertEqual(report['user_files_after_shutdown'], [])
+
+    def test_candidate_mode_refuses_another_platform_or_version_before_execution(self):
+        for name in ('starport_1.2.1-next_windows_x86_64.zip', 'starport_1.2.2-next_windows_arm64.zip', 'starport_1.2.2-next_linux_x86_64.zip'):
+            with self.subTest(name=name):
+                status, report, candidate, run_binary, _ = self.run_candidate(archive_name=name)
+                self.assertEqual((status, report['verdict']), (1, 'FAIL'))
+                run_binary.assert_not_called()
+                candidate.unlink()
+
+    def test_candidate_mode_refuses_a_binary_with_another_version(self):
+        status, report, _, _, _ = self.run_candidate(version='starport version 1.2.1')
+        self.assertEqual((status, report['verdict']), (1, 'FAIL'))
+        self.assertIn('wrong release version', report['error'])
+        self.assertNotIn('keyless_catalog_commands', report)
+
+    def test_release_and_candidate_arguments_are_exclusive(self):
+        output = str(self.root / 'result.json')
+        native = ['--expected-os', 'linux', '--expected-arch', 'x86_64', '--output', output]
+        for arguments in (['--archive', 'a.tar.gz', '--checksums', 'c.txt', '--expected-version', '1.2.2-next', '--tag', 'v1.2.0'],
+                          ['--archive', 'a.tar.gz', '--expected-version', '1.2.2-next'],
+                          ['--archive', 'a.tar.gz', '--checksums', 'c.txt'],
+                          ['--tag', 'v1.2.0', '--checksums', 'c.txt'],
+                          ['--tag', 'v1.2.0', '--expected-version', '1.2.2-next']):
+            with self.subTest(arguments=arguments), patch.object(sys, 'argv', ['verify', *arguments, *native]), \
+                    patch.dict(os.environ, {}, clear=True), patch('sys.stderr', io.StringIO()), self.assertRaises(SystemExit) as raised:
+                verifier.main()
+            self.assertEqual(raised.exception.code, 2)
+        with patch.object(sys, 'argv', ['verify', *native]), patch.dict(os.environ, {}, clear=True), \
+                patch('sys.stderr', io.StringIO()), self.assertRaises(SystemExit) as raised:
+            verifier.main()
+        self.assertEqual(raised.exception.code, 2)
+
 
 if __name__ == '__main__':
     unittest.main()

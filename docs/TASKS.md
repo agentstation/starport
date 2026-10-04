@@ -51,6 +51,19 @@ A local gateway does not refuse a start after `backup close`, so the external wr
 Catalog and fixture tests prove that the fleet leader promotes a newer packaged baseline over the moved head. The fixture test runs the shared gateway, because only a running gateway executes a promotion request.
 The move copies process-scoped keys without a filter. A local source writes none, and a moved runtime migration receipt fails closed.
 
+CSP20 aligns the README with the first-use sequence: install, catalog inspection, temporary gateway, request, client, and persistent path.
+The README owns the three credential roles, the path anchors, the storage roles, and the refused development selectors.
+It links each fact to its site page. CSP24 owns the final recording and the released installer evidence.
+
+The tests in `cmd/starport/readme_test.go` prove the README order, links, and claims against the performance profile.
+The test `TestDocumentedInferenceRequestStreamsThroughGateway` sends the README request body through the gateway to a fake provider.
+The test `TestModelsSearchAndShowWithoutCredentialsOrNetwork` runs the catalog commands without credentials or network.
+The `candidate-install` CI job installs each candidate archive on its native runner.
+
+The `candidate-install` job runs only on pull requests, as its parent `release-snapshot` does. A main push run has no install evidence.
+The install evidence therefore comes from the final pull request run. Its source commit matches the squash-merged tree.
+The format 4 capture records the run event and the pull request number. A format 3 capture fails an install entry.
+
 ### Proposed Work
 
 **Console primitive migration.** Move the remaining hand-rolled controls onto
