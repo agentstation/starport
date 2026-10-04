@@ -26,6 +26,30 @@ The acquisition switch and the source refresh mode are independent. With `ACQUIS
 
 Startup refuses a removed setting and names its replacement. For example, `STARPORT_CATALOG_REFRESH_INTERVAL` became `STARPORT_CATALOG_ACQUISITION_INTERVAL`.
 
+## Update policy selector
+
+The update policy decides when the catalog of a gateway can change. It is independent from the catalog source topology. First select the topology in [Catalog source topologies](../architecture/topologies.md). Then select one policy from this table.
+
+| Policy | Settings | Catalog changes |
+| --- | --- | --- |
+| Automatic | The defaults | Source reads each hour and provider observations each 4 hours |
+| Source only | `STARPORT_CATALOG_ACQUISITION_ENABLED=false` | Source reads only. The gateway makes no provider observation. |
+| Manual | `STARPORT_CATALOG_SOURCE_REFRESH_MODE=manual` and `STARPORT_CATALOG_ACQUISITION_ENABLED=false` | Only an explicit refresh run |
+| Pinned | `STARPORT_CATALOG_GENERATION_PIN=<generation-id>` | None until the pin changes |
+| Offline | `STARPORT_CATALOG_NETWORK_MODE=offline` | No change from a catalog network request |
+
+Each architecture target has a usual policy:
+
+| Target | Usual policy |
+| --- | --- |
+| [T1](../architecture/recipes.md#t1-standalone-starmap) | Starmap controls its own updates. Refer to [Run a central Starmap server](../operate-starmap/central-server.md). |
+| [T2](../architecture/recipes.md#t2-persistent-local-starport) | Automatic |
+| [T3](../architecture/recipes.md#t3-one-production-server) | Automatic. Use the pin for a controlled change window. |
+| [T4](../architecture/recipes.md#t4-replicated-starport) | Automatic. The replica that holds the refresh lease runs the source reads and the observations. |
+| [T5](../architecture/recipes.md#t5-internal-starmap-server) | Automatic, or source only when the server owns the provider observations |
+| [T6](../architecture/recipes.md#t6-restricted-or-air-gapped-installation) | Source only with the `file` source |
+| [T7](../architecture/recipes.md#t7-ephemeral-development) | The development defaults |
+
 ## The generation pin
 
 `STARPORT_CATALOG_GENERATION_PIN` names one retained generation. While the setting has a value, acceptance refuses each candidate that differs from the pinned generation. The pin stays until the configuration changes. The console does not pin a generation. It points to the pin field in Settings.

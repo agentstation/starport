@@ -1,0 +1,10 @@
+# TEST ONLY. Do not use this override in a deployment.
+# scripts/test-storage-recipes.py --mode fleet runs docker-compose.fleet.yml
+# against plaintext fixtures on the Docker host. A production fleet uses a
+# valkeys:// URL and keeps STARPORT_STORAGE_VALKEY_ALLOW_INSECURE=false.
+services:
+  starport:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      STARPORT_STORAGE_VALKEY_ALLOW_INSECURE: "true"

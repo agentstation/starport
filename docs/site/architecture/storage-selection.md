@@ -45,8 +45,8 @@ Set `STARPORT_DEPLOYMENT_ID` to the same value on every replica of one deploymen
 - One Badger directory serves one process. Do not share it between processes.
 - One SQLite file serves one host. It does not synchronize between replicas.
 - A local file directory serves one node. Another replica cannot read its files.
-- The shared recipe has no qualified failover result in this release. The [production status](../../PRODUCTION-STATUS.md) lists the open work.
-- Valkey with PostgreSQL is the primary replicated recipe that the production work will qualify. Redis and MySQL need their own compatibility evidence.
+- Fleet qualification covers Valkey 7.2.14 and PostgreSQL 16.15 with failover limits. The [production status](../../PRODUCTION-STATUS.md) lists the limits.
+- Valkey with PostgreSQL is the qualified replicated recipe. Redis and MySQL need their own compatibility evidence.
 
 ## Durable write settings
 
@@ -66,4 +66,4 @@ Move from T7 to T2 when you want to keep keys or records after a restart.
 
 A change of `STARPORT_STORAGE_MODE` alone opens different storage. It does not copy data. Plan the move with [Move between storage modes](../storage/migration.md). To move a local deployment to the shared recipe, refer to [Local data to the shared recipe](../storage/migration.md#local-data-to-the-shared-recipe). Back up first with [Back up and restore](../storage/backup-and-restore.md#before-you-start).
 
-The operator guide says: "Do not upgrade an existing shared deployment to this candidate." Read [Storage modes](../../OPERATOR-GUIDE.md#storage-modes) before a shared deployment.
+The operator guide names the populated adoption procedure. Read [Storage modes](../../OPERATOR-GUIDE.md#storage-modes) before a shared deployment.

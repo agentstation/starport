@@ -1,5 +1,4 @@
 # Candidate fresh fleet. External stores must satisfy docs/FLEET_INITIALIZATION.md.
-# CSP13 and CSP15 still block production fleet use and existing fleet upgrades.
 services:
   starport:
     # One replica per project keeps the local credential volume private.
@@ -17,6 +16,10 @@ services:
     # Durable records and uploaded bytes reside in the external shared stores.
     volumes:
       - starport-node-state:/var/lib/starport
+    # The root file system is read-only. Scratch uses tmpfs.
+    read_only: true
+    tmpfs:
+      - /tmp
     environment:
       STARPORT_SERVER_HOST: 0.0.0.0
       STARPORT_DEPLOYMENT_ID: ${STARPORT_DEPLOYMENT_ID:?set a stable fleet deployment ID}

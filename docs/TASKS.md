@@ -36,6 +36,14 @@ The command records a request in shared storage and never takes the publication 
 The lease holder executes the request and records a receipt that makes a retry with the same operation ID exact.
 Rollback and a console view remain out of scope.
 
+CSP19 adds one deployment recipe for each of the seven architecture targets.
+Each recipe states its durable owners, memory state, admission, latency targets, checks, and recovery.
+CSP22 owns the latency qualification. CSP19.1 owns the local-to-shared move.
+
+Both Compose recipes run with a read-only root file system and tmpfs scratch.
+A deployment that writes outside the declared mounts stops at start.
+The fleet recipe test replaces both gateway containers and reads the records again.
+
 CSP19.1 qualifies the move of a populated local deployment to the shared recipe.
 Its tests capture Badger, SQLite, and file storage, then prepare, inspect, and activate into Valkey, PostgreSQL, and object storage.
 They cover record parity, typed refusals, a second replica, and rollback to the local stores.

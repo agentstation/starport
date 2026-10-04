@@ -1578,8 +1578,8 @@ Set `STARPORT_DEPLOYMENT_ID` to the same identity on every replica of one deploy
 Durable keys and notification channels include that encoded identity and a schema version.
 Changing the identity selects different storage. It does not rename or migrate existing records.
 
-Do not upgrade an existing shared deployment to this candidate.
-Its populated-state migration and recovery commands are not yet available.
+Adopt a populated shared deployment only through [Populated adoption in place](RECOVERY.md#populated-adoption-in-place).
+Fence every writer before the adoption. A caller string or a captured control is not a fence.
 A database number or key prefix does not isolate service memory, eviction, persistence, or failure.
 
 Use a TLS endpoint for durable KV:
@@ -2305,7 +2305,11 @@ has not supplied a path override:
 | `starport-config` | `/var/lib/starport/config` | Primary configuration at `starport/config.env`. |
 | `starport-data` | `/var/lib/starport/data` | Badger at `badger/`, SQLite at `sqlite/starport.db`, file bytes at `files/`, local admin token, and catalog baseline at `catalog/baseline/`. |
 | `starport-state` | `/var/lib/starport/state` | Catalog runtime at `catalog/runtime/default/` and credential state. |
-| Container layer | `/var/lib/starport/cache` | Reconstructible cache data. |
+| tmpfs | `/var/lib/starport/cache` | Reconstructible cache data. A restart clears it. |
+
+The container has a read-only root file system, and `/tmp` uses tmpfs. A
+deployment that writes outside the declared mounts stops at start. Move a
+path override inside one of the three volumes.
 
 Run `docker compose run --rm starport config paths --json` to inspect the
 selected paths. Badger uses synchronous writes in this recipe.
