@@ -413,6 +413,9 @@ The routable snapshot retains Starmap endpoint templates. Request policy first
 selects account or deployment-owned inference material. The retained runtime
 generation then binds that material to the selected template. Deployment-owned
 base URL overrides apply only to deployment-owned material.
+`STARPORT_<PROVIDER>_INFERENCE_BASE_URL` sets that override for one provider.
+Startup compiles it into the `environment` destination policy only, so shared
+and account material keep the catalog origin.
 
 Each connector receives the exact provider model ID and the request-bound endpoint. A
 connector does not discover models, select a catalog endpoint, or probe
