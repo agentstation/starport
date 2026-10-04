@@ -48,7 +48,12 @@ func TestDeploymentApprovalsWithoutSettingsMatchInstallationDefaults(t *testing.
 	require.NoError(t, err)
 	installation, err := InstallationDestinationApprovals(snapshot)
 	require.NoError(t, err)
-	for _, settings := range []config.ProvidersConfig{nil, {catalogs.ProviderIDOpenAI: {Enabled: true}}} {
+	for _, settings := range []config.ProvidersConfig{
+		nil,
+		{catalogs.ProviderIDOpenAI: {Enabled: true}},
+		// An explicit base URL without the setting approves nothing.
+		{catalogs.ProviderIDOpenAI: {BaseURL: "http://127.0.0.1:8089/relay"}},
+	} {
 		deployment, err := DeploymentDestinationApprovals(snapshot, settings)
 		require.NoError(t, err)
 		want, err := installation.RecoverySelectionSHA256()
@@ -63,7 +68,7 @@ func TestDeploymentApprovalsBindOperatorOriginToEnvironmentRoleOnly(t *testing.T
 	snapshot, err := destinationContractBaseline()
 	require.NoError(t, err)
 	approvals, err := DeploymentDestinationApprovals(snapshot, config.ProvidersConfig{
-		catalogs.ProviderIDOpenAI: {BaseURL: "http://127.0.0.1:8089/relay/"},
+		catalogs.ProviderIDOpenAI: {BaseURL: "http://127.0.0.1:8089/relay", InferenceOrigin: "http://127.0.0.1:8089/relay/"},
 	})
 	require.NoError(t, err)
 	provider, err := snapshot.Provider(catalogs.ProviderIDOpenAI)
@@ -108,7 +113,7 @@ func TestDeploymentApprovalsKeepPrivateAndParameterizedCatalogOriginsClosed(t *t
 		private, err := builder.Build()
 		require.NoError(t, err)
 		approvals, err := DeploymentDestinationApprovals(private, config.ProvidersConfig{
-			provider.ID: {BaseURL: "https://relay.example"},
+			provider.ID: {BaseURL: "https://relay.example", InferenceOrigin: "https://relay.example"},
 		})
 		require.NoError(t, err)
 		material := credentials.NewMaterial(provider.Credentials.Profiles[0], nil, credentials.MaterialMetadata{Handle: "fixture-handle"})
@@ -123,7 +128,7 @@ func TestDeploymentApprovalsKeepPrivateAndParameterizedCatalogOriginsClosed(t *t
 		installation, err := InstallationDestinationApprovals(snapshot)
 		require.NoError(t, err)
 		deployment, err := DeploymentDestinationApprovals(snapshot, config.ProvidersConfig{
-			"ollama": {BaseURL: "http://127.0.0.1:11434"},
+			"ollama": {BaseURL: "http://127.0.0.1:11434", InferenceOrigin: "http://127.0.0.1:11434"},
 		})
 		require.NoError(t, err)
 		want, err := installation.RecoverySelectionSHA256()

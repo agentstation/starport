@@ -178,6 +178,7 @@ func (c *Config) resolveProviderRuntime(
 	catalogConfig := projectResolvedProvider(provider, material, handle.CachedSource())
 	if baseURL != "" {
 		catalogConfig.BaseURL = baseURL
+		catalogConfig.InferenceOrigin = baseURL
 	}
 	return mergeProviderConfig(catalogConfig, explicit, references), true, nil
 }
@@ -433,7 +434,9 @@ func mergeProviderConfig(
 	references map[catalogs.ProviderCredentialFieldID]CredentialReference,
 ) ProviderConfig {
 	if explicit.BaseURL != "" {
+		// An explicit base URL supersedes the setting and approves nothing.
 		resolved.BaseURL = explicit.BaseURL
+		resolved.InferenceOrigin = ""
 	}
 	if explicit.Timeout > 0 {
 		resolved.Timeout = explicit.Timeout

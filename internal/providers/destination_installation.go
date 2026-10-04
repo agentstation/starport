@@ -21,7 +21,8 @@ func InstallationDestinationApprovals(bundled *catalogs.Catalog) (*credentials.D
 
 // DeploymentDestinationApprovals adds operator-approved inference origins to the installation defaults.
 // The settings must be the startup resolution, so a catalog refresh never changes an approval.
-// A provider base URL replaces the catalog origin only for the environment role, because the
+// Only ProviderConfig.InferenceOrigin is an approval. An explicit BaseURL approves nothing.
+// The approved origin replaces the catalog origin only for the environment role, because the
 // router binds the operator override only to environment material. Shared, BYOK, and
 // anonymous material keep the public catalog origin.
 func DeploymentDestinationApprovals(bundled *catalogs.Catalog, settings config.ProvidersConfig) (*credentials.DestinationApprovals, error) {
@@ -37,7 +38,7 @@ func DeploymentDestinationApprovals(bundled *catalogs.Catalog, settings config.P
 		// A parameterized provider's base URL comes from its catalog bindings,
 		// which still require explicit deployment approval.
 		if !parameterizedDestination(provider) {
-			override = strings.TrimRight(strings.TrimSpace(settings[provider.ID].BaseURL), "/")
+			override = strings.TrimRight(strings.TrimSpace(settings[provider.ID].InferenceOrigin), "/")
 		}
 		public := publicInstallationOrigin(provider.Inference.BaseURL)
 		if override == "" && !public {

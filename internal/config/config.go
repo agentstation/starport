@@ -221,7 +221,12 @@ type ProvidersConfig map[catalogs.ProviderID]ProviderConfig
 
 // ProviderConfig defines settings for a single LLM provider
 type ProviderConfig struct {
-	BaseURL              string                                                     `redact:"url"`
+	BaseURL string `redact:"url"`
+	// InferenceOrigin is the operator-approved replacement origin from
+	// STARPORT_<PROVIDER>_INFERENCE_BASE_URL. It is empty when the setting is
+	// absent or an explicit BaseURL supersedes it. Only this field approves a
+	// destination. An explicit BaseURL never does.
+	InferenceOrigin      string                                                     `redact:"url"`
 	CredentialReferences map[catalogs.ProviderCredentialFieldID]CredentialReference `json:"credential_references,omitempty"`
 	Material             credentials.Material                                       `json:"-"`
 	CredentialSource     credentials.MaterialSource                                 `json:"-"`

@@ -57,6 +57,7 @@ func TestInferenceBaseURLSettingReplacesCatalogOrigin(t *testing.T) {
 			require.NoError(t, err)
 			require.Empty(t, failures)
 			require.Equal(t, test.want, resolved[catalogs.ProviderIDOpenAI].BaseURL)
+			require.Equal(t, test.want, resolved[catalogs.ProviderIDOpenAI].InferenceOrigin)
 			value, _ := resolved[catalogs.ProviderIDOpenAI].Material.Value("api-key")
 			require.Equal(t, "sk-test-key", value)
 			require.Len(t, resolved, 1)
@@ -145,6 +146,7 @@ func TestExplicitProviderBaseURLPrecedesInferenceBaseURLSetting(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "https://explicit.example", resolved[catalogs.ProviderIDOpenAI].BaseURL)
+	require.Empty(t, resolved[catalogs.ProviderIDOpenAI].InferenceOrigin)
 }
 
 func TestInferenceBaseURLSettingClaimsItsName(t *testing.T) {
