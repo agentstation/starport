@@ -19,7 +19,10 @@ import (
 
 func TestRecoveryActivationLocalOperatorCommands(t *testing.T) {
 	cfg, prepare := boundedActivationSourceFixture(t)
-	cfg, request := activationPreparedFixture(t, cfg, prepare)
+	var output bytes.Buffer
+	deps := localOperatorDependencies(t, cfg, &output)
+	// The operator writes H through the shipped verb before activation.
+	cfg, request := activationPreparedFixtureWith(t, cfg, prepare, activationHistoryCommand(t, deps, &output))
 	parent := filepath.Join(t.TempDir(), "private-request")
 	_, err := productfiles.CreateDirectory(parent)
 	require.NoError(t, err)
@@ -27,29 +30,6 @@ func TestRecoveryActivationLocalOperatorCommands(t *testing.T) {
 	require.NoError(t, err)
 	file := filepath.Join(parent, "activation.json")
 	require.NoError(t, os.WriteFile(file, body, 0600))
-	var output bytes.Buffer
-	deps := cli.Dependencies{
-		Stdout: &output, Stderr: &output, Stdin: bytes.NewReader(nil),
-		LoadConfig:       func(context.Context) (*config.Config, error) { return cfg, nil },
-		ActivateRecovery: ActivateRecovery, InspectRecoveryActivation: InspectRecoveryActivation,
-		ResolvePaths: func() (config.Paths, error) { return cfg.EffectivePaths(), nil },
-		RunServer: func(context.Context, cli.GatewayOptions) error {
-			t.Fatal("recovery started a gateway")
-			return nil
-		},
-		StartDevelopment: func(context.Context, cli.GatewayOptions) (cli.DevelopmentSession, error) {
-			t.Fatal("recovery started development")
-			return cli.DevelopmentSession{}, nil
-		},
-		Initialize: func(context.Context, cli.InitOptions) (cli.InitResult, error) {
-			t.Fatal("recovery initialized a gateway")
-			return cli.InitResult{}, nil
-		},
-		Diagnose: func(context.Context, diagnosis.Options) diagnosis.Report {
-			t.Fatal("recovery ran diagnostics")
-			return diagnosis.Report{}
-		},
-	}
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 	defer cancel()
 	require.NoError(t, cli.Run(ctx, []string{"starport", "backup", "activate", "--request-file", file, "--json"}, deps))
@@ -70,4 +50,32 @@ func TestRecoveryActivationLocalOperatorCommands(t *testing.T) {
 	var repeated recovery.ActivationResult
 	require.NoError(t, json.Unmarshal(output.Bytes(), &repeated))
 	require.Equal(t, completed, repeated)
+}
+
+// localOperatorDependencies runs the recovery verbs in process against one loaded configuration.
+// Any gateway, development, initialization, or diagnosis start fails the test.
+func localOperatorDependencies(t *testing.T, cfg *config.Config, output *bytes.Buffer) cli.Dependencies {
+	t.Helper()
+	return cli.Dependencies{
+		Stdout: output, Stderr: output, Stdin: bytes.NewReader(nil),
+		LoadConfig:           func(context.Context) (*config.Config, error) { return cfg, nil },
+		WriteImportedHistory: WriteImportedHistory, ActivateRecovery: ActivateRecovery, InspectRecoveryActivation: InspectRecoveryActivation,
+		ResolvePaths: func() (config.Paths, error) { return cfg.EffectivePaths(), nil },
+		RunServer: func(context.Context, cli.GatewayOptions) error {
+			t.Fatal("recovery started a gateway")
+			return nil
+		},
+		StartDevelopment: func(context.Context, cli.GatewayOptions) (cli.DevelopmentSession, error) {
+			t.Fatal("recovery started development")
+			return cli.DevelopmentSession{}, nil
+		},
+		Initialize: func(context.Context, cli.InitOptions) (cli.InitResult, error) {
+			t.Fatal("recovery initialized a gateway")
+			return cli.InitResult{}, nil
+		},
+		Diagnose: func(context.Context, diagnosis.Options) diagnosis.Report {
+			t.Fatal("recovery ran diagnostics")
+			return diagnosis.Report{}
+		},
+	}
 }

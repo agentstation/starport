@@ -83,6 +83,7 @@ func runContext(
 		PrepareBackup:                 app.PrepareBackup,
 		InspectImportedBackup:         app.InspectImportedBackup,
 		ApplyImportedHistory:          app.ApplyImportedHistory,
+		WriteImportedHistory:          app.WriteImportedHistory,
 		PublishBackupFiles:            app.PublishBackupFiles,
 		ActivateRecovery:              app.ActivateRecovery,
 		InspectRecoveryActivation:     app.InspectRecoveryActivation,

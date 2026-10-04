@@ -120,7 +120,7 @@ func operatorCommandDependencies(t *testing.T, environment map[string]string, ou
 			}
 			return cfg.EffectivePaths(), nil
 		},
-		ActivateRecovery: ActivateRecovery, InspectRecoveryActivation: InspectRecoveryActivation,
+		WriteImportedHistory: WriteImportedHistory, ActivateRecovery: ActivateRecovery, InspectRecoveryActivation: InspectRecoveryActivation,
 		PreparePopulatedRecovery: func(ctx context.Context, cfg *config.Config, request cli.PopulatedRecoveryRequest) (cli.PopulatedRecoveryPreparation, error) {
 			result, err := PreparePopulatedRecovery(ctx, cfg, PopulatedRecoveryRequest(request))
 			return cli.PopulatedRecoveryPreparation(result), err
@@ -367,7 +367,9 @@ func TestRecoveryPopulatedOperatorCommandsAcrossNativePhaseCut(t *testing.T) {
 	}, func(source *config.Config, receipt recovery.CaptureResult) { activity.afterCapture(t, source, receipt) })
 	configureSharedRestore(t, cfg, valkey, postgres, endpoint)
 	cfg, environment := operatorPrimaryConfiguration(t, cfg)
-	cfg, request := activationPreparedFixture(t, cfg, prepare)
+	// The operator writes the final-only H through the shipped verb. The post-backup ledger then extends it.
+	var written, writtenDiagnostic bytes.Buffer
+	cfg, request := activationPreparedFixtureWith(t, cfg, prepare, activationHistoryCommand(t, operatorCommandDependencies(t, environment, &written, &writtenDiagnostic), &written))
 	request = postBackupHistory(t, cfg, request, &activity)
 	private := filepath.Join(t.TempDir(), "private-operator")
 	_, err := productfiles.CreateDirectory(private)

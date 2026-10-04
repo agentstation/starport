@@ -73,13 +73,58 @@ The attestations assert external facts that Starport cannot establish.
 Set them only after verifying the complete interval and previously admitted work.
 Missing history cannot establish zero spending, restored permission, or safe provider retries.
 
+## History package
+
+`starport backup write-history` writes the independent history package for a controlled stop.
+The package declares two steps: the final KV authorization and then the final SQL authorization.
+The KV value comes from the backup, and the SQL value comes from the closed target.
+The command records the SHA-256 digest and size of each evidence file. It does not copy the files.
+It changes no target store and grants no admission.
+
+Create an empty private history directory outside the backup, scratch, and target paths.
+Keep every writer fenced while the command runs.
+Supply the unchanged operation and the `target_sha256` value from `backup inspect-import`.
+The command refuses a target with a different digest.
+
+Retain the returned `history_sha256` outside the package, and use it as `HistorySHA256`.
+After a failure, remove the partial history directory before you retry.
+
+```bash
+starport backup write-history \
+  --directory /private/recovery/original-backup \
+  --manifest-sha256 "$BACKUP_SHA256" \
+  --scratch /private/recovery/scratch \
+  --operation restore-2026-09-30 \
+  --fencing-evidence replace-with-external-fencing-reference \
+  --history-directory /private/recovery/independent-history \
+  --expected-target-sha256 "$TARGET_SHA256" \
+  --valkey-incarnation "$VALKEY_INCARNATION" \
+  --mode planned_migration --disposition replay_complete \
+  --through 2026-09-30T18:00:00Z \
+  --end-reference replace-with-interval-end-reference \
+  --highest-epoch 7 --epoch-reference replace-with-epoch-record-reference \
+  --epoch-operator operator \
+  --evidence-file source-stop=/private/recovery/evidence/source-stop.log=replace-with-evidence-reference \
+  --epoch-evidence source-stop \
+  --operator operator \
+  --attestation-reference replace-with-independent-interval-evidence \
+  --writers-fenced --admitted-work-accounted --complete-interval --json
+```
+
+The `--through` time cannot be before the backup finished.
+The `--highest-epoch` value cannot be below the backup epoch.
+The command writes no step for activity after the backup.
+If the source admitted work after the backup, this package cannot account for it.
+
 ## Activation and exact retries
 
 1. Verify the original backup against its independently retained manifest digest.
 2. Prepare inactive target stores with `starport backup prepare`.
-3. Inspect the closed import with `starport backup inspect-import`.
-4. Bind independent history to the returned target digest and unchanged operation.
-5. Run the coordinated activation with the private request file.
+3. Make the target local admin token with `starport auth rotate --no-secret`.
+   The token in the backup stays inactive. Activation refuses a target without a current token.
+4. Inspect the closed import with `starport backup inspect-import`.
+5. Write the history package with `starport backup write-history` and the returned target digest.
+6. Run the coordinated activation with the private request file.
 
 ```bash
 starport backup activate \
@@ -206,8 +251,9 @@ This record is the prior approval. Starport does not supply a command that reads
 Close approval with `starport backup close`, and then capture the live deployment with `starport backup create`.
 The capture is the backup of the adoption request.
 
-Bind the independent history package to the capture and the unchanged restore operation.
-Set `ValkeyIncarnation` to the identity of the current Valkey process.
+Write the history package for the capture with `starport backup write-history` and the unchanged restore operation.
+Adoption has no import inspection, so omit `--expected-target-sha256`.
+Supply the current Valkey identity to `--valkey-incarnation`, and set `ValkeyIncarnation` to the same value.
 After a restart or a promotion, this identity differs from the identity in the prior approval.
 
 Configure a new empty catalog state directory in `STARPORT_CATALOG_STATE_DIR` before preparation.
@@ -250,7 +296,7 @@ Set it only after you verify these facts.
 
 1. Fence every writer externally.
 2. Retain the prior approval, close approval, and capture the live deployment.
-3. Bind the independent history package to the capture.
+3. Write the history package for the capture with `starport backup write-history`.
 4. Configure the new empty catalog state directory.
 5. Prepare the adoption. Preparation places no claim.
 6. Activate the adoption with the retained prepared digest.

@@ -64,6 +64,13 @@ The `candidate-install` job runs only on pull requests, as its parent `release-s
 The install evidence therefore comes from the final pull request run. Its source commit matches the squash-merged tree.
 The format 4 capture records the run event and the pull request number. A format 3 capture fails an install entry.
 
+CSP19.2 adds `starport backup write-history`, which writes the independent history package for a controlled stop.
+The package holds only the final KV and SQL authorization rotations, bound to the backup and the closed target digest.
+The command records evidence digests, requires the operator attestations, and changes no target store.
+The activation, adoption, and measurement tests build their final-only packages through this writer.
+The fleet recipe test writes the package and activates a restored target with the image.
+No shipped command writes prefix steps for activity after the backup.
+
 ### Proposed Work
 
 **Console primitive migration.** Move the remaining hand-rolled controls onto

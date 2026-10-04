@@ -230,7 +230,7 @@ func measurementAdopt(t *testing.T, binary string, f *populatedFixture, capture 
 	preparation := filepath.Join(f.adoption, "preparation")
 	_, err = productfiles.CreateDirectory(preparation)
 	require.NoError(t, err)
-	activation := activationHistoryFixture(t, f.cfg, prepare)
+	activation := activationHistoryWith(t, f.cfg, prepare, measurementWriteHistory(t, binary, f, private, run, "adopt-write-history", ""))
 	measurementHistory(t, f.cfg, &activation, run)
 	f.request = PopulatedRecoveryRequest{Activation: activation, PriorApproval: f.prior, PreparationDirectory: preparation}
 	f.requestFile = operatorPrivateJSON(t, private, "adoption-request.json", f.request)
@@ -285,7 +285,7 @@ func measurementImport(t *testing.T, binary string, f *populatedFixture, capture
 	var inspected recovery.ImportInspectionResult
 	require.NoError(t, json.Unmarshal(body, &inspected))
 	run.InspectionSHA256 = inspected.Inspection.RequestSHA256
-	activation := activationHistoryFixture(t, f.cfg, prepare)
+	activation := activationHistoryWith(t, f.cfg, prepare, measurementWriteHistory(t, binary, f, private, run, "write-history", inspected.TargetSHA256))
 	require.Equal(t, inspected.TargetSHA256, activation.History.ExpectedTargetSHA256)
 	measurementHistory(t, f.cfg, &activation, run)
 	request := operatorPrivateJSON(t, private, "activation-request.json", activation)
@@ -297,26 +297,30 @@ func measurementImport(t *testing.T, binary string, f *populatedFixture, capture
 	run.DecisionSHA256 = completed.DecisionSHA256
 }
 
+// measurementWriteHistory writes H with the shipping binary. The final-only package covers the test fence and capture,
+// including deliberately lost probe writes.
+func measurementWriteHistory(t *testing.T, binary string, f *populatedFixture, private string, run *measurementRun, name, expectedTarget string) activationHistoryWrite {
+	return func(request recovery.WriteHistoryRequest) recovery.HistoryWriteReport {
+		t.Helper()
+		request.History.Through = time.Now().UTC()
+		request.History.EndReference = "measurement-test-writers-fenced"
+		request.ExpectedTargetSHA256 = expectedTarget
+		body := measurementCommandRun(t, binary, f, private, run, name, writeHistoryArguments(request)[1:]...)
+		var report recovery.HistoryWriteReport
+		require.NoError(t, json.Unmarshal(body, &report))
+		run.HistoryThrough = request.History.Through
+		return report
+	}
+}
+
 func measurementHistory(t *testing.T, cfg *config.Config, request *RecoveryActivationRequest, run *measurementRun) {
 	t.Helper()
-	// The synthetic final-only package covers the test fence and capture, including deliberately lost probe writes.
-	body, err := os.ReadFile(filepath.Join(request.History.HistoryDirectory, "history.json"))
-	require.NoError(t, err)
-	var history map[string]any
-	require.NoError(t, json.Unmarshal(body, &history))
-	through := time.Now().UTC()
-	history["interval"] = map[string]any{"through_utc": through, "end_reference": "measurement-test-writers-fenced"}
-	body, err = json.Marshal(history, json.Deterministic(true))
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(request.History.HistoryDirectory, "history.json"), body, 0600))
-	run.HistorySHA256 = canonicalRecordSHA256(body)
-	request.History.HistorySHA256 = run.HistorySHA256
+	run.HistorySHA256 = request.History.HistorySHA256
 	run.HistoryCapturedAt = time.Now().UTC()
-	run.HistoryThrough = through
 	run.HistoryAgeSeconds = run.OutageStart.Sub(run.HistoryCapturedAt).Seconds()
 	run.Fencing = request.History.Attestation
 	run.FencingEvidence = request.Prepare.Operation.FencingEvidence
-	body, err = os.ReadFile(filepath.Join(request.Prepare.Directory, "backup-manifest.json"))
+	body, err := os.ReadFile(filepath.Join(request.Prepare.Directory, "backup-manifest.json"))
 	require.NoError(t, err)
 	var backup recovery.BundleManifest
 	require.NoError(t, json.Unmarshal(body, &backup))

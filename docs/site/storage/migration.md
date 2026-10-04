@@ -145,9 +145,10 @@ The external fence is mandatory. Stop each local writer, and prevent its restart
    ```
 
    Keep the `prepared.boundary` values. The import barriers stay. A shared gateway refuses to start before activation.
+   Then run `starport auth rotate --no-secret` to make the target local admin token. Activation refuses a target without a current token.
 
 6. Inspect the closed import with `starport backup inspect-import`. Supply the same backup flags and restore operation. Supply the prepared boundary with the `--expected-deployment`, `--expected-recovery-epoch`, `--expected-recovery-evidence`, and `--expected-recovery-backend` flags. Supply `0` to `--kv-replay-sequence`, `--sql-replay-sequence`, and `--blob-replay-sequence`. Supply `run_id:master_replid` of the Valkey server to `--valkey-incarnation`. Keep `target_sha256`.
-7. Bind the independent history to `target_sha256` and the same restore operation. Then run `starport backup activate` with the private request file. Refer to [Activation and exact retries](../../RECOVERY.md#activation-and-exact-retries). Keep `decision_sha256` outside the deployment.
+7. Write the history package with `starport backup write-history`. Supply `target_sha256` and the same restore operation. Then run `starport backup activate` with the private request file. Refer to [Activation and exact retries](../../RECOVERY.md#activation-and-exact-retries). Keep `decision_sha256` outside the deployment.
 8. Start the first shared gateway with the target configuration. Check `/health/ready` before you permit traffic.
 
 ### Expected result
@@ -188,7 +189,7 @@ The local gateway serves the records of the capture. Records that the shared dep
 ### Limits
 
 - The tests use a populated fixture: two accounts, three gateway keys, two provider credentials, two files, two users, one team, two grants, four usage records, and three audit records. The team in the fixture has no budget. Team budget history is not in the test.
-- The container recipe test runs capture, preparation, inspection, and the refusals with the image. It stops before activation, because activation needs the independent history package. The in-process tests cover activation, a second replica, and rollback.
+- The container recipe test of this move runs capture, preparation, inspection, and the refusals with the image. It stops before activation. The fleet recipe test writes the history package and activates a restored target with the image. The in-process tests activate this move. They also cover a second replica and rollback.
 - The tests use plaintext Valkey on a private network. A production fleet uses TLS.
 - After the move, the fleet head has a recovery origin and no lease. The first gateway that gets the lease publishes the same generation again at the next revision. A promotion after the move completes only while a running gateway holds the fleet lease. A test promotes a newer packaged baseline through a running shared gateway after the move, with a request that names the moved revision. Refer to [Baseline promotion](../../OPERATOR-GUIDE.md#baseline-promotion).
 - The move copies the deployment keys without a filter. The tests find no `provider-health:instance:`, `provider-latency:instance:`, or `catalog_migration:v1:` keys on the target, because a local gateway does not write them. If you ran `starport migrate runtime prepare` on the local deployment, its receipt moves too. On the shared target, the same operation ID then refuses because the store identity is different. Use a new operation ID.

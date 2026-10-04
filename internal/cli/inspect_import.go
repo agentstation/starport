@@ -37,7 +37,7 @@ func newInspectImportedBackupCommand(deps Dependencies, usageError usageErrorHan
 			&urfavecli.StringFlag{Name: "sql-replay-sha256", Usage: "SQL receipt digest; required when its sequence is positive"},
 			&urfavecli.Int64Flag{Name: "blob-replay-sequence", Required: true, Usage: "Last completed blob replay sequence; explicitly use 0 before replay"},
 			&urfavecli.StringFlag{Name: "blob-replay-sha256", Usage: "Blob receipt digest; required when its sequence is positive"},
-			&urfavecli.StringFlag{Name: "valkey-incarnation", Usage: "Recorded run_id:master_replid identity for configured Valkey; omit for Badger"},
+			&urfavecli.StringFlag{Name: flagValkeyIncarnation, Usage: "Recorded run_id:master_replid identity for configured Valkey; omit for Badger"},
 			&urfavecli.BoolFlag{Name: flagStructuredJSON, Usage: jsonOutputUsage},
 		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
@@ -51,7 +51,7 @@ func newInspectImportedBackupCommand(deps Dependencies, usageError usageErrorHan
 				KVPosition:        storage.ImportReplayPosition{Sequence: cmd.Int64("kv-replay-sequence"), ReceiptSHA256: cmd.String("kv-replay-sha256")},
 				SQLPosition:       sqlstore.RelationalReplayPosition{Sequence: cmd.Int64("sql-replay-sequence"), ReceiptSHA256: cmd.String("sql-replay-sha256")},
 				BlobPosition:      blob.ImportReplayPosition{Sequence: cmd.Int64("blob-replay-sequence"), ReceiptSHA256: cmd.String("blob-replay-sha256")},
-				ValkeyIncarnation: cmd.String("valkey-incarnation"), Destination: cmd.String("destination"),
+				ValkeyIncarnation: cmd.String(flagValkeyIncarnation), Destination: cmd.String("destination"),
 			}
 			if err := request.Validate(); err != nil {
 				return urfavecli.Exit(err.Error(), ExitCodeUsage)

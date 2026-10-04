@@ -136,6 +136,8 @@ The durable owners are the same as in [T2](#t2-persistent-local-starport). The C
 | `starport-data` | `/var/lib/starport/data` | Badger, SQLite, file bytes, and the catalog baseline |
 | `starport-state` | `/var/lib/starport/state` | The catalog runtime and the credential state |
 
+The image creates these directories with mode `0700`, and a new volume keeps that mode. Recovery activation refuses a data directory that grants group or other access.
+
 The container has a read-only root file system. `/tmp` and the rebuildable cache at `/var/lib/starport/cache` use tmpfs. A deployment that writes outside the declared mounts stops at start.
 
 ### Memory-serving state
@@ -167,8 +169,8 @@ The T2 backup procedure applies. The CSP13 tests prove a backup, a restore, and 
 
 These limits apply:
 
-- A move to the shared recipe follows [Local data to the shared recipe](../storage/migration.md#local-data-to-the-shared-recipe). Activation needs the independent history package, which CSP19.2 owns.
-- No shipped command writes the independent history package that activation consumes. The tests build that package.
+- A move to the shared recipe follows [Local data to the shared recipe](../storage/migration.md#local-data-to-the-shared-recipe).
+- `starport backup write-history` writes only a package for a controlled stop. No shipped command writes steps for activity after the backup.
 - The [production status](../../PRODUCTION-STATUS.md) lists the open qualification work.
 
 ## T4 replicated Starport
@@ -215,7 +217,7 @@ The repository fleet recipe test runs two replicas from the recipe image against
 go test ./internal/config -run TestFleetRecipeContainerRecreation -count=1
 ```
 
-The test replaces both gateway containers and reads the keys, the credentials, and the files again. It starts each replica on the `embedded` and `file` sources without a GitHub route. It also runs a backup into fresh targets and inspects the restored import.
+The test replaces both gateway containers and reads the keys, the credentials, and the files again. It starts each replica on the `embedded` and `file` sources without a GitHub route. It also runs a backup into fresh targets and inspects the restored import. Then it writes the history package and activates the restored target.
 
 ### Recovery
 
@@ -226,7 +228,7 @@ These limits apply:
 - The first replica attachment to a Valkey primary without a replication backlog changes `master_replid`. A restart or a promotion also changes it. A bound owner then fails closed until a new admission.
 - The recovery point objective is zero acknowledged writes after a persistent Valkey restart. It is also zero after an empty-target import of a fenced capture.
 - A replica promotion can lose each write that only the old primary acknowledged. The product does not bound this loss.
-- No shipped command writes the independent history package that activation and adoption consume.
+- `starport backup write-history` writes only a package for a controlled stop. No shipped command writes steps for activity after the backup.
 
 ## T5 internal Starmap server
 

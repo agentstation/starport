@@ -1,19 +1,19 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json/v2"
-	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/agentstation/starmap/pkg/productfiles"
-	"github.com/agentstation/starport/internal/authorization/revision"
-	"github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/storage"
@@ -35,14 +35,75 @@ func activationFleetFixture(t *testing.T) (*config.Config, RecoveryActivationReq
 
 func activationPreparedFixture(t *testing.T, cfg *config.Config, prepare recovery.PrepareRequest) (*config.Config, RecoveryActivationRequest) {
 	t.Helper()
+	return activationPreparedFixtureWith(t, cfg, prepare, activationHistoryWriter(t, cfg))
+}
+
+// activationPreparedFixtureWith prepares the target and writes H through the selected shipped writer.
+func activationPreparedFixtureWith(t *testing.T, cfg *config.Config, prepare recovery.PrepareRequest, write activationHistoryWrite) (*config.Config, RecoveryActivationRequest) {
+	t.Helper()
 	_, err := PrepareBackup(t.Context(), cfg, prepare)
 	require.NoError(t, err)
 	canonicalSelectedInputs(t, cfg)
-	return cfg, activationHistoryFixture(t, cfg, prepare)
+	return cfg, activationHistoryWith(t, cfg, prepare, write)
+}
+
+// activationHistoryWrite writes one final-only history package and returns the shipped receipt.
+type activationHistoryWrite func(recovery.WriteHistoryRequest) recovery.HistoryWriteReport
+
+// activationHistoryWriter calls the shipped in-process writer.
+func activationHistoryWriter(t *testing.T, cfg *config.Config) activationHistoryWrite {
+	return func(request recovery.WriteHistoryRequest) recovery.HistoryWriteReport {
+		t.Helper()
+		report, err := WriteImportedHistory(t.Context(), cfg, request)
+		require.NoError(t, err)
+		return report
+	}
+}
+
+// activationHistoryCommand drives the backup write-history verb in process.
+func activationHistoryCommand(t *testing.T, deps cli.Dependencies, output *bytes.Buffer) activationHistoryWrite {
+	return func(request recovery.WriteHistoryRequest) recovery.HistoryWriteReport {
+		t.Helper()
+		output.Reset()
+		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
+		defer cancel()
+		require.NoError(t, cli.Run(ctx, writeHistoryArguments(request), deps))
+		var report recovery.HistoryWriteReport
+		require.NoError(t, json.Unmarshal(output.Bytes(), &report))
+		output.Reset()
+		return report
+	}
+}
+
+// writeHistoryArguments states one history request as backup write-history arguments.
+func writeHistoryArguments(request recovery.WriteHistoryRequest) []string {
+	history := request.History
+	arguments := []string{operatorProgram, operatorBackup, "write-history", "--directory", request.Directory, "--manifest-sha256", request.ManifestSHA256,
+		"--operation", history.Operation.ID, "--fencing-evidence", history.Operation.FencingEvidence, "--history-directory", history.Directory,
+		"--mode", history.Mode, "--disposition", history.Disposition, "--through", history.Through.Format(time.RFC3339Nano), "--end-reference", history.EndReference,
+		"--highest-epoch", strconv.FormatInt(history.HighestEpoch, 10), "--epoch-reference", history.EpochReference, "--epoch-operator", history.EpochOperator, "--epoch-evidence", history.EpochEvidence,
+		"--operator", history.Attestation.Operator, "--attestation-reference", history.Attestation.Reference,
+		"--writers-fenced=" + strconv.FormatBool(history.Attestation.WritersFenced), "--admitted-work-accounted=" + strconv.FormatBool(history.Attestation.AdmittedWorkAccounted),
+		"--complete-interval=" + strconv.FormatBool(history.Attestation.CompleteInterval), operatorJSONFlag}
+	for _, evidence := range history.Evidence {
+		arguments = append(arguments, "--evidence-file", evidence.ID+"="+evidence.Path+"="+evidence.Reference)
+	}
+	for _, option := range [][2]string{{"--scratch", request.ScratchDirectory}, {"--valkey-incarnation", request.ValkeyIncarnation}, {"--expected-target-sha256", request.ExpectedTargetSHA256}} {
+		if option[1] != "" {
+			arguments = append(arguments, option[0], option[1])
+		}
+	}
+	return arguments
 }
 
 // activationHistoryFixture writes the final-only history H that binds the source's import identity and the current target.
 func activationHistoryFixture(t *testing.T, cfg *config.Config, prepare recovery.PrepareRequest) RecoveryActivationRequest {
+	t.Helper()
+	return activationHistoryWith(t, cfg, prepare, activationHistoryWriter(t, cfg))
+}
+
+// activationHistoryWith states the controlled source facts and lets the shipped writer derive both bindings.
+func activationHistoryWith(t *testing.T, cfg *config.Config, prepare recovery.PrepareRequest, write activationHistoryWrite) RecoveryActivationRequest {
 	t.Helper()
 	incarnation := ""
 	if cfg.RuntimeStorage().Type == storage.StorageTypeValkey {
@@ -52,67 +113,35 @@ func activationHistoryFixture(t *testing.T, cfg *config.Config, prepare recovery
 		require.NoError(t, err)
 		require.NoError(t, store.Close())
 	}
-	encryption, err := backupEncryption(cfg)
-	require.NoError(t, err)
-	source, err := recovery.InspectRestoreSource(t.Context(), prepare.VerifyRequest, encryption, catalog.InspectCapturedCatalog)
-	require.NoError(t, err)
-	identity, err := source.ImportIdentity(prepare.Operation)
-	require.NoError(t, err)
-	view, err := source.OpenCapturedKV(t.Context())
-	require.NoError(t, err)
-	_, kvExpected, err := revision.CaptureKVRecovery(t.Context(), view)
-	require.NoError(t, err)
-	require.NoError(t, view.Close())
-	db, err := openBackupSQL(cfg)
-	require.NoError(t, err)
-	conn, err := db.Conn(t.Context())
-	require.NoError(t, err)
-	sqlExpected, err := revision.CaptureSQLRecovery(t.Context(), db, conn)
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
-	blobs, err := restoreBlobTarget(t.Context(), cfg.Files)
-	require.NoError(t, err)
-	target, err := configuredRecoveryTarget(t.Context(), cfg, db, blobs, incarnation)
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
 	root := filepath.Dir(prepare.FilesDirectory)
-	history, journal, activation, scratch := filepath.Join(root, "independent-history"), filepath.Join(root, "history-journal"), filepath.Join(root, "activation"), filepath.Join(root, "scratch")
-	for _, path := range []string{history, journal, activation, scratch, filepath.Join(history, "payloads")} {
+	history, journal, activation, scratch, evidence := filepath.Join(root, "independent-history"), filepath.Join(root, "history-journal"), filepath.Join(root, "activation"), filepath.Join(root, "scratch"), filepath.Join(root, "history-evidence")
+	for _, path := range []string{history, journal, activation, scratch, evidence} {
 		_, err := productfiles.CreateDirectory(path)
 		require.NoError(t, err)
 	}
-	var steps []map[string]any
-	payloads := []any{map[string]any{"version": 1, "expected_sha256": kvExpected}, map[string]any{"version": 1, "expected": sqlExpected}}
-	for index, payload := range payloads {
-		body, err := json.Marshal(payload, json.Deterministic(true))
-		require.NoError(t, err)
-		path := fmt.Sprintf("payloads/%06d.json", index+1)
-		require.NoError(t, os.WriteFile(filepath.Join(history, path), body, 0600))
-		kind := "kv_authorization_final"
-		if index == 1 {
-			kind = "sql_authorization_final"
-		}
-		steps = append(steps, map[string]any{"ordinal": index + 1, "kind": kind, "path": path, "size": len(body), "sha256": canonicalRecordSHA256(body), "evidence_source_ids": []string{"controlled-source"}})
-	}
+	retained, err := productfiles.ExistingDirectory(evidence)
+	require.NoError(t, err)
+	require.NoError(t, retained.CompareAndPublish(t.Context(), "controlled-source.log", nil, []byte("controlled source stopped after the backup\n")))
 	manifestBody, err := os.ReadFile(filepath.Join(prepare.Directory, "backup-manifest.json"))
 	require.NoError(t, err)
 	var backup recovery.BundleManifest
 	require.NoError(t, json.Unmarshal(manifestBody, &backup))
-	encodedIdentity, err := json.Marshal(identity, json.Deterministic(true))
-	require.NoError(t, err)
-	historyBody, err := json.Marshal(map[string]any{
-		"version": 1, "backup_sha256": prepare.ManifestSHA256, "deployment_id": source.DeploymentID(), "operation": prepare.Operation, "target_sha256": target, "prepared_sha256": canonicalRecordSHA256(encodedIdentity),
-		"mode": "planned_migration", "disposition": "replay_complete",
-		"interval":         map[string]any{"through_utc": backup.FinishedAt.Add(time.Second), "end_reference": "controlled-source-stopped"},
-		"highest_epoch":    recovery.EpochEvidence{HighestEpoch: identity.Boundary.Epoch + 3, SourceSHA256: strings.Repeat("e", 64), Reference: "controlled-source-epoch", Operator: "operator"},
-		"evidence_sources": []map[string]any{{"id": "controlled-source", "sha256": strings.Repeat("e", 64), "size": 5, "reference": "controlled-source-owner"}}, "steps": steps,
-	}, json.Deterministic(true))
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(history, "history.json"), historyBody, 0600))
-	request := RecoveryActivationRequest{Prepare: prepare, History: recovery.ApplyHistoryRequest{VerifyRequest: prepare.VerifyRequest, Operation: prepare.Operation, HistoryDirectory: history, HistorySHA256: canonicalRecordSHA256(historyBody), ExpectedTargetSHA256: target, JournalDirectory: journal, ValkeyIncarnation: incarnation, Attestation: recovery.HistoryAttestation{Operator: "operator", Reference: "controlled-source-owner", WritersFenced: true, AdmittedWorkAccounted: true, CompleteInterval: true}}, ActivationDirectory: activation, PreserveTargetWorkspace: true}
+	attestation := recovery.HistoryAttestation{Operator: "operator", Reference: "controlled-source-owner", WritersFenced: true, AdmittedWorkAccounted: true, CompleteInterval: true}
+	verify := prepare.VerifyRequest
 	// Both request owners must select the same original verification contract and private scratch.
+	verify.ScratchDirectory = scratch
+	// The prepared boundary is one epoch above the backup boundary. The source used two more epochs.
+	written := write(recovery.WriteHistoryRequest{VerifyRequest: verify, ValkeyIncarnation: incarnation, History: recovery.HistoryWriteRequest{
+		Directory: history, Operation: prepare.Operation, Mode: "planned_migration", Disposition: "replay_complete",
+		Through: backup.FinishedAt.Add(time.Second), EndReference: "controlled-source-stopped",
+		HighestEpoch: backup.Request.Boundary.Epoch + 4, EpochReference: "controlled-source-epoch", EpochOperator: "operator", EpochEvidence: "controlled-source",
+		Evidence:    []recovery.HistoryEvidenceFile{{ID: "controlled-source", Path: filepath.Join(evidence, "controlled-source.log"), Reference: "controlled-source-owner"}},
+		Attestation: attestation,
+	}})
+	require.Equal(t, history, written.Directory)
+	require.Equal(t, 2, written.DeclaredSteps)
+	request := RecoveryActivationRequest{Prepare: prepare, History: recovery.ApplyHistoryRequest{VerifyRequest: verify, Operation: prepare.Operation, HistoryDirectory: history, HistorySHA256: written.HistorySHA256, ExpectedTargetSHA256: written.TargetSHA256, JournalDirectory: journal, ValkeyIncarnation: incarnation, Attestation: attestation}, ActivationDirectory: activation, PreserveTargetWorkspace: true}
 	request.Prepare.ScratchDirectory = scratch
-	request.History.ScratchDirectory = scratch
 	if cfg.RuntimeStorage().Type == storage.StorageTypeValkey {
 		t.Cleanup(func() {
 			store, err := storage.OpenValkey(cfg.RuntimeStorage().Valkey)
