@@ -120,9 +120,11 @@ If the source admitted work after the backup, this package cannot account for it
 
 1. Verify the original backup against its independently retained manifest digest.
 2. Prepare inactive target stores with `starport backup prepare`.
-3. Inspect the closed import with `starport backup inspect-import`.
-4. Write the history package with `starport backup write-history` and the returned target digest.
-5. Run the coordinated activation with the private request file.
+3. Make the target local admin token with `starport auth rotate --no-secret`.
+   The token in the backup stays inactive. Activation refuses a target without a current token.
+4. Inspect the closed import with `starport backup inspect-import`.
+5. Write the history package with `starport backup write-history` and the returned target digest.
+6. Run the coordinated activation with the private request file.
 
 ```bash
 starport backup activate \

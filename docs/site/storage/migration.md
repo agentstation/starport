@@ -145,6 +145,7 @@ The external fence is mandatory. Stop each local writer, and prevent its restart
    ```
 
    Keep the `prepared.boundary` values. The import barriers stay. A shared gateway refuses to start before activation.
+   Then run `starport auth rotate --no-secret` to make the target local admin token. Activation refuses a target without a current token.
 
 6. Inspect the closed import with `starport backup inspect-import`. Supply the same backup flags and restore operation. Supply the prepared boundary with the `--expected-deployment`, `--expected-recovery-epoch`, `--expected-recovery-evidence`, and `--expected-recovery-backend` flags. Supply `0` to `--kv-replay-sequence`, `--sql-replay-sequence`, and `--blob-replay-sequence`. Supply `run_id:master_replid` of the Valkey server to `--valkey-incarnation`. Keep `target_sha256`.
 7. Write the history package with `starport backup write-history`. Supply `target_sha256` and the same restore operation. Then run `starport backup activate` with the private request file. Refer to [Activation and exact retries](../../RECOVERY.md#activation-and-exact-retries). Keep `decision_sha256` outside the deployment.
