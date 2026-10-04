@@ -454,9 +454,9 @@ def qualify_fleet_records(root, image, inputs, run):
                 command += ['-f', str(override)]
             return command
 
-        def cli(index, *args, overrides=(), timeout=180):
+        def cli(index, *args, overrides=(), timeout=180, diagnose=False):
             return run(compose(index, *overrides) + ['run', '--rm', '--no-deps', '--pull', 'never', 'starport', *args],
-                       timeout=timeout)
+                       timeout=timeout, diagnose=diagnose)
 
         def container(index):
             return run(compose(index) + ['ps', '-a', '-q', 'starport']).decode().strip()
@@ -562,10 +562,10 @@ def qualify_fleet_records(root, image, inputs, run):
                        '--fencing-evidence', 'recipe-fleet-stopped')
             created = json.loads(cli(0, 'backup', 'create', '--destination', '/home/nonroot/bundle', *capture,
                                      '--key-reference', 'recipe-master-key', '--json',
-                                     overrides=extra[0], timeout=600))
+                                     overrides=extra[0], timeout=600, diagnose=True))
             verified = json.loads(cli(0, 'backup', 'verify', '--directory', '/home/nonroot/bundle',
                                       '--manifest-sha256', created['manifest_sha256'], '--json',
-                                      overrides=extra[0], timeout=600))
+                                      overrides=extra[0], timeout=600, diagnose=True))
             references = verified['references']
             assert verified['deployment_id'] == inputs['deployment_id'], 'backup names another deployment'
             assert references['credential_values'] >= 1 and references['file_records'] >= 1, \
@@ -578,9 +578,11 @@ def qualify_fleet_records(root, image, inputs, run):
             prepared = json.loads(cli(2, 'backup', 'prepare', '--directory', '/home/nonroot/bundle',
                                       '--manifest-sha256', created['manifest_sha256'],
                                       '--files-directory', '/home/nonroot/prepared', *restore, '--json',
-                                      overrides=extra[2], timeout=600))
+                                      overrides=extra[2], timeout=600, diagnose=True))
             assert prepared['references'] == references, 'preparation changed the record references'
             observations.append('fleet_restore_prepares_fresh_targets')
+            # The captured administrator token stays inactive. Activation requires a current target token.
+            cli(2, 'auth', 'rotate', '--no-secret', '--json', overrides=extra[2], diagnose=True)
             closed = prepared['prepared']['boundary']
             expected = ['--expected-deployment', closed['DeploymentID'],
                         '--expected-recovery-epoch', str(closed['Epoch']),
@@ -593,7 +595,7 @@ def qualify_fleet_records(root, image, inputs, run):
                                        '--kv-replay-sequence', '0', '--sql-replay-sequence', '0',
                                        '--blob-replay-sequence', '0',
                                        '--valkey-incarnation', inputs['valkey_incarnation'], '--json',
-                                       overrides=extra[2], timeout=600))
+                                       overrides=extra[2], timeout=600, diagnose=True))
             assert inspected['inspection']['references'] == references, 'import inspection changed the references'
             observations.append('fleet_restore_import_inspected')
 
@@ -627,7 +629,7 @@ def qualify_fleet_records(root, image, inputs, run):
                                      '--epoch-evidence', 'fleet-stopped', '--operator', attestation['operator'],
                                      '--attestation-reference', attestation['reference'], '--writers-fenced=true',
                                      '--admitted-work-accounted=true', '--complete-interval=true', '--json',
-                                     overrides=extra[2], timeout=600))
+                                     overrides=extra[2], timeout=600, diagnose=True))
             assert written['target_sha256'] == inspected['target_sha256'], 'history binds another target'
             assert written['declared_steps'] == 2, 'history is not final-only'
             observations.append('fleet_restore_history_written')
@@ -643,7 +645,7 @@ def qualify_fleet_records(root, image, inputs, run):
             }
             place(private_archive(['request'], {'request/activation.json': json.dumps(activation).encode()}))
             activated = json.loads(cli(2, 'backup', 'activate', '--request-file', '/home/nonroot/request/activation.json',
-                                       '--json', overrides=extra[2], timeout=900))
+                                       '--json', overrides=extra[2], timeout=900, diagnose=True))
             assert activated['historically_complete'] and activated['current_admission_valid'] \
                 and not activated['restricted'], 'activation left the restored deployment restricted'
             observations.append('fleet_restore_activated')
@@ -715,15 +717,20 @@ def main():
                    '--project-directory', scratch, '--env-file', str(dotenv),
                    '-f', str(root / 'docker-compose.yml'), '-f', str(override)]
 
-        def run(command, data=None, timeout=90, refusal=None, check=True):
+        def run(command, data=None, timeout=90, refusal=None, check=True, diagnose=False):
             result = subprocess.run(command, input=data, capture_output=True,
                                     env=environment, timeout=timeout)
             if refusal is not None:
                 return result.returncode != 0 and any(phrase in result.stderr for phrase in refusal)
             if result.returncode and check:
                 # CLI initialization can print one-time fixture credentials.
-                # Do not copy stdout or stderr into retained evidence.
-                raise RuntimeError(f'{command[0]} operation failed with exit {result.returncode}')
+                # Do not copy stdout into retained evidence. Only a caller that
+                # prints no credential asks for its stderr, without URL credentials.
+                detail = ''
+                if diagnose:
+                    text = re.sub(r'://[^@\s/]+@', '://<redacted>@', result.stderr.decode(errors='replace'))
+                    detail = ':\n' + text.strip()[-4000:]
+                raise RuntimeError(f'{command[0]} operation failed with exit {result.returncode}{detail}')
             return result.stdout
 
         def cli(*arguments):
