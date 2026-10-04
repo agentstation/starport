@@ -47,6 +47,32 @@ func TestWriteImportedHistoryBindsApplication(t *testing.T) {
 	assertInspectionStillClosed(t, cfg)
 }
 
+func TestWriteImportedHistoryRefusesAnotherDeployment(t *testing.T) {
+	cfg, inspection, _ := importedInspectionFixture(t)
+	parent := filepath.Dir(inspection.Destination)
+	// The same target paths under another deployment identity must not bind this backup.
+	foreign, err := config.NewLoader().WithPaths(config.PathsForConfigDir(parent)).WithEnvFiles().WithEnvironment(map[string]string{
+		"STARPORT_SECURITY_MASTER_KEY": cfg.Security.MasterKey, "STARPORT_DEPLOYMENT_ID": "another-deployment",
+	}).Load(t.Context())
+	require.NoError(t, err)
+	require.NotEqual(t, cfg.EffectivePaths().DeploymentID, foreign.EffectivePaths().DeploymentID)
+	prepare := recovery.PrepareRequest{VerifyRequest: inspection.VerifyRequest, Operation: inspection.Operation, FilesDirectory: filepath.Join(parent, "prepared")}
+	activationHistoryWith(t, cfg, prepare, func(history recovery.WriteHistoryRequest) recovery.HistoryWriteReport {
+		t.Helper()
+		refused, err := WriteImportedHistory(t.Context(), foreign, history)
+		require.ErrorIs(t, err, recovery.ErrConflict)
+		require.Zero(t, refused)
+		entries, err := os.ReadDir(history.History.Directory)
+		require.NoError(t, err)
+		require.Empty(t, entries)
+		// The refusal leaves the directory usable for the configured deployment.
+		report, err := WriteImportedHistory(t.Context(), cfg, history)
+		require.NoError(t, err)
+		return report
+	})
+	assertInspectionStillClosed(t, cfg)
+}
+
 func TestWriteImportedHistoryBindsActivation(t *testing.T) {
 	cfg, prepare := boundedActivationSourceFixture(t)
 	writes := 0
