@@ -39,12 +39,8 @@ func TestParseKeepsFencedHeadingsInTheBody(t *testing.T) {
 }
 
 func TestReadFileNormalizesLineEndings(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "page.md")
-	if err := os.WriteFile(path, []byte("## One\r\n\r\nText\r\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got := readNormalized(t, path); got != "## One\n\nText\n" {
-		t.Fatalf("readNormalized = %q", got)
+	if got := normalizeLineEndings([]byte("## One\r\n\r\nText\r\n")); got != "## One\n\nText\n" {
+		t.Fatalf("normalizeLineEndings = %q", got)
 	}
 	if _, err := os.Stat(filepath.Join(RepositoryRoot(t), "go.mod")); err != nil {
 		t.Fatalf("the repository root has no go.mod: %v", err)

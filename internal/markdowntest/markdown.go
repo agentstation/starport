@@ -92,18 +92,23 @@ func Fences(lines []string) []Fence {
 }
 
 // ReadFile reads a file by its slash-separated path from the repository root.
-// A Windows checkout converts the docs to CRLF, so the result uses LF only.
+// The read cannot leave the repository root. A Windows checkout converts the
+// docs to CRLF, so the result uses LF only.
 func ReadFile(tb testing.TB, path string) string {
 	tb.Helper()
-	return readNormalized(tb, filepath.Join(RepositoryRoot(tb), filepath.FromSlash(path)))
-}
-
-func readNormalized(tb testing.TB, path string) string {
-	tb.Helper()
-	source, err := os.ReadFile(path)
+	root, err := os.OpenRoot(RepositoryRoot(tb))
+	if err != nil {
+		tb.Fatalf("open the repository root: %v", err)
+	}
+	defer func() { _ = root.Close() }()
+	source, err := root.ReadFile(filepath.FromSlash(path))
 	if err != nil {
 		tb.Fatalf("read %s: %v", path, err)
 	}
+	return normalizeLineEndings(source)
+}
+
+func normalizeLineEndings(source []byte) string {
 	return strings.ReplaceAll(string(source), "\r\n", "\n")
 }
 
