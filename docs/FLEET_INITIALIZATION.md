@@ -5,8 +5,8 @@ It starts no gateway, provider acquisition, or source refresh.
 The command does not migrate existing data or approve a restored backend.
 Complete fleet storage qualification remains part of the production catalog plan.
 
-This build has no operator command for populated deployment adoption or recovery after a Valkey restart or failover.
-CSP13 owns those commands and their qualification. Production fleet use requires that work first.
+`starport backup adopt` reopens a closed populated deployment after a Valkey restart or promotion.
+Read [Populated adoption in place](RECOVERY.md#populated-adoption-in-place) before that command.
 
 ## Preconditions
 
@@ -117,10 +117,10 @@ The container has a read-only root file system, and `/tmp` uses tmpfs. The only
 writable mount is the node state volume at `/var/lib/starport`. A deployment
 that writes outside that mount stops at start.
 
-This is a candidate recipe for fresh initialization and qualification.
-Production use requires the CSP13 recovery procedures and CSP15 failure tests.
-A Valkey restart or failover changes its identity and prevents normal recovery
-in this build. Do not delete state or repeat fresh initialization to bypass it.
+Fleet qualification covers Valkey 7.2.14 and PostgreSQL 16.15 with failover limits.
+A Valkey restart or promotion changes `master_replid`, and a bound owner then fails closed until a new admission.
+Do not delete state or repeat fresh initialization to bypass it.
+Read the [T4 recipe](site/architecture/recipes.md#t4-replicated-starport) for the limits.
 
 ```bash
 cp .env.fleet.example .env.fleet

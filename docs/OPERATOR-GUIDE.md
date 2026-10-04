@@ -1578,8 +1578,8 @@ Set `STARPORT_DEPLOYMENT_ID` to the same identity on every replica of one deploy
 Durable keys and notification channels include that encoded identity and a schema version.
 Changing the identity selects different storage. It does not rename or migrate existing records.
 
-Do not upgrade an existing shared deployment to this candidate.
-Its populated-state migration and recovery commands are not yet available.
+Adopt a populated shared deployment only through [Populated adoption in place](RECOVERY.md#populated-adoption-in-place).
+Fence every writer before the adoption. A caller string or a captured control is not a fence.
 A database number or key prefix does not isolate service memory, eviction, persistence, or failure.
 
 Use a TLS endpoint for durable KV:

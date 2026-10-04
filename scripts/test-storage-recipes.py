@@ -7,8 +7,10 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -452,10 +454,21 @@ def qualify_fleet_records(root, image, inputs, run):
         def container(index):
             return run(compose(index) + ['ps', '-a', '-q', 'starport']).decode().strip()
 
+        def dump_replica(index):
+            # Cleanup removes the containers, so a readiness failure keeps the
+            # container state and the gateway log on stderr for the caller.
+            # A credential inside a URL is redacted before the copy.
+            for tail in (['ps', '-a'], ['logs', '--no-color', '--tail', '200', 'starport']):
+                result = subprocess.run(compose(index) + tail, capture_output=True, timeout=60)
+                text = re.sub(r'://[^@\s/]+@', '://<redacted>@', result.stdout.decode(errors='replace'))
+                print(f'fleet replica {index} {tail[0]}:\n{text}', file=sys.stderr)
+
         def start(index):
             run(compose(index) + ['up', '-d', '--no-build', 'starport'], timeout=180)
             base = 'http://' + run(compose(index) + ['port', 'starport', '8080']).decode().strip()
-            assert wait_ready(base, attempts=600), f'fleet replica {index} did not become ready'
+            if not wait_ready(base, attempts=600):
+                dump_replica(index)
+                raise AssertionError(f'fleet replica {index} did not become ready')
             return base
 
         def check_records(base):

@@ -167,7 +167,7 @@ The T2 backup procedure applies. The CSP13 tests prove a backup, a restore, and 
 
 These limits apply:
 
-- No test covers a restore from the local recipe to the shared recipe.
+- A move to the shared recipe follows [Local data to the shared recipe](../storage/migration.md#local-data-to-the-shared-recipe). Activation needs the independent history package, which CSP19.2 owns.
 - No shipped command writes the independent history package that activation consumes. The tests build that package.
 - The [production status](../../PRODUCTION-STATUS.md) lists the open qualification work.
 
