@@ -136,6 +136,8 @@ The durable owners are the same as in [T2](#t2-persistent-local-starport). The C
 | `starport-data` | `/var/lib/starport/data` | Badger, SQLite, file bytes, and the catalog baseline |
 | `starport-state` | `/var/lib/starport/state` | The catalog runtime and the credential state |
 
+The image creates these directories with mode `0700`, and a new volume keeps that mode. Recovery activation refuses a data directory that grants group or other access.
+
 The container has a read-only root file system. `/tmp` and the rebuildable cache at `/var/lib/starport/cache` use tmpfs. A deployment that writes outside the declared mounts stops at start.
 
 ### Memory-serving state

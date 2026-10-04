@@ -51,11 +51,12 @@ LABEL org.opencontainers.image.title="Starport" \
     org.opencontainers.image.licenses="AGPL-3.0-only"
 
 COPY --from=build --chown=65532:65532 /out/starport /usr/local/bin/starport
-COPY --from=build --chown=65532:65532 /out/config /var/lib/starport/config
-COPY --from=build --chown=65532:65532 /out/data /var/lib/starport/data
+# Recovery refuses private state roots that grant group or other access.
+COPY --from=build --chown=65532:65532 --chmod=0700 /out/config /var/lib/starport/config
+COPY --from=build --chown=65532:65532 --chmod=0700 /out/data /var/lib/starport/data
 
-COPY --from=build --chown=65532:65532 /out/state /var/lib/starport/state
-COPY --from=build --chown=65532:65532 /out/cache /var/lib/starport/cache
+COPY --from=build --chown=65532:65532 --chmod=0700 /out/state /var/lib/starport/state
+COPY --from=build --chown=65532:65532 --chmod=0700 /out/cache /var/lib/starport/cache
 
 ENV STARPORT_CONFIG_DIR=/var/lib/starport/config/starport \
     STARPORT_DATA_DIR=/var/lib/starport/data \
