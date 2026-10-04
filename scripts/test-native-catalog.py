@@ -5,10 +5,12 @@ import copy
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import native_catalog as native
 
@@ -181,10 +183,10 @@ class NativeCatalogTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             native.unchanged_source(self.root, revision)
 
-    def enable_recovery_shards(self):
+    def enable_recovery_shards(self, extra=()):
         self.enable_shards()
         self.proof["format"] = 3
-        names = sorted(["TestRecoveryFixture"] + [f"TestRecoveryOwner{i}" for i in range(30)])
+        names = sorted(["TestRecoveryFixture", *extra] + [f"TestRecoveryOwner{i}" for i in range(30)])
         for runner in native.RUNNERS["windows"].values():
             toolchain = (self.root / f"native-catalog-{runner}/toolchain.txt").read_text()
             for index in range(native.app_shards.SHARDS):
@@ -254,6 +256,143 @@ class NativeCatalogTests(unittest.TestCase):
                 self.bind_events(suffix, events)
         with self.assertRaises(ValueError):
             self.validate()
+
+    def install_report(self, system, arch, runner):
+        suffix = "zip" if system == "windows" else "tar.gz"
+        return {"schema_version": 1, "verdict": "PASS", "mode": "candidate", "release": None,
+                "candidate_version": "1.2.2-next", "workflow_run_id": "123", "workflow_head": "a" * 40,
+                "archive": f"starport_1.2.2-next_{system}_{native.ARCHIVE_ARCHITECTURES[arch]}.{suffix}",
+                "version": "starport version 1.2.2-next", "keyless_catalog_commands": 2, "user_files_after_shutdown": [],
+                "archive_sha256": hashlib.sha256(runner.encode()).hexdigest(), "binary_sha256": "b" * 64,
+                "catalog_model_sha256": "c" * 64, "catalog_generation": "generation-1"}
+
+    def enable_install(self, extra=()):
+        self.enable_recovery_shards(extra)
+        self.proof["format"] = 4
+        for system, runners in native.RUNNERS.items():
+            for arch, runner in runners.items():
+                self.proof["run"]["jobs"].append({"name": f"Candidate install ({runner})", "status": "completed", "conclusion": "success", "databaseId": 300 + len(self.proof["run"]["jobs"])})
+                self.bind(f"install-{runner}", "result.json", json.dumps(self.install_report(system, arch, runner)))
+
+    def test_install_qualifies_each_platform_with_digests_and_generation(self):
+        self.enable_install()
+        for system, runners in native.RUNNERS.items():
+            with self.subTest(system=system):
+                observations = native.validate_install(self.root, self.proof, system)
+                self.assertEqual([x["architecture"] for x in observations], list(runners))
+                for observation, runner in zip(observations, runners.values()):
+                    self.assertEqual(observation["archive_sha256"], hashlib.sha256(runner.encode()).hexdigest())
+                    self.assertEqual((observation["binary_sha256"], observation["catalog_generation"]), ("b" * 64, "generation-1"))
+
+    def test_install_jobs_are_mandatory_for_every_architecture(self):
+        self.enable_install()
+        jobs = copy.deepcopy(self.proof["run"]["jobs"])
+        install = [job for job in jobs if job["name"] == "Candidate install (windows-11-arm)"]
+        others = [job for job in jobs if job["name"] != "Candidate install (windows-11-arm)"]
+        for changed in [others, jobs + install, others + [dict(install[0], conclusion="failure")], others + [dict(install[0], status="in_progress")]]:
+            self.proof["run"]["jobs"] = changed
+            with self.assertRaises(ValueError):
+                native.validate_install(self.root, self.proof, "windows")
+
+    def test_install_report_fields_cannot_be_forged(self):
+        self.enable_install()
+        runner = "ubuntu-24.04-arm"
+        original = self.install_report("linux", "arm64", runner)
+        native.validate_install(self.root, self.proof, "linux")
+        for key, value in [("schema_version", 2), ("mode", "release"), ("verdict", "FAIL"), ("workflow_run_id", "124"),
+                           ("workflow_head", "c" * 40), ("candidate_version", "1.2.2"), ("candidate_version", "1.2.3-next"),
+                           ("archive", "starport_1.2.2-next_linux_x86_64.tar.gz"), ("version", "starport version 1.2.1"),
+                           ("keyless_catalog_commands", 1), ("user_files_after_shutdown", ["config/starport.yaml"]),
+                           ("user_files_after_shutdown", None), ("archive_sha256", None), ("binary_sha256", "b" * 63),
+                           ("catalog_model_sha256", "C" * 64), ("catalog_generation", ""), ("catalog_generation", "a b")]:
+            with self.subTest(key=key, value=value):
+                self.bind(f"install-{runner}", "result.json", json.dumps(dict(original, **{key: value})))
+                with self.assertRaises(ValueError):
+                    native.validate_install(self.root, self.proof, "linux")
+        self.bind(f"install-{runner}", "result.json", json.dumps(original))
+        (self.root / f"native-catalog-install-{runner}/result.json").write_text(json.dumps(dict(original, verdict="PASS ")))
+        with self.assertRaises(ValueError):
+            native.validate_install(self.root, self.proof, "linux")
+        self.proof["sha256"].pop(f"native-catalog-install-{runner}/result.json")
+        with self.assertRaises(ValueError):
+            native.validate_install(self.root, self.proof, "linux")
+
+    def test_install_requires_format_4_and_a_supported_platform(self):
+        self.enable_install()
+        for changed, system in [(3, "linux"), (None, "linux"), (4, "freebsd"), (4, None)]:
+            self.proof["format"] = changed
+            with self.subTest(format=changed, system=system), self.assertRaises(ValueError):
+                native.validate_install(self.root, self.proof, system)
+
+    def test_format_4_keeps_the_test_event_contracts(self):
+        self.enable_install()
+        self.assertEqual({x["architecture"] for x in self.validate()}, {"amd64", "arm64"})
+        jobs = self.proof["run"]["jobs"]
+        for name in ("App test (windows-2025, 0)", "Recovery test (windows-11-arm, 3)"):
+            self.proof["run"]["jobs"] = [job for job in jobs if job["name"] != name]
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                self.validate()
+
+    def write_capture(self):
+        repository = self.root / "repository"
+        shutil.copytree(self.root, repository / native.PROOF, ignore=shutil.ignore_patterns("repository"))
+        (repository / native.PROOF / "capture.json").write_text(json.dumps(self.proof))
+        return repository
+
+    def test_verify_dispatches_on_the_evidence_field(self):
+        self.enable_install()
+        repository = self.write_capture()
+        with patch.object(native, "unchanged_source") as unchanged:
+            install = native.verify(repository, {"platform": "linux", "evidence": "install"})
+            tests = native.verify(repository, {"platform": "windows", "tests": [self.test]})
+            unknown = native.verify(repository, {"platform": "linux", "evidence": "tests"})
+        unchanged.assert_called_with(repository, "a" * 40)
+        self.assertEqual(install["status"], "PASS", install)
+        self.assertEqual([x["architecture"] for x in install["observations"]], ["amd64", "arm64"])
+        self.assertIn("catalog_generation", install["observations"][0])
+        self.assertEqual(tests["status"], "PASS", tests)
+        self.assertEqual([x["required_tests"] for x in tests["observations"]], [1, 1])
+        self.assertEqual(unknown["status"], "UNVERIFIED")
+
+    def test_verify_without_install_evidence_refuses_an_install_entry(self):
+        self.enable_recovery_shards()
+        repository = self.write_capture()
+        with patch.object(native, "unchanged_source"):
+            self.assertEqual(native.verify(repository, {"platform": "windows", "evidence": "install"})["status"], "UNVERIFIED")
+            self.assertEqual(native.verify(repository, {"platform": "windows", "tests": [self.test]})["status"], "PASS")
+
+    def capture(self, install):
+        self.enable_install(extra=["TestRecoveryWitnessTransitions"]) if install else self.enable_recovery_shards(["TestRecoveryWitnessTransitions"])
+        for system, runners in native.RUNNERS.items():
+            for arch, runner in runners.items():
+                if system != "windows":
+                    cgo = "1"
+                    self.bind(runner, "toolchain.txt", f"go version go1.27.1 {system}/{arch}\n{system}\n{arch}\n{system}\n{arch}\n{cgo}\n")
+                    self.bind_events(runner, [self.event("run"), self.event("pass"), self.event("pass", test=False)])
+        source = self.root / "artifacts"
+        shutil.copytree(self.root, source, ignore=shutil.ignore_patterns("artifacts"))
+        def command(args, _root):
+            if args[:3] == ["gh", "run", "view"]:
+                return json.dumps(self.proof["run"])
+            shutil.copytree(source, Path(args[args.index("--dir") + 1]), dirs_exist_ok=True)
+            return ""
+        output = self.root / "capture"
+        with patch.object(native, "command", side_effect=command):
+            native.capture(self.root, 123, output)
+        return json.loads((output / "capture.json").read_text())
+
+    def test_capture_records_install_results_as_format_4(self):
+        proof = self.capture(install=True)
+        self.assertEqual(proof["format"], 4)
+        for runners in native.RUNNERS.values():
+            for runner in runners.values():
+                self.assertIn(f"native-catalog-install-{runner}/result.json", proof["sha256"])
+        self.assertIn("native-catalog-recovery-windows-11-arm-0/tests.jsonl", proof["sha256"])
+
+    def test_capture_without_install_jobs_keeps_format_3(self):
+        proof = self.capture(install=False)
+        self.assertEqual(proof["format"], 3)
+        self.assertFalse(any(path.startswith("native-catalog-install-") for path in proof["sha256"]))
 
 
 if __name__ == "__main__":
