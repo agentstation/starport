@@ -639,6 +639,24 @@ Operator inspection requires `--blob-replay-sequence`, with `--blob-replay-sha25
 These owner operations keep ordinary startup restricted. They do not establish complete history or authorize activation.
 
 
+## Operator history writing
+
+`RestoreSource.WriteFinalHistory` writes a package whose only steps are the final KV and SQL authorization rotations.
+It derives the backup, deployment, and prepared identities from the verified source.
+The KV expectation comes from the backup capture. The caller supplies the SQL expectation and the target digest.
+It requires an existing empty private directory, and it publishes `history.json` after every payload.
+It then verifies its own output through `VerifyHistoryPackage`.
+
+An interrupted write leaves no manifest. The operator removes the partial directory before a retry.
+
+`starport backup write-history` reads the SQL expectation and the target digest from the closed target.
+It refuses a target digest that differs from the `backup inspect-import` receipt.
+It checks the target digest and the SQL expectation again after the write, and it refuses a change.
+The command records the digest and size of each evidence file and requires the three operator attestations.
+The package does not store the attestations. Its digests bind it to the backup and the target.
+
+No shipped command writes prefix steps for activity after the backup.
+
 ## Operator history replay
 
 `starport backup apply-history` uses the original backup and independent history package with existing closed targets.

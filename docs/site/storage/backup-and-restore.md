@@ -99,7 +99,7 @@ A restore is a coordinated recovery. Keep every writer fenced until the activati
 1. Verify the set against the retained digest.
 2. Restore into the configured target stores with `starport backup prepare`. This step does not approve admission.
 3. Inspect the closed import with `starport backup inspect-import`.
-4. Bind the independent history to the target digest with the same operation ID.
+4. Write the history package with `starport backup write-history`. Supply the target digest and the same operation ID.
 5. Run `starport backup activate` with a private request file. The file is 64 KiB or smaller, with mode `0600` in a `0700` directory.
 6. Keep the `decision_sha256` value from the reply outside the deployment.
 7. Start a new gateway with the same target configuration. Check `/health/ready` before you permit traffic or remove a fence.
