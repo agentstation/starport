@@ -113,6 +113,10 @@ an empty PostgreSQL schema, and an object-store bucket first. Use TLS with
 server identity verification for remote services. Use a controlled single-primary
 Valkey service. Redis, MySQL, and Valkey Cluster qualification remain separate.
 
+The container has a read-only root file system, and `/tmp` uses tmpfs. The only
+writable mount is the node state volume at `/var/lib/starport`. A deployment
+that writes outside that mount stops at start.
+
 This is a candidate recipe for fresh initialization and qualification.
 Production use requires the CSP13 recovery procedures and CSP15 failure tests.
 A Valkey restart or failover changes its identity and prevents normal recovery

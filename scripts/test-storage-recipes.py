@@ -3,14 +3,17 @@
 
 import argparse
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
 import secrets
 import subprocess
+import tarfile
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 
@@ -190,12 +193,431 @@ def qualify_local_to_shared(image, project, compose, master_key, run):
             run(['docker', 'network', 'rm', network], check=False)
 
 
+# Each recipe declares its tmpfs scratch paths and its durable mounts.
+READONLY_RECIPES = {
+    'docker-compose.yml': ({'/tmp', '/var/lib/starport/cache'}, {
+        '/var/lib/starport/config', '/var/lib/starport/data', '/var/lib/starport/state'}),
+    'docker-compose.fleet.yml': ({'/tmp'}, {'/var/lib/starport'}),
+}
+
+
+def probe_archive(name):
+    """Return a tar stream with one file that the image user owns."""
+    payload = b'read-only recipe probe\n'
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode='w') as archive:
+        entry = tarfile.TarInfo(name)
+        entry.size, entry.uid, entry.gid, entry.mode = len(payload), 65532, 65532, 0o600
+        archive.addfile(entry, io.BytesIO(payload))
+    return buffer.getvalue()
+
+
+def refused(run, command, data=None):
+    """Report whether a command fails. The caller pairs it with a control."""
+    try:
+        run(command, data)
+    except RuntimeError:
+        return True
+    return False
+
+
+def wait_ready(base, attempts=150):
+    """Wait for the readiness probe of one gateway."""
+    for _ in range(attempts):
+        try:
+            with urllib.request.urlopen(base + '/health/ready', timeout=1) as response:
+                if response.status == 200:
+                    return True
+        except (urllib.error.URLError, OSError):
+            pass
+        time.sleep(0.2)
+    return False
+
+
+def qualify_readonly_mounts(root, image, run):
+    """Check that each Compose recipe writes only to its declared mounts."""
+    observations = []
+    with tempfile.TemporaryDirectory(prefix='starport-readonly-recipe-') as scratch:
+        directory = Path(scratch)
+        master_key = secrets.token_hex(32)
+        (directory / '.env').write_text('\n'.join([
+            'STARPORT_SECURITY_MASTER_KEY=' + master_key,
+            'STARPORT_CATALOG_SOURCE=embedded',
+            'STARPORT_CATALOG_NETWORK_MODE=offline',
+            'STARPORT_CATALOG_ACQUISITION_ENABLED=false',
+            'STARPORT_PORT=0', '',
+        ]))
+        # The fleet recipe needs its settings to create a container. It opens no store here.
+        (directory / '.env.fleet').write_text('\n'.join([
+            'STARPORT_DEPLOYMENT_ID=recipe-fixture',
+            'STARPORT_SECURITY_MASTER_KEY=' + master_key,
+            'STARPORT_STORAGE_VALKEY_URL=valkeys://valkey.example.test:6379/0',
+            'STARPORT_STORAGE_SQL_POSTGRES_URL=postgres://fixture@postgres.example.test/starport?sslmode=verify-full',
+            'STARPORT_FILES_OBJECT_STORE_BUCKET=recipe-fixture',
+            'STARPORT_FILES_OBJECT_STORE_REGION=us-east-1', '',
+        ]))
+        for name in ('.env', '.env.fleet'):
+            (directory / name).chmod(0o600)
+        image_override = directory / 'image.json'
+        image_override.write_text(json.dumps({'services': {'starport': {'image': image}}}))
+        commands = []
+
+        def compose(recipe, *overrides):
+            dotenv = '.env.fleet' if recipe == 'docker-compose.fleet.yml' else '.env'
+            command = ['docker', 'compose', '--project-name', 'starport-readonly-' + secrets.token_hex(6),
+                       '--project-directory', scratch, '--env-file', str(directory / dotenv),
+                       '-f', str(root / recipe), '-f', str(image_override)]
+            for override in overrides:
+                command += ['-f', str(override)]
+            commands.append(command)
+            return command
+
+        try:
+            for recipe, (scratch_paths, mounts) in READONLY_RECIPES.items():
+                command = compose(recipe)
+                run(command + ['create', '--no-build', 'starport'])
+                container = run(command + ['ps', '-a', '-q', 'starport']).decode().strip()
+                details = json.loads(run(['docker', 'container', 'inspect', container]))[0]
+                assert details['HostConfig']['ReadonlyRootfs'], f'{recipe} root file system is writable'
+                assert set(details['HostConfig'].get('Tmpfs') or {}) == scratch_paths, f'{recipe} scratch paths changed'
+                assert {mount['Destination'] for mount in details['Mounts']} == mounts, f'{recipe} durable mounts changed'
+                declared = sorted(mounts)[0]
+                assert not refused(run, ['docker', 'cp', '-a', '-', f'{container}:{declared}'],
+                                   probe_archive('readonly-probe')), f'{recipe} refused a write to {declared}'
+                assert refused(run, ['docker', 'cp', '-a', '-', f'{container}:/usr/local'],
+                               probe_archive('readonly-probe')), f'{recipe} accepted a write outside its mounts'
+            observations += ['readonly_root_filesystem', 'declared_writable_mounts_only',
+                             'scratch_tmpfs_only', 'write_outside_mounts_refused']
+
+            # One deployment initializes and starts with a moved data directory. Only the mount differs.
+            command = compose('docker-compose.yml')
+            outcomes = {}
+            for path in ('/var/lib/starport/undeclared', '/var/lib/starport/state/relocated'):
+                override = directory / ('relocated-' + secrets.token_hex(4) + '.json')
+                override.write_text(json.dumps({'services': {'starport': {
+                    'restart': 'no', 'environment': {'STARPORT_DATA_DIR': path}}}}))
+                relocated = command + ['-f', str(override)]
+                one_off = relocated + ['run', '--rm', '--no-deps', '--pull', 'never', 'starport']
+                initialized = not refused(run, one_off + ['init', '--configured-storage', '--name', 'readonly-admin', '--json'])
+                initialized = not refused(run, one_off + ['auth', 'rotate']) and initialized
+                run(relocated + ['up', '-d', '--no-build', 'starport'])
+                container = run(relocated + ['ps', '-a', '-q', 'starport']).decode().strip()
+                try:
+                    mapping = run(relocated + ['port', 'starport', '8080']).decode().strip()
+                    ready = wait_ready('http://' + mapping, attempts=100)
+                except RuntimeError:
+                    ready = False
+                state = json.loads(run(['docker', 'container', 'inspect', container]))[0]['State']
+                outcomes[path] = initialized, ready, state
+                run(relocated + ['down'])
+            initialized, ready, state = outcomes['/var/lib/starport/undeclared']
+            assert not initialized and not ready and not state['Running'] and state['ExitCode'] != 0, \
+                'an undeclared write path did not stop initialization and start'
+            initialized, ready, state = outcomes['/var/lib/starport/state/relocated']
+            assert initialized and ready and state['Running'], 'a declared write path did not start'
+            observations += ['undeclared_write_path_stops_start', 'declared_write_path_starts']
+            return observations
+        finally:
+            for command in commands:
+                run(command + ['down', '--volumes', '--remove-orphans'])
+
+
+FLEET_PLAINTEXT_OVERRIDE = 'scripts/testdata/docker-compose.fleet.plaintext-fixture.yml'
+FLEET_LIMITS = ('Two replicas against plaintext fixtures on one Docker host and one Valkey process. '
+                'Restore stops after preparation and import inspection: no command writes the activation '
+                'history package, so the internal/app activation tests own activation.')
+# Each name resolves to a closed loopback port, so no GitHub request leaves the container.
+GITHUB_HOSTS = ('github.com', 'api.github.com', 'codeload.github.com',
+                'objects.githubusercontent.com', 'raw.githubusercontent.com')
+FLEET_SOURCE_FILE = '/var/lib/starport/source/catalog.json'
+
+
+def container_address(address):
+    """Return a fixture URL that a container reaches through the Docker host."""
+    parsed = urllib.parse.urlsplit(address)
+    if parsed.hostname not in ('127.0.0.1', 'localhost'):
+        return address
+    userinfo, _, hostport = parsed.netloc.rpartition('@')
+    port = hostport.rpartition(':')[2] if ':' in hostport else ''
+    netloc = (userinfo + '@' if userinfo else '') + 'host.docker.internal' + (':' + port if port else '')
+    return urllib.parse.urlunsplit(parsed._replace(netloc=netloc))
+
+
+def source_archive(payload):
+    """Return a tar stream that places a catalog file at FLEET_SOURCE_FILE."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode='w') as archive:
+        directory = tarfile.TarInfo('source')
+        directory.type, directory.uid, directory.gid, directory.mode = tarfile.DIRTYPE, 65532, 65532, 0o700
+        archive.addfile(directory)
+        entry = tarfile.TarInfo('source/catalog.json')
+        entry.size, entry.uid, entry.gid, entry.mode = len(payload), 65532, 65532, 0o600
+        archive.addfile(entry, io.BytesIO(payload))
+    return buffer.getvalue()
+
+
+def fleet_api(base, key, path, data=None, content_type='application/json', attempts=30):
+    """Send one authenticated request. Retry while the catalog is not ready."""
+    headers = {'Authorization': 'Bearer ' + key}
+    if data is not None:
+        headers['Content-Type'] = content_type
+    for _ in range(attempts):
+        req = urllib.request.Request(base + path, data=data, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=10) as response:
+                return response.read()
+        except urllib.error.HTTPError as error:
+            if error.code != 503 or data is not None:
+                # Response bodies can echo request values. Report the status only.
+                raise RuntimeError(f'fleet request {path} failed with status {error.code}') from None
+        time.sleep(1)
+    raise RuntimeError(f'fleet request {path} stayed unavailable')
+
+
+def source_kinds(value):
+    """Return every source_kind value in a catalog status document."""
+    if isinstance(value, dict):
+        found = {value['source_kind']} if isinstance(value.get('source_kind'), str) and value['source_kind'] else set()
+        for item in value.values():
+            found |= source_kinds(item)
+        return found
+    if isinstance(value, list):
+        return set().union(*(source_kinds(item) for item in value)) if value else set()
+    return set()
+
+
+def qualify_fleet_records(root, image, inputs, run):
+    """Run two fleet gateways against isolated shared stores and restore their capture."""
+    observations = []
+    projects = ['starport-fleet-' + name + '-' + secrets.token_hex(4) for name in ('a', 'b', 'restore')]
+    master_key = secrets.token_hex(32)
+    with tempfile.TemporaryDirectory(prefix='starport-fleet-records-') as scratch:
+        directory = Path(scratch)
+
+        def write_env(project, target, source='embedded'):
+            values = {
+                'STARPORT_DEPLOYMENT_ID': inputs['deployment_id'],
+                'STARPORT_SECURITY_MASTER_KEY': master_key,
+                'STARPORT_STORAGE_VALKEY_URL': container_address(target['valkey_url']),
+                'STARPORT_STORAGE_SQL_POSTGRES_URL': container_address(target['postgres_url']),
+                'STARPORT_FILES_OBJECT_STORE_BUCKET': target['bucket'],
+                'STARPORT_FILES_OBJECT_STORE_REGION': inputs['object_store_region'],
+                'STARPORT_FILES_OBJECT_STORE_ENDPOINT': container_address(inputs['object_store_endpoint']),
+                'STARPORT_FILES_OBJECT_STORE_ACCESS_KEY_ID': inputs['object_store_access_key_id'],
+                'STARPORT_FILES_OBJECT_STORE_SECRET_ACCESS_KEY': inputs['object_store_secret_access_key'],
+                'STARPORT_CATALOG_SOURCE': source,
+                'STARPORT_CATALOG_NETWORK_MODE': 'offline',
+                'STARPORT_CATALOG_ACQUISITION_ENABLED': 'false',
+            }
+            if source == 'file':
+                values['STARPORT_CATALOG_SOURCE_URL'] = FLEET_SOURCE_FILE
+            assert not any("'" in value or '\n' in value for value in values.values()), 'fixture value needs quoting'
+            path = directory / project / '.env.fleet'
+            path.parent.mkdir(mode=0o700, exist_ok=True)
+            path.write_text(''.join(f"{name}='{value}'\n" for name, value in values.items()))
+            path.chmod(0o600)
+
+        image_override = directory / 'image.json'
+        image_override.write_text(json.dumps({'services': {'starport': {
+            'image': image, 'extra_hosts': [host + ':127.0.0.1' for host in GITHUB_HOSTS]}}}))
+        backup_volume = projects[0] + '_recipe-backup'
+        # The image home directory belongs to the image user with mode 0700, and a new volume keeps it.
+        capture_override = directory / 'capture.json'
+        capture_override.write_text(json.dumps({
+            'services': {'starport': {'volumes': ['recipe-backup:/home/nonroot']}},
+            'volumes': {'recipe-backup': {}}}))
+        restore_override = directory / 'restore.json'
+        restore_override.write_text(json.dumps({
+            'services': {'starport': {'volumes': ['recipe-backup:/home/nonroot']}},
+            'volumes': {'recipe-backup': {'external': True, 'name': backup_volume}}}))
+        write_env(projects[0], inputs['source'])
+        write_env(projects[1], inputs['source'])
+        write_env(projects[2], inputs['restore'])
+        extra = {0: [capture_override], 1: [], 2: [restore_override]}
+
+        def compose(index, *overrides):
+            project = directory / projects[index]
+            command = ['docker', 'compose', '--project-name', projects[index],
+                       '--project-directory', str(project), '--env-file', str(project / '.env.fleet'),
+                       '-f', str(root / 'docker-compose.fleet.yml'), '-f', str(root / FLEET_PLAINTEXT_OVERRIDE),
+                       '-f', str(image_override)]
+            for override in overrides:
+                command += ['-f', str(override)]
+            return command
+
+        def cli(index, *args, overrides=(), timeout=180):
+            return run(compose(index, *overrides) + ['run', '--rm', '--no-deps', '--pull', 'never', 'starport', *args],
+                       timeout=timeout)
+
+        def container(index):
+            return run(compose(index) + ['ps', '-a', '-q', 'starport']).decode().strip()
+
+        def start(index):
+            run(compose(index) + ['up', '-d', '--no-build', 'starport'], timeout=180)
+            base = 'http://' + run(compose(index) + ['port', 'starport', '8080']).decode().strip()
+            assert wait_ready(base, attempts=600), f'fleet replica {index} did not become ready'
+            return base
+
+        def check_records(base):
+            stored = json.loads(fleet_api(base, admin, '/api/v1/admin/keys/' + created_key['id']))
+            assert created_key['id'] in json.dumps(stored), 'gateway key record missing'
+            fleet_api(base, created_key['key'], '/v1/models')
+            listed = json.loads(fleet_api(base, admin, '/api/v1/providers/openai/credentials'))
+            assert [item['id'] for item in listed['credentials']] == [credential['id']], 'provider credential missing'
+            assert fleet_api(base, admin, '/v1/files/' + file_id + '/content') == payload, 'file bytes changed'
+
+        def check_source(bases, kind):
+            for base in bases:
+                status = json.loads(fleet_api(base, admin, '/api/v1/admin/catalog/status'))
+                assert source_kinds(status) == {kind}, f'catalog source is not {kind}'
+            for index in (0, 1):
+                hosts = json.loads(run(['docker', 'container', 'inspect', container(index)]))[0]['HostConfig']['ExtraHosts']
+                assert {host + ':127.0.0.1' for host in GITHUB_HOSTS} <= set(hosts), 'a GitHub route exists'
+
+        try:
+            cli(0, 'fleet', 'init', '--operation', 'recipe-fleet-init', '--evidence', 'recipe-fleet-harness', '--json')
+            cli(0, 'config', 'init', '--shared', '--yes', '--json')
+            admin = json.loads(cli(0, 'init', '--configured-storage', '--name', 'recipe-admin', '--json'))['api_key']
+            for index in (0, 1):
+                cli(index, 'auth', 'rotate')  # Discard the one-time credential output.
+            bases = [start(0), start(1)]
+
+            created_key = json.loads(fleet_api(bases[0], admin, '/api/v1/admin/keys', json.dumps({
+                'name': 'recipe-record', 'scopes': ['models:read']}).encode()))['key']
+            credential = json.loads(fleet_api(bases[0], admin, '/api/v1/providers/openai/credentials', json.dumps({
+                'label': 'recipe-record', 'credentials': {'api-key': 'sk-recipe-' + secrets.token_hex(16)}}).encode()))
+            payload = b'fleet recipe retains these uploaded bytes\n'
+            boundary = 'starport-fleet-upload'
+            body = (f'--{boundary}\r\nContent-Disposition: form-data; name="purpose"\r\n\r\nuser_data\r\n'
+                    f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="recipe.txt"\r\n'
+                    'Content-Type: text/plain\r\n\r\n').encode() + payload + f'\r\n--{boundary}--\r\n'.encode()
+            file_id = json.loads(fleet_api(bases[0], admin, '/v1/files', body,
+                                           'multipart/form-data; boundary=' + boundary))['id']
+            check_records(bases[0])
+            observations.append('fleet_records_created_through_one_replica')
+            check_records(bases[1])
+            observations.append('fleet_records_read_through_other_replica')
+
+            before = [container(0), container(1)]
+            for index in (0, 1):
+                run(compose(index) + ['rm', '--stop', '--force', 'starport'], timeout=180)
+            bases = [start(0), start(1)]
+            after = [container(0), container(1)]
+            assert all(after) and not set(before) & set(after), 'a gateway container was not replaced'
+            observations.append('fleet_gateway_containers_replaced')
+            for base in reversed(bases):
+                check_records(base)
+            observations.append('fleet_records_survive_container_recreation')
+            check_source(bases, 'embedded')
+            observations.append('fleet_catalog_source_embedded_without_github')
+
+            for index in (0, 1):
+                run(compose(index) + ['stop', 'starport'], timeout=180)
+            baseline = run(['docker', 'cp', container(0) + ':/var/lib/starport/data/catalog/baseline/.', '-'], timeout=180)
+            with tarfile.open(fileobj=io.BytesIO(baseline)) as archive:
+                members = [member for member in archive.getmembers()
+                           if member.isfile() and member.name.endswith('/catalog.json')]
+                assert len(members) == 1, 'the packaged baseline has no single catalog file'
+                catalog = archive.extractfile(members[0]).read()
+            for index in (0, 1):
+                run(['docker', 'cp', '-a', '-', container(index) + ':/var/lib/starport'], source_archive(catalog))
+            local = json.loads(cli(0, 'config', 'migrate', '--to', 'local', '--yes', '--json'))['revision']
+            assert local['authority'] == 'local', 'configuration did not move to local management'
+            for index in (0, 1):
+                write_env(projects[index], inputs['source'], source='file')
+            shared = json.loads(cli(0, 'config', 'migrate', '--to', 'shared', '--json'))['revision']
+            assert shared['authority'] == 'shared' and shared['sequence'] == local['sequence'] + 1, \
+                'configuration did not return to shared management'
+            observations.append('fleet_configuration_migrate_round_trip')
+            bases = [start(0), start(1)]
+            check_source(bases, 'file')
+            for base in bases:
+                check_records(base)
+            observations.append('fleet_catalog_source_file_without_github')
+
+            for index in (0, 1):
+                run(compose(index) + ['stop', 'starport'], timeout=180)
+            cli(0, 'backup', 'close', '--json')
+            capture = ('--operation', 'recipe-backup-' + secrets.token_hex(4),
+                       '--fencing-evidence', 'recipe-fleet-stopped')
+            created = json.loads(cli(0, 'backup', 'create', '--destination', '/home/nonroot/bundle', *capture,
+                                     '--key-reference', 'recipe-master-key', '--json',
+                                     overrides=extra[0], timeout=600))
+            verified = json.loads(cli(0, 'backup', 'verify', '--directory', '/home/nonroot/bundle',
+                                      '--manifest-sha256', created['manifest_sha256'], '--json',
+                                      overrides=extra[0], timeout=600))
+            references = verified['references']
+            assert verified['deployment_id'] == inputs['deployment_id'], 'backup names another deployment'
+            assert references['credential_values'] >= 1 and references['file_records'] >= 1, \
+                'backup lost a credential or a file record'
+            assert references['gateway_keys']['keys'] >= 2, 'backup lost a gateway key'
+            observations.append('fleet_backup_verifies_records')
+
+            restore = ('--operation', 'recipe-restore-' + secrets.token_hex(4),
+                       '--fencing-evidence', 'recipe-fleet-stopped')
+            prepared = json.loads(cli(2, 'backup', 'prepare', '--directory', '/home/nonroot/bundle',
+                                      '--manifest-sha256', created['manifest_sha256'],
+                                      '--files-directory', '/home/nonroot/prepared', *restore, '--json',
+                                      overrides=extra[2], timeout=600))
+            assert prepared['references'] == references, 'preparation changed the record references'
+            observations.append('fleet_restore_prepares_fresh_targets')
+            closed = prepared['prepared']['boundary']
+            expected = ['--expected-deployment', closed['DeploymentID'],
+                        '--expected-recovery-epoch', str(closed['Epoch']),
+                        '--expected-recovery-evidence', closed['Evidence']]
+            if closed['BackendID']:
+                expected += ['--expected-recovery-backend', closed['BackendID']]
+            inspected = json.loads(cli(2, 'backup', 'inspect-import', '--directory', '/home/nonroot/bundle',
+                                       '--manifest-sha256', created['manifest_sha256'], *restore,
+                                       '--destination', '/home/nonroot/inspection', *expected,
+                                       '--kv-replay-sequence', '0', '--sql-replay-sequence', '0',
+                                       '--blob-replay-sequence', '0',
+                                       '--valkey-incarnation', inputs['valkey_incarnation'], '--json',
+                                       overrides=extra[2], timeout=600))
+            assert inspected['inspection']['references'] == references, 'import inspection changed the references'
+            observations.append('fleet_restore_import_inspected')
+            return observations
+        finally:
+            # The restore project uses the capture volume, so it goes first.
+            for index in (2, 1, 0):
+                try:
+                    run(compose(index, *extra[index]) + ['down', '--volumes', '--remove-orphans'], timeout=180)
+                except RuntimeError:
+                    pass
+
+
+def report_mode(root, args, run):
+    """Run one additional mode and print its evidence."""
+    sources = ['Dockerfile', 'docker-compose.yml', 'docker-compose.fleet.yml', 'scripts/test-storage-recipes.py']
+    if args.mode == 'readonly':
+        observations = qualify_readonly_mounts(root, args.image, run)
+        limits = 'Container configuration and one relocated data directory. No host file system or kernel policy qualification.'
+    else:
+        inputs = json.loads(Path(args.fleet_inputs).read_text())
+        observations = qualify_fleet_records(root, args.image, inputs, run)
+        sources.append(FLEET_PLAINTEXT_OVERRIDE)
+        limits = FLEET_LIMITS
+    print(json.dumps({'status': 'PASS', 'mode': args.mode, 'image': args.image,
+                      'image_id': run(['docker', 'image', 'inspect', args.image, '--format', '{{.Id}}']).decode().strip(),
+                      'observations': observations, 'source_sha256': {
+                          name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in sources},
+                      'limits': limits}))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--image', required=True, help='Previously built Starport image')
+    parser.add_argument('--mode', choices=('local', 'readonly', 'fleet'), default='local',
+                        help='local qualifies the fresh recipes; readonly checks the declared mounts; '
+                             'fleet runs two gateways against the stores in --fleet-inputs')
+    parser.add_argument('--fleet-inputs', help='Private JSON file that names isolated shared fixture stores')
     parser.add_argument('--local-to-shared', action='store_true',
                         help='Import the populated local recipe into disposable shared stores instead of the persistence checks')
     args = parser.parse_args()
+    if args.mode == 'fleet' and not args.fleet_inputs:
+        parser.error('--mode fleet requires --fleet-inputs')
+    if args.local_to_shared and args.mode != 'local':
+        parser.error('--local-to-shared applies to --mode local only')
     root = Path(__file__).resolve().parents[1]
     project = 'starport-recipe-' + secrets.token_hex(6)
     observations = []
@@ -283,6 +705,9 @@ def main():
                 raise RuntimeError(request('/api/v1/admin/catalog/status').decode())
             assert catalog, 'catalog unavailable'
 
+        if args.mode != 'local':
+            report_mode(root, args, run)
+            return
         try:
             paths = json.loads(cli('config', 'paths', '--json'))
             for name, expected in {
@@ -329,11 +754,14 @@ def main():
             observations.append('container_recreation_preserves_records')
             run(compose + ['stop', 'starport'])
             container = run(compose + ['ps', '-a', '-q', 'starport']).decode().strip()
-            backup = run(['docker', 'cp', container + ':/var/lib/starport/.', '-'])
+            # The read-only root refuses a copy outside the declared volumes.
+            mounts = ('config', 'data', 'state')
+            backups = {mount: run(['docker', 'cp', f'{container}:/var/lib/starport/{mount}/.', '-']) for mount in mounts}
             run(compose + ['down', '--volumes'])
             run(compose + ['create', '--no-build', 'starport'])
             container = run(compose + ['ps', '-a', '-q', 'starport']).decode().strip()
-            run(['docker', 'cp', '-a', '-', container + ':/var/lib/starport'], backup)
+            for mount, backup in backups.items():
+                run(['docker', 'cp', '-a', '-', f'{container}:/var/lib/starport/{mount}'], backup)
             base = start()
             verify_records()
             observations.append('cold_backup_restores_into_fresh_volumes')

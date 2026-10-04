@@ -2305,7 +2305,11 @@ has not supplied a path override:
 | `starport-config` | `/var/lib/starport/config` | Primary configuration at `starport/config.env`. |
 | `starport-data` | `/var/lib/starport/data` | Badger at `badger/`, SQLite at `sqlite/starport.db`, file bytes at `files/`, local admin token, and catalog baseline at `catalog/baseline/`. |
 | `starport-state` | `/var/lib/starport/state` | Catalog runtime at `catalog/runtime/default/` and credential state. |
-| Container layer | `/var/lib/starport/cache` | Reconstructible cache data. |
+| tmpfs | `/var/lib/starport/cache` | Reconstructible cache data. A restart clears it. |
+
+The container has a read-only root file system, and `/tmp` uses tmpfs. A
+deployment that writes outside the declared mounts stops at start. Move a
+path override inside one of the three volumes.
 
 Run `docker compose run --rm starport config paths --json` to inspect the
 selected paths. Badger uses synchronous writes in this recipe.
