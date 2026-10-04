@@ -29,7 +29,9 @@ type Config struct {
 	// InferenceDestinationApprovals holds the applied deployment policy.
 	// Nil selects pinned installation defaults. An explicit empty set denies all destinations.
 	// The configuration authority supplies this value, never catalog refresh.
-	InferenceDestinationApprovals *credentials.DestinationApprovals `json:"-"`
+	// The noinit option keeps the loader from materializing an empty set,
+	// which the gateway would read as an explicit deny-all policy.
+	InferenceDestinationApprovals *credentials.DestinationApprovals `env:",noinit" json:"-"`
 	Providers                     ProvidersConfig
 	RateLimiting                  RateLimitingConfig    `env:",prefix=RATE_LIMITING_"`
 	BudgetAdmission               BudgetAdmissionConfig `env:",prefix=BUDGET_ADMISSION_"`

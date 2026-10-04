@@ -2,6 +2,12 @@
 
 This file carries the summary for each tagged version. The GitHub release for a tag carries the generated commit list.
 
+## Unreleased
+
+### Fixes
+
+- The configuration loader no longer materializes an empty inference destination approval set. Each build after #384 denied every inference destination with a 503. The `1.2.2-next` candidate carries the defect. The v1.2.0 release does not carry the defect.
+
 ## v1.2.0
 
 ### Enterprise readiness
