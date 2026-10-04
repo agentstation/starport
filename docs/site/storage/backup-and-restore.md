@@ -108,7 +108,8 @@ The activation releases the blob store first, the KV store second, and the SQL s
 
 ## Restore limits
 
-- The tests cover a local recipe to a local recipe and a shared recipe to a shared recipe. No test covers a restore from one recipe to the other.
+- The tests cover a local recipe to a local recipe and a shared recipe to a shared recipe. A topology test covers a minimal local deployment to a fleet and a fleet to a local deployment.
+- The tests cover a populated local deployment to the shared recipe. Refer to [Local data to the shared recipe](migration.md#local-data-to-the-shared-recipe).
 - A missing history cannot prove zero spend, restored permission, or a safe provider retry.
 - A ready gateway does not prove caller credentials, account permission, or budget. Refer to [Completion and permission](../../RECOVERY.md#completion-and-permission).
 - This release does not qualify this recovery procedure for production.

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -123,6 +124,41 @@ func TestContainerRecipePersistence(t *testing.T) {
 		"effective_container_paths", "fresh_start_kv_sql_file_catalog",
 		"container_recreation_preserves_records", "cold_backup_restores_into_fresh_volumes",
 		"fleet_replica_rotation_survives_replacement", "fleet_replica_local_state_isolated",
+	}, result.Observations)
+	t.Log(string(output))
+}
+
+// TestContainerRecipeLocalToShared imports a populated local recipe into
+// disposable Valkey, PostgreSQL, and object storage through the image CLI.
+// Activation stays with the in-process migration tests in internal/app.
+func TestContainerRecipeLocalToShared(t *testing.T) {
+	image := os.Getenv("STARPORT_RECIPE_IMAGE")
+	if image == "" {
+		t.Skip("UNVERIFIED: STARPORT_RECIPE_IMAGE is required for local-to-shared container qualification")
+	}
+	repository, err := filepath.Abs("../..")
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", filepath.Join(repository, "scripts/test-storage-recipes.py"), "--image", image, "--local-to-shared")
+	// Interpreter warnings on stderr must not corrupt the JSON report on stdout.
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	require.NoError(t, err, "%s%s", output, stderr.Bytes())
+	var result struct {
+		Status       string   `json:"status"`
+		Mode         string   `json:"mode"`
+		Observations []string `json:"observations"`
+	}
+	require.NoError(t, json.Unmarshal(output, &result))
+	require.Equal(t, "PASS", result.Status)
+	require.Equal(t, "local-to-shared", result.Mode)
+	require.ElementsMatch(t, []string{
+		"effective_container_paths", "fresh_start_kv_sql_file_catalog",
+		"local_backup_prepares_into_shared_stores", "shared_import_inspection_matches_capture",
+		"shared_target_refuses_start_before_activation", "populated_shared_target_refuses_second_import",
+		"closed_local_source_restarts_unchanged",
 	}, result.Observations)
 	t.Log(string(output))
 }

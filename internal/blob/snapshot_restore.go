@@ -16,6 +16,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// ErrImportTargetPopulated refuses an import into an object store that already holds objects.
+var ErrImportTargetPopulated = errors.New("blob: import target contains existing objects")
+
 type blobImportClaim struct {
 	Version     int      `json:"version"`
 	OperationID string   `json:"operation_id"`
@@ -139,7 +142,7 @@ func (o *ObjectStore) claimImport(ctx context.Context, claim []byte) error {
 		}
 		for _, object := range page.Contents {
 			if aws.ToString(object.Key) != o.objectKey(blobLayoutKey) {
-				return errors.New("blob: import target contains existing objects")
+				return ErrImportTargetPopulated
 			}
 		}
 	}
