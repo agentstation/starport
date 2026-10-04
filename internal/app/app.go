@@ -725,7 +725,10 @@ func (b *runtimeBuilder) buildGateway() error {
 		if err != nil {
 			return fmt.Errorf("load bundled destination contracts: %w", err)
 		}
-		approvals, err = providers.InstallationDestinationApprovals(bundled)
+		// openConcepts runs before this step and stores the startup provider
+		// resolution in b.config.Providers. Approvals compile once from it, so a
+		// later catalog refresh never changes an approved inference origin.
+		approvals, err = providers.DeploymentDestinationApprovals(bundled, b.config.Providers)
 		if err != nil {
 			return fmt.Errorf("compile installation destination approvals: %w", err)
 		}
