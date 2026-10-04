@@ -15,6 +15,7 @@ const (
 	flagBackupManifestSHA256  = "manifest-sha256"
 	flagBackupFencingEvidence = "fencing-evidence"
 	flagBackupScratch         = "scratch"
+	flagValkeyIncarnation     = "valkey-incarnation"
 	backupDirectoryUsage      = "Absolute backup directory"
 	backupManifestDigestUsage = "Manifest digest retained independently of the backup"
 )
@@ -36,6 +37,7 @@ func newBackupCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 		newPopulatedRecoveryCommand(deps, usageError),
 		newInspectImportedBackupCommand(deps, usageError),
 		newApplyHistoryCommand(deps, usageError),
+		newWriteHistoryCommand(deps, usageError),
 		newPublishBackupFilesCommand(deps, usageError),
 		{
 			Name: "close", Usage: "Close recovery approval; separately stop and fence all writers", OnUsageError: usageError,

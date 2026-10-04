@@ -114,6 +114,7 @@ type Dependencies struct {
 	PrepareBackup                 BackupPreparer
 	InspectImportedBackup         ImportedBackupInspector
 	ApplyImportedHistory          ImportedHistoryApplier
+	WriteImportedHistory          ImportedHistoryWriter
 	PublishBackupFiles            BackupFilePublisher
 	ActivateRecovery              RecoveryActivator
 	InspectRecoveryActivation     RecoveryActivationInspector

@@ -49,7 +49,7 @@ func TestBackupCommandReportsRuntimeFailureWithoutReceipt(t *testing.T) {
 }
 
 func TestBackupCommandsExposeRecoveryLimits(t *testing.T) {
-	for _, verb := range []string{"close", "create", "verify"} {
+	for _, verb := range []string{"close", "create", "verify", "write-history"} {
 		t.Run(verb, func(t *testing.T) {
 			deps, output, _ := testDependencies()
 			require.NoError(t, Run(t.Context(), []string{"starport", "backup", verb, "--help"}, deps))
@@ -62,6 +62,10 @@ func TestBackupCommandsExposeRecoveryLimits(t *testing.T) {
 			case "verify":
 				require.Contains(t, output.String(), "does not approve recovery")
 				require.Contains(t, output.String(), "independently")
+			case "write-history":
+				require.Contains(t, output.String(), "Keep every writer fenced")
+				require.Contains(t, output.String(), "changes no target store")
+				require.Contains(t, output.String(), "--complete-interval")
 			}
 		})
 	}

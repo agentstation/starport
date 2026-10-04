@@ -27,7 +27,7 @@ func newApplyHistoryCommand(deps Dependencies, usageError usageErrorHandler) *ur
 			&urfavecli.StringFlag{Name: "expected-target-sha256", Required: true, Usage: "Target digest from the closed import inspection receipt"},
 			&urfavecli.StringFlag{Name: "journal-directory", Required: true, Usage: "Existing private journal directory retained across every exact retry"},
 			&urfavecli.StringFlag{Name: flagBackupScratch, Usage: backupScratchUsage},
-			&urfavecli.StringFlag{Name: "valkey-incarnation", Usage: "Recorded run_id:master_replid for Valkey; omit for Badger"},
+			&urfavecli.StringFlag{Name: flagValkeyIncarnation, Usage: "Recorded run_id:master_replid for Valkey; omit for Badger"},
 			&urfavecli.StringFlag{Name: "operator", Required: true, Usage: "Operator who accepts the external recovery facts"},
 			&urfavecli.StringFlag{Name: "attestation-reference", Required: true, Usage: "Non-secret reference to independent fencing and interval evidence"},
 			&urfavecli.BoolFlag{Name: "writers-fenced", Required: true, Usage: "Attest that every external writer remains stopped and fenced"},
@@ -43,7 +43,7 @@ func newApplyHistoryCommand(deps Dependencies, usageError usageErrorHandler) *ur
 				VerifyRequest:    recovery.VerifyRequest{Directory: cmd.String(flagBackupDirectory), ManifestSHA256: cmd.String(flagBackupManifestSHA256), ScratchDirectory: cmd.String(flagBackupScratch)},
 				Operation:        recovery.RestoreOperation{ID: cmd.String(flagBackupOperation), FencingEvidence: cmd.String(flagBackupFencingEvidence)},
 				HistoryDirectory: cmd.String("history-directory"), HistorySHA256: cmd.String("history-sha256"), ExpectedTargetSHA256: cmd.String("expected-target-sha256"),
-				JournalDirectory: cmd.String("journal-directory"), ValkeyIncarnation: cmd.String("valkey-incarnation"),
+				JournalDirectory: cmd.String("journal-directory"), ValkeyIncarnation: cmd.String(flagValkeyIncarnation),
 				Attestation: recovery.HistoryAttestation{Operator: cmd.String("operator"), Reference: cmd.String("attestation-reference"), WritersFenced: cmd.Bool("writers-fenced"), AdmittedWorkAccounted: cmd.Bool("admitted-work-accounted"), CompleteInterval: cmd.Bool("complete-interval")},
 			}
 			if err := request.Validate(); err != nil {
