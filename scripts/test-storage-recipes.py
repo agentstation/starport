@@ -326,8 +326,8 @@ def qualify_readonly_mounts(root, image, run):
 
 FLEET_PLAINTEXT_OVERRIDE = 'scripts/testdata/docker-compose.fleet.plaintext-fixture.yml'
 FLEET_LIMITS = ('Two replicas against plaintext fixtures on one Docker host and one Valkey process. '
-                'Restore stops after preparation and import inspection: no command writes the activation '
-                'history package, so the internal/app activation tests own activation.')
+                'Restore writes a final-only history package for a controlled stop and activates the target. '
+                'No gateway starts on the restored target, and the history records no post-backup activity.')
 # Each name resolves to a closed loopback port, so no GitHub request leaves the container.
 GITHUB_HOSTS = ('github.com', 'api.github.com', 'codeload.github.com',
                 'objects.githubusercontent.com', 'raw.githubusercontent.com')
@@ -345,17 +345,24 @@ def container_address(address):
     return urllib.parse.urlunsplit(parsed._replace(netloc=netloc))
 
 
-def source_archive(payload):
-    """Return a tar stream that places a catalog file at FLEET_SOURCE_FILE."""
+def private_archive(directories, files):
+    """Return a tar stream of private directories and files that the image user owns."""
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode='w') as archive:
-        directory = tarfile.TarInfo('source')
-        directory.type, directory.uid, directory.gid, directory.mode = tarfile.DIRTYPE, 65532, 65532, 0o700
-        archive.addfile(directory)
-        entry = tarfile.TarInfo('source/catalog.json')
-        entry.size, entry.uid, entry.gid, entry.mode = len(payload), 65532, 65532, 0o600
-        archive.addfile(entry, io.BytesIO(payload))
+        for name in directories:
+            directory = tarfile.TarInfo(name)
+            directory.type, directory.uid, directory.gid, directory.mode = tarfile.DIRTYPE, 65532, 65532, 0o700
+            archive.addfile(directory)
+        for name, payload in files.items():
+            entry = tarfile.TarInfo(name)
+            entry.size, entry.uid, entry.gid, entry.mode = len(payload), 65532, 65532, 0o600
+            archive.addfile(entry, io.BytesIO(payload))
     return buffer.getvalue()
+
+
+def source_archive(payload):
+    """Return a tar stream that places a catalog file at FLEET_SOURCE_FILE."""
+    return private_archive(['source'], {'source/catalog.json': payload})
 
 
 def fleet_api(base, key, path, data=None, content_type='application/json', attempts=30):
@@ -589,6 +596,57 @@ def qualify_fleet_records(root, image, inputs, run):
                                        overrides=extra[2], timeout=600))
             assert inspected['inspection']['references'] == references, 'import inspection changed the references'
             observations.append('fleet_restore_import_inspected')
+
+            def place(archive):
+                # The image has no shell. A created container copies private entries into the backup volume.
+                run(compose(2, *extra[2]) + ['create', '--no-build', '--pull', 'never', 'starport'], timeout=180)
+                try:
+                    run(['docker', 'cp', '-a', '-', container(2) + ':/home/nonroot'], archive)
+                finally:
+                    run(compose(2, *extra[2]) + ['rm', '--force', 'starport'], timeout=180)
+
+            # The package directories stay outside the bundle, the scratch directory, and /var/lib/starport.
+            place(private_archive(['history', 'journal', 'activation', 'scratch', 'evidence'],
+                                  {'evidence/fleet-stopped.log': b'recipe fleet gateways stopped before the backup\n'}))
+            bundle = {'Directory': '/home/nonroot/bundle', 'ManifestSHA256': created['manifest_sha256'],
+                      'ScratchDirectory': '/home/nonroot/scratch'}
+            attestation = {'operator': 'recipe-operator', 'reference': 'recipe-fleet-stopped', 'writers_fenced': True,
+                           'admitted_work_accounted': True, 'complete_interval': True}
+            written = json.loads(cli(2, 'backup', 'write-history', '--directory', bundle['Directory'],
+                                     '--manifest-sha256', bundle['ManifestSHA256'], '--scratch', bundle['ScratchDirectory'],
+                                     *restore, '--history-directory', '/home/nonroot/history',
+                                     '--expected-target-sha256', inspected['target_sha256'],
+                                     '--valkey-incarnation', inputs['valkey_incarnation'],
+                                     '--mode', 'planned_migration', '--disposition', 'replay_complete',
+                                     '--through', time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                                     '--end-reference', 'recipe-fleet-stopped',
+                                     # The stopped source used no epoch above the captured boundary.
+                                     '--highest-epoch', str(created['recovery_epoch']),
+                                     '--epoch-reference', 'recipe-backup-boundary', '--epoch-operator', 'recipe-operator',
+                                     '--evidence-file', 'fleet-stopped=/home/nonroot/evidence/fleet-stopped.log=recipe-fleet-stopped',
+                                     '--epoch-evidence', 'fleet-stopped', '--operator', attestation['operator'],
+                                     '--attestation-reference', attestation['reference'], '--writers-fenced=true',
+                                     '--admitted-work-accounted=true', '--complete-interval=true', '--json',
+                                     overrides=extra[2], timeout=600))
+            assert written['target_sha256'] == inspected['target_sha256'], 'history binds another target'
+            assert written['declared_steps'] == 2, 'history is not final-only'
+            observations.append('fleet_restore_history_written')
+
+            operation = {'ID': restore[1], 'FencingEvidence': restore[3]}
+            activation = {
+                'Prepare': {**bundle, 'Operation': operation, 'FilesDirectory': '/home/nonroot/prepared'},
+                'History': {**bundle, 'Operation': operation, 'HistoryDirectory': '/home/nonroot/history',
+                            'HistorySHA256': written['history_sha256'], 'ExpectedTargetSHA256': written['target_sha256'],
+                            'JournalDirectory': '/home/nonroot/journal', 'ValkeyIncarnation': inputs['valkey_incarnation'],
+                            'Attestation': attestation},
+                'ActivationDirectory': '/home/nonroot/activation', 'PreserveTargetWorkspace': True,
+            }
+            place(private_archive(['request'], {'request/activation.json': json.dumps(activation).encode()}))
+            activated = json.loads(cli(2, 'backup', 'activate', '--request-file', '/home/nonroot/request/activation.json',
+                                       '--json', overrides=extra[2], timeout=900))
+            assert activated['historically_complete'] and activated['current_admission_valid'] \
+                and not activated['restricted'], 'activation left the restored deployment restricted'
+            observations.append('fleet_restore_activated')
             return observations
         finally:
             # The restore project uses the capture volume, so it goes first.
@@ -759,7 +817,7 @@ def main():
                                   'observations': observations, 'source_sha256': {
                                       name: hashlib.sha256((root / name).read_bytes()).hexdigest()
                                       for name in ('Dockerfile', 'docker-compose.yml', 'scripts/test-storage-recipes.py')},
-                                  'limits': 'Backup, prepare, inspection, and refusals only. Activation needs an independent history package that the image CLI does not produce. Plaintext Valkey on a private network.'}))
+                                  'limits': 'Backup, prepare, inspection, and refusals only. The fleet mode qualifies write-history and activation. Plaintext Valkey on a private network.'}))
                 return
             run(compose + ['down'])
             base = start()

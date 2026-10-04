@@ -112,6 +112,8 @@ func TestFleetRecipeContainerRecreation(t *testing.T) {
 		"fleet_backup_verifies_records",
 		"fleet_restore_prepares_fresh_targets",
 		"fleet_restore_import_inspected",
+		"fleet_restore_history_written",
+		"fleet_restore_activated",
 	}, result.Observations)
 	t.Log(string(output))
 }
