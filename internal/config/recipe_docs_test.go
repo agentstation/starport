@@ -90,7 +90,8 @@ func readRepositoryDoc(t *testing.T, path string) string {
 	require.NoError(t, err)
 	source, err := os.ReadFile(filepath.Join(repository, filepath.FromSlash(path)))
 	require.NoError(t, err)
-	return string(source)
+	// A Windows checkout converts the docs to CRLF. The tests compare lines.
+	return strings.ReplaceAll(string(source), "\r\n", "\n")
 }
 
 // headingSlug returns the GitHub-style anchor that rehype-slug assigns.
