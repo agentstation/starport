@@ -13,6 +13,8 @@ This area is for an operator who plans a Starport deployment. Make three decisio
 2. Select a catalog source topology. The topology sets the network egress, the catalog freshness, and the GitHub request budget.
 3. Select the storage backends. The storage recipe follows from the process count of the target.
 
+Then read the [deployment recipe](recipes.md) of the target. Each recipe gives the durable owners, the runnable checks, and the recovery procedure.
+
 ## Process count is not organization size
 
 A developer can run several gateway replicas. An enterprise can run one gateway process. Select the target from the process count and the network boundary, not from the size of the organization.

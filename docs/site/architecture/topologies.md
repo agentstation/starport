@@ -5,7 +5,7 @@ order: 2
 summary: Select one of five catalog source topologies or the replicated central variant from four network questions.
 ---
 
-A catalog source topology decides where each gateway gets its catalog. It sets the egress, the freshness age, and the GitHub request budget of the deployment.
+A catalog source topology decides where each gateway gets its catalog. It sets the catalog egress, the freshness age, and the GitHub request budget of the deployment.
 
 ## Decision questions
 
@@ -20,15 +20,19 @@ Read the table from the top. Use the first row that matches the deployment. If t
 
 ## Topology table
 
-| Topology | Replica egress | `SOURCE` | `ACQUISITION_ENABLED` | Freshness age |
-| --- | --- | --- | --- | --- |
-| Single Starport with direct GitHub | GitHub and providers | `public` | `true` | 6 hours |
-| Starport fleet with direct GitHub | GitHub and providers | `public` | `true` | 6 hours |
-| Central Starmap server with replica acquisition | Central server and providers | `starmap` | `true` | 6 hours |
-| Restricted replica egress | Central server only | `starmap` | `false` | 6 hours |
-| Air-gapped mirror | None | `file` | `false` | Transfer cadence |
+| Topology | Catalog egress | Inference egress | `SOURCE` | `ACQUISITION_ENABLED` | Freshness age |
+| --- | --- | --- | --- | --- | --- |
+| Single Starport with direct GitHub | GitHub and providers | Providers | `public` | `true` | 6 hours |
+| Starport fleet with direct GitHub | GitHub and providers | Providers | `public` | `true` | 6 hours |
+| Central Starmap server with replica acquisition | Central server and providers | Providers | `starmap` | `true` | 6 hours |
+| Restricted replica egress | Central server only | Providers | `starmap` | `false` | 6 hours |
+| Air-gapped mirror | None | Providers inside the boundary | `file` | `false` | Transfer cadence |
 
 Each setting name in the table has the prefix `STARPORT_CATALOG_`.
+
+Catalog egress carries the source reads and the provider observations. Inference egress carries the client requests that the gateway sends to a provider. A topology sets the catalog egress only.
+
+The topology does not decide when the catalog changes. Select that separately in the [update policy selector](../operate-starport/catalog-updates.md#update-policy-selector).
 
 ## Single Starport with direct GitHub
 
@@ -36,13 +40,17 @@ One gateway follows the public channel `catalog/v1`. The shipped defaults apply,
 
 ## Starport fleet with direct GitHub
 
-Several gateways share one egress address and follow the public channel. Set `STARPORT_CATALOG_SOURCE_TOKEN` to one GitHub token for all replicas. The token raises the hourly limit from 60 requests for each address to 5,000 requests for each token.
+Several gateways share one egress address and follow the public channel. In a shared fleet, one replica at a time holds the refresh lease. That replica reads the source and observes the providers. The other replicas follow the shared accepted head and send no GitHub request.
+
+A shared fleet therefore counts as one poller. Each separate deployment behind the same address counts as one more poller. Every replica still needs a route to GitHub and to the providers, because any replica can take the lease.
+
+Set `STARPORT_CATALOG_SOURCE_TOKEN` to one GitHub token on every replica. The token raises the hourly limit from 60 requests for each address to 5,000 requests for each token.
 
 Move to a central Starmap server at any of these points:
 
-- More than 60 replicas behind one address without a token.
-- More than about 5,000 replicas that share one token.
-- More than 10,000 replicas.
+- More than 60 pollers behind one address without a token.
+- More than about 5,000 pollers that share one token.
+- More than 10,000 pollers.
 
 ## Central Starmap server with replica acquisition
 
@@ -54,11 +62,11 @@ STARPORT_CATALOG_SOURCE_URL=<starmap-server-url>/api/v1
 STARPORT_CATALOG_SOURCE_API_KEY=<starmap-server-api-key>
 ```
 
-The source API key is a catalog credential. It never pays a provider. Each replica still observes the providers on its own schedule.
+The source API key is a catalog credential. It never pays a provider. In a shared fleet, the replica that holds the refresh lease observes the providers. A separate deployment observes the providers on its own schedule.
 
 ## Restricted replica egress
 
-The central server reaches GitHub and the providers. Each replica reaches only the central server. Set `STARPORT_CATALOG_ACQUISITION_ENABLED=false` on every replica. This topology is not air-gapped, because the central server has a route to the internet.
+The central server reaches GitHub and the providers. Each replica sends catalog requests to the central server only. Each replica still sends inference requests to the providers. Set `STARPORT_CATALOG_ACQUISITION_ENABLED=false` on every replica. This topology is not air-gapped, because the central server has a route to the internet.
 
 ## Air-gapped mirror
 

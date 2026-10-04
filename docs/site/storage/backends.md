@@ -88,7 +88,14 @@ The object store backend uses `STARPORT_FILES_OBJECT_STORE_BUCKET`, `_REGION`, `
 
 ## Supported versions
 
-The code does not state a minimum version of Valkey, PostgreSQL, MySQL, or an object store. The repository tests use Valkey and PostgreSQL container images that it pins by digest. Test your own service versions before production use.
+| Service | Qualified release |
+| --- | --- |
+| Valkey | 7.2.14 |
+| PostgreSQL | 16.15 |
+
+The real-backend qualification covers these releases only. The Valkey qualification covers one standalone writable primary. CI pins each release by image digest. Another release of either service stays UNVERIFIED until a qualification run records it.
+
+Redis, MySQL, and Valkey Cluster are not qualified. Each one needs its own compatibility result. The code does not state a minimum object store version. Test your own service versions before production use.
 
 ## Local files of a shared deployment
 

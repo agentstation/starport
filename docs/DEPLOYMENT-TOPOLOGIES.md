@@ -16,13 +16,17 @@ interval to that age. A push hop adds no interval.
 
 ## Decision table
 
-| Topology | Replica egress | `SOURCE` | `ACQUISITION_ENABLED` | Freshness age |
-| --- | --- | --- | --- | --- |
-| Single Starport with direct GitHub | GitHub and providers | `public` | `true` | 6 hours |
-| Starport fleet with direct GitHub | GitHub and providers | `public` | `true` | 6 hours |
-| Central Starmap server with replica acquisition | central server and providers | `starmap` | `true` | 6 hours |
-| Restricted replica egress | central server alone | `starmap` | `false` | 6 hours |
-| Air-gapped mirror | none | `file` | `false` | transfer cadence |
+| Topology | Catalog egress | Inference egress | `SOURCE` | `ACQUISITION_ENABLED` | Freshness age |
+| --- | --- | --- | --- | --- | --- |
+| Single Starport with direct GitHub | GitHub and providers | providers | `public` | `true` | 6 hours |
+| Starport fleet with direct GitHub | GitHub and providers | providers | `public` | `true` | 6 hours |
+| Central Starmap server with replica acquisition | central server and providers | providers | `starmap` | `true` | 6 hours |
+| Restricted replica egress | central server alone | providers | `starmap` | `false` | 6 hours |
+| Air-gapped mirror | none | providers inside the boundary | `file` | `false` | transfer cadence |
+
+Catalog egress carries the source reads and the provider observations.
+Inference egress carries the client requests that the gateway sends to a
+provider. A topology sets the catalog egress alone.
 
 Read the table from the top and take the first row that matches the
 deployment. Four questions select the row:
@@ -64,8 +68,9 @@ catalog `warn` above `SOURCE_MAX_AGE` and `critical` above five thirds of it.
 The default of six hours gives `warn` above six hours and `critical` above
 ten hours.
 
-**Egress.** The gateway reaches GitHub for the catalog and reaches each
-provider API for acquisition.
+**Egress.** For the catalog, the gateway reaches GitHub and reaches each
+provider API for acquisition. For inference, the gateway reaches each provider
+API that serves a request.
 
 **Failure behavior.** A source that does not answer leaves the accepted head in
 place. The default `prefer_source` policy starts the gateway on the embedded
@@ -90,21 +95,29 @@ flowchart LR
   NAT -->|acquisition every 4 hours| PR
 ```
 
-**Settings.** Set `SOURCE_TOKEN` to one GitHub token that every replica shares.
-The token raises the hourly ceiling from 60 requests for each address to 5,000
-requests for each token. Keep `STARTUP_SPREAD` at `15m`, because the spread
-holds a cold fleet away from one moment.
+**Lease ownership.** In a shared fleet, one replica at a time holds the
+refresh lease. Only that replica reads the source and observes the providers.
+The other replicas send no GitHub request. They check the shared accepted head
+every 30 seconds and follow it. A shared fleet therefore puts the load of one
+poller on GitHub. Each separate deployment behind the same address adds one
+poller.
+
+**Settings.** Set `SOURCE_TOKEN` to one GitHub token on every replica. Any
+replica can take the lease, so each replica needs the token. The token raises
+the hourly ceiling from 60 requests for each address to 5,000 requests for each
+token. Keep `STARTUP_SPREAD` at `15m`, because the spread holds many pollers
+away from one moment.
 
 **Request budget.** A direct consumer budgets from the GitHub rate-limit
 headers. The four headers are `x-ratelimit-limit`, `x-ratelimit-used`,
 `x-ratelimit-remaining`, and `x-ratelimit-reset`. The runtime records the
-measured requests for each refresh cycle. The fleet capacity is the remaining
-budget minus a reserved headroom, divided by the measured requests for each
-cycle. The status warns when `used` passes 80 percent of `limit`.
+measured requests for each refresh cycle. The capacity in pollers is the
+remaining budget minus a reserved headroom, divided by the measured requests
+for each cycle. The status warns when `used` passes 80 percent of `limit`.
 
-The rate that a fleet puts on GitHub follows the fleet size and the window:
+The rate on GitHub follows the poller count and the window:
 
-| Fleet | 15-minute startup spread | 1-hour poll interval | 4-hour acquisition |
+| Pollers | 15-minute startup spread | 1-hour poll interval | 4-hour acquisition |
 | --- | --- | --- | --- |
 | 100 | 0.111 requests a second | 0.028 requests a second | 0.007 requests a second |
 | 10,000 | 11.11 requests a second | 2.78 requests a second | 0.69 requests a second |
@@ -113,27 +126,30 @@ The rate that a fleet puts on GitHub follows the fleet size and the window:
 A published ceiling is not a safe threshold. Move to a central Starmap server
 at any of these three points:
 
-- Above 60 replicas behind one egress address with no token. Each replica
+- Above 60 pollers behind one egress address with no token. Each poller
   needs one poll an hour, and the hourly ceiling is 60.
-- Above about 5,000 replicas that share one token. The token ceiling is 5,000
+- Above about 5,000 pollers that share one token. The token ceiling is 5,000
   requests an hour.
-- Above 10,000 replicas. The 15-minute spread then puts 11 requests a second
+- Above 10,000 pollers. The 15-minute spread then puts 11 requests a second
   against a secondary limit of 15 requests a second. No headroom remains.
 
-**Freshness age.** The objective stays six hours, because every replica reads
-the channel directly.
+**Freshness age.** The objective stays six hours, because the lease owner reads
+the channel directly. The followers check the shared head every 30 seconds.
 
-**Egress.** Every replica reaches GitHub and every replica reaches the provider
-APIs.
+**Egress.** Every replica needs a route to GitHub and to the provider APIs for
+the catalog, because any replica can take the lease. Every replica reaches the
+provider APIs for inference.
 
-**Failure behavior.** A rate-limit refusal leaves the accepted head in place
-and the next phase retries. Each replica keeps its own accepted head, so one
-refused replica does not move another replica.
+**Failure behavior.** A rate-limit refusal leaves the shared accepted head in
+place, and the next phase retries. The followers keep the same head. A lease
+owner that stops loses the lease when the lease expires, and another replica
+takes it.
 
 ## Central Starmap server with replica acquisition
 
 One Starmap server follows GitHub and serves the fleet. Each replica reads the
-server and keeps its own provider acquisition.
+server. In a shared fleet, the replica that holds the refresh lease runs the
+provider acquisition. A separate deployment runs its own acquisition.
 
 ```mermaid
 flowchart LR
@@ -165,8 +181,9 @@ inside the 15-minute spread window.
 so a push hop adds no poll interval. The objective stays six hours. A hop that
 falls back to polling adds one poll interval to the age.
 
-**Egress.** The central server reaches GitHub. Each replica reaches the central
-server and reaches the provider APIs.
+**Egress.** The central server reaches GitHub. For the catalog, each replica
+reaches the central server and the provider APIs. For inference, each replica
+reaches the provider APIs.
 
 **Failure behavior.** A stream that fails three times in a row falls back to a
 poll of the upstream manifest. A server outage leaves each replica on its
@@ -175,8 +192,8 @@ accepted head, and the runtime status reports the fallback state. A `401` or a
 
 ## Restricted replica egress
 
-The central server keeps the egress to GitHub and to the providers. Each
-replica reaches the central server alone.
+The central server keeps the catalog egress to GitHub and to the providers.
+Each replica sends catalog requests to the central server alone.
 
 ```mermaid
 flowchart LR
@@ -204,7 +221,8 @@ observation. The central server owns the complete external budget.
 **Freshness age.** The objective stays six hours, because the server-sent
 events reach the replicas without a poll.
 
-**Egress.** Each replica reaches one address, which is the central server.
+**Egress.** For the catalog, each replica reaches one address, which is the
+central server. For inference, each replica still reaches the provider APIs.
 
 **Failure behavior.** A replica that loses the server keeps its accepted head
 and reconnects with a bounded retry. The replica observes no provider, so a
@@ -217,9 +235,10 @@ deployment that permits no such route uses the air-gapped mirror below.
 
 ## Air-gapped mirror
 
-No host inside the boundary reaches GitHub or a provider. An external process
-outside the boundary reads the artifact and its verification bundle. An
-operator moves both files across the boundary on a schedule.
+No host inside the boundary reaches GitHub or a provider API on the internet.
+An external process outside the boundary reads the artifact and its
+verification bundle. An operator moves both files across the boundary on a
+schedule.
 
 ```mermaid
 flowchart LR
@@ -254,7 +273,9 @@ alert with the transfer schedule, so an operator reads a late transfer and not
 a broken gateway.
 
 **Egress.** No host inside the boundary reaches the internet. The runtime has
-no OCI source, so the `file` source is the supported entry point.
+no OCI source, so the `file` source is the supported entry point. For
+inference, each gateway reaches only the provider endpoints inside the
+boundary.
 
 **Failure behavior.** A missed transfer raises the catalog age. The freshness
 grade moves from `current` to `warn` and then to `critical`, and the accepted
