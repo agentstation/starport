@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a published Starport archive on its native operating system and CPU."""
+"""Verify a published or candidate Starport archive on its native operating system and CPU."""
 
 import argparse
 import hashlib
@@ -38,19 +38,35 @@ def native_target():
     return operating_system, architecture
 
 
+def archive_file(version, operating_system, architecture):
+    suffix = 'zip' if operating_system == 'windows' else 'tar.gz'
+    return f'starport_{version}_{operating_system}_{architecture}.{suffix}'
+
+
 def archive_name(tag, operating_system, architecture):
     if not re.fullmatch(r'v\d+\.\d+\.\d+(?:-rc\.\d+)?', tag):
         raise ValueError('The release tag must be an exact application version.')
-    suffix = 'zip' if operating_system == 'windows' else 'tar.gz'
-    return f'starport_{tag[1:]}_{operating_system}_{architecture}.{suffix}'
+    return archive_file(tag[1:], operating_system, architecture)
 
 
-def verify_checksum(archive, checksums, release):
+def candidate_archive_name(version, operating_system, architecture):
+    # GoReleaser names a snapshot "{{ incpatch .Version }}-next".
+    if not re.fullmatch(r'\d+\.\d+\.\d+-next', version):
+        raise ValueError('The candidate version must be an exact snapshot version.')
+    return archive_file(version, operating_system, architecture)
+
+
+def verify_checksum_entry(archive, checksums):
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     matches = [line.split()[0] for line in checksums.read_text().splitlines()
                if len(line.split()) == 2 and line.split()[1] == archive.name]
     if matches != [digest]:
         raise ValueError('The archive does not match one exact checksum entry.')
+    return digest
+
+
+def verify_checksum(archive, checksums, release):
+    digest = verify_checksum_entry(archive, checksums)
     assets = [asset for asset in release['assets'] if asset['name'] == archive.name]
     if len(assets) != 1 or assets[0].get('digest') != 'sha256:' + digest:
         raise ValueError('The archive does not match the GitHub release asset digest.')
@@ -109,6 +125,11 @@ def run_binary(binary, arguments, environment, home):
     return result.stdout
 
 
+def catalog_model_digest(payload):
+    canonical = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+
+
 def request_json(url, key=None):
     headers = {'Authorization': 'Bearer ' + key} if key else {}
     with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=3) as response:
@@ -151,7 +172,15 @@ def verify_console(base):
     return len(assets.paths)
 
 
-def verify_development(binary, environment, home, port, report):
+def catalog_generation(base, key):
+    status, discovery = request_json(base + '/api/v1/catalog/discovery', key)
+    generation = discovery.get('generation_id') if isinstance(discovery, dict) else None
+    if status != 200 or not isinstance(generation, str) or not re.fullmatch(r'[A-Za-z0-9._:-]{1,200}', generation):
+        raise ValueError('The native server did not identify its catalog generation.')
+    return generation
+
+
+def verify_development(binary, environment, home, port, report, record_generation=False):
     options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {}
     process = subprocess.Popen([str(binary), 'dev', '--no-open'], env=environment, cwd=home,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, **options)
@@ -194,6 +223,8 @@ def verify_development(binary, environment, home, port, report):
             raise ValueError('The native server catalog is incomplete.')
         report['authenticated_catalog_status'] = status
         report['model_count'] = len(catalog['data'])
+        if record_generation:
+            report['catalog_generation'] = catalog_generation(base, key)
         try:
             request_json(base + '/api/v1/admin/info')
         except urllib.error.HTTPError as error:
@@ -222,62 +253,94 @@ def verify_development(binary, environment, home, port, report):
             raise RuntimeError('The native server did not shut down cleanly.')
 
 
+def verify_archive(archive, checksums, version, operating_system, root, report, release=None):
+    report['archive'] = archive.name
+    if release is None:
+        report['archive_sha256'] = verify_checksum_entry(archive, checksums)
+    else:
+        report['archive_sha256'] = verify_checksum(archive, checksums, release)
+    executable = 'starport.exe' if operating_system == 'windows' else 'starport'
+    extract_archive(archive, root / 'distribution', executable)
+    binary = root / 'distribution' / executable
+    report['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
+    home, temporary = root / 'home', root / 'temporary'
+    home.mkdir()
+    temporary.mkdir()
+    with socket.socket() as probe:
+        probe.bind(('127.0.0.1', 0))
+        port = probe.getsockname()[1]
+    environment = isolated_environment(home, temporary, port)
+    report['version'] = run_binary(binary, ['--version'], environment, home).strip()
+    if report['version'] != 'starport version ' + version:
+        raise ValueError('The native executable reports the wrong release version.')
+    for command in (['models', 'search', 'gpt-4o', '--json'], ['models', 'show', 'openai/gpt-4o-mini', '--json']):
+        payload = json.loads(run_binary(binary, command, environment, home))
+        verify_catalog_payload(command[1], payload)
+        if command[1] == 'show':
+            report['catalog_model_sha256'] = catalog_model_digest(payload)
+    report['keyless_catalog_commands'] = 2
+    if any(home.rglob('*')):
+        raise ValueError('A passive catalog command created persistent user files.')
+    verify_development(binary, environment, home, port, report, record_generation=release is None)
+    report['user_files_after_shutdown'] = [str(path.relative_to(home)) for path in home.rglob('*') if path.is_file()]
+    if report['user_files_after_shutdown']:
+        raise ValueError('Development mode left persistent user files.')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--tag', default=os.environ.get('RELEASE_TAG'), required=not bool(os.environ.get('RELEASE_TAG')))
+    parser.add_argument('--tag', help='Published release tag. RELEASE_TAG supplies the default.')
+    parser.add_argument('--archive', type=Path, help='Candidate archive from this workflow run. It replaces --tag.')
+    parser.add_argument('--checksums', type=Path, help='Checksum file that names the candidate archive.')
+    parser.add_argument('--expected-version', help='Snapshot version that the candidate binary must report.')
     parser.add_argument('--expected-os', required=True, choices=['darwin', 'linux', 'windows'])
     parser.add_argument('--expected-arch', required=True, choices=['x86_64', 'arm64'])
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
-    report = {'schema_version': 1, 'verdict': 'UNVERIFIED', 'release': args.tag,
-              'scope': 'Native published archive, keyless catalog, development startup, authentication and graceful shutdown. No paid inference.',
+    candidate = args.archive is not None
+    if candidate and (args.tag or not args.checksums or not args.expected_version):
+        parser.error('--archive requires --checksums and --expected-version and refuses --tag')
+    if not candidate:
+        if args.checksums or args.expected_version:
+            parser.error('--checksums and --expected-version require --archive')
+        args.tag = args.tag or os.environ.get('RELEASE_TAG')
+        if not args.tag:
+            parser.error('the following arguments are required: --tag')
+    scope = ('Native candidate archive from this workflow run, keyless catalog, development startup, authentication and graceful shutdown. No signing, notarization or paid inference.'
+             if candidate else 'Native published archive, keyless catalog, development startup, authentication and graceful shutdown. No paid inference.')
+    report = {'schema_version': 1, 'verdict': 'UNVERIFIED', 'mode': 'candidate' if candidate else 'release',
+              'release': args.tag, 'scope': scope,
               'platform': platform.platform(), 'machine': platform.machine(), 'python': platform.python_version(),
               'workflow_run_id': os.environ.get('GITHUB_RUN_ID'), 'workflow_run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT'),
               'workflow_commit': os.environ.get('GITHUB_SHA')}
+    if candidate:
+        report['candidate_version'] = args.expected_version
+        # A pull request run tests a merge commit. The head commit is the source that evidence binds.
+        report['workflow_head'] = os.environ.get('STARPORT_CANDIDATE_HEAD_SHA')
     try:
         operating_system, architecture = native_target()
         if (operating_system, architecture) != (args.expected_os, args.expected_arch):
             raise ValueError('The current process does not match the required native platform.')
-        name = archive_name(args.tag, operating_system, architecture)
-        metadata = subprocess.run(['gh', 'api', f'repos/{REPOSITORY}/releases/tags/{args.tag}'],
-                                  check=True, capture_output=True, text=True, timeout=30)
-        release = json.loads(metadata.stdout)
-        if release['tag_name'] != args.tag or release.get('draft'):
-            raise ValueError('The selected release is not a published exact tag.')
-        report['release_url'] = release['html_url']
-        report['published_at'] = release['published_at']
-        with tempfile.TemporaryDirectory(prefix='starport-native-archive-') as directory:
-            root = Path(directory)
-            subprocess.run(['gh', 'release', 'download', args.tag, '--repo', REPOSITORY,
-                            '--pattern', name, '--pattern', 'checksums.txt', '--dir', directory],
-                           check=True, capture_output=True, text=True, timeout=120)
-            archive = root / name
-            report['archive'] = name
-            report['archive_sha256'] = verify_checksum(archive, root / 'checksums.txt', release)
-            executable = 'starport.exe' if operating_system == 'windows' else 'starport'
-            extract_archive(archive, root / 'distribution', executable)
-            binary = root / 'distribution' / executable
-            report['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
-            home, temporary = root / 'home', root / 'temporary'
-            home.mkdir()
-            temporary.mkdir()
-            with socket.socket() as probe:
-                probe.bind(('127.0.0.1', 0))
-                port = probe.getsockname()[1]
-            environment = isolated_environment(home, temporary, port)
-            report['version'] = run_binary(binary, ['--version'], environment, home).strip()
-            if report['version'] != 'starport version ' + args.tag[1:]:
-                raise ValueError('The native executable reports the wrong release version.')
-            for command in (['models', 'search', 'gpt-4o', '--json'], ['models', 'show', 'openai/gpt-4o-mini', '--json']):
-                payload = json.loads(run_binary(binary, command, environment, home))
-                verify_catalog_payload(command[1], payload)
-            report['keyless_catalog_commands'] = 2
-            if any(home.rglob('*')):
-                raise ValueError('A passive catalog command created persistent user files.')
-            verify_development(binary, environment, home, port, report)
-            report['user_files_after_shutdown'] = [str(path.relative_to(home)) for path in home.rglob('*') if path.is_file()]
-            if report['user_files_after_shutdown']:
-                raise ValueError('Development mode left persistent user files.')
+        if candidate:
+            if args.archive.name != candidate_archive_name(args.expected_version, operating_system, architecture):
+                raise ValueError('The candidate archive does not match the native platform and snapshot version.')
+            with tempfile.TemporaryDirectory(prefix='starport-native-archive-') as directory:
+                verify_archive(args.archive, args.checksums, args.expected_version, operating_system, Path(directory), report)
+        else:
+            name = archive_name(args.tag, operating_system, architecture)
+            metadata = subprocess.run(['gh', 'api', f'repos/{REPOSITORY}/releases/tags/{args.tag}'],
+                                      check=True, capture_output=True, text=True, timeout=30)
+            release = json.loads(metadata.stdout)
+            if release['tag_name'] != args.tag or release.get('draft'):
+                raise ValueError('The selected release is not a published exact tag.')
+            report['release_url'] = release['html_url']
+            report['published_at'] = release['published_at']
+            with tempfile.TemporaryDirectory(prefix='starport-native-archive-') as directory:
+                root = Path(directory)
+                subprocess.run(['gh', 'release', 'download', args.tag, '--repo', REPOSITORY,
+                                '--pattern', name, '--pattern', 'checksums.txt', '--dir', directory],
+                               check=True, capture_output=True, text=True, timeout=120)
+                verify_archive(root / name, root / 'checksums.txt', args.tag[1:], operating_system, root, report, release)
         report['verdict'] = 'PASS'
     except Exception as error:
         report['verdict'] = 'FAIL'
@@ -286,7 +349,7 @@ def main():
         report['error'] = str(error) if not isinstance(error, subprocess.SubprocessError) else 'A bounded external command failed.'
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
-    print(json.dumps({key: report.get(key) for key in ('verdict', 'release', 'machine', 'archive', 'error')}))
+    print(json.dumps({key: report.get(key) for key in ('verdict', 'mode', 'release', 'candidate_version', 'machine', 'archive', 'error')}))
     return 0 if report['verdict'] == 'PASS' else 1
 
 
