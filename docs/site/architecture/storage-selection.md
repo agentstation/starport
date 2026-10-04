@@ -64,6 +64,6 @@ Move from T7 to T2 when you want to keep keys or records after a restart.
 
 ## Before you move
 
-A change of `STARPORT_STORAGE_MODE` alone opens different storage. It does not copy data. Plan the move with [Move between storage modes](../storage/migration.md). Back up first with [Back up and restore](../storage/backup-and-restore.md#before-you-start).
+A change of `STARPORT_STORAGE_MODE` alone opens different storage. It does not copy data. Plan the move with [Move between storage modes](../storage/migration.md). To move a local deployment to the shared recipe, refer to [Local data to the shared recipe](../storage/migration.md#local-data-to-the-shared-recipe). Back up first with [Back up and restore](../storage/backup-and-restore.md#before-you-start).
 
 The operator guide says: "Do not upgrade an existing shared deployment to this candidate." Read [Storage modes](../../OPERATOR-GUIDE.md#storage-modes) before a shared deployment.

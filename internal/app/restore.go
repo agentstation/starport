@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json/v2"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -80,7 +81,7 @@ func inspectBackupRestore(ctx context.Context, cfg *config.Config, request recov
 		return nil, nil, nil, err
 	}
 	if cfg.EffectivePaths().DeploymentID != source.DeploymentID() {
-		return nil, nil, nil, errors.New("restore target deployment ID differs from the verified backup")
+		return nil, nil, nil, fmt.Errorf("%w: restore target deployment ID differs from the verified backup", recovery.ErrConflict)
 	}
 	filePlan, err := planBackupFiles(ctx, cfg, source)
 	if err != nil {

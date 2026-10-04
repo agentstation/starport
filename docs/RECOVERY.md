@@ -136,6 +136,19 @@ Check `/health/ready` before permitting traffic or removing external fences.
 Gateway readiness does not prove caller credentials, account permission, or available budget.
 Keep uncertain provider work and unresolved reservations for audited reconciliation.
 
+## Local to shared recovery
+
+A local deployment can move to Valkey, PostgreSQL, and object storage through this procedure.
+Capture the fenced local deployment, then prepare and activate into empty shared stores.
+The target uses the same deployment ID and encryption key.
+See [Local data to the shared recipe](site/storage/migration.md#local-data-to-the-shared-recipe).
+
+A local gateway does not read the recovery approval at startup.
+A closed approval does not stop a local start.
+The external fence of every local writer is mandatory, and it stays after the move.
+The unchanged local stores are the rollback path.
+Records that the shared deployment writes after activation do not return to the local stores.
+
 ## Populated adoption in place
 
 Populated adoption reopens a closed deployment with its live stores in place.
