@@ -136,9 +136,14 @@ def validate_install(directory, proof, system):
     if not isinstance(system, str) or system not in RUNNERS:
         raise ValueError("Native install qualification requires a supported platform.")
     if proof.get("format") != 4:
-        raise ValueError("Native install evidence requires format 4.")
+        raise ValueError(f"Native install evidence requires a format 4 capture of a pull request run, but this capture is format {proof.get('format', 1)}.")
     run = proof["run"]
     validate_run(run)
+    # Only pull request runs build the release snapshot, so install evidence
+    # names the run event and the pull request.
+    number = proof.get("pull_request")
+    if run.get("event") != "pull_request" or type(number) is not int or number <= 0:
+        raise ValueError("Native install evidence requires a pull request run and its pull request number.")
     if not isinstance(run.get("jobs"), list) or any(not isinstance(job, dict) for job in run["jobs"]):
         raise ValueError("Native evidence has invalid job records.")
     observations = []
@@ -183,7 +188,8 @@ def verify(root, entry):
                 raise ValueError("Unsupported native evidence kind.")
             observations = validate_install(directory, proof, entry.get("platform"))
             return {"status": "PASS", "scope": "Candidate archives from the source commit installed and ran natively on the supported architectures.",
-                    "run": proof["run"]["url"], "source_commit": proof["run"]["headSha"], "observations": observations}
+                    "run": proof["run"]["url"], "pull_request": proof["pull_request"], "source_commit": proof["run"]["headSha"],
+                    "observations": observations}
         observations = validate_platform(directory, proof, entry.get("platform"), entry.get("tests"))
         return {"status": "PASS", "scope": "Recorded native component tests on the supported architectures.",
                 "run": proof["run"]["url"], "source_commit": proof["run"]["headSha"], "observations": observations}
@@ -195,8 +201,22 @@ def capture(root, run_id, directory):
     if directory.exists():
         raise ValueError("Select a new evidence directory to preserve earlier captures.")
     run = json.loads(command(["gh", "run", "view", str(run_id), "--repo", REPOSITORY, "--json",
-                              "databaseId,url,headSha,status,conclusion,jobs"], root))
+                              "databaseId,url,headSha,status,conclusion,event,jobs"], root))
     validate_run(run)
+    recovery = any(job.get("name", "").startswith("Recovery test (") for job in run["jobs"])
+    install = any(job.get("name", "").startswith("Candidate install (") for job in run["jobs"])
+    if install and not recovery:
+        raise ValueError("Install evidence requires a run that has the recovery shards.")
+    if install:
+        if run.get("event") != "pull_request":
+            raise ValueError("Install evidence requires a pull request run.")
+        # The run record loses its pull requests after the merge. The commit
+        # record keeps them.
+        pulls = json.loads(command(["gh", "api", f"repos/{REPOSITORY}/commits/{run['headSha']}/pulls"], root))
+        numbers = [pull.get("number") for pull in pulls
+                   if isinstance(pull, dict) and isinstance(pull.get("head"), dict) and pull["head"].get("sha") == run["headSha"]]
+        if len(numbers) != 1:
+            raise ValueError("Install evidence requires exactly one pull request whose head is the run source commit.")
     directory.mkdir(parents=True)
     command(["gh", "run", "download", str(run_id), "--repo", REPOSITORY, "--pattern", "native-catalog-*", "--dir", str(directory)], root)
     digests = {}
@@ -210,10 +230,6 @@ def capture(root, run_id, directory):
         for name in ("roster.json", "tests.jsonl", "toolchain.txt"):
             path = f"native-catalog-app-windows-2025-{index}/{name}"
             digests[path] = hashlib.sha256((directory / path).read_bytes()).hexdigest()
-    recovery = any(job.get("name", "").startswith("Recovery test (") for job in run["jobs"])
-    install = any(job.get("name", "").startswith("Candidate install (") for job in run["jobs"])
-    if install and not recovery:
-        raise ValueError("Install evidence extends a run that has the recovery shards.")
     format_version = 4 if install else 3 if recovery else 2
     if recovery:
         for runner in RUNNERS["windows"].values():
@@ -227,6 +243,8 @@ def capture(root, run_id, directory):
                 path = f"native-catalog-install-{runner}/result.json"
                 digests[path] = hashlib.sha256((directory / path).read_bytes()).hexdigest()
     proof = {"format": format_version, "run": run, "sha256": digests}
+    if install:
+        proof["pull_request"] = numbers[0]
     # Check completeness before retaining a capture. Individual skipped contracts
     # remain unqualified when callers request them later.
     app_shards.verify_shards(lambda index, name: read_bound_file(

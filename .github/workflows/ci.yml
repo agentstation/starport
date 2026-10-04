@@ -945,6 +945,7 @@ jobs:
     timeout-minutes: 15
     runs-on: ${{ matrix.runner }}
     needs: [release-snapshot]
+    if: github.event_name == 'pull_request'
     permissions:
       contents: read
       actions: read

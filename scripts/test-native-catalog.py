@@ -269,6 +269,8 @@ class NativeCatalogTests(unittest.TestCase):
     def enable_install(self, extra=()):
         self.enable_recovery_shards(extra)
         self.proof["format"] = 4
+        self.proof["run"]["event"] = "pull_request"
+        self.proof["pull_request"] = 7
         for system, runners in native.RUNNERS.items():
             for arch, runner in runners.items():
                 self.proof["run"]["jobs"].append({"name": f"Candidate install ({runner})", "status": "completed", "conclusion": "success", "databaseId": 300 + len(self.proof["run"]["jobs"])})
@@ -324,6 +326,13 @@ class NativeCatalogTests(unittest.TestCase):
             with self.subTest(format=changed, system=system), self.assertRaises(ValueError):
                 native.validate_install(self.root, self.proof, system)
 
+    def test_install_requires_a_pull_request_run_and_number(self):
+        self.enable_install()
+        for event, number in [("push", 7), (None, 7), ("pull_request", None), ("pull_request", 0), ("pull_request", "7"), ("pull_request", True)]:
+            self.proof["run"]["event"], self.proof["pull_request"] = event, number
+            with self.subTest(event=event, number=number), self.assertRaisesRegex(ValueError, "pull request run and its pull request number"):
+                native.validate_install(self.root, self.proof, "linux")
+
     def test_format_4_keeps_the_test_event_contracts(self):
         self.enable_install()
         self.assertEqual({x["architecture"] for x in self.validate()}, {"amd64", "arm64"})
@@ -348,6 +357,7 @@ class NativeCatalogTests(unittest.TestCase):
             unknown = native.verify(repository, {"platform": "linux", "evidence": "tests"})
         unchanged.assert_called_with(repository, "a" * 40)
         self.assertEqual(install["status"], "PASS", install)
+        self.assertEqual(install["pull_request"], 7)
         self.assertEqual([x["architecture"] for x in install["observations"]], ["amd64", "arm64"])
         self.assertIn("catalog_generation", install["observations"][0])
         self.assertEqual(tests["status"], "PASS", tests)
@@ -358,11 +368,18 @@ class NativeCatalogTests(unittest.TestCase):
         self.enable_recovery_shards()
         repository = self.write_capture()
         with patch.object(native, "unchanged_source"):
-            self.assertEqual(native.verify(repository, {"platform": "windows", "evidence": "install"})["status"], "UNVERIFIED")
+            install = native.verify(repository, {"platform": "windows", "evidence": "install"})
             self.assertEqual(native.verify(repository, {"platform": "windows", "tests": [self.test]})["status"], "PASS")
+        self.assertEqual(install, {"status": "UNVERIFIED", "reason":
+                                   "Native install evidence requires a format 4 capture of a pull request run, but this capture is format 3."})
 
-    def capture(self, install):
+    def capture(self, install, event="pull_request", pulls=None):
         self.enable_install(extra=["TestRecoveryWitnessTransitions"]) if install else self.enable_recovery_shards(["TestRecoveryWitnessTransitions"])
+        self.proof["run"]["event"] = event
+        self.proof.pop("pull_request", None)
+        if pulls is None:
+            pulls = [{"number": 7, "head": {"sha": "a" * 40}}, {"number": 9, "head": {"sha": "b" * 40}}]
+        self.lookups = []
         for system, runners in native.RUNNERS.items():
             for arch, runner in runners.items():
                 if system != "windows":
@@ -374,6 +391,9 @@ class NativeCatalogTests(unittest.TestCase):
         def command(args, _root):
             if args[:3] == ["gh", "run", "view"]:
                 return json.dumps(self.proof["run"])
+            if args[:2] == ["gh", "api"]:
+                self.lookups.append(args[2])
+                return json.dumps(pulls)
             shutil.copytree(source, Path(args[args.index("--dir") + 1]), dirs_exist_ok=True)
             return ""
         output = self.root / "capture"
@@ -388,10 +408,24 @@ class NativeCatalogTests(unittest.TestCase):
             for runner in runners.values():
                 self.assertIn(f"native-catalog-install-{runner}/result.json", proof["sha256"])
         self.assertIn("native-catalog-recovery-windows-11-arm-0/tests.jsonl", proof["sha256"])
+        self.assertEqual((proof["run"]["event"], proof["pull_request"]), ("pull_request", 7))
+        self.assertEqual(self.lookups, [f"repos/{native.REPOSITORY}/commits/{'a' * 40}/pulls"])
+
+    def test_capture_refuses_install_evidence_without_one_pull_request(self):
+        for event, pulls in [("push", None), ("pull_request", []), ("pull_request", [{"number": 9, "head": {"sha": "b" * 40}}]),
+                             ("pull_request", [{"number": 7, "head": {"sha": "a" * 40}}, {"number": 8, "head": {"sha": "a" * 40}}])]:
+            with self.subTest(event=event, pulls=pulls):
+                self.setUp()
+                with self.assertRaisesRegex(ValueError, "pull request"):
+                    self.capture(install=True, event=event, pulls=pulls)
+                self.assertFalse((self.root / "capture").exists())
 
     def test_capture_without_install_jobs_keeps_format_3(self):
-        proof = self.capture(install=False)
+        proof = self.capture(install=False, event="push")
         self.assertEqual(proof["format"], 3)
+        self.assertEqual(proof["run"]["event"], "push")
+        self.assertNotIn("pull_request", proof)
+        self.assertEqual(self.lookups, [])
         self.assertFalse(any(path.startswith("native-catalog-install-") for path in proof["sha256"]))
 
 

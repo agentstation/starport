@@ -60,6 +60,10 @@ The test `TestDocumentedInferenceRequestStreamsThroughGateway` sends the README 
 The test `TestModelsSearchAndShowWithoutCredentialsOrNetwork` runs the catalog commands without credentials or network.
 The `candidate-install` CI job installs each candidate archive on its native runner.
 
+The `candidate-install` job runs only on pull requests, as its parent `release-snapshot` does. A main push run has no install evidence.
+The install evidence therefore comes from the final pull request run. Its source commit matches the squash-merged tree.
+The format 4 capture records the run event and the pull request number. A format 3 capture fails an install entry.
+
 ### Proposed Work
 
 **Console primitive migration.** Move the remaining hand-rolled controls onto
