@@ -240,6 +240,8 @@ readers. It does not yet promise a compatibility window.
 For persistent local state, run `starport init` once. The command creates the
 configuration file, a Starport master key, and the first gateway identity. It
 does not select a provider or persist provider inference credentials.
+[Run a persistent local gateway](docs/site/start/local-persistent.md) gives the
+complete procedure.
 
 ```bash
 starport init --name primary-admin
