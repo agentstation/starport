@@ -1,8 +1,8 @@
-{"Time":"2026-10-04T19:39:01.80381Z","Action":"start","Package":"github.com/agentstation/starport/internal/credentials"}
-{"Time":"2026-10-04T19:39:01.828556Z","Action":"run","Package":"github.com/agentstation/starport/internal/credentials","Test":"TestDestinationTemplateAuthorizationHasNoAllocations"}
-{"Time":"2026-10-04T19:39:01.828689Z","Action":"output","Package":"github.com/agentstation/starport/internal/credentials","Test":"TestDestinationTemplateAuthorizationHasNoAllocations","Output":"=== RUN   TestDestinationTemplateAuthorizationHasNoAllocations\n","OutputType":"frame"}
-{"Time":"2026-10-04T19:39:01.829208Z","Action":"output","Package":"github.com/agentstation/starport/internal/credentials","Test":"TestDestinationTemplateAuthorizationHasNoAllocations","Output":"--- PASS: TestDestinationTemplateAuthorizationHasNoAllocations (0.00s)\n","OutputType":"frame"}
-{"Time":"2026-10-04T19:39:01.829271Z","Action":"pass","Package":"github.com/agentstation/starport/internal/credentials","Test":"TestDestinationTemplateAuthorizationHasNoAllocations","Elapsed":0}
-{"Time":"2026-10-04T19:39:01.829288Z","Action":"output","Package":"github.com/agentstation/starport/internal/credentials","Output":"PASS\n","OutputType":"frame"}
-{"Time":"2026-10-04T19:39:01.829645Z","Action":"output","Package":"github.com/agentstation/starport/internal/credentials","Output":"ok  \tgithub.com/agentstation/starport/internal/credentials\t0.025s\n"}
-{"Time":"2026-10-04T19:39:01.829659Z","Action":"pass","Package":"github.com/agentstation/starport/internal/credentials","Elapsed":0.026}
+{"Time":"2026-10-05T18:57:53.382087Z","Action":"start","Package":"github.com/agentstation/starport/internal/credentials"}
+{"Time":"2026-10-05T18:57:53.417066Z","Action":"run","Package":"github.com/agentstation/starport/internal/credentials","Test":"TestDestinationTemplateAuthorizationHasNoAllocations"}
+{"Time":"2026-10-05T18:57:53.417349Z","Action":"output","Package":"github.com/agentstation/starport/internal/credentials","Test":"TestDestinationTemplateAuthorizationHasNoAllocations","Output":"=== RUN   TestDestinationTemplateAuthorizationHasNoAllocations\n","OutputType":"frame"}
+{"Time":"2026-10-05T18:57:53.418016Z","Action":"output","Package":"github.com/agentstation/starport/internal/credentials","Test":"TestDestinationTemplateAuthorizationHasNoAllocations","Output":"--- PASS: TestDestinationTemplateAuthorizationHasNoAllocations (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-05T18:57:53.418057Z","Action":"pass","Package":"github.com/agentstation/starport/internal/credentials","Test":"TestDestinationTemplateAuthorizationHasNoAllocations","Elapsed":0}
+{"Time":"2026-10-05T18:57:53.418097Z","Action":"output","Package":"github.com/agentstation/starport/internal/credentials","Output":"PASS\n","OutputType":"frame"}
+{"Time":"2026-10-05T18:57:53.418482Z","Action":"output","Package":"github.com/agentstation/starport/internal/credentials","Output":"ok  \tgithub.com/agentstation/starport/internal/credentials\t0.036s\n"}
+{"Time":"2026-10-05T18:57:53.418501Z","Action":"pass","Package":"github.com/agentstation/starport/internal/credentials","Elapsed":0.036}
