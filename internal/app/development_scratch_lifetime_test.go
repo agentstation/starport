@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -42,8 +43,8 @@ func TestDevelopmentScratchExcludesLiveProcessAndRecoversKilledProcess(t *testin
 	require.FileExists(t, filepath.Join(path, "files", "owned"))
 	report, err := recoverDevelopmentScratch(t.Context(), temporary)
 	require.NoError(t, err)
-	require.Equal(t, 1, report.Live)
-	require.Zero(t, report.Recovered)
+	require.Equal(t, 1, report.Live, "recovery report for a live session: %+v", report)
+	require.Zero(t, report.Recovered, "recovery report for a live session: %+v", report)
 	require.DirExists(t, path)
 
 	require.NoError(t, command.Process.Kill())
@@ -67,6 +68,9 @@ func TestDevelopmentScratchProcess(t *testing.T) {
 	_, err = fmt.Fprintln(os.Stdout, session.path)
 	require.NoError(t, err)
 	_, _ = io.Copy(io.Discard, os.Stdin)
+	// The session lock is an *os.File. If the collector finalizes an unreachable
+	// session, the file closes and releases the lock while the process is live.
+	runtime.KeepAlive(session)
 }
 
 func TestDevelopmentScratchPreservesUnknownEntries(t *testing.T) {
