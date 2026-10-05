@@ -27,6 +27,7 @@ The canonical plan records current qualification and merge status.
 On 2026-10-04, CSP21 found a loader regression from #384.
 The environment decoder materialized an empty inference destination approval set. Every loader-built configuration then denied every inference destination.
 The fix adds the `noinit` option on the field and two loader-composed regression tests.
+CSP21 also adds `STARPORT_<PROVIDER>_INFERENCE_BASE_URL`. It approves one operator inference origin for environment credentials.
 
 CSP6.2 repairs recognition billing and protocol facts across both projects.
 Its local implementation preserves actual units, measured usage, and charges after request failures.

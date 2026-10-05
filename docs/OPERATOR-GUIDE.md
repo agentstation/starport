@@ -1108,6 +1108,41 @@ Use `STARPORT_CATALOG_WORKSPACE_PATH` for reviewed account facts, such as
 Azure deployment names and local Ollama model mappings. Those facts enter a
 durable Starmap generation before Starport makes the adapter routable.
 
+### Approve a different inference origin
+
+Set `STARPORT_<PROVIDER>_INFERENCE_BASE_URL` to send inference requests for one
+provider to an origin that you approve, such as a relay. The provider part of
+the name is the catalog provider ID in upper case. Change each hyphen to an
+underscore.
+
+```bash
+STARPORT_OPENAI_INFERENCE_BASE_URL=https://relay.example.com
+```
+
+The value replaces the catalog base URL. Starport adds each catalog endpoint
+path to it, so do not repeat a path segment that the catalog paths contain. For
+OpenAI, the example above sends chat completions to
+`https://relay.example.com/v1/chat/completions`.
+
+Startup stops with an error when the value has one of these problems:
+
+- It is not an absolute URL, or it contains a template variable.
+- It contains user information, a query, or a fragment.
+- It uses `http` for a host that is not local or private.
+- It uses a scheme other than `https` or `http`.
+- It names a provider whose endpoints use catalog bindings.
+
+Starport permits plain `http` only for `localhost` and for loopback, private,
+and link-local addresses. The error names the setting but does not show its value.
+Startup reads the setting once. A catalog refresh does not change the approved
+origin.
+
+The setting has two limits. It applies only to environment credentials.
+Gateway credentials and account BYOK credentials always go to the catalog
+origin, so the approved origin never receives them. The setting also does not
+apply to a provider whose endpoints use catalog bindings, such as Azure OpenAI
+or Ollama. Set the binding fields of that provider, such as `OLLAMA_BASE_URL`.
+
 ## Catalog Configuration
 
 Starport reads one connected Starmap runtime. A deployment names one source

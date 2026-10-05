@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/keyring"
 )
@@ -15,12 +16,32 @@ import (
 // The caller must supply the bundled catalog, never an accepted runtime catalog.
 // Parameterized and private destinations require explicit deployment approval.
 func InstallationDestinationApprovals(bundled *catalogs.Catalog) (*credentials.DestinationApprovals, error) {
+	return DeploymentDestinationApprovals(bundled, nil)
+}
+
+// DeploymentDestinationApprovals adds operator-approved inference origins to the installation defaults.
+// The settings must be the startup resolution, so a catalog refresh never changes an approval.
+// Only ProviderConfig.InferenceOrigin is an approval. An explicit BaseURL approves nothing.
+// The approved origin replaces the catalog origin only for the environment role, because the
+// router binds the operator override only to environment material. Shared, BYOK, and
+// anonymous material keep the public catalog origin.
+func DeploymentDestinationApprovals(bundled *catalogs.Catalog, settings config.ProvidersConfig) (*credentials.DestinationApprovals, error) {
 	var policies []*credentials.DestinationPolicy
 	if bundled == nil {
 		return nil, credentials.ErrDestinationUnapproved
 	}
 	for _, provider := range bundled.Providers().List() {
-		if provider.Inference == nil || provider.Credentials == nil || !publicInstallationOrigin(provider.Inference.BaseURL) {
+		if provider.Inference == nil || provider.Credentials == nil {
+			continue
+		}
+		override := ""
+		// A parameterized provider's base URL comes from its catalog bindings,
+		// which still require explicit deployment approval.
+		if !parameterizedDestination(provider) {
+			override = strings.TrimRight(strings.TrimSpace(settings[provider.ID].InferenceOrigin), "/")
+		}
+		public := publicInstallationOrigin(provider.Inference.BaseURL)
+		if override == "" && !public {
 			continue
 		}
 		for _, profile := range provider.Credentials.Profiles {
@@ -32,7 +53,14 @@ func InstallationDestinationApprovals(bundled *catalogs.Catalog) (*credentials.D
 				roles = append(roles, keyring.SourceAnonymous)
 			}
 			for _, role := range roles {
-				policy, err := CompileDestinationPolicy(provider, string(role), profile.ID, "", nil)
+				baseURL := ""
+				if role == keyring.SourceEnvironment {
+					baseURL = override
+				}
+				if baseURL == "" && !public {
+					continue
+				}
+				policy, err := CompileDestinationPolicy(provider, string(role), profile.ID, baseURL, nil)
 				if err != nil {
 					return nil, err
 				}
@@ -41,6 +69,15 @@ func InstallationDestinationApprovals(bundled *catalogs.Catalog) (*credentials.D
 		}
 	}
 	return credentials.NewDestinationApprovals(nil, policies...)
+}
+
+func parameterizedDestination(provider catalogs.Provider) bool {
+	if strings.ContainsAny(provider.Inference.BaseURL, "{}") {
+		return true
+	}
+	return slices.ContainsFunc(provider.Credentials.Profiles, func(profile catalogs.ProviderCredentialProfile) bool {
+		return len(profile.EndpointBindings) != 0 && slices.Contains(provider.Credentials.Inference.Alternatives, profile.ID)
+	})
 }
 
 func publicInstallationOrigin(value string) bool {

@@ -162,10 +162,24 @@ func (c *Config) resolveProviderRuntime(
 	} else {
 		material, configured, err = handle.Resolve(ctx)
 	}
-	if err != nil || !configured {
+	if err != nil {
 		return ProviderConfig{}, false, err
 	}
+	// The origin read follows material resolution, so a terminal material
+	// failure keeps its lookup sequence. It precedes the not-configured return,
+	// so a refused origin fails even without provider material.
+	baseURL, err := providerInferenceBaseURL(provider, c.providerEnvironment)
+	if err != nil {
+		return ProviderConfig{}, false, fmt.Errorf("provider %s: %w", provider.ID, err)
+	}
+	if !configured {
+		return ProviderConfig{}, false, nil
+	}
 	catalogConfig := projectResolvedProvider(provider, material, handle.CachedSource())
+	if baseURL != "" {
+		catalogConfig.BaseURL = baseURL
+		catalogConfig.InferenceOrigin = baseURL
+	}
 	return mergeProviderConfig(catalogConfig, explicit, references), true, nil
 }
 
@@ -198,6 +212,10 @@ func (c *Config) ResolveProviderSetLocalIsolated(
 			false,
 		)
 		if err != nil {
+			// A refused origin is an operator setting error, not a source failure.
+			if errors.Is(err, ErrInferenceBaseURLRefused) {
+				return nil, nil, err
+			}
 			failures = append(failures, ProviderResolutionFailure{
 				ProviderID: provider.ID,
 				Err:        err,
@@ -313,6 +331,14 @@ func validateCredentialAliases(providers []catalogs.Provider, allowStarmap bool)
 		if err := provider.ValidateContract(); err != nil {
 			return fmt.Errorf("validate provider %s credential contract: %w", provider.ID, err)
 		}
+		baseURLName, err := inferenceBaseURLEnvironmentName(provider.ID)
+		if err != nil {
+			return err
+		}
+		baseURLOwner := credentialFieldOwner{providerID: provider.ID, role: "inference_base_url"}
+		if err := claimCredentialAlias(aliases, baseURLName, baseURLOwner); err != nil {
+			return err
+		}
 		if provider.Credentials == nil {
 			continue
 		}
@@ -408,7 +434,9 @@ func mergeProviderConfig(
 	references map[catalogs.ProviderCredentialFieldID]CredentialReference,
 ) ProviderConfig {
 	if explicit.BaseURL != "" {
+		// An explicit base URL supersedes the setting and approves nothing.
 		resolved.BaseURL = explicit.BaseURL
+		resolved.InferenceOrigin = ""
 	}
 	if explicit.Timeout > 0 {
 		resolved.Timeout = explicit.Timeout
