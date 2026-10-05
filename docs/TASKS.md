@@ -1,7 +1,7 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-10-03
+Last Updated: 2026-10-04
 
 ## 🚀 Current Sprint: Starport v1
 
@@ -23,6 +23,10 @@ Historical storage, latency, and audit evidence remains unchanged.
 
 CSP6.1 now standardizes both products on Go 1.27.1. It preserves behavioral and platform checks while removing older compiler coverage.
 The canonical plan records current qualification and merge status.
+
+On 2026-10-04, CSP21 found a loader regression from #384.
+The environment decoder materialized an empty inference destination approval set. Every loader-built configuration then denied every inference destination.
+The fix adds the `noinit` option on the field and two loader-composed regression tests.
 
 CSP6.2 repairs recognition billing and protocol facts across both projects.
 Its local implementation preserves actual units, measured usage, and charges after request failures.
