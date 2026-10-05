@@ -37,6 +37,8 @@ T3 uses the T2 storage recipe on durable volumes with explicit service paths. It
 
 Several gateway replicas share one Valkey service, one PostgreSQL database, and one object store. One replica at a time owns provider acquisition. The other replicas follow the shared accepted head.
 
+Each fleet runs in one region with one PostgreSQL primary, one Valkey authority, and one object-store bucket. Cross-region replication and multi-region failover are out of scope.
+
 ```text
               +-------------+
  clients ---> | balancer    |
