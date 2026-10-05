@@ -102,6 +102,27 @@ func TestDeclaredRecipePages(t *testing.T) {
 	}
 }
 
+// TestRecipeSingleRegionBoundary proves that the T4 target and the T4 recipe
+// each state the single-region fleet boundary and the multi-region exclusion.
+func TestRecipeSingleRegionBoundary(t *testing.T) {
+	t.Parallel()
+
+	const (
+		boundary   = "Each fleet runs in one region with one PostgreSQL primary, one Valkey authority, and one object-store bucket."
+		outOfScope = "Cross-region replication and multi-region failover are out of scope."
+	)
+	for _, page := range []string{"docs/site/architecture/targets.md", "docs/site/architecture/recipes.md"} {
+		_, sections := markdowntest.Parse(markdowntest.ReadFile(t, page))
+		index := slices.IndexFunc(sections, func(section markdowntest.Section) bool {
+			return section.Heading == "T4 replicated Starport"
+		})
+		require.NotEqual(t, -1, index, "%s has no T4 section", page)
+		text := sections[index].Text()
+		require.Contains(t, text, boundary, page)
+		require.Contains(t, text, outOfScope, page)
+	}
+}
+
 // TestRecipeLatencyProfiles proves that the recipe latency profiles state the
 // engineering targets exactly, keep the UNVERIFIED label, and name CSP22 as the
 // qualifier.
