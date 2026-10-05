@@ -31,7 +31,7 @@ import (
 // The boundary milestone must fall in [delay/2, 3*delay/2) and every other
 // milestone below delay/2. The ranges do not overlap, so a milestone in the
 // first range carries the injected delay and a milestone in the second does not.
-const boundaryDelay = 300 * time.Millisecond
+const boundaryDelay = 600 * time.Millisecond
 
 const (
 	boundaryProbeHeader = "X-Starport-Timing-Probe"
