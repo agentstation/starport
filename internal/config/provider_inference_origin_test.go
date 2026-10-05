@@ -75,7 +75,7 @@ func TestInferenceBaseURLSettingRefusesUnsafeOrigins(t *testing.T) {
 		{value: "mailto:operator@relay.example", reason: "is not an absolute URL"},
 		{value: "https://%zz", reason: "is not an absolute URL"},
 		{value: "https://{host}.relay.example", reason: "contains a template variable"},
-		{value: "https://user:secret@relay.example", reason: "contains user information"},
+		{value: "https://operator@relay.example", reason: "contains user information"},
 		{value: "https://relay.example?region=1", reason: "contains a query"},
 		{value: "https://relay.example?", reason: "contains a query"},
 		{value: "https://relay.example#section", reason: "contains a fragment"},
