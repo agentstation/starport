@@ -167,7 +167,7 @@ Investigate repeatable regressions above 10%, even when an absolute target passe
 
 The profile names the required credential, authority, cache, and connection variants.
 It also names large-input, long-stream, retry, refresh, outage, saturation, slow-client, cancellation, and rotation exercises.
-Native functional archive checks cover all six published platforms.
+Native functional archive checks cover all five published archive targets.
 Initial numeric qualification covers Linux x64 and ARM64, macOS ARM64, and Windows x64.
 Other latency claims require a profile revision and evidence.
 
