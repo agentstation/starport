@@ -93,6 +93,7 @@
     "TestFullPathMeasurementBaseline",
     "TestFullPathMeasurementIncludesAuthentication",
     "TestGatewayHoldsSetupGuardUntilStorageCloses",
+    "TestGatewayProviderTimingBoundaries",
     "TestImplicitDataRootsRefuseLegacyStateBeforeGatewayStores",
     "TestIncompleteFleetRecipeRefusesBeforeStorageAccess",
     "TestInferenceCredentialsNeverEnterCatalogState",
@@ -108,6 +109,8 @@
     "TestJobReservationChecksOriginalIdentity",
     "TestLateNativeResponseBlocksDisputedBudget",
     "TestLifecycleClosesInReverseOrderOnce",
+    "TestLoaderComposedGatewayStreamsOnInstallationDefaults",
+    "TestLoaderComposedGatewayStreamsThroughApprovedInferenceOrigin",
     "TestLocalToSharedMigrationPopulatedWorkload",
     "TestLocalToSharedMigrationPromotionAfterMove",
     "TestLocalToSharedMigrationRefusals",
@@ -280,7 +283,10 @@
     "TestUnprefixedMigrationPreservesRecordsAcrossProcessExit",
     "TestUnsupportedCatalogPrimitivesRemainUnavailable",
     "TestValkeyDurabilityAndFailover",
-    "TestVerifiedRemoteCatalogActivatesProvider"
+    "TestVerifiedRemoteCatalogActivatesProvider",
+    "TestWriteImportedHistoryBindsActivation",
+    "TestWriteImportedHistoryBindsApplication",
+    "TestWriteImportedHistoryRefusesAnotherDeployment"
   ],
   "selected": [
     "TestANetworkBindAcceptsARotatedToken",
@@ -354,6 +360,6 @@
     "TestUnsupportedCatalogPrimitivesRemainUnavailable"
   ],
   "package": "github.com/agentstation/starport/internal/app",
-  "source": "81a463353e82de590b2b25c7c1e2e20b050643cf",
-  "workflow_head": "aeae766491c248c8585d4f97a006ae3a7e7e40fb"
+  "source": "1f6b2461afd7b15c945a840e63d29f2d183e2da2",
+  "workflow_head": "60db1856066a0933d9603b6a468c1d3dc9301137"
 }

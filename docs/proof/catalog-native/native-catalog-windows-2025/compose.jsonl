@@ -1,16 +1,16 @@
-{"Time":"2026-10-04T17:56:54.8904738Z","Action":"start","Package":"github.com/agentstation/starport/internal/config"}
-{"Time":"2026-10-04T17:56:55.0940978Z","Action":"run","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes"}
-{"Time":"2026-10-04T17:56:55.0940978Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes","Output":"=== RUN   TestComposeStorageRecipes\n","OutputType":"frame"}
-{"Time":"2026-10-04T17:56:58.6848506Z","Action":"run","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/local"}
-{"Time":"2026-10-04T17:56:58.6853627Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/local","Output":"=== RUN   TestComposeStorageRecipes/local\n","OutputType":"frame"}
-{"Time":"2026-10-04T17:56:58.9982749Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/local","Output":"--- PASS: TestComposeStorageRecipes/local (0.31s)\n","OutputType":"frame"}
-{"Time":"2026-10-04T17:56:58.9982749Z","Action":"pass","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/local","Elapsed":0.31}
-{"Time":"2026-10-04T17:56:58.9982749Z","Action":"run","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/fleet"}
-{"Time":"2026-10-04T17:56:58.9982749Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/fleet","Output":"=== RUN   TestComposeStorageRecipes/fleet\n","OutputType":"frame"}
-{"Time":"2026-10-04T17:56:59.188009Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/fleet","Output":"--- PASS: TestComposeStorageRecipes/fleet (0.19s)\n","OutputType":"frame"}
-{"Time":"2026-10-04T17:56:59.188009Z","Action":"pass","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/fleet","Elapsed":0.19}
-{"Time":"2026-10-04T17:56:59.188009Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes","Output":"--- PASS: TestComposeStorageRecipes (4.09s)\n","OutputType":"frame"}
-{"Time":"2026-10-04T17:56:59.188009Z","Action":"pass","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes","Elapsed":4.09}
-{"Time":"2026-10-04T17:56:59.188009Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Output":"PASS\n","OutputType":"frame"}
-{"Time":"2026-10-04T17:57:00.2015015Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Output":"ok  \tgithub.com/agentstation/starport/internal/config\t5.311s\n"}
-{"Time":"2026-10-04T17:57:00.2015015Z","Action":"pass","Package":"github.com/agentstation/starport/internal/config","Elapsed":5.311}
+{"Time":"2026-10-05T16:59:08.0964933Z","Action":"start","Package":"github.com/agentstation/starport/internal/config"}
+{"Time":"2026-10-05T16:59:08.3719765Z","Action":"run","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes"}
+{"Time":"2026-10-05T16:59:08.3719765Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes","Output":"=== RUN   TestComposeStorageRecipes\n","OutputType":"frame"}
+{"Time":"2026-10-05T16:59:16.8699038Z","Action":"run","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/local"}
+{"Time":"2026-10-05T16:59:16.8699038Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/local","Output":"=== RUN   TestComposeStorageRecipes/local\n","OutputType":"frame"}
+{"Time":"2026-10-05T16:59:17.3201577Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/local","Output":"--- PASS: TestComposeStorageRecipes/local (0.45s)\n","OutputType":"frame"}
+{"Time":"2026-10-05T16:59:17.3201577Z","Action":"pass","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/local","Elapsed":0.45}
+{"Time":"2026-10-05T16:59:17.3205215Z","Action":"run","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/fleet"}
+{"Time":"2026-10-05T16:59:17.3205215Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/fleet","Output":"=== RUN   TestComposeStorageRecipes/fleet\n","OutputType":"frame"}
+{"Time":"2026-10-05T16:59:17.4648987Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/fleet","Output":"--- PASS: TestComposeStorageRecipes/fleet (0.14s)\n","OutputType":"frame"}
+{"Time":"2026-10-05T16:59:17.4648987Z","Action":"pass","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes/fleet","Elapsed":0.14}
+{"Time":"2026-10-05T16:59:17.4648987Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes","Output":"--- PASS: TestComposeStorageRecipes (9.09s)\n","OutputType":"frame"}
+{"Time":"2026-10-05T16:59:17.4648987Z","Action":"pass","Package":"github.com/agentstation/starport/internal/config","Test":"TestComposeStorageRecipes","Elapsed":9.09}
+{"Time":"2026-10-05T16:59:17.4654802Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Output":"PASS\n","OutputType":"frame"}
+{"Time":"2026-10-05T16:59:18.4736993Z","Action":"output","Package":"github.com/agentstation/starport/internal/config","Output":"ok  \tgithub.com/agentstation/starport/internal/config\t10.376s\n"}
+{"Time":"2026-10-05T16:59:18.4736993Z","Action":"pass","Package":"github.com/agentstation/starport/internal/config","Elapsed":10.377}
