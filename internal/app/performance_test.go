@@ -124,11 +124,27 @@ func newPerformanceFixtureForProviders(tb testing.TB, wait time.Duration, catalo
 
 func newPerformanceFixtureWithRuntime(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool, budgets *limits.Limits, upstream http.Handler, fixtureProviders []performanceProvider, configureKey func(*apikey.APIKey), runtimeOptions []Option, configure ...func(*config.Config)) *performanceFixture {
 	tb.Helper()
+	return newPerformanceFixtureAt(tb, startPerformanceUpstream, wait, catalog, approve, budgets, upstream, fixtureProviders, configureKey, runtimeOptions, configure...)
+}
+
+// performanceOrigin starts the controlled upstream and returns the origin that
+// the gateway dials and approves.
+type performanceOrigin func(tb testing.TB, handler http.Handler) (*httptest.Server, string)
+
+func startPerformanceUpstream(tb testing.TB, handler http.Handler) (*httptest.Server, string) {
+	tb.Helper()
+	upstream := httptest.NewServer(handler)
+	return upstream, upstream.URL
+}
+
+func newPerformanceFixtureAt(tb testing.TB, start performanceOrigin, wait time.Duration, catalog *config.CatalogConfig, approve bool, budgets *limits.Limits, upstream http.Handler, fixtureProviders []performanceProvider, configureKey func(*apikey.APIKey), runtimeOptions []Option, configure ...func(*config.Config)) *performanceFixture {
+	tb.Helper()
 	f := &performanceFixture{samples: make(chan performanceUpstreamSample, 1), handlers: make(chan time.Duration, 1), wait: wait}
 	if upstream != nil {
 		f.handlers = make(chan time.Duration, 8)
 	}
-	f.upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var origin string
+	f.upstream, origin = start(tb, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		matched := false
 		for _, provider := range fixtureProviders {
 			if slices.Contains(provider.paths, r.URL.Path) && r.Header.Get(provider.header) == provider.headerValue {
@@ -163,7 +179,7 @@ func newPerformanceFixtureWithRuntime(tb testing.TB, wait time.Duration, catalog
 	environment := make(map[string]string, len(fixtureProviders))
 	for _, fixtureProvider := range fixtureProviders {
 		provider := cfg.Providers[catalogs.ProviderIDOpenAI]
-		provider.BaseURL = f.upstream.URL
+		provider.BaseURL = origin
 		provider.CredentialReferences = nil
 		cfg.Providers[fixtureProvider.id] = provider
 		environment[fixtureProvider.environment] = "sk-test-key"
@@ -180,7 +196,7 @@ func newPerformanceFixtureWithRuntime(tb testing.TB, wait time.Duration, catalog
 		for _, fixtureProvider := range fixtureProviders {
 			provider, err := bundled.Provider(fixtureProvider.id)
 			require.NoError(tb, err)
-			policy, err := providers.CompileDestinationPolicy(provider, string(keyring.SourceEnvironment), provider.Credentials.Inference.Alternatives[0], f.upstream.URL, nil)
+			policy, err := providers.CompileDestinationPolicy(provider, string(keyring.SourceEnvironment), provider.Credentials.Inference.Alternatives[0], origin, nil)
 			require.NoError(tb, err)
 			policies = append(policies, policy)
 		}
