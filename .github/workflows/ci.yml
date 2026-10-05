@@ -814,6 +814,9 @@ jobs:
           test -d "$ROOT/pkg/catalogs"
           printf 'root=%s\n' "$ROOT" >> "$GITHUB_OUTPUT"
 
+      - name: Test README demonstration verifier
+        run: python3 scripts/test-readme-demo.py
+
       - name: Verify release contracts
         env:
           STARMAP_OWNERSHIP_STARMAP_ROOT: ${{ steps.starmap.outputs.root }}
