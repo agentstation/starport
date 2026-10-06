@@ -1,7 +1,10 @@
-import { HomeLayout } from 'fumadocs-ui/layouts/home';
+import './tokens.css';
+import './hero.css';
+import './journey.css';
 
-import { baseOptions } from '@/lib/layout.shared';
-
+// The splash page has its own night surface and its own type. Every rule in
+// tokens.css, hero.css, and journey.css is scoped under `.splash`, so nothing
+// leaks into the docs.
 export default function Layout({ children }: LayoutProps<'/'>) {
-  return <HomeLayout {...baseOptions()}>{children}</HomeLayout>;
+  return <div className="splash">{children}</div>;
 }
