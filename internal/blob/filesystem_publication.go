@@ -69,9 +69,9 @@ func (f *Filesystem) writePublication(ctx context.Context, key string, r io.Read
 		return Info{}, err
 	}
 	if retire {
-		err = os.Rename(staged.Name(), target)
+		err = retryBlockedReplace(ctx, func() error { return f.placePublication(staged.Name(), target, true) })
 	} else {
-		err = os.Link(staged.Name(), target)
+		err = f.placePublication(staged.Name(), target, false)
 	}
 	if errors.Is(err, fs.ErrExist) {
 		return Info{}, ErrPublicationExists
@@ -90,6 +90,17 @@ func (f *Filesystem) writePublication(ctx context.Context, key string, r io.Read
 		}
 	}
 	return Info{Key: key, Size: size}, nil
+}
+
+// placePublication links new bytes or renames a retirement marker over the
+// identity. It holds the store lock only for that one directory change.
+func (f *Filesystem) placePublication(staged, target string, retire bool) error {
+	f.publishing.Lock()
+	defer f.publishing.Unlock()
+	if retire {
+		return os.Rename(staged, target)
+	}
+	return os.Link(staged, target)
 }
 
 func syncPublicationDirectory(path string) error {

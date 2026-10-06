@@ -69,3 +69,25 @@ func TestFilesystemRetirementFencesAnotherProcess(t *testing.T) {
 	_, err = reopened.Publish(t.Context(), "process-output", strings.NewReader("new bytes"))
 	require.ErrorIs(t, err, blob.ErrPublicationExists)
 }
+
+func TestRetireConcurrentlyOnOneKey(t *testing.T) {
+	store, err := blob.NewFilesystem(t.TempDir())
+	require.NoError(t, err)
+	_, err = store.Publish(t.Context(), "shared", strings.NewReader("payload"))
+	require.NoError(t, err)
+	errs := make([]error, 8)
+	var wg sync.WaitGroup
+	for i := range errs {
+		wg.Go(func() { errs[i] = store.Retire(t.Context(), "shared") })
+	}
+	wg.Wait()
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
+	_, err = store.StatPublished(t.Context(), "shared")
+	require.ErrorIs(t, err, blob.ErrNotFound)
+	_, err = store.ReadPublished(t.Context(), "shared")
+	require.ErrorIs(t, err, blob.ErrNotFound)
+	_, err = store.Publish(t.Context(), "shared", strings.NewReader("payload"))
+	require.ErrorIs(t, err, blob.ErrPublicationExists)
+}
