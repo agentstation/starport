@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
 """Test the README demonstration verifier against synthetic records."""
 
+import argparse
 import contextlib
 import copy
 import hashlib
+import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import struct
 import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "readme-demo"))
 import capture  # noqa: E402
 import verify  # noqa: E402
 
 MANIFEST = Path(__file__).resolve().parent.parent / "docs" / "assets" / "starport-demo.json"
+RENDER_AVAILABLE = importlib.util.find_spec("PIL") is not None and Path("/System/Library/Fonts/Menlo.ttc").is_file()
 RECORD = "docs/proof/readme-demo/rehearsal-test"
 SCENES = ["install", "catalog", "setup", "answer", "next"]
 ANSWER = ["Rehearsal ", "fixture"]
@@ -41,7 +46,9 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-class ReadmeDemoVerifierTests(unittest.TestCase):
+class RecordHarness(unittest.TestCase):
+    """A git root with the manifest, a README, one product file, and a synthetic rehearsal record."""
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -152,6 +159,8 @@ class ReadmeDemoVerifierTests(unittest.TestCase):
         self.assertEqual((code, report["status"]), (1, "FAIL"))
         return {name for name, check in checks.items() if check["status"] != "PASS"}
 
+
+class ReadmeDemoVerifierTests(RecordHarness):
     def test_complete_record_passes_every_check(self):
         code, report, checks = self.verify()
         self.assertEqual((code, report["status"]), (0, "PASS"), report)
@@ -395,6 +404,190 @@ class MediaHeaderTests(unittest.TestCase):
                 path.write_bytes(data)
                 with self.assertRaises(ValueError):
                     (verify.gif_info if name.endswith(".gif") else verify.png_size)(path)
+
+
+FAKE_GH = """#!/usr/bin/env python3
+import json, os, shutil, sys
+from pathlib import Path
+arguments = sys.argv[1:]
+assets = Path(os.environ["FAKE_GH_ASSETS"])
+if arguments[:1] == ["api"]:
+    print(json.dumps({"sha": os.environ["FAKE_GH_COMMIT"]}))
+elif arguments[:2] == ["release", "download"]:
+    target = Path(arguments[arguments.index("--dir") + 1])
+    target.mkdir(parents=True, exist_ok=True)
+    for name in ("starport_1.3.0_darwin_arm64.tar.gz", "checksums.txt"):
+        shutil.copyfile(assets / name, target / name)
+elif arguments[:2] == ["attestation", "verify"]:
+    if os.environ.get("FAKE_GH_ATTEST") == "fail":
+        sys.exit(1)
+    print(json.dumps([{"verificationResult": {"statement": {"predicateType": "https://slsa.dev/provenance/v1"}}}]))
+else:
+    sys.exit(2)
+"""
+
+
+class ReleaseCandidateTests(unittest.TestCase):
+    """Resolve a release candidate through a fake gh on PATH. No network."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.assets = self.root / "assets"
+        self.assets.mkdir()
+        self.archive = self.assets / "starport_1.3.0_darwin_arm64.tar.gz"
+        self.archive.write_bytes(b"release archive bytes")
+        (self.assets / "checksums.txt").write_text(f"{digest(self.archive)}  {self.archive.name}\n")
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        gh = bin_dir / "gh"
+        gh.write_text(FAKE_GH)
+        gh.chmod(0o755)
+        self.commit = "c" * 40
+        self.environment = dict(os.environ, PATH=f"{bin_dir}:{os.environ.get('PATH', '')}",
+                                FAKE_GH_ASSETS=str(self.assets), FAKE_GH_COMMIT=self.commit)
+        self.work = self.root / "work"
+
+    def resolve(self, **overrides):
+        with unittest.mock.patch.dict(os.environ, dict(self.environment, **overrides), clear=True):
+            return capture.resolve_release("v1.3.0", self.work)
+
+    def test_release_candidate_binds_the_attested_archive(self):
+        candidate = self.resolve()
+        self.assertEqual(candidate["source"], "release")
+        self.assertEqual((candidate["run_id"], candidate["pull_request"], candidate["release_tag"]),
+                         (None, None, "v1.3.0"))
+        self.assertEqual(candidate["head_commit"], self.commit)
+        self.assertEqual(candidate["archive_name"], self.archive.name)
+        self.assertEqual(candidate["archive_sha256"], digest(self.archive))
+        self.assertTrue(Path(candidate["archive_path"]).is_file())
+        self.assertEqual((candidate["checksum_verified"], candidate["attestation_verified"]), (True, True))
+        self.assertEqual(candidate["attestation"]["predicate_types"], ["https://slsa.dev/provenance/v1"])
+
+    def test_checksum_mismatch_refuses_the_release(self):
+        (self.assets / "checksums.txt").write_text(f"{'0' * 64}  {self.archive.name}\n")
+        with self.assertRaisesRegex(RuntimeError, "does not match the release checksum"):
+            self.resolve()
+
+    def test_attestation_failure_refuses_the_release(self):
+        with self.assertRaisesRegex(RuntimeError, "no verified attestation"):
+            self.resolve(FAKE_GH_ATTEST="fail")
+
+    def test_inexact_tag_is_refused_before_any_download(self):
+        with self.assertRaisesRegex(RuntimeError, "vX.Y.Z"):
+            capture.resolve_release("latest", self.work)
+        self.assertFalse(self.work.exists())
+
+
+class ReleaseCaptureTests(unittest.TestCase):
+    def test_release_capture_refuses_without_the_provider_credential(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            candidate = {"source": "release", "release_tag": "v1.3.0", "archive_path": str(work / "absent.tar.gz"),
+                         "archive_name": "starport_1.3.0_darwin_arm64.tar.gz", "archive_sha256": "a" * 64,
+                         "head_commit": "c" * 40, "checksum_verified": True, "attestation_verified": True}
+            (work / "candidate.json").write_text(json.dumps(candidate))
+            arguments = argparse.Namespace(work=str(work), repository=None, port=19399, scene_pause=0.0)
+            environment = {name: value for name, value in os.environ.items() if name != "OPENAI_API_KEY"}
+            with unittest.mock.patch.dict(os.environ, environment, clear=True):
+                with self.assertRaisesRegex(RuntimeError, "needs OPENAI_API_KEY"):
+                    capture.capture_main(arguments)
+            events = json.loads((work / "events.json").read_text())
+            self.assertEqual((events["kind"], events["verdict"], events["real_provider"]), ("release", "FAIL", True))
+            self.assertEqual(events["events"], [])
+
+    def test_release_header_and_scene_titles_name_the_verified_release(self):
+        run = capture.Capture({"source": "release", "release_tag": "v1.3.0"})
+        with contextlib.redirect_stdout(io.StringIO()):
+            run.scene("install", "1  INSTALL")
+        self.assertEqual((run.kind, run.report["kind"], run.report["real_provider"]), ("release", "release", True))
+        self.assertIn("verified release", run.events[0]["data"])
+        rehearsal = capture.Capture({"source": "ci-run"})
+        self.assertEqual((rehearsal.kind, rehearsal.report["real_provider"]), ("rehearsal", False))
+
+
+class ReleaseRenderTests(RecordHarness):
+    """Render a synthetic release capture and verify the record it writes."""
+
+    def setUp(self):
+        super().setUp()
+        self.work = self.root / "work"
+        self.work.mkdir()
+        self.output = self.root / "docs" / "proof" / "readme-demo" / "release-v1.3.0"
+
+    def release_capture(self):
+        clear = "\x1b[2J\x1b[H"
+        events = []
+        for index, name in enumerate(SCENES):
+            events.append({"seconds": float(index * 2), "data": clear + "STARPORT / verified release\n\n" + name + "\n",
+                           "scene": name})
+            events.append({"seconds": index * 2 + 0.5, "data": "body " + name + "\n"})
+            if name == "answer":
+                start = len(events)
+                events += [{"seconds": index * 2 + 0.6, "data": "Hello "}, {"seconds": index * 2 + 0.8, "data": "from Starport!"},
+                           {"seconds": index * 2 + 0.9, "data": "\nStream complete: [DONE]\n"}]
+                interval = {"start_event": start, "end_event": start + 1, "start_seconds": index * 2 + 0.55,
+                            "end_seconds": index * 2 + 0.85}
+        content = "Hello from Starport!"
+        return {
+            "schema_version": 1, "kind": "release", "release_tag": "v1.3.0", "real_provider": True, "verdict": "PASS",
+            "captured_at": "2026-10-06T12:00:00Z", "events": events, "scenes": capture.scene_ranges(events),
+            "commands": [{"scene": "catalog", "command": ["starport", "models", "show"],
+                          "environment_names": ["HOME", "PATH"], "exit_code": 0}],
+            "inference_interval": interval, "starport_version": "starport version v1.3.0",
+            "catalog_generation": "gen", "base_url_mechanism": None, "provider_credential_source": "environment",
+            "network_egress_denied": False, "network_egress_reason": "real provider",
+            "catalog_environment_has_provider_key": False, "persistent_selectors_present": False,
+            "leftover_home_files": [], "shutdown_exit_code": 0, "fixture_requests": [],
+            "response": {"status": 200, "content_type": "text/event-stream", "final_event": "[DONE]",
+                         "content": content, "content_length": len(content), "stream_events": 3,
+                         "reported_provider": "openai", "reported_model": "gpt-4o-mini"},
+        }
+
+    def release_candidate(self):
+        return {"source": "release", "run_id": None, "run_url": None, "pull_request": None, "head_commit": "d" * 40,
+                "archive_name": "starport_1.3.0_darwin_arm64.tar.gz", "archive_sha256": "a" * 64,
+                "release_tag": "v1.3.0", "archive_path": "/nonexistent", "checksum_verified": True,
+                "attestation_verified": True, "attestation": {"predicate_types": ["https://slsa.dev/provenance/v1"],
+                                                               "statements": 1},
+                "snapshot_version": "starport version v1.3.0", "binary_sha256": "b" * 64}
+
+    def render_release(self, events, candidate):
+        import render  # noqa: PLC0415
+        (self.work / "events.json").write_text(json.dumps(events))
+        (self.work / "candidate.json").write_text(json.dumps(candidate))
+        with contextlib.redirect_stdout(io.StringIO()):
+            with unittest.mock.patch.object(sys, "argv", ["render.py", "--work", str(self.work),
+                                                          "--output", str(self.output)]):
+                render.main()
+
+    @unittest.skipUnless(RENDER_AVAILABLE, "rendering needs Pillow and the Menlo font")
+    def test_rendered_release_record_passes_the_verifier(self):
+        self.render_release(self.release_capture(), self.release_candidate())
+        record = json.loads((self.output / "record.json").read_text())
+        self.assertEqual((record["kind"], record["qualifies_release_cases"], record["fixtures"], record["real_provider"]),
+                         ("release", True, [], True))
+        self.assertEqual(record["candidate"]["attestation_verified"], True)
+        self.assertEqual(record["discovery"]["provider_credential_source"], "environment")
+        transcript = (self.output / "TRANSCRIPT.md").read_text()
+        self.assertIn("Hello from Starport!", transcript)
+        self.assertNotRegex(transcript.lower(), "rehearsal[- ]fixture|starport-demo-fixture-")
+        script = Path(__file__).resolve().parent / "record-readme-demo.sh"
+        subprocess.run(["bash", str(script), "--review", str(self.output), "--reviewer", "Reviewer",
+                        "--pacing-verdict", "PASS"], check=True, capture_output=True, text=True, timeout=60)
+        code, report, checks = self.verify(record=str(self.output.relative_to(self.root)))
+        self.assertEqual((code, report["status"], report["kind"]), (0, "PASS", "release"), report)
+
+    @unittest.skipUnless(RENDER_AVAILABLE, "rendering needs Pillow and the Menlo font")
+    def test_release_render_refuses_a_fixture_answer_or_a_rehearsal_candidate(self):
+        events = self.release_capture()
+        events["response"]["content"] = "Rehearsal fixture: Hello from Starport!"
+        with self.assertRaisesRegex(SystemExit, "not a real provider answer"):
+            self.render_release(events, self.release_candidate())
+        candidate = dict(self.release_candidate(), source="ci-run")
+        with self.assertRaisesRegex(SystemExit, "release candidate"):
+            self.render_release(self.release_capture(), candidate)
 
 
 class CaptureTests(unittest.TestCase):
