@@ -551,6 +551,15 @@
   .splash .brand-mark {
     height: 28px;
   }
+
+  /* Four tabs and the copy control do not share one row on a phone, and a
+     wrapped flex row leaves the last tab alone under three. Two columns of
+     two read as a chooser. */
+  .splash .install-tabs {
+    display: grid;
+    grid-template-columns: max-content max-content;
+    justify-items: start;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
