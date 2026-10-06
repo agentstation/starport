@@ -1,11 +1,14 @@
 /* The splash page tokens and base rules: the Nimbus role tokens, the same
    sheet its site and console ship, scoped under `.splash` because these
    sheets load on one route and the docs keep the Fumadocs themes. The splash
-   is a night surface in both colour schemes, like the Nimbus hero, so only
-   the dark block of that sheet is here; the light block has no ground to sit
-   on until a splash surface is light. The values are the Nimbus dark values
-   exactly, so a change to one sheet belongs in the other. The fonts are the
-   console fonts; scripts/copy-assets.mjs copies them into public/fonts/.
+   opens on night in both colour schemes, like the Nimbus hero, and the
+   journey turns its ground to daylight paper and then to the gold wash. The
+   journey names the ground with `data-ground` on the stage, or on a beat of
+   the storyboard, and the token set for that ground applies under it. The
+   night and paper values are the Nimbus dark and light values exactly, so a
+   change to one sheet belongs in the other. A code surface is a terminal, so
+   it keeps the night set on every ground. The fonts are the console fonts;
+   scripts/copy-assets.mjs copies them into public/fonts/.
 
    hero.css styles the hero above the journey, and journey.css styles the
    sticky stage and its storyboard fallback. The mascot's colour and motion
@@ -71,8 +74,17 @@
   background: #0a0b0c;
 }
 
+/* The stage writes its ground to <html> each frame, so an overscroll past
+   either end of the journey shows the ground of the stage, not a flash of
+   night. */
+:root:has(.journey) {
+  background: var(--stage-background, #0a0b0c);
+}
+
 /* ---- Role tokens: dark ---- */
-.splash {
+.splash,
+.splash [data-ground='night'],
+.splash :is(.block, .install) {
   --bg-canvas: #0a0b0c;
   --bg-panel: #101112;
   --bg-raised: #18191b;
@@ -116,6 +128,91 @@
   --info-tint: rgba(96, 165, 250, 0.14);
   --accent-tint: rgba(240, 178, 62, 0.14);
 
+  color-scheme: dark;
+}
+
+/* ---- Role tokens: light ----
+   The daylight paper of the journey. The values are the Nimbus light values
+   exactly. The stage ground is `--bg-panel`, #fafafa, as in Nimbus. */
+.splash [data-ground='paper'] {
+  --bg-canvas: #ffffff;
+  --bg-panel: #fafafa;
+  --bg-raised: #f4f4f5;
+  --bg-hover: #ececee;
+
+  --border-1: rgba(0, 0, 0, 0.06);
+  --border-2: rgba(0, 0, 0, 0.1);
+  --border-3: rgba(0, 0, 0, 0.15);
+  --border-control: rgba(0, 0, 0, 0.45);
+
+  --text-1: #18181b;
+  --text-2: #3f3f46;
+  --text-3: #66666e;
+  --text-4: #a1a1aa;
+
+  --accent: #f0b23e;
+  --accent-hover: #e0a230;
+  --accent-ink: #1a1204;
+  /* On paper the gold is 1.8:1, so a mark with no area takes the ink. */
+  --accent-text: #1a1204;
+
+  --success: #15753a;
+  --warning: #b53b0a;
+  --error: #b91c1c;
+  --error-ink: #ffffff;
+  --success-ink: #ffffff;
+  --info: #1d4ed8;
+  --success-tint: rgba(21, 117, 58, 0.14);
+  --warning-tint: rgba(181, 59, 10, 0.14);
+  --error-tint: rgba(185, 28, 28, 0.14);
+  --info-tint: rgba(29, 78, 216, 0.14);
+  --accent-tint: rgba(240, 178, 62, 0.22);
+
+  color-scheme: light;
+}
+
+/* ---- Role tokens: the gold wash ----
+   The finale ground is the accent itself, under the accent's ink, as in the
+   Nimbus finale. The pair is still `--accent` and `--accent-ink` exactly, so
+   the neutrals are the ink mixed into the gold and the accent text is the
+   ink. The light status tones clear 3:1 on the gold. */
+.splash [data-ground='wash'] {
+  --bg-canvas: #f0b23e;
+  --bg-panel: color-mix(in srgb, #1a1204 5%, #f0b23e);
+  --bg-raised: color-mix(in srgb, #1a1204 9%, #f0b23e);
+  --bg-hover: color-mix(in srgb, #1a1204 13%, #f0b23e);
+
+  --border-1: rgba(26, 18, 4, 0.1);
+  --border-2: rgba(26, 18, 4, 0.16);
+  --border-3: rgba(26, 18, 4, 0.24);
+  --border-control: rgba(26, 18, 4, 0.55);
+
+  --text-1: #1a1204;
+  --text-2: color-mix(in srgb, #1a1204 82%, #f0b23e);
+  --text-3: color-mix(in srgb, #1a1204 60%, #f0b23e);
+  --text-4: color-mix(in srgb, #1a1204 40%, #f0b23e);
+
+  --accent: #f0b23e;
+  --accent-hover: #e0a230;
+  --accent-ink: #1a1204;
+  --accent-text: #1a1204;
+
+  --success: #15753a;
+  --warning: #b53b0a;
+  --error: #b91c1c;
+  --error-ink: #ffffff;
+  --success-ink: #ffffff;
+  --info: #1d4ed8;
+  --success-tint: rgba(21, 117, 58, 0.14);
+  --warning-tint: rgba(181, 59, 10, 0.14);
+  --error-tint: rgba(185, 28, 28, 0.14);
+  --info-tint: rgba(29, 78, 216, 0.14);
+  --accent-tint: rgba(26, 18, 4, 0.12);
+
+  color-scheme: light;
+}
+
+.splash {
   --font-sans: 'Geist', system-ui, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
@@ -149,9 +246,10 @@
   background-color: var(--accent-tint);
 }
 
-/* The stage ground is one night, so the ring is the accent outright. */
+/* The ring is the accent mark the ground can show: the gold on night, and
+   the accent's ink on paper and on the gold wash. */
 .splash :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 

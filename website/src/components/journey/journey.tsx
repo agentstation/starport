@@ -9,7 +9,7 @@ import { Code, Table } from '@/components/splash/code-block';
 import { Inline } from '@/components/splash/inline';
 import { InstallTabs } from '@/components/splash/install-tabs';
 import { GITHUB_URL } from '@/lib/layout.shared';
-import { COMPOSE_METHOD, type CodeBlock, INSTALL_METHODS, type InstallMethod } from '@/lib/splash-facts';
+import { COMPOSE_METHOD, type CodeBlock, INSTALL_METHODS, type InstallMethod, PERSISTENT_METHOD } from '@/lib/splash-facts';
 
 import {
   type Chapter,
@@ -31,7 +31,7 @@ import {
   viewportFor,
   visibilityWindow,
 } from './timeline';
-import { drawFrame, resolveFonts, stillAspect } from './world';
+import { type Palette, drawFrame, resolveFonts, rgb, stillAspect } from './world';
 
 // Reduced motion, or a viewport too short to stage the scene, gets the static
 // storyboard: the same world, drawn once per chapter. A phone stacks copy above
@@ -42,13 +42,31 @@ const STATIC_QUERY = '(prefers-reduced-motion: reduce), (max-height: 620px), (ma
 // chapter's own stop, and the end of the journey for the last one.
 const STILL_PROGRESS = chapters.map((chapter, index) => (index === chapters.length - 1 ? 0.99 : chapter.end - COPY_EDGE));
 
-// The final beat closes the journey with the install tabs. Its first tab is
-// the Compose block of the deploy chapter, so the tabs hold every way to run
-// Starport that the README gives.
-const FINAL_METHODS: InstallMethod[] = chapters[chapters.length - 1].facts.visuals
-  .filter((visual): visual is CodeBlock => visual.kind === 'code')
-  .map((block) => ({ ...COMPOSE_METHOD, command: block.text }))
-  .concat(INSTALL_METHODS);
+// The final beat closes the journey with the install tabs. Homebrew and the
+// quick start come first, then the persistent commands of the laptop chapter
+// and the Compose block of the server chapter, then the container and the
+// source. The tabs hold every way to run Starport that the README gives.
+const codeOf = (id: string) =>
+  chapters
+    .find((chapter) => chapter.id === id)
+    ?.facts.visuals.find((visual): visual is CodeBlock => visual.kind === 'code')?.text ?? '';
+const methodOf = (id: string) => INSTALL_METHODS.filter((method) => method.id === id);
+const FINAL_METHODS: InstallMethod[] = [
+  ...methodOf('homebrew'),
+  ...methodOf('quick-start'),
+  { ...PERSISTENT_METHOD, command: codeOf('laptop') },
+  { ...COMPOSE_METHOD, command: codeOf('server') },
+  ...methodOf('container'),
+  ...methodOf('source'),
+];
+
+// The ground under a beat or the stage, as the CSS custom properties that the
+// stage chrome and the copy read. The ground also names its token set, so the
+// secondary tones (borders, panels, the second text tone) turn with it. The
+// ground steps where the ink steps, at the middle of each crossing.
+function groundOf(palette: Palette) {
+  return palette.washMix >= 0.5 ? 'wash' : palette.paperMix >= 0.5 ? 'paper' : 'night';
+}
 
 // The machine values in a request state are code spans in the facts. The rail
 // caption is mono already, so it shows the plain text.
@@ -95,8 +113,8 @@ const REST_DEBOUNCE = 140;
 const NUDGE_DELAY = 1800;
 // Progress per millisecond that reads as a full gust on the rail mark: a
 // chapter's span in a little over half a second, the pace of a chapter drive.
-// A Starport chapter spans 0.1 of the journey (Nimbus: 0.05).
-const FULL_GUST = 0.1 / 550;
+// A Starport chapter spans 0.0927 of the journey (Nimbus: 0.05).
+const FULL_GUST = 0.0927 / 550;
 // Tooling that sets the scroll position itself puts this attribute on <html>,
 // and the driver leaves the scroll alone.
 const HOLD_ATTRIBUTE = 'data-journey-hold';
@@ -160,6 +178,7 @@ function mountJourney(handles: JourneyHandles) {
   const finalIndex = beats.length - 1;
   const finalBeat = beats[finalIndex];
   const colophon = stage.querySelector<HTMLElement>('.afterword');
+  const page = document.documentElement;
   const vars = new Map<string, string>();
   const setVar = (name: string, value: string) => {
     if (vars.get(name) === value) return;
@@ -217,11 +236,29 @@ function mountJourney(handles: JourneyHandles) {
     target = clamp((window.scrollY - sectionTop) / distance);
   };
 
-  // The stage has one night ground, so the frame writes no palette (Nimbus
-  // writes its moving palette here). It writes the progress that the rail,
-  // the act fill, and the scroll hint read, and the chapter and the request
-  // state for the nav and the rail caption.
-  const applyChrome = () => {
+  // The frame writes the moving ground: the palette as `--stage-*` vars that
+  // the copy, the nav, the rail, and the scroll hint read, and the ground's
+  // token set. The page behind the stage takes the same ground, so an
+  // overscroll does not flash. It also writes the progress that the rail, the
+  // act fill, and the scroll hint read, and the chapter and the request state
+  // for the nav and the rail caption.
+  let groundName = '';
+  const applyChrome = (palette: Palette) => {
+    const background = rgb(palette.background);
+    setVar('--stage-background', background);
+    setVar('--stage-chrome', rgb(palette.chromeBackground));
+    setVar('--stage-ink', rgb(palette.ink));
+    setVar('--stage-muted', rgb(palette.muted));
+    setVar('--stage-accent', rgb(palette.accent));
+    setVar('--stage-accent-carrier', rgb(palette.accentCarrier));
+    setVar('--paper-mix', palette.paperMix.toFixed(3));
+    setVar('--wash-mix', palette.washMix.toFixed(3));
+    if (page.style.getPropertyValue('--stage-background') !== background) page.style.setProperty('--stage-background', background);
+    const ground = groundOf(palette);
+    if (ground !== groundName) {
+      groundName = ground;
+      stage.dataset.ground = ground;
+    }
     setVar('--journey-progress', progress.toFixed(4));
     setVar('--scroll-hint-opacity', (1 - smoothstep(range(progress, 0, 0.06))).toFixed(3));
 
@@ -303,7 +340,7 @@ function mountJourney(handles: JourneyHandles) {
   };
 
   const draw = (now: number) => {
-    drawFrame(ctx, {
+    const { palette } = drawFrame(ctx, {
       width,
       height,
       dpr,
@@ -312,7 +349,7 @@ function mountJourney(handles: JourneyHandles) {
       viewport,
       ambient: true,
     });
-    applyChrome();
+    applyChrome(palette);
     applyBeats();
   };
 
@@ -810,14 +847,21 @@ function mountJourney(handles: JourneyHandles) {
       colophon.inert = false;
       colophon.classList.remove('is-live');
     }
+    vars.forEach((_, name) => stage.style.removeProperty(name));
+    delete stage.dataset.ground;
+    page.style.removeProperty('--stage-background');
     travelRegistry.current = travelStatic;
     homeRegistry.current = travelHomeStatic;
   };
 }
 
-// Static storyboard: one still from the same world per chapter.
+// Static storyboard: one still from the same world per chapter. Each beat
+// takes the ground of its still, as the Nimbus storyboard does.
+const BEAT_VARS = ['--beat-background', '--beat-ink', '--beat-muted', '--beat-accent', '--beat-accent-carrier'];
+
 function mountStoryboard(section: HTMLElement) {
   const stills = Array.from(section.querySelectorAll<HTMLCanvasElement>('canvas.still'));
+  const beatOf = (canvas: HTMLCanvasElement) => canvas.closest<HTMLElement>('[data-beat]');
   const draw = () => {
     stills.forEach((canvas, index) => {
       const width = canvas.clientWidth;
@@ -827,7 +871,7 @@ function mountStoryboard(section: HTMLElement) {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
-      drawFrame(ctx, {
+      const { palette } = drawFrame(ctx, {
         width,
         height,
         dpr,
@@ -837,6 +881,14 @@ function mountStoryboard(section: HTMLElement) {
         ambient: false,
         centered: true,
       });
+      const beat = beatOf(canvas);
+      if (!beat) return;
+      beat.style.setProperty('--beat-background', rgb(palette.background));
+      beat.style.setProperty('--beat-ink', rgb(palette.ink));
+      beat.style.setProperty('--beat-muted', rgb(palette.muted));
+      beat.style.setProperty('--beat-accent', rgb(palette.accent));
+      beat.style.setProperty('--beat-accent-carrier', rgb(palette.accentCarrier));
+      beat.dataset.ground = groundOf(palette);
     });
   };
   draw();
@@ -851,6 +903,12 @@ function mountStoryboard(section: HTMLElement) {
   return () => {
     mounted = false;
     resizeObserver.disconnect();
+    stills.forEach((canvas) => {
+      const beat = beatOf(canvas);
+      if (!beat) return;
+      BEAT_VARS.forEach((name) => beat.style.removeProperty(name));
+      delete beat.dataset.ground;
+    });
   };
 }
 

@@ -9,10 +9,11 @@ import { travelTo } from './journey';
 import { type Viewport, chapterStop, chapters } from './timeline';
 import { type Part, drawFrame, parts, resolveFonts } from './world';
 
-// The hero frames the whole world at the deploy stop: every part of the
+// The hero frames the whole world at the server stop: every part of the
 // request path is on the host, so the diagram the reader lands on is the
-// same world they scroll into.
-const HERO_PROGRESS = chapterStop(chapters.length - 1);
+// same world they scroll into. The hero sits on the night ground of the page
+// top, so it draws the server stop on the night palette.
+const HERO_PROGRESS = chapterStop(chapters.findIndex((chapter) => chapter.id === 'server'));
 // The frame: the host and every part on it, centred and zoomed to fit the
 // still. The world span is the drawing's extent plus air.
 const HERO_FRAME = { x: 1025, y: 60, w: 2480, h: 1780 };
@@ -68,7 +69,7 @@ function partAt(width: number, height: number, sx: number, sy: number): Hover | 
   return { id: hit.id, left, top, width: w, height: h, card };
 }
 
-// The scene in the hero: the deploy stop, drawn as a centred still and kept
+// The scene in the hero: the server stop, drawn as a centred still and kept
 // alive at half rate while it is on screen, so the request rides the lanes.
 // Reduced motion gets the still alone.
 function mountScene(canvas: HTMLCanvasElement) {
@@ -96,6 +97,7 @@ function mountScene(canvas: HTMLCanvasElement) {
       viewport,
       ambient: !reduced.matches,
       centered: true,
+      ground: 0,
       camera: { x: frame.x, y: frame.y, zoom, anchorX: 0.5, anchorY: 0.5 },
     });
   };

@@ -2,9 +2,14 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { Journey } from '../src/components/journey/journey';
 import { Mascot, type MascotProps, type MascotState } from '../src/components/mascot';
 import {
+  COPY_EDGE,
+  PAPER_AFTER,
   type Viewport,
+  WASH_AFTER,
+  acts,
   cameras,
   chapterIndexFor,
   chapterRest,
@@ -13,8 +18,9 @@ import {
   interpolateCamera,
   monotoneCubic,
   requestStates,
+  visibilityWindow,
 } from '../src/components/journey/timeline';
-import { requestRoute } from '../src/components/journey/world';
+import { paletteFor, requestRoute, stillAspect } from '../src/components/journey/world';
 import {
   CHAPTERS,
   type CodeBlock,
@@ -22,6 +28,7 @@ import {
   HEADLINE,
   INSTALL_METHODS,
   lede,
+  PERSISTENT_METHOD,
   posterSize,
   README,
   readRepoFile,
@@ -93,10 +100,11 @@ const prose = [
   ...HEADLINE,
   ...INSTALL_METHODS.map((method) => method.note),
   COMPOSE_METHOD.note,
+  PERSISTENT_METHOD.note,
   ...WORLD_PARTS.flatMap((part) => [part.title, part.label, part.card, ...part.details]),
   ...WORLD_PROVIDERS,
   ...Object.values(REQUEST_STATES),
-  ...Object.values(WORLD_LABELS),
+  ...Object.values(WORLD_LABELS).flat(),
   ...CHAPTERS.flatMap((chapter) => [
     chapter.eyebrow,
     chapter.claim,
@@ -171,9 +179,29 @@ describe('splash facts', () => {
     for (const version of versions) expect(corpus, version).toContain(version);
   });
 
-  it('has ten chapters with an eyebrow, a claim, a body, and three chips', () => {
-    expect(CHAPTERS).toHaveLength(10);
-    expect(new Set(CHAPTERS.map((chapter) => chapter.id)).size).toBe(10);
+  it('tells the gateway story, then the server, the fleet, and the laptop', () => {
+    expect(CHAPTERS.map((chapter) => chapter.id)).toEqual([
+      'sdk',
+      'surfaces',
+      'credentials',
+      'catalog',
+      'first-request',
+      'console',
+      'enterprise',
+      'storage',
+      'server',
+      'scale-out',
+      'laptop',
+    ]);
+  });
+
+  it('cites only repository files that exist', () => {
+    for (const file of new Set(sources)) expect(() => readRepoFile(file), file).not.toThrow();
+  });
+
+  it('has eleven chapters with an eyebrow, a claim, a body, and three chips', () => {
+    expect(CHAPTERS).toHaveLength(11);
+    expect(new Set(CHAPTERS.map((chapter) => chapter.id)).size).toBe(11);
     for (const chapter of CHAPTERS) {
       expect(chapter.eyebrow, chapter.id).not.toBe('');
       expect(chapter.claim, chapter.id).toMatch(/\.$/);
@@ -234,16 +262,20 @@ describe('journey timeline', () => {
     chapters.forEach((chapter, index) => expect(chapter.facts, chapter.id).toBe(CHAPTERS[index]));
   });
 
-  it('has ten chapters in seven acts, with alternating sides', () => {
-    expect(chapters).toHaveLength(10);
+  it('has eleven chapters in five acts, with alternating sides', () => {
+    expect(chapters).toHaveLength(11);
     expect([...new Set(chapters.map((chapter) => chapter.act))]).toEqual([
       'client',
       'gateway',
-      'catalog',
       'request',
-      'state',
       'operate',
       'deploy',
+    ]);
+    expect(acts.map((act) => act.id)).toEqual(['client', 'gateway', 'request', 'operate', 'deploy']);
+    expect(chapters.filter((chapter) => chapter.act === 'deploy').map((chapter) => chapter.id)).toEqual([
+      'server',
+      'scale-out',
+      'laptop',
     ]);
     chapters.forEach((chapter, index) => expect(chapter.align, chapter.id).toBe(index % 2 === 0 ? 'left' : 'right'));
   });
@@ -304,10 +336,11 @@ describe('journey timeline', () => {
 
   it('frames every phone chapter at a zoom where its card titles stay inside their cards', () => {
     // Below this zoom, a title on the compact screen floor is wider than its
-    // card. The deploy chapter's copy covers the world on a phone.
+    // card. The last chapter's copy and install tabs cover the world on a
+    // phone.
     const legible = 0.35;
     chapters.forEach((chapter, index) => {
-      if (chapter.id === 'deploy') return;
+      if (chapter.id === 'laptop') return;
       const rest = chapterRest(index);
       for (let step = 0; step <= 20; step += 1) {
         const progress = rest.from + ((rest.to - rest.from) * step) / 20;
@@ -326,6 +359,61 @@ describe('journey timeline', () => {
     }
     expect(previous).toBe(chapters.length - 1);
     chapters.forEach((chapter, index) => expect(chapterIndexFor(chapterStop(index)), chapter.id).toBe(index));
+  });
+
+  it('turns the ground from night to paper to the gold wash', () => {
+    const at = (id: string) => chapterStop(chapters.findIndex((chapter) => chapter.id === id));
+    const night = paletteFor(0);
+    expect(night.paperMix).toBe(0);
+    expect(night.washMix).toBe(0);
+    expect(night.background).toEqual([10, 11, 12]);
+    for (const id of ['sdk', 'surfaces']) expect(paletteFor(at(id)).paperMix, id).toBe(0);
+    for (const id of ['credentials', 'catalog', 'first-request', 'console', 'enterprise', 'storage']) {
+      const palette = paletteFor(at(id));
+      expect(palette.paperMix, id).toBe(1);
+      expect(palette.washMix, id).toBe(0);
+      expect(palette.background, id).toEqual([250, 250, 250]);
+    }
+    expect(paletteFor(0.45).background).toEqual([250, 250, 250]);
+    for (const id of ['server', 'scale-out', 'laptop']) {
+      const palette = paletteFor(at(id));
+      expect(palette.washMix, id).toBe(1);
+      expect(palette.background, id).toEqual([240, 178, 62]);
+      expect(palette.ink, id).toEqual([26, 18, 4]);
+    }
+    expect(paletteFor(1).background).toEqual([240, 178, 62]);
+  });
+
+  it('turns the ground in the gap between two chapters, with no copy on stage', () => {
+    for (const [id, mixOf] of [
+      [PAPER_AFTER, (progress: number) => paletteFor(progress).paperMix],
+      [WASH_AFTER, (progress: number) => paletteFor(progress).washMix],
+    ] as const) {
+      const index = chapters.findIndex((chapter) => chapter.id === id);
+      const before = chapters[index];
+      const after = chapters[index + 1];
+      for (let step = 0; step <= 200; step += 1) {
+        const progress = before.end - COPY_EDGE + ((after.start + COPY_EDGE - before.end + COPY_EDGE) * step) / 200;
+        const turning = mixOf(progress) > 0 && mixOf(progress) < 1;
+        if (!turning) continue;
+        expect(progress, id).toBeGreaterThan(before.end);
+        expect(progress, id).toBeLessThan(after.start);
+        for (const chapter of chapters) {
+          expect(visibilityWindow(progress, chapter.start, chapter.end, COPY_EDGE), `${chapter.id} at ${progress}`).toBe(0);
+        }
+      }
+      expect(mixOf(before.end)).toBe(0);
+      expect(mixOf(after.start)).toBe(1);
+    }
+  });
+
+  it('gives every chapter a storyboard still, in chapter order', () => {
+    for (const chapter of chapters) expect(stillAspect(chapter.id), chapter.id).not.toBe(stillAspect('none'));
+    const markup = renderToStaticMarkup(
+      createElement(Journey, { poster: { width: 1280, height: 800 }, build: { release: 'v0.0.0', starmap: 'v0.0.0' } }),
+    );
+    const order = [...markup.matchAll(/<article id="chapter-([a-z-]+)"/g)].map((match) => match[1]);
+    expect(order).toEqual(chapters.map((chapter) => chapter.id));
   });
 
   it('moves the request through its states in order', () => {

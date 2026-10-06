@@ -1,9 +1,9 @@
 // The draw context shared by every part of the world: the palette, the
 // camera-aware canvas helpers, and the backdrop. World geometry and the story
-// itself live in world.ts. Ported from the Nimbus odyssey scene; the Starport
-// page has one night ground, so the palette does not change with progress.
+// itself live in world.ts. Ported from the Nimbus odyssey scene, with its
+// three grounds: night, daylight paper, and the gold wash of the finale.
 
-import { type Camera, type Viewport, clamp, mix, range, smoothstep } from './timeline';
+import { type Camera, type Viewport, clamp, mix, paperMixFor, range, smoothstep, washMixFor } from './timeline';
 
 export type Rgb = [number, number, number];
 
@@ -15,11 +15,13 @@ export type Palette = {
   muted: Rgb;
   // `accent` is the display tone that fills chips, lanes and the token, and
   // `accentText` is the reading tone for accent-coloured labels.
-  // `accentCarrier` is the ground under an accent label. On the night ground
-  // all three are the page's own tones.
+  // `accentCarrier` is the ground under an accent label.
   accent: Rgb;
   accentText: Rgb;
   accentCarrier: Rgb;
+  // How far the ground has turned to paper and to the wash (0..1).
+  paperMix: number;
+  washMix: number;
 };
 
 export type FrameOptions = {
@@ -42,14 +44,53 @@ export type FrameOptions = {
   // A frame composed by its caller: the splash names its own camera, and the
   // stage fitting that follows the chapter keyframes is skipped.
   camera?: Partial<Camera>;
+  // The progress the ground is read at, when it is not the frame's own: the
+  // hero still frames the server chapter on the night ground of the hero.
+  ground?: number;
 };
 
-// The Starport role tokens, read off the `.splash` scope in tokens.css. Canvas
-// cannot read a CSS variable, so the values are literal here. A change to the
-// token sheet belongs in this table too.
-const NIGHT: Rgb = [10, 11, 12]; // --canvas, #0a0b0c
-const INK: Rgb = [246, 247, 248]; // --text-1, #f6f7f8
-const ACCENT: Rgb = [240, 178, 62]; // --accent, #f0b23e
+// The palette stops: the Starport role tokens, read off the ground scopes in
+// tokens.css, and the Nimbus stops exactly. Canvas cannot read a CSS
+// variable, so the values are literal here. A change to the token sheet
+// belongs in this table too.
+type PaletteStops = {
+  night: Rgb;
+  paper: Rgb;
+  wash: Rgb;
+  washInk: Rgb;
+  inkNight: Rgb;
+  inkPaper: Rgb;
+  accentNight: Rgb;
+  accentPaper: Rgb;
+  accentTextNight: Rgb;
+  accentTextPaper: Rgb;
+};
+
+const STOPS: PaletteStops = {
+  night: [10, 11, 12], // --bg-canvas night, #0a0b0c
+  paper: [250, 250, 250], // --bg-canvas paper, #fafafa
+  // --accent, #f0b23e, under --accent-ink, #1a1204: 10.9:1.
+  wash: [240, 178, 62],
+  washInk: [26, 18, 4],
+  inkNight: [246, 247, 248], // --text-1 night, #f6f7f8
+  inkPaper: [24, 24, 27], // --text-1 paper, #18181b
+  // The gold is the accent on every ground but the wash: the lanes, the
+  // chip borders and the token stay #f0b23e as the page whitens. A darkened
+  // gold turns olive.
+  accentNight: [240, 178, 62], // --accent, #f0b23e
+  accentPaper: [240, 178, 62], // --accent, #f0b23e
+  // A caption in the accent has no area behind it, and the gold is 1.8:1 on
+  // paper, so there the caption takes the accent's own ink, as
+  // `--accent-text` does. Two colours, never a darkened third.
+  accentTextNight: [240, 178, 62], // --accent, #f0b23e
+  accentTextPaper: [26, 18, 4], // --accent-ink, #1a1204
+};
+
+// The night stop, for a surface that stays night on every ground: the
+// laptop screen in the last chapter.
+export function night(): Palette {
+  return paletteFor(0);
+}
 
 // Canvas fonts cannot read CSS variables; the page resolves the loaded
 // families once and hands them over.
@@ -112,15 +153,36 @@ export function rgba(color: Rgb, alpha: number) {
   return `rgb(${color[0].toFixed(0)} ${color[1].toFixed(0)} ${color[2].toFixed(0)} / ${clamp(alpha).toFixed(3)})`;
 }
 
-export function paletteFor(): Palette {
+export function paletteFor(progress: number): Palette {
+  const paperMix = paperMixFor(progress);
+  const washMix = washMixFor(progress);
+  const background = mixRgb(mixRgb(STOPS.night, STOPS.paper, paperMix), STOPS.wash, washMix);
+  // The ink swaps in one step as the background passes its midpoint, so the
+  // two never meet at the same grey and the frame keeps its contrast through
+  // a crossfade. Any continuous mix passes through that grey; a step does not.
+  const inkMix = paperMix < 0.5 ? 0 : 1;
+  const ink = mixRgb(mixRgb(STOPS.inkNight, STOPS.inkPaper, inkMix), STOPS.washInk, washMix);
+  const chromeBackground = mixRgb(mixRgb(STOPS.night, STOPS.paper, inkMix), STOPS.wash, washMix);
+  // On the wash the ground is already the accent, so both accent jobs step
+  // aside for its ink. Gold on gold is not a tone.
+  const accent = mixRgb(mixRgb(STOPS.accentNight, STOPS.accentPaper, paperMix), STOPS.washInk, washMix);
+  // The caption steps with the ink, for the same reason: a continuous fade
+  // from the gold to its ink passes through the darkened golds.
+  const accentText = mixRgb(mixRgb(STOPS.accentTextNight, STOPS.accentTextPaper, inkMix), STOPS.washInk, washMix);
+  // The ground an accent label sits on, so the gold can stay gold on paper:
+  // the page's own ground on night and on the wash, and the accent ink on
+  // paper, where the ground is too light to show the gold.
+  const accentCarrier = mixRgb(mixRgb(STOPS.night, STOPS.washInk, paperMix), STOPS.wash, washMix);
   return {
-    background: NIGHT,
-    chromeBackground: NIGHT,
-    ink: INK,
-    muted: mixRgb(NIGHT, INK, 0.56),
-    accent: ACCENT,
-    accentText: ACCENT,
-    accentCarrier: NIGHT,
+    background,
+    chromeBackground,
+    ink,
+    muted: mixRgb(chromeBackground, ink, 0.56),
+    accent,
+    accentText,
+    accentCarrier,
+    paperMix,
+    washMix,
   };
 }
 
@@ -480,7 +542,8 @@ export function drawBackdrop(ctx: CanvasRenderingContext2D, options: FrameOption
     const spacing = layer.spacing;
     const offsetX = (((-camera.x * camera.zoom * layer.parallax) % spacing) + spacing) % spacing;
     const offsetY = (((-camera.y * camera.zoom * layer.parallax) % spacing) + spacing) % spacing;
-    ctx.globalAlpha = layer.alpha;
+    // The wash is a light, saturated ground, so its dots step back by half.
+    ctx.globalAlpha = layer.alpha * (1 - palette.washMix * 0.5);
     ctx.beginPath();
     for (let x = offsetX - spacing; x < width + spacing; x += spacing) {
       for (let y = offsetY - spacing; y < height + spacing; y += spacing) {

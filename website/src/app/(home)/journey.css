@@ -4,28 +4,56 @@
    the journey. mountJourney in components/journey/journey.tsx writes the
    progress variables below on the stage every frame.
 
-   The stage is one night ground, like the hero, so every rule reads the
-   tokens directly. The accent marks the active state only: the played rail,
-   the playhead, the act fill, and the percent. */
+   The stage runs the Nimbus cycle of grounds: night, then daylight paper,
+   then the gold wash for the last act. `paletteFor` in
+   components/journey/scene.ts writes the ground as `--stage-*` every frame,
+   so the copy, the nav, the rail, and the scroll hint read `--stage-*` and
+   not the role tokens: the ground moves under the type, so the type moves
+   with it. The stage also names its ground in `data-ground`, and tokens.css
+   turns the role tokens there, for the borders and the panels. The code
+   surface is a terminal and stays night on every ground. The accent marks
+   the active state only: the played rail, the playhead, the act fill, and
+   the percent. */
 
+/* The rest values are the first frame, night. `mountJourney` overwrites the
+   stage vars on the stage element every frame; the storyboard writes the
+   ground of each beat as `--beat-*` on the beat. */
 .splash .journey {
   --journey-progress: 0;
   --scroll-hint-opacity: 1;
   --rail-gust: 0;
+  --stage-background: var(--bg-canvas);
+  --stage-chrome: var(--bg-canvas);
+  --stage-ink: var(--text-1);
+  --stage-muted: var(--text-3);
+  /* The accent as a fill and as a label: the gold, and the accent's ink only
+     on the wash, where the ground is the gold. */
+  --stage-accent: var(--accent);
+  /* The ground under a gold label: the night on night, the accent's ink on
+     paper, where the gold alone is 1.8:1, and the gold on the wash. */
+  --stage-accent-carrier: var(--bg-canvas);
+  /* Body copy: the ink, a step back toward the ground. 78% clears 4.5:1 on
+     all three grounds. */
+  --stage-body: color-mix(in srgb, var(--stage-ink) 78%, var(--stage-background));
+  --paper-mix: 0;
+  --wash-mix: 0;
   position: relative;
-  /* Ten chapters at the Nimbus scroll distance per chapter (3000vh for its
-     nineteen chapters, so about 158vh each). */
-  height: 1500vh;
+  /* Eleven chapters at the Nimbus scroll distance per chapter (3000vh for
+     its nineteen chapters, so about 158vh each). */
+  height: 1650vh;
 }
 
+/* `--stage-body` mixes the ground and the ink where they are set, on the
+   stage, so it follows the frame. */
 .splash .journey-stage {
+  --stage-body: color-mix(in srgb, var(--stage-ink) 78%, var(--stage-background));
   position: sticky;
   top: 0;
   height: 100svh;
   min-height: 620px;
   overflow: hidden;
-  background: var(--bg-canvas);
-  color: var(--text-1);
+  background: var(--stage-background);
+  color: var(--stage-ink);
   text-rendering: geometricPrecision;
 }
 
@@ -58,13 +86,13 @@
 .splash .journey-stage::before {
   top: 0;
   height: 112px;
-  background: linear-gradient(var(--bg-canvas) 55%, transparent);
+  background: linear-gradient(var(--stage-background) 55%, transparent);
 }
 
 .splash .journey-stage::after {
   bottom: 0;
   height: 132px;
-  background: linear-gradient(transparent, var(--bg-canvas) 45%);
+  background: linear-gradient(transparent, var(--stage-background) 45%);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -91,9 +119,23 @@
   align-items: center;
   gap: 10px;
   min-height: 44px;
-  color: var(--text-1);
+  color: var(--stage-ink);
   font: 600 15px/1 var(--font-sans);
   letter-spacing: -0.01em;
+}
+
+/* The mascot on the stage is the same sticker as in the hero: gold on every
+   ground. Through the wash its body and face trade places, as the Nimbus
+   mascot does in its finale, and a keyline of the accent carrier holds its
+   edge on paper. */
+.splash .journey .brand-mark,
+.splash .progress-track .rail-mark {
+  --mark: color-mix(in srgb, var(--accent-ink) calc(var(--wash-mix) * 100%), var(--accent));
+  --mark-ink: color-mix(in srgb, var(--accent) calc(var(--wash-mix) * 100%), var(--accent-ink));
+}
+
+.splash .journey .brand-mark {
+  filter: drop-shadow(0 0 1px var(--stage-accent-carrier));
 }
 
 .splash .chapter-nav {
@@ -121,8 +163,8 @@
 }
 
 .splash .act-group[data-current] {
-  border-color: var(--border-3);
-  background: var(--border-1);
+  border-color: color-mix(in srgb, var(--stage-ink) 14%, transparent);
+  background: color-mix(in srgb, var(--stage-ink) 4%, transparent);
 }
 
 .splash .act-fill {
@@ -132,7 +174,7 @@
   right: 12px;
   bottom: -1px;
   height: 1px;
-  background: var(--accent);
+  background: var(--accent-text);
   transform: scaleX(var(--act-fill));
   transform-origin: left;
   opacity: 0;
@@ -146,7 +188,7 @@
 .splash .chapter-nav button {
   position: relative;
   padding: 10px 10px 12px;
-  color: var(--text-3);
+  color: var(--stage-muted);
   font: 500 10px/1 var(--font-mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -154,7 +196,7 @@
 }
 
 .splash .chapter-nav button:hover {
-  color: var(--text-1);
+  color: var(--stage-ink);
 }
 
 .splash .chapter-nav button::after {
@@ -171,7 +213,7 @@
 }
 
 .splash .chapter-nav button[aria-current='step'] {
-  color: var(--text-1);
+  color: var(--stage-ink);
 }
 
 .splash .chapter-nav button[aria-current='step']::after {
@@ -234,8 +276,8 @@
   min-height: 40px;
   padding: 0 16px;
   border-radius: 999px;
-  background: var(--text-1);
-  color: var(--bg-canvas);
+  background: var(--stage-ink);
+  color: var(--stage-chrome);
   font: 600 10.5px/1 var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -245,8 +287,8 @@
 }
 
 .splash .run-link:hover {
-  background: var(--text-2);
-  color: var(--bg-canvas);
+  background: var(--stage-body);
+  color: var(--stage-chrome);
 }
 
 /* The status row is the rail, edge to edge, closed by the percent. The rail's
@@ -291,7 +333,7 @@
   top: 50%;
   width: calc(var(--journey-progress) * 100%);
   height: 1px;
-  background: var(--accent);
+  background: var(--accent-text);
 }
 
 /* Act labels sit above the rail, one per span. */
@@ -300,7 +342,7 @@
   top: -12px;
   padding-left: 14px;
   overflow: hidden;
-  color: var(--text-3);
+  color: var(--stage-muted);
   font-size: 9px;
   letter-spacing: 0.16em;
   white-space: nowrap;
@@ -323,18 +365,18 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--text-3);
+  background: var(--stage-muted);
   transition:
     background-color 120ms linear,
     transform 200ms var(--ease-standard);
 }
 
 .splash .progress-track button:hover::before {
-  background: var(--text-1);
+  background: var(--stage-ink);
 }
 
 .splash .progress-track button[aria-current='step']::before {
-  background: var(--text-1);
+  background: var(--stage-ink);
   transform: scale(1.4);
 }
 
@@ -370,14 +412,15 @@
 }
 
 /* The mascot rides the rail. The drop shadows are its halo of the ground,
-   so it lifts off the rail's hairline and its chapter dots, and the drift is
-   a slow bob under the gust's lean: the gust runs on the wrapper, so the two
+   so it lifts off the rail's hairline and its chapter dots, and a keyline of
+   the accent carrier, so the gold holds its edge on paper. The drift is a
+   slow bob under the gust's lean: the gust runs on the wrapper, so the two
    transforms never fight. */
 .splash .progress-track .rail-mark {
   display: block;
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 0 2px var(--bg-canvas)) drop-shadow(0 0 1px var(--bg-canvas));
+  filter: drop-shadow(0 0 1px var(--stage-accent-carrier)) drop-shadow(0 0 2px var(--stage-chrome));
   animation: rail-drift 3.4s ease-in-out infinite;
 }
 
@@ -418,13 +461,13 @@
   translate: calc(var(--journey-progress) * -100%) 0;
   display: flex;
   gap: 12px;
-  color: var(--text-3);
+  color: var(--stage-muted);
   white-space: nowrap;
   pointer-events: none;
 }
 
 .splash .rail-caption .state {
-  color: var(--text-2);
+  color: var(--stage-body);
   text-transform: none;
   letter-spacing: 0.02em;
 }
@@ -435,17 +478,17 @@
   display: flex;
   gap: 8px;
   margin-top: 10px;
-  color: var(--text-3);
+  color: var(--stage-muted);
   white-space: nowrap;
 }
 
-/* The count is gold on its carrier: the one accent mark on the status row,
-   and a mark with area, so it takes the pair. */
+/* The count is the accent on its carrier: the one accent mark on the status
+   row, and a mark with area, so it takes the pair. */
 .splash .telemetry b {
   padding: 3px 6px;
   border-radius: var(--radius-xs);
-  background: var(--accent-ink);
-  color: var(--accent-text);
+  background: var(--stage-accent-carrier);
+  color: var(--stage-accent);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -461,7 +504,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  color: var(--text-3);
+  color: var(--stage-muted);
   font: 500 10px/1 var(--font-mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -472,7 +515,7 @@
 .splash .scroll-prompt i {
   width: 1px;
   height: 34px;
-  background: var(--accent);
+  background: var(--accent-text);
   transform-origin: top;
   animation: scroll-pulse 1.8s cubic-bezier(0.6, 0, 0.4, 1) infinite;
 }
@@ -482,8 +525,8 @@
   padding: 10px 14px 10px 16px;
   border: 1px solid var(--border-control);
   border-radius: 999px;
-  background: var(--bg-panel);
-  color: var(--text-1);
+  background: var(--stage-chrome);
+  color: var(--stage-ink);
   font-size: 11px;
   opacity: 1;
   pointer-events: auto;
@@ -492,7 +535,7 @@
 }
 
 .splash .scroll-prompt.is-next:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 
 .splash .scroll-prompt.is-next i {
@@ -501,7 +544,7 @@
   width: auto;
   height: auto;
   background: none;
-  color: var(--accent);
+  color: var(--accent-text);
   animation: none;
 }
 
@@ -586,7 +629,7 @@
   inset: -40px -64px;
   z-index: -1;
   border-radius: 64px;
-  background: var(--bg-canvas);
+  background: var(--stage-background);
   /* A wide feather: a card that reaches under the copy fades out over about
      100px instead of ending at a visible edge. */
   filter: blur(52px);
@@ -603,8 +646,8 @@
   transform-origin: right center;
 }
 
-/* The chapter's index and name, as one gold chip on its carrier: the accent
-   mark of the beat, in the mono voice of the chrome. The negative margin
+/* The chapter's index and name, as one accent chip on its carrier: the
+   accent mark of the beat, in the mono voice of the chrome. The negative margin
    sets the type, not the chip, on the column's edge. A chapter with a target
    status carries its badge after the chip, muted, so the chip stays the one
    gold mark. */
@@ -614,7 +657,7 @@
   align-items: center;
   gap: 8px 14px;
   margin: 0 0 20px -9px;
-  color: var(--text-3);
+  color: var(--stage-muted);
   font: 600 14px/1 var(--font-mono);
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -623,8 +666,8 @@
 .splash .beat-eyebrow span {
   padding: 6px 9px;
   border-radius: var(--radius-sm);
-  background: var(--accent-ink);
-  color: var(--accent-text);
+  background: var(--stage-accent-carrier);
+  color: var(--stage-accent);
 }
 
 /* The dot between the index and the name. */
@@ -638,7 +681,7 @@
   padding: 4px 9px;
   border: 1px solid var(--border-control);
   border-radius: 999px;
-  color: var(--text-2);
+  color: var(--stage-body);
   font-size: 9.5px;
   font-style: normal;
   letter-spacing: 0.14em;
@@ -658,7 +701,7 @@
 .splash .beat-body {
   margin: 18px 0 0;
   max-width: 34em;
-  color: var(--text-2);
+  color: var(--stage-body);
   font-size: clamp(14.5px, 1.05vw, 16.5px);
   line-height: 1.55;
   text-wrap: pretty;
@@ -674,14 +717,14 @@
 .splash .beat-status {
   margin: 16px 0 0;
   max-width: 34em;
-  color: var(--text-3);
+  color: var(--stage-body);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .splash .beat-status span {
   margin-right: 6px;
-  color: var(--text-2);
+  color: var(--stage-ink);
   font: 500 10.5px/1.5 var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -690,29 +733,53 @@
 .splash .proof {
   margin: 18px 0 0;
   padding: 12px 0 0;
-  border-top: 1px solid var(--border-2);
-  color: var(--text-3);
+  border-top: 1px solid color-mix(in srgb, var(--stage-ink) 16%, transparent);
+  color: var(--stage-muted);
   font: 500 10.5px/1.6 var(--font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .splash .proof code {
-  color: var(--text-2);
+  color: var(--stage-body);
   font: inherit;
   letter-spacing: 0;
   text-transform: none;
 }
 
 /* The final beat closes the journey with the install tabs where the hero
-   opened it. The Compose tab is first. */
+   opened it. Homebrew is first, as on a laptop. */
 .splash .beat-final .install {
   margin-top: 20px;
   max-width: none;
 }
 
+/* Six tabs do not share one row with the copy control in the column, and a
+   scrolled row hides the last tabs. Three columns of two rows read as a
+   chooser, as the phone's two columns do. */
+@media (min-width: 480px) {
+  .splash .beat-final .install-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, max-content);
+    justify-items: start;
+  }
+}
+
 .splash .final-actions {
   margin-top: 20px;
+}
+
+/* The primary action is the ink on the ground, as in the Nimbus finale: the
+   gold pill would vanish into the gold wash. */
+.splash .final-actions .pill.primary {
+  border-color: var(--stage-ink);
+  background: var(--stage-ink);
+  color: var(--stage-chrome);
+}
+
+.splash .final-actions .pill.primary:hover {
+  border-color: var(--stage-body);
+  background: var(--stage-body);
 }
 
 /* Storyboard stills exist for the static narrative only. */
@@ -823,17 +890,17 @@
 
 .splash .demo figcaption {
   margin-top: 12px;
-  color: var(--text-3);
+  color: var(--stage-body);
   font-size: 13.5px;
 }
 
 .splash .demo figcaption a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-underline-offset: 3px;
 }
 
 .splash .demo figcaption a:hover {
-  color: var(--accent-hover);
+  color: var(--stage-ink);
 }
 
 /* On the animated stage the world beside the copy is the picture, so the
@@ -866,7 +933,7 @@
   align-items: baseline;
   gap: 10px 32px;
   padding: 0 0 14px;
-  color: var(--text-3);
+  color: var(--stage-muted);
   font: 500 10.5px/1.6 var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -885,7 +952,7 @@
   inset: -16px -24px -8px;
   z-index: -1;
   border-radius: 32px;
-  background: var(--bg-canvas);
+  background: var(--stage-background);
   filter: blur(16px);
   pointer-events: none;
 }
@@ -896,13 +963,13 @@
 }
 
 .splash .afterword a {
-  color: var(--text-1);
+  color: var(--stage-ink);
   text-decoration: none;
   border-bottom: 1px solid var(--border-control);
 }
 
 .splash .afterword a:hover {
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--accent-text);
 }
 
 .splash .afterword p {
@@ -910,7 +977,7 @@
 }
 
 .splash .afterword .build code {
-  color: var(--text-1);
+  color: var(--stage-ink);
   letter-spacing: 0;
   text-transform: none;
 }
@@ -961,8 +1028,8 @@
 @media (max-width: 760px) {
   .splash .journey {
     /* Nimbus keeps 2180vh for nineteen chapters on a phone, about 115vh
-       each; a phone scrolls the ten chapters in the same distance each. */
-    height: 1150vh;
+       each; a phone scrolls the eleven chapters in the same distance each. */
+    height: 1265vh;
   }
 
   .splash .journey-stage {
@@ -1130,7 +1197,7 @@
     width: 100%;
     padding: 0 var(--gutter);
     border-bottom: 1px solid var(--border-2);
-    background: color-mix(in srgb, var(--bg-canvas) 88%, transparent);
+    background: color-mix(in srgb, var(--stage-background) 88%, transparent);
     backdrop-filter: blur(10px);
   }
 
@@ -1157,8 +1224,8 @@
     top: auto !important;
     left: auto;
     right: auto;
-    width: var(--width);
-    margin: 0 auto;
+    width: 100%;
+    margin: 0;
     opacity: 1 !important;
     transform: none !important;
     pointer-events: auto;
@@ -1166,9 +1233,25 @@
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     column-gap: clamp(32px, 4vw, 64px);
     align-items: start;
-    padding: 64px 0;
-    border-top: 1px solid var(--border-2);
+    /* The ground runs edge to edge; the copy keeps the page width. */
+    padding: 64px max(var(--gutter), calc((100% - 1440px) / 2));
+    border-top: 1px solid color-mix(in srgb, var(--beat-ink, var(--stage-ink)) 12%, transparent);
+    background: var(--beat-background, var(--stage-background));
+    color: var(--beat-ink, var(--stage-ink));
     will-change: auto;
+  }
+
+  /* Each beat takes the ground of its still, as the Nimbus storyboard does:
+     `mountStoryboard` writes it as `--beat-*`, and the stage vars inside the
+     beat follow it. */
+  .splash .beat {
+    --stage-background: var(--beat-background, var(--bg-canvas));
+    --stage-chrome: var(--beat-background, var(--bg-canvas));
+    --stage-ink: var(--beat-ink, var(--text-1));
+    --stage-muted: var(--beat-muted, var(--text-3));
+    --stage-accent: var(--beat-accent, var(--accent));
+    --stage-accent-carrier: var(--beat-accent-carrier, var(--bg-canvas));
+    --stage-body: color-mix(in srgb, var(--stage-ink) 78%, var(--stage-background));
   }
 
   /* Lightning CSS folds `translate` and `scale` into a `transform` in the
@@ -1208,7 +1291,7 @@
     translate: 0;
     width: 100%;
     margin: 0;
-    padding: 24px var(--gutter) 40px;
+    padding: 24px max(var(--gutter), calc((100% - 1440px) / 2)) 40px;
     background: var(--accent);
     color: var(--accent-ink);
     opacity: 1 !important;
@@ -1242,7 +1325,7 @@
     .splash .beat-left,
     .splash .beat-right {
       grid-template-columns: minmax(0, 1fr);
-      padding: 48px 0;
+      padding-block: 48px;
     }
 
     .splash .still {

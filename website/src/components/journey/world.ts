@@ -3,13 +3,29 @@
 // gateway key check, resolves its model in the catalog generation, takes a
 // route to a provider, and streams back to the app as server-sent events.
 // Beside the route sit the catalog source, the durable state, the console,
-// the enterprise controls, and the host that runs the one binary. Every part
-// is drawn from `progress` (0..1), so the scrolling stage, the static
-// storyboard, and the hero still share one source of truth.
+// the enterprise controls, and the host that runs the one binary. Under the
+// host sit the two other places Starport runs: a fleet of replicas behind one
+// load balancer, and a laptop with one process. Every part is drawn from
+// `progress` (0..1), so the scrolling stage, the static storyboard, and the
+// hero still share one source of truth.
 
 import { CHAPTERS, WORLD_LABELS, WORLD_PARTS, WORLD_PROVIDERS, type WorldPartId } from '@/lib/splash-facts';
-import { type Viewport, chapterIndexFor, chapters, clamp, interpolateCamera, mix, monotoneCubic, range, requestStateFor, smoothstep, visibilityWindow } from './timeline';
-import { type FrameOptions, type Rgb, Scene, drawBackdrop, mixRgb, paletteFor, rgba } from './scene';
+import {
+  FLEET,
+  LAPTOP,
+  type Viewport,
+  chapterIndexFor,
+  chapters,
+  clamp,
+  interpolateCamera,
+  mix,
+  monotoneCubic,
+  range,
+  requestStateFor,
+  smoothstep,
+  visibilityWindow,
+} from './timeline';
+import { type FrameOptions, type Palette, type Rgb, Scene, drawBackdrop, mixRgb, night, paletteFor, rgba } from './scene';
 
 export { type FrameOptions, type Palette, type Rgb, paletteFor, resolveFonts, rgb, setFonts } from './scene';
 
@@ -43,9 +59,9 @@ const providers = [...WORLD_PROVIDERS.filter((name) => name !== 'OpenAI'), 'Open
 const REQUEST_PROVIDER = providers.length - 1;
 
 const credentialChips = chapterFacts('credentials').chips;
-const lifetimeChips = chapterFacts('lifetime').chips;
 const storageChips = chapterFacts('storage').chips;
-const storageStatus = chapterFacts('storage').status;
+const fleetStatus = chapterFacts('scale-out').status;
+const laptopChips = chapterFacts('laptop').chips;
 
 // World geometry, in world units. The route runs along y = 0 from the app on
 // the left to the providers on the right; y grows downwards.
@@ -79,6 +95,25 @@ const streamPath = [
 const CHUNK_XS = [1700, 1380, 1060];
 const LAST_CHUNK_X = 700;
 
+// The fleet under the host: the clients above one load balancer, three
+// replicas under it, and the shared stores under the replicas, all inside
+// one region. The request goes to the middle replica; the left one holds the
+// refresh lease.
+const CLIENTS_Y = 1080;
+const BALANCER = { x: FLEET.x, y: 1230, w: 360, h: 92 };
+const REPLICA = { xs: [FLEET.x - 360, FLEET.x, FLEET.x + 360], y: FLEET.replicaY, w: 300, h: 150 };
+const LEASE_REPLICA = 0;
+const REQUEST_REPLICA = 1;
+const BUS_Y = 1600;
+const STORE = { y: FLEET.storeY, w: 170, h: 150 };
+const REGION = { x0: FLEET.x - 530, x1: FLEET.x + 530, y0: 1140, y1: 1850 };
+
+// The laptop under the fleet: a screen with one Starport process on it, over
+// the base. The screen is night on every ground, like the code blocks.
+const SCREEN = { x: LAPTOP.x, y: LAPTOP.y - 30, w: 720, h: 440 };
+const PROCESS = { x: LAPTOP.x, y: LAPTOP.y + 5, w: 520, h: 240 };
+const BASE = { y: SCREEN.y + SCREEN.h / 2 + 18, w: 860, h: 26 };
+
 type Box = { x: number; y: number; w: number; h: number };
 const left = (box: Box) => box.x - box.w / 2;
 const right = (box: Box) => box.x + box.w / 2;
@@ -96,6 +131,8 @@ const REST = {
   state: { x: STATE.x, y: top(STATE) },
   console: { x: CONSOLE.x, y: -480 },
   controls: { x: CONTROLS.x, y: -150 },
+  replica: { x: REPLICA.xs[REQUEST_REPLICA], y: REPLICA.y - REPLICA.h / 2 },
+  process: { x: PROCESS.x, y: PROCESS.y - PROCESS.h / 2 },
 };
 
 // ---------------------------------------------------------------------------
@@ -119,18 +156,19 @@ function share(id: string, offset: number) {
 
 // The parts each chapter is about. The other parts on stage step back so
 // the chapter's diagram reads on its own.
-type Key = WorldPartId | 'source' | 'binary';
+type Key = WorldPartId | 'source' | 'binary' | 'fleet' | 'laptop';
 const FOCUS: Record<string, Key[]> = {
   sdk: ['app', 'listener'],
   surfaces: ['app', 'listener', 'binary'],
   credentials: ['app', 'listener', 'keys', 'catalog', 'planning', 'providers', 'source', 'binary'],
   catalog: ['catalog', 'source', 'planning'],
   'first-request': ['app', 'listener', 'keys', 'catalog', 'planning', 'providers', 'stream', 'binary'],
-  lifetime: ['state', 'binary'],
   console: ['console', 'listener'],
-  storage: ['state', 'binary'],
   enterprise: ['controls', 'keys', 'binary'],
-  deploy: ['app', 'listener', 'keys', 'catalog', 'planning', 'providers', 'stream', 'state', 'console', 'controls', 'source', 'host', 'binary'],
+  storage: ['state', 'binary'],
+  server: ['app', 'listener', 'keys', 'catalog', 'planning', 'providers', 'stream', 'state', 'console', 'controls', 'source', 'host', 'binary'],
+  'scale-out': ['fleet'],
+  laptop: ['laptop'],
 };
 const DIM = 0.3;
 
@@ -139,10 +177,12 @@ const DIM = 0.3;
 const INTRO: Partial<Record<Key, string>> = {
   source: 'credentials',
   stream: 'first-request',
-  state: 'lifetime',
   console: 'console',
   controls: 'enterprise',
-  host: 'deploy',
+  state: 'storage',
+  host: 'server',
+  fleet: 'scale-out',
+  laptop: 'laptop',
 };
 
 type World = { scene: Scene; progress: number; weights: number[] };
@@ -275,7 +315,7 @@ function drawListener(world: World) {
   const { palette } = scene;
   const appAlpha = Math.min(alpha, alphaOf(world, 'app'));
   const keysAlpha = Math.min(alpha, alphaOf(world, 'keys'));
-  const here = weightOf(world, 'surfaces', 'console', 'deploy');
+  const here = weightOf(world, 'surfaces', 'console', 'server');
 
   doors.forEach((door, index) => {
     const y = doorY(index);
@@ -513,52 +553,43 @@ function drawConsole(world: World) {
 }
 
 // Durable state under the binary: the three roles as stores, and beside
-// them either the lifetime of a temporary gateway (in-memory stores, dashed)
-// or the two storage recipes. A cache sits apart: it never holds durable
+// them the two storage recipes. A cache sits apart: it never holds durable
 // state.
 function drawState(world: World) {
-  const { scene, progress } = world;
+  const { scene } = world;
   const alpha = alphaOf(world, 'state');
   if (alpha <= 0.01 || !scene.inView(left(STATE), right(STATE), 120, 300, 900)) return;
   const { ctx, palette } = scene;
   const part = fact('state');
-  // The lifetime chapter shows the temporary gateway; from the storage
-  // chapter on, the stores are durable.
-  const durable = smoothstep(range(progress, chapters[chapterIndex('storage')].start - GAP, chapters[chapterIndex('storage')].start));
 
   scene.line(STATE.x, BINARY.y1, STATE.x, top(STATE), palette.muted, alpha * 0.5);
   scene.lineTraffic(STATE.x, BINARY.y1, STATE.x, top(STATE), palette.ink, alpha * 0.45, { speed: 1.4 });
   scene.panel(STATE.x, STATE.y, STATE.w, STATE.h, alpha, 0.15);
   const body = cardHead(scene, STATE, alpha, part.title, part.label);
 
-  // The three stores. In memory they are outlined in dashes.
+  // The three stores.
   const storeY = body + 90;
   part.details.forEach((name, index) => {
     const x = left(STATE) + 80 + index * 140;
-    ctx.setLineDash(durable < 0.5 ? [scene.px(5), scene.px(4)] : []);
-    scene.cylinder(x, storeY, 110, 120, alpha * mix(0.75, 1, durable), 0.1 + durable * 0.2);
-    ctx.setLineDash([]);
+    scene.cylinder(x, storeY, 110, 120, alpha, 0.3);
     scene.sans(12.5, 600);
     scene.text(name, x, scene.cylinderBodyTop(storeY, 110, 120) + 22, palette.ink, alpha * scene.far, 'center');
   });
 
-  // Beside the stores: the lifetime of a temporary gateway, or the recipes.
+  // Beside the stores: the two recipes. The shared one carries the status of
+  // the replicated target.
   const columnX = left(STATE) + 470;
   const detail = alpha * scene.detail;
-  const spacing = Math.max(36, scene.px(30));
-  lifetimeChips.forEach((label, index) => {
-    scene.chip(label, columnX, body + 30 + index * spacing, detail * (1 - durable), index === 2 ? 0.8 : 0.3, palette.ink);
-  });
   const recipes = [
     { name: WORLD_LABELS.local, stores: storageChips[0], badge: '' },
-    { name: WORLD_LABELS.shared, stores: storageChips[1], badge: storageStatus?.badge ?? '' },
+    { name: WORLD_LABELS.shared, stores: storageChips[1], badge: fleetStatus?.badge ?? '' },
   ];
   recipes.forEach((recipe, index) => {
     const y = body + 26 + index * Math.max(70, scene.px(58));
     scene.sans(11.5, 500);
-    scene.text(recipe.name, columnX, y, palette.muted, detail * durable);
-    if (recipe.badge) scene.chip(recipe.badge, right(STATE) - 24, y, detail * durable, 0.2, palette.muted, 'right');
-    scene.chip(recipe.stores, columnX, y + Math.max(28, scene.px(24)), detail * durable, 0.4, palette.ink);
+    scene.text(recipe.name, columnX, y, palette.muted, detail);
+    if (recipe.badge) scene.chip(recipe.badge, right(STATE) - 24, y, detail, 0.2, palette.muted, 'right');
+    scene.chip(recipe.stores, columnX, y + Math.max(28, scene.px(24)), detail, 0.4, palette.ink);
   });
 
   // The cache strip along the floor of the state.
@@ -574,6 +605,134 @@ function drawState(world: World) {
   scene.text(WORLD_LABELS.cache, left(STATE) + 44, cacheY, palette.muted, alpha * scene.far);
   scene.sans(11.5);
   scene.text(WORLD_LABELS.cacheNote, left(STATE) + 44, cacheY + 21, palette.muted, detail);
+}
+
+// The fleet: the clients reach one load balancer, the balancer sends the
+// request to one replica, and every replica reads and writes the same shared
+// stores. The lease replica owns provider acquisition; the others follow the
+// accepted head. The dashed frame is the one region the fleet runs in.
+function drawFleet(world: World) {
+  const { scene } = world;
+  const alpha = alphaOf(world, 'fleet');
+  if (alpha <= 0.01 || !scene.inView(REGION.x0, REGION.x1, 120, CLIENTS_Y - 60, REGION.y1 + 60)) return;
+  const { ctx, palette } = scene;
+  const here = weightOf(world, 'scale-out');
+
+  scene.roundRect(REGION.x0, REGION.y0, REGION.x1 - REGION.x0, REGION.y1 - REGION.y0, 24);
+  ctx.lineWidth = scene.px(1);
+  ctx.setLineDash([scene.px(6), scene.px(6)]);
+  ctx.strokeStyle = rgba(palette.ink, alpha * 0.3);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  scene.sans(13, 600);
+  scene.text(WORLD_LABELS.region, REGION.x0, REGION.y1 + scene.px(26), palette.ink, alpha * scene.far);
+
+  // The clients and their lane into the balancer.
+  scene.sans(12, 600);
+  scene.text(WORLD_LABELS.clients, BALANCER.x, CLIENTS_Y, palette.muted, alpha * scene.far, 'center');
+  const clientsFloor = CLIENTS_Y + scene.px(14);
+  scene.line(BALANCER.x, clientsFloor, BALANCER.x, top(BALANCER), palette.accent, alpha * 0.7, 1.4);
+  scene.lineTraffic(BALANCER.x, clientsFloor, BALANCER.x, top(BALANCER), palette.accent, alpha * 0.9, { speed: 2 });
+
+  // The balancer's lanes: one to each replica, the request's the bright one.
+  REPLICA.xs.forEach((x, index) => {
+    const request = index === REQUEST_REPLICA;
+    const color = request ? palette.accent : palette.muted;
+    const y1 = REPLICA.y - REPLICA.h / 2;
+    scene.laneVertical(BALANCER.x, bottom(BALANCER), x, y1, color, alpha * (request ? 0.7 : 0.4), request ? 1.4 : 1);
+    scene.laneVerticalTraffic(BALANCER.x, bottom(BALANCER), x, y1, color, alpha * 0.8, { count: 1, speed: 1.8 + index * 0.3, phase: index * 0.29 });
+  });
+  scene.panel(BALANCER.x, BALANCER.y, BALANCER.w, BALANCER.h, alpha, 0.2 + here * 0.4, palette.accent);
+  if (titleFits(scene, WORLD_LABELS.balancer, BALANCER.w - 40)) scene.text(WORLD_LABELS.balancer, BALANCER.x, BALANCER.y, palette.ink, alpha * scene.far, 'center');
+
+  // The shared stores, on one bus under the replicas.
+  const busX0 = REPLICA.xs[0];
+  const busX1 = REPLICA.xs[REPLICA.xs.length - 1];
+  scene.line(busX0, BUS_Y, busX1, BUS_Y, palette.muted, alpha * 0.5);
+  REPLICA.xs.forEach((x, index) => {
+    scene.line(x, REPLICA.y + REPLICA.h / 2, x, BUS_Y, palette.muted, alpha * 0.5);
+    scene.lineTraffic(x, REPLICA.y + REPLICA.h / 2, x, BUS_Y, palette.ink, alpha * 0.45, { count: 1, speed: 1.4, phase: index * 0.31 });
+    scene.line(x, BUS_Y, x, STORE.y - STORE.h / 2, palette.muted, alpha * 0.5);
+  });
+  WORLD_LABELS.stores.forEach((name, index) => {
+    const x = REPLICA.xs[index];
+    scene.cylinder(x, STORE.y, STORE.w, STORE.h, alpha, 0.3);
+    if (titleFits(scene, name, STORE.w - 16)) {
+      scene.text(name, x, scene.cylinderBodyTop(STORE.y, STORE.w, STORE.h) + 30, palette.ink, alpha * scene.far, 'center');
+    }
+  });
+
+  // The replicas. The lease is the one accent mark among them.
+  REPLICA.xs.forEach((x, index) => {
+    const lease = index === LEASE_REPLICA;
+    const request = index === REQUEST_REPLICA;
+    scene.panel(x, REPLICA.y, REPLICA.w, REPLICA.h, alpha, request ? 0.2 + here * 0.4 : 0.15, request ? palette.accent : undefined);
+    const titleY = REPLICA.y - Math.max(28, scene.px(16));
+    if (titleFits(scene, WORLD_LABELS.replicas[index], REPLICA.w - 40)) scene.text(WORLD_LABELS.replicas[index], x, titleY, palette.ink, alpha * scene.far, 'center');
+    const chipY = REPLICA.y + Math.max(26, scene.px(16));
+    scene.chip(lease ? WORLD_LABELS.lease : WORLD_LABELS.follower, x, chipY, alpha * scene.far, lease ? 1 : 0.15, lease ? palette.accent : palette.muted, 'center', REPLICA.w - 24);
+  });
+}
+
+// The laptop: one Starport process on a night screen. `starport dev` runs it
+// with in-memory stores, outlined in dashes, and its state goes at shutdown.
+// The screen keeps the night palette whatever the ground.
+function drawLaptop(world: World) {
+  const { scene } = world;
+  const alpha = alphaOf(world, 'laptop');
+  if (alpha <= 0.01 || !scene.inView(left(SCREEN), right(SCREEN), 160, top(SCREEN), BASE.y + 80)) return;
+  const { ctx } = scene;
+  const ground = scene.palette;
+
+  // The lid around the screen, and the base under it, in the ground's ink.
+  const bezel = 16;
+  scene.roundRect(left(SCREEN) - bezel, top(SCREEN) - bezel, SCREEN.w + bezel * 2, SCREEN.h + bezel * 2, 22);
+  ctx.fillStyle = rgba(mixRgb(ground.background, ground.ink, 0.12), alpha);
+  ctx.fill();
+  ctx.lineWidth = scene.px(1);
+  ctx.strokeStyle = rgba(ground.ink, alpha * 0.45);
+  ctx.stroke();
+  scene.roundRect(SCREEN.x - BASE.w / 2, BASE.y - BASE.h / 2, BASE.w, BASE.h, BASE.h / 2);
+  ctx.fillStyle = rgba(mixRgb(ground.background, ground.ink, 0.18), alpha);
+  ctx.fill();
+  ctx.strokeStyle = rgba(ground.ink, alpha * 0.45);
+  ctx.stroke();
+  scene.roundRect(SCREEN.x - 70, BASE.y - BASE.h / 2, 140, 8, 4);
+  ctx.fillStyle = rgba(ground.ink, alpha * 0.2);
+  ctx.fill();
+  scene.sans(13, 600);
+  scene.text(WORLD_LABELS.laptop, SCREEN.x, BASE.y + BASE.h / 2 + scene.px(24), ground.ink, alpha * scene.far, 'center');
+
+  // The screen and what runs on it, in the night palette.
+  scene.palette = night();
+  const { palette } = scene;
+  scene.roundRect(left(SCREEN), top(SCREEN), SCREEN.w, SCREEN.h, 10);
+  ctx.fillStyle = rgba(palette.background, alpha);
+  ctx.fill();
+  const promptY = top(SCREEN) + Math.max(34, scene.px(22));
+  scene.mono(12, 500);
+  scene.text('$', left(SCREEN) + 28, promptY, palette.muted, alpha * scene.far);
+  scene.mono(12, 600);
+  scene.text(WORLD_LABELS.dev.replace(/`/g, ''), left(SCREEN) + 28 + scene.px(18), promptY, palette.ink, alpha * scene.far);
+
+  const here = weightOf(world, 'laptop');
+  scene.panel(PROCESS.x, PROCESS.y, PROCESS.w, PROCESS.h, alpha, 0.2 + here * 0.4, palette.accent);
+  const titleY = top(PROCESS) + Math.max(30, scene.fontSize(13) * 0.6 + 14);
+  if (titleFits(scene, WORLD_LABELS.process, PROCESS.w - 40)) scene.text(WORLD_LABELS.process, left(PROCESS) + 20, titleY, palette.ink, alpha * scene.far);
+  const storeY = PROCESS.y + 30;
+  WORLD_LABELS.memory.forEach((name, index) => {
+    const x = PROCESS.x + (index === 0 ? -120 : 120);
+    ctx.setLineDash([scene.px(5), scene.px(4)]);
+    scene.cylinder(x, storeY, 190, 120, alpha * 0.85, 0.1);
+    ctx.setLineDash([]);
+    if (titleFits(scene, name, 174)) scene.text(name, x, scene.cylinderBodyTop(storeY, 190, 120) + 24, palette.ink, alpha * scene.far, 'center');
+  });
+  scene.chip(laptopChips[1], PROCESS.x, bottom(PROCESS) + Math.max(30, scene.px(22)), alpha * scene.far, 0.3, palette.ink, 'center');
+  scene.palette = ground;
+}
+
+function insideScreen(point: { x: number; y: number }) {
+  return point.x > left(SCREEN) && point.x < right(SCREEN) && point.y > top(SCREEN) && point.y < bottom(SCREEN);
 }
 
 // The credential roles: three tags, each beside the part its credential
@@ -608,12 +767,14 @@ function drawCredentialTags(world: World) {
 
 type RoutePoint = { x: number; y: number; at: number };
 
+const LAST = chapters[chapters.length - 1].id;
+
 function routePoints(): RoutePoint[] {
   const end = (id: string) => chapters[chapterIndex(id)].end;
   const start = (id: string) => chapters[chapterIndex(id)].start;
   const hold = (point: { x: number; y: number }, id: string): RoutePoint[] => [
     { ...point, at: id === 'sdk' ? 0 : start(id) },
-    { ...point, at: id === 'deploy' ? 1 : end(id) },
+    { ...point, at: id === LAST ? 1 : end(id) },
   ];
   return [
     ...hold(REST.app, 'sdk'),
@@ -632,11 +793,17 @@ function routePoints(): RoutePoint[] {
     { ...streamPath[2], at: share('first-request', 0.52) },
     { ...REST.done, at: share('first-request', 0.6) },
     { ...REST.done, at: end('first-request') },
-    ...hold(REST.state, 'lifetime'),
     ...hold(REST.console, 'console'),
-    ...hold(REST.state, 'storage'),
     ...hold(REST.controls, 'enterprise'),
-    ...hold(REST.door, 'deploy'),
+    ...hold(REST.state, 'storage'),
+    ...hold(REST.door, 'server'),
+    // The fleet: from the clients, through the balancer, into one replica.
+    { x: BALANCER.x, y: CLIENTS_Y + 30, at: start('scale-out') },
+    { x: BALANCER.x, y: top(BALANCER), at: share('scale-out', 0.15) },
+    { x: BALANCER.x, y: bottom(BALANCER), at: share('scale-out', 0.25) },
+    { ...REST.replica, at: share('scale-out', 0.4) },
+    { ...REST.replica, at: end('scale-out') },
+    ...hold(REST.process, 'laptop'),
   ];
 }
 
@@ -662,20 +829,23 @@ const SPOTS: Spot[] = [
   { id: 'credentials', dx: KEYS.x - REST.keys.x, dy: bottom(KEYS), sy: 24, align: 'center' },
   { id: 'catalog', dx: CATALOG.x - REST.catalog.x, dy: bottom(CATALOG), sy: 24, align: 'center' },
   { id: 'first-request', from: 0.6, sx: 16, align: 'left' },
-  { id: 'lifetime', sx: 16, sy: -28, align: 'left' },
   { id: 'console', sx: 16, align: 'left' },
-  { id: 'storage', sx: 16, sy: -28, align: 'left' },
   { id: 'enterprise', sx: 16, align: 'left' },
-  // The last chapter frames the whole world; the status rail carries the
+  { id: 'storage', sx: 16, sy: -28, align: 'left' },
+  // The server chapter frames the whole host; the status rail carries the
   // state there, and the hero still shows the request alone.
-  { id: 'deploy', align: 'center', hide: true },
+  { id: 'server', align: 'center', hide: true },
+  { id: 'scale-out', from: 0.4, sx: 16, sy: -28, align: 'left' },
+  { id: 'laptop', sx: 16, sy: -28, align: 'left' },
 ];
 
 function drawRequest(world: World, time: number, ambient: boolean) {
   const { scene, progress } = world;
   const point = pointOnRoute(progress);
   if (!scene.inView(point.x, point.x, 200, point.y, point.y)) return;
-  const { ctx, palette } = scene;
+  const { ctx } = scene;
+  // On the laptop screen the request keeps the night palette of the screen.
+  const palette: Palette = insideScreen(point) ? night() : scene.palette;
   const pulse = ambient ? 0.5 + 0.5 * Math.sin(time * 0.004) : 0.5;
   const size = scene.px(7) + scene.px(1.2) * pulse;
 
@@ -720,7 +890,7 @@ function drawRequest(world: World, time: number, ambient: boolean) {
   for (const spot of SPOTS) {
     const chapter = chapters[chapterIndex(spot.id)];
     const from = spot.from === undefined ? (spot.id === 'sdk' ? -1 : chapter.start - GAP / 2) : share(spot.id, spot.from);
-    const to = spot.id === 'deploy' ? 2 : chapter.end + GAP / 2;
+    const to = spot.id === LAST ? 2 : chapter.end + GAP / 2;
     const weight = visibilityWindow(progress, from, to, GAP / 2);
     if (weight <= 0.001) continue;
     const ax = point.x + (spot.dx ?? 0) + scene.px(spot.sx ?? 0);
@@ -760,11 +930,12 @@ const STILLS: Record<string, Box> = {
   credentials: { x: 1025, y: -230, w: 2420, h: 1000 },
   catalog: { x: 1290, y: -300, w: 920, h: 880 },
   'first-request': { x: 1025, y: 40, w: 2420, h: 620 },
-  lifetime: { x: 1000, y: 600, w: 1000, h: 540 },
   console: { x: 600, y: -390, w: 760, h: 800 },
-  storage: { x: 1000, y: 600, w: 1000, h: 540 },
   enterprise: { x: 900, y: -130, w: 800, h: 580 },
-  deploy: { x: 1025, y: 60, w: 2460, h: 1780 },
+  storage: { x: 1000, y: 600, w: 1000, h: 540 },
+  server: { x: 1025, y: 60, w: 2460, h: 1780 },
+  'scale-out': { x: FLEET.x, y: 1475, w: 1260, h: 880 },
+  laptop: { x: LAPTOP.x, y: LAPTOP.y, w: 900, h: 640 },
 };
 
 // The aspect ratio of a chapter's storyboard still: its box, held between a
@@ -824,7 +995,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, options: FrameOptions) 
     camera.zoom *= room;
     camera.anchorY += (1 - room) * 0.08;
   }
-  const palette = paletteFor();
+  const palette = paletteFor(options.ground ?? progress);
 
   drawBackdrop(ctx, options, camera, palette);
 
@@ -852,10 +1023,12 @@ export function drawFrame(ctx: CanvasRenderingContext2D, options: FrameOptions) 
   drawPlanning(world);
   drawProviders(world);
   drawCredentialTags(world);
+  drawFleet(world);
+  drawLaptop(world);
   drawRequest(world, time, ambient);
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  // On a phone, the deploy chapter's install tabs, actions, and afterword
+  // On a phone, the laptop chapter's install tabs, actions, and afterword
   // fill the stage, so the world steps out under them as the chapter comes
   // on stage.
   if (viewport === 'compact' && !centered && !options.camera) {

@@ -56,9 +56,12 @@ starport dev`,
   },
 ];
 
-// The final beat of the journey shows the Compose commands of the deploy
-// chapter as the first tab beside the install methods. The note restates the
-// README sentence about the default Compose file.
+// The final beat of the journey shows the persistent commands of the laptop
+// chapter and the Compose commands of the server chapter as tabs beside the
+// install methods. The persistent note restates the persistent local gateway
+// guide, and the Compose note restates the README sentence about the default
+// Compose file.
+export const PERSISTENT_METHOD = { id: 'persistent', title: 'Persistent', note: 'One process · Badger · SQLite · files' };
 export const COMPOSE_METHOD = { id: 'compose', title: 'Compose', note: 'Default Compose file · one process' };
 
 // The parts of the world that the journey draws, from the app on the left to
@@ -174,15 +177,16 @@ export const REQUEST_STATES = {
   planned: 'Planned · `openai/gpt-4o-mini`',
   streaming: 'Streaming · server-sent events',
   done: 'Done · `data: [DONE]`',
-  temporary: 'Recorded · in-memory state',
   console: 'Console · one-time launch link',
-  stored: 'Stored · KV · SQL · blob',
   logged: 'Logged · `/api/v1/activity`',
-  served: 'Served · one binary on your host',
+  stored: 'Stored · KV · SQL · blob',
+  served: 'Served · one process on your host',
+  balanced: 'Balanced · one replica of the fleet',
+  temporary: 'Recorded · in-memory state',
 };
 
 // The labels that the world draws beside its parts: the catalog source, the
-// credential on each lane, and the stream back.
+// credential on each lane, the stream back, the fleet, and the laptop.
 export const WORLD_LABELS = {
   binary: 'Starport · one binary',
   source: 'Catalog source',
@@ -193,6 +197,17 @@ export const WORLD_LABELS = {
   stream: 'Server-sent events',
   chunk: '`data:`',
   last: '`data: [DONE]`',
+  clients: 'Clients',
+  balancer: 'Load balancer',
+  replicas: ['Starport 1', 'Starport 2', 'Starport N'],
+  lease: 'Refresh lease',
+  follower: 'Accepted head',
+  stores: ['Valkey', 'PostgreSQL', 'Object store'],
+  region: 'One region',
+  laptop: 'Your laptop',
+  dev: '`starport dev`',
+  process: 'Starport · one process',
+  memory: ['In-memory Badger', 'In-memory SQLite'],
 };
 
 // The repository files that the world parts and the request states restate.
@@ -203,6 +218,7 @@ export const WORLD_SOURCES = [
   'docs/site/catalog-lifecycle/routability.md',
   'docs/site/architecture/storage-selection.md',
   'docs/site/architecture/targets.md',
+  'docs/site/architecture/topologies.md',
 ];
 
 // A code block on the page. A block with `verbatim: 'block'` is one
@@ -349,39 +365,10 @@ starport models show openai/gpt-4o-mini --json`,
     demo: true,
   },
   {
-    id: 'lifetime',
-    eyebrow: 'Gateway lifetime',
-    claim: 'Temporary by default. Persistent by choice.',
-    body: 'The `starport dev` command starts a temporary gateway with in-memory Badger and SQLite. At shutdown, it removes the keys, accounts, sessions, usage, budgets, files, batches, presets, and catalog state. To keep data, run `starport init` once and then `starport serve`.',
-    chips: ['In-memory state', 'Removed at shutdown', '`starport init` keeps data'],
-    visuals: [
-      {
-        kind: 'code',
-        lang: 'shell',
-        title: 'Temporary',
-        source: README,
-        verbatim: 'block',
-        text: `unset STARPORT_CATALOG_STATE_DIR STARPORT_FILES_BACKEND
-export OPENAI_API_KEY="replace-with-provider-inference-key"
-starport dev`,
-      },
-      {
-        kind: 'code',
-        lang: 'shell',
-        title: 'Persistent',
-        source: 'docs/site/start/local-persistent.md',
-        verbatim: 'lines',
-        text: `starport init --name primary-admin
-starport serve
-starport ui`,
-      },
-    ],
-  },
-  {
     id: 'console',
     eyebrow: 'Console',
     claim: 'Open the console without pasting a secret.',
-    body: 'The `starport dev` command prints one gateway API key and a one-time console launch link. The gateway spends the link on first use and exchanges it for a browser session. You paste nothing into the browser.',
+    body: 'The `starport ui` command opens the console with a one-time launch link at any time. The gateway spends the link on first use and exchanges it for a browser session. You paste nothing into the browser.',
     chips: ['One-time launch link', '`starport ui`', '`starport auth token --copy`'],
     visuals: [
       {
@@ -394,6 +381,23 @@ URL: http://127.0.0.1:8080
 Authentication: required
 Gateway API key (shown once): replace-with-generated-gateway-key
 Console (one-time launch link): http://127.0.0.1:8080/launch?lt=replace-with-ticket`,
+      },
+    ],
+  },
+  {
+    id: 'enterprise',
+    eyebrow: 'Enterprise',
+    claim: 'Enterprise controls live in the gateway.',
+    body: 'An enterprise adds shared provider inference credentials, BYOK policy, budgets, rate limits, encrypted credential storage, and secret references. Run `starport config show` to see the effective values without secrets. Run `starport config validate` to check the same configuration that `starport serve` loads.',
+    chips: ['BYOK policy', 'Budgets and rate limits', 'Secret references'],
+    visuals: [
+      {
+        kind: 'code',
+        lang: 'shell',
+        source: 'docs/site/configure/index.md',
+        verbatim: 'spans',
+        text: `starport config show
+starport config validate`,
       },
     ],
   },
@@ -417,33 +421,10 @@ Console (one-time launch link): http://127.0.0.1:8080/launch?lt=replace-with-tic
         mono: [],
       },
     ],
-    status: {
-      badge: 'Failover limits',
-      target: 'T4 replicated',
-      text: 'Fleet qualified on Valkey 7.2.14 and PostgreSQL 16.15. Failover limits apply.',
-      source: 'docs/site/architecture/targets.md',
-    },
   },
   {
-    id: 'enterprise',
-    eyebrow: 'Enterprise',
-    claim: 'Enterprise controls live in the gateway.',
-    body: 'An enterprise adds shared provider inference credentials, BYOK policy, budgets, rate limits, encrypted credential storage, and secret references. Run `starport config show` to see the effective values without secrets. Run `starport config validate` to check the same configuration that `starport serve` loads.',
-    chips: ['BYOK policy', 'Budgets and rate limits', 'Secret references'],
-    visuals: [
-      {
-        kind: 'code',
-        lang: 'shell',
-        source: 'docs/site/configure/index.md',
-        verbatim: 'spans',
-        text: `starport config show
-starport config validate`,
-      },
-    ],
-  },
-  {
-    id: 'deploy',
-    eyebrow: 'Deploy',
+    id: 'server',
+    eyebrow: 'Production server',
     claim: 'Deploy to the host you own.',
     body: 'The default Compose file builds one Starport process with persistent Badger, SQLite, and file storage. The Container image install tab verifies the GitHub attestation of the image. Several replicas need the replicated recipe.',
     chips: ['macOS · Linux · Windows', 'Attested image', 'AGPLv3'],
@@ -468,5 +449,50 @@ docker compose up -d starport`,
       text: 'Available. Single-process recovery tested. Production qualification open.',
       source: 'docs/site/architecture/targets.md',
     },
+  },
+  {
+    id: 'scale-out',
+    eyebrow: 'Scale out',
+    claim: 'Scale out behind one load balancer.',
+    body: 'Several Starport replicas run behind one load balancer and share one Valkey service, one PostgreSQL database, and one object store. One replica at a time holds the refresh lease and owns provider acquisition, and the other replicas follow the shared accepted head. Each fleet runs in one region, and cross-region replication and multi-region failover are out of scope.',
+    chips: ['One load balancer', 'One refresh lease', 'One region'],
+    visuals: [
+      {
+        kind: 'code',
+        lang: 'text',
+        title: 'Every replica',
+        source: 'docs/site/operate-starport/fleet.md',
+        verbatim: 'block',
+        text: `STARPORT_DEPLOYMENT_ID=<deployment-id>
+STARPORT_STORAGE_MODE=valkey
+STARPORT_STORAGE_SQL_MODE=postgres
+STARPORT_FILES_BACKEND=objectstore`,
+      },
+    ],
+    status: {
+      badge: 'Failover limits',
+      target: 'T4 replicated Starport',
+      text: 'Fleet qualified on Valkey 7.2.14 and PostgreSQL 16.15. Failover limits apply.',
+      source: 'docs/site/architecture/targets.md',
+    },
+  },
+  {
+    id: 'laptop',
+    eyebrow: 'On a laptop',
+    claim: 'Temporary by default. Persistent by choice.',
+    body: 'Homebrew installs Starport on macOS and Linux. The `starport dev` command starts a temporary gateway with in-memory Badger and SQLite, and it removes the gateway state at shutdown. To keep data, run `starport init` once and then `starport serve`.',
+    chips: ['Homebrew · macOS · Linux', 'Removed at shutdown', '`starport init` keeps data'],
+    visuals: [
+      {
+        kind: 'code',
+        lang: 'shell',
+        title: 'Persistent',
+        source: 'docs/site/start/local-persistent.md',
+        verbatim: 'lines',
+        text: `starport init --name primary-admin
+starport serve
+starport ui`,
+      },
+    ],
   },
 ];

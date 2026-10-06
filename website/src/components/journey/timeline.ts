@@ -7,7 +7,7 @@ import { CHAPTERS, type Chapter as ChapterFacts, REQUEST_STATES } from '@/lib/sp
 
 export type Align = 'left' | 'right';
 export type Viewport = 'wide' | 'medium' | 'compact';
-export type ActId = 'client' | 'gateway' | 'catalog' | 'request' | 'state' | 'operate' | 'deploy';
+export type ActId = 'client' | 'gateway' | 'request' | 'operate' | 'deploy';
 
 export type Chapter = {
   id: string;
@@ -25,26 +25,25 @@ export type Chapter = {
 export type Act = { id: ActId; label: string; rail?: string };
 
 export const acts: Act[] = [
-  { id: 'client', label: 'Client', rail: 'SDK' },
-  { id: 'gateway', label: 'Gateway', rail: 'Keys' },
-  { id: 'catalog', label: 'Catalog' },
+  { id: 'client', label: 'Client' },
+  { id: 'gateway', label: 'Gateway' },
   { id: 'request', label: 'Request', rail: 'Stream' },
-  { id: 'state', label: 'State' },
-  { id: 'operate', label: 'Operate', rail: 'Controls' },
-  { id: 'deploy', label: 'Deploy', rail: 'Run' },
+  { id: 'operate', label: 'Operate' },
+  { id: 'deploy', label: 'Deploy' },
 ];
 
 const ACT_OF: Record<string, ActId> = {
   sdk: 'client',
   surfaces: 'client',
   credentials: 'gateway',
-  catalog: 'catalog',
+  catalog: 'gateway',
   'first-request': 'request',
-  lifetime: 'state',
-  console: 'state',
-  storage: 'state',
+  console: 'operate',
   enterprise: 'operate',
-  deploy: 'deploy',
+  storage: 'operate',
+  server: 'deploy',
+  'scale-out': 'deploy',
+  laptop: 'deploy',
 };
 
 export type CameraKeyframe = {
@@ -60,13 +59,13 @@ export type CameraKeyframe = {
 
 export type Camera = Omit<CameraKeyframe, 'at'>;
 
-// Ten chapters. Each window is 0.0806 of the scroll, with a 0.0216 gap where
-// the camera travels and the copy crossfades. Nimbus spaces nineteen
-// chapters at 0.0505 with a 0.0399 window; the ten windows here keep its
+// Eleven chapters. Each window is 0.0731 of the scroll, with a 0.0196 gap
+// where the camera travels and the copy crossfades. Nimbus spaces nineteen
+// chapters at 0.0505 with a 0.0399 window; the eleven windows here keep its
 // window-to-period ratio, and the section height (journey.css) keeps its
-// scroll distance per chapter.
-const PERIOD = 0.1022;
-const WINDOW = 0.0806;
+// scroll distance per chapter. The last window runs from 0.927 to the end.
+const PERIOD = 0.0927;
+const WINDOW = 0.0731;
 
 export const chapters: Chapter[] = CHAPTERS.map((facts, index) => {
   const act = ACT_OF[facts.id];
@@ -92,7 +91,8 @@ export function actSpans() {
 // The request's narrative state, read out in the status bar and drawn beside
 // the travelling token. Each entry starts at `at` and holds until the next.
 // The first request chapter plans, streams, and finishes inside its window,
-// so it holds three entries.
+// so it holds three entries. The laptop chapter last restates the temporary
+// gateway that the quick start runs.
 function at(id: string, offset = 0) {
   const chapter = chapters.find((entry) => entry.id === id);
   if (!chapter) throw new Error(`no chapter ${id}`);
@@ -107,11 +107,12 @@ export const requestStates: { at: number; label: string }[] = [
   { at: at('first-request'), label: REQUEST_STATES.planned },
   { at: at('first-request', 0.25), label: REQUEST_STATES.streaming },
   { at: at('first-request', 0.62), label: REQUEST_STATES.done },
-  { at: at('lifetime'), label: REQUEST_STATES.temporary },
   { at: at('console'), label: REQUEST_STATES.console },
-  { at: at('storage'), label: REQUEST_STATES.stored },
   { at: at('enterprise'), label: REQUEST_STATES.logged },
-  { at: at('deploy'), label: REQUEST_STATES.served },
+  { at: at('storage'), label: REQUEST_STATES.stored },
+  { at: at('server'), label: REQUEST_STATES.served },
+  { at: at('scale-out'), label: REQUEST_STATES.balanced },
+  { at: at('laptop'), label: REQUEST_STATES.temporary },
 ];
 
 export function requestStateFor(progress: number) {
@@ -147,9 +148,37 @@ export function visibilityWindow(value: number, start: number, end: number, edge
 }
 
 // A chapter's copy fades over this much of the journey at each end. Nimbus
-// uses 0.0114 for a 0.0505 period; this is the same share of a 0.1022
+// uses 0.0114 for a 0.0505 period; this is the same share of a 0.0927
 // period.
-export const COPY_EDGE = 0.023;
+export const COPY_EDGE = 0.0209;
+
+// The ground under the stage. Nimbus moves its page through three grounds:
+// night, daylight paper, and the gold wash of its finale. Each crossing is
+// eased over a short span at the middle of the gap between two chapters,
+// where no copy is on stage. The Client act is night; the paper comes up as
+// the camera pulls back from the listener to the whole route for the
+// credentials, so the ground turns while the world moves. The wash comes up
+// between the storage recipes and the production server, where the story
+// leaves the gateway for the hosts that run it.
+const CROSSING = 0.0035;
+
+function crossing(after: string, progress: number) {
+  const index = chapters.findIndex((chapter) => chapter.id === after);
+  if (index < 0 || index === chapters.length - 1) throw new Error(`no gap after chapter ${after}`);
+  const middle = (chapters[index].end + chapters[index + 1].start) / 2;
+  return smoothstep(range(progress, middle - CROSSING / 2, middle + CROSSING / 2));
+}
+
+export const PAPER_AFTER = 'surfaces';
+export const WASH_AFTER = 'storage';
+
+export function paperMixFor(progress: number) {
+  return crossing(PAPER_AFTER, progress);
+}
+
+export function washMixFor(progress: number) {
+  return crossing(WASH_AFTER, progress);
+}
 
 // Where chapter travel lands: the point where the chapter's copy is fully on
 // stage and its scene has played. The first stop is the top of the page,
@@ -225,31 +254,38 @@ export function monotoneCubic(times: number[], values: number[], t: number) {
   return h00 * values[index] + h10 * h * m0 + h01 * values[index + 1] + h11 * h * m1;
 }
 
+// The two places below the host that the last chapters travel to. world.ts
+// draws them; the camera frames them.
+export const FLEET = { x: 1025, y: 1500, replicaY: 1450, storeY: 1730 };
+export const LAPTOP = { x: 1025, y: 2330 };
+
 // One composition per chapter and viewport class: the world point the camera
 // frames, its zoom, and the screen anchor. Each chapter holds a keyframe at
 // the start and at the end of its window, so the camera drifts a little
 // while the copy is on stage and travels in the gap between two chapters.
 // A `pan` holds the frame until `from` (a share of the window), moves it by
-// `dx` until `to`, and holds it again: a phone frame follows the request
-// where the route is wider than the screen.
-type Pan = { from: number; to: number; dx: number };
+// `dx` and `dy` until `to`, and holds it again: a phone frame follows the
+// request where the route is wider or taller than the screen.
+type Pan = { from: number; to: number; dx?: number; dy?: number };
 type Shot = { x: number; y: number; zoom: number; anchorX: number; anchorY: number; dx?: number; dz?: number; pan?: Pan };
 
 // Wide (1440×900 composition): the copy sits in a left or right column and
-// the world takes the other side. The credentials, first-request and deploy
+// the world takes the other side. The credentials, first-request and server
 // chapters pull back to show the whole route; the others frame one part and
-// its neighbours.
+// its neighbours. The scale-out chapter goes down under the host to the
+// fleet, and the laptop chapter goes down again to the laptop.
 const wideShots: Record<string, Shot> = {
   sdk: { x: 240, y: 0, zoom: 1, anchorX: 0.68, anchorY: 0.5, dx: 20 },
   surfaces: { x: 330, y: 0, zoom: 0.9, anchorX: 0.32, anchorY: 0.5, dx: 20 },
   credentials: { x: 1025, y: -250, zoom: 0.37, anchorX: 0.68, anchorY: 0.5 },
   catalog: { x: 1220, y: -300, zoom: 0.74, anchorX: 0.32, anchorY: 0.5, dx: 20 },
   'first-request': { x: 1025, y: 40, zoom: 0.37, anchorX: 0.68, anchorY: 0.5 },
-  lifetime: { x: 1000, y: 610, zoom: 0.8, anchorX: 0.32, anchorY: 0.5, dx: 20 },
-  console: { x: 590, y: -380, zoom: 0.76, anchorX: 0.68, anchorY: 0.5, dx: 20 },
-  storage: { x: 1000, y: 620, zoom: 0.8, anchorX: 0.32, anchorY: 0.5, dx: 20 },
+  console: { x: 590, y: -380, zoom: 0.76, anchorX: 0.32, anchorY: 0.5, dx: 20 },
   enterprise: { x: 880, y: -150, zoom: 0.9, anchorX: 0.68, anchorY: 0.5, dx: 20 },
-  deploy: { x: 1025, y: 60, zoom: 0.32, anchorX: 0.31, anchorY: 0.45, dz: 0.01 },
+  storage: { x: 1000, y: 620, zoom: 0.8, anchorX: 0.32, anchorY: 0.5, dx: 20 },
+  server: { x: 1025, y: 60, zoom: 0.32, anchorX: 0.69, anchorY: 0.45, dz: 0.01 },
+  'scale-out': { x: FLEET.x, y: FLEET.y, zoom: 0.6, anchorX: 0.32, anchorY: 0.5, dx: 20 },
+  laptop: { x: LAPTOP.x, y: LAPTOP.y, zoom: 0.78, anchorX: 0.68, anchorY: 0.5, dz: 0.02 },
 };
 
 // Medium (1024×768 composition): the copy column is wider, so the world is
@@ -260,11 +296,12 @@ const mediumShots: Record<string, Shot> = {
   credentials: { x: 1025, y: -250, zoom: 0.23, anchorX: 0.69, anchorY: 0.56 },
   catalog: { x: 1250, y: -300, zoom: 0.48, anchorX: 0.27, anchorY: 0.56 },
   'first-request': { x: 1025, y: 40, zoom: 0.23, anchorX: 0.69, anchorY: 0.56 },
-  lifetime: { x: 1000, y: 620, zoom: 0.5, anchorX: 0.27, anchorY: 0.56 },
-  console: { x: 590, y: -380, zoom: 0.56, anchorX: 0.73, anchorY: 0.56 },
-  storage: { x: 1000, y: 620, zoom: 0.5, anchorX: 0.27, anchorY: 0.56 },
+  console: { x: 590, y: -380, zoom: 0.56, anchorX: 0.27, anchorY: 0.56 },
   enterprise: { x: 880, y: -150, zoom: 0.6, anchorX: 0.73, anchorY: 0.56 },
-  deploy: { x: 1025, y: 60, zoom: 0.22, anchorX: 0.27, anchorY: 0.5 },
+  storage: { x: 1000, y: 620, zoom: 0.5, anchorX: 0.27, anchorY: 0.56 },
+  server: { x: 1025, y: 60, zoom: 0.22, anchorX: 0.73, anchorY: 0.5 },
+  'scale-out': { x: FLEET.x, y: FLEET.y, zoom: 0.4, anchorX: 0.27, anchorY: 0.56 },
+  laptop: { x: LAPTOP.x, y: LAPTOP.y, zoom: 0.52, anchorX: 0.73, anchorY: 0.56 },
 };
 
 // Compact (390×844 composition): the copy owns the upper band, the world
@@ -273,7 +310,9 @@ const mediumShots: Record<string, Shot> = {
 // holds only the parts its chapter names: the key check, the catalog and the
 // planning for the credentials; the catalog pipeline; the providers and then
 // the stream home for the first request; one card for the console and the
-// controls. The deploy chapter's copy owns the phone stage (world.ts).
+// controls; the durable state and the host row for the server; the balancer
+// and the replicas, then the shared stores, for the scale-out. The laptop
+// chapter's copy owns the phone stage (world.ts).
 const compactShots: Record<string, Shot> = {
   sdk: { x: 240, y: 0, zoom: 0.45, anchorX: 0.5, anchorY: 0.78 },
   surfaces: { x: 400, y: 0, zoom: 0.45, anchorX: 0.5, anchorY: 0.78 },
@@ -282,11 +321,21 @@ const compactShots: Record<string, Shot> = {
   // The stream runs from 0.3 to 0.52 of the window (world.ts); the frame
   // moves with it from the providers to the app.
   'first-request': { x: 1780, y: 60, zoom: 0.4, anchorX: 0.5, anchorY: 0.76, pan: { from: 0.3, to: 0.52, dx: -1430 } },
-  lifetime: { x: 1000, y: 640, zoom: 0.4, anchorX: 0.5, anchorY: 0.8 },
   console: { x: 590, y: -560, zoom: 0.62, anchorX: 0.5, anchorY: 0.76 },
-  storage: { x: 1000, y: 640, zoom: 0.4, anchorX: 0.5, anchorY: 0.8 },
   enterprise: { x: 880, y: -230, zoom: 0.85, anchorX: 0.5, anchorY: 0.76 },
-  deploy: { x: 1025, y: 60, zoom: 0.16, anchorX: 0.5, anchorY: 0.78 },
+  storage: { x: 1000, y: 640, zoom: 0.4, anchorX: 0.5, anchorY: 0.8 },
+  server: { x: 1000, y: 690, zoom: 0.38, anchorX: 0.5, anchorY: 0.78 },
+  // The frame holds the balancer and the replicas while the request goes in,
+  // then moves down to the stores they share.
+  'scale-out': {
+    x: FLEET.x,
+    y: FLEET.replicaY - 90,
+    zoom: 0.36,
+    anchorX: 0.5,
+    anchorY: 0.78,
+    pan: { from: 0.35, to: 0.6, dy: FLEET.storeY - FLEET.replicaY },
+  },
+  laptop: { x: LAPTOP.x, y: LAPTOP.y, zoom: 0.4, anchorX: 0.5, anchorY: 0.78 },
 };
 
 function keyframes(shots: Record<string, Shot>): CameraKeyframe[] {
@@ -299,8 +348,8 @@ function keyframes(shots: Record<string, Shot>): CameraKeyframe[] {
       return [
         { at: chapter.start, ...camera },
         { at: at(pan.from), ...camera },
-        { at: at(pan.to), ...camera, x: camera.x + pan.dx },
-        { at: chapter.end, ...camera, x: camera.x + pan.dx },
+        { at: at(pan.to), ...camera, x: camera.x + (pan.dx ?? 0), y: camera.y + (pan.dy ?? 0) },
+        { at: chapter.end, ...camera, x: camera.x + (pan.dx ?? 0), y: camera.y + (pan.dy ?? 0) },
       ];
     }
     return [
