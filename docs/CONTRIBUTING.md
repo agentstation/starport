@@ -101,7 +101,7 @@ complete package runs. Shared-storage jobs retain their real-service checks.
 
 The shard runner preserves optional skips in its raw evidence. A skipped
 required test cannot qualify a native contract. Recovery shards use a
-twenty-minute package allowance. Test assertions and individual deadlines do
+thirty-minute package allowance. Test assertions and individual deadlines do
 not change.
 
 ## Format and check
