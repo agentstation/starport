@@ -1,0 +1,141 @@
+# Site builds the public site in website/ and deploys it to Cloudflare.
+#
+# The Site job runs on each pull request and each push to main that changes
+# the site or its content. It checks, tests, and builds the site, and uploads
+# the static files as an artifact. It deploys nothing.
+#
+# The Deploy job runs only when a maintainer starts the workflow by hand with
+# a git reference. It builds the site at that reference and deploys the static
+# files to the starport-site Worker. Before the first run, a maintainer
+# creates the starport-site environment with required reviewers and the
+# CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets.
+#
+# A failed run leaves the last deployment in place. Rollback is a new run with
+# an earlier reference.
+name: Site
+
+on:
+  pull_request:
+    paths:
+      - "website/**"
+      - "docs/site/**"
+      - "docs/assets/first-use-v1.2.0/**"
+      - "console/src/docs/areas.ts"
+      - "console/src/favicon.svg"
+      - "console/scripts/build-docs.mjs"
+      - "README.md"
+      - "go.mod"
+      - ".github/workflows/site.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "docs/site/**"
+      - "docs/assets/first-use-v1.2.0/**"
+      - "console/src/docs/areas.ts"
+      - "console/src/favicon.svg"
+      - "console/scripts/build-docs.mjs"
+      - "README.md"
+      - "go.mod"
+      - ".github/workflows/site.yaml"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git reference to deploy, for example v1.3.0 or a commit"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.event_name == 'workflow_dispatch' && 'deploy' || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  site:
+    name: Site
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - name: Install the site package manager
+        run: npm install -g pnpm@11.22.0
+
+      - name: Install dependencies
+        run: pnpm -C website install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm -C website lint
+
+      - name: Test
+        run: pnpm -C website test
+
+      - name: Build
+        run: pnpm -C website build
+
+      - name: Upload site artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: starport-site
+          path: website/out
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: starport-site
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      # GITHUB_SHA and GITHUB_REF_NAME name the reference that started the
+      # run, not the input reference. Set the release and the link commit from
+      # the checkout so the manifest and the repository links name the
+      # deployed source.
+      - name: Set release facts
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            printf 'STARPORT_DOCS_RELEASE=%s\n' "$REF" >> "$GITHUB_ENV"
+          else
+            printf 'STARPORT_DOCS_RELEASE=dev\n' >> "$GITHUB_ENV"
+          fi
+          printf 'STARPORT_DOCS_COMMIT=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - name: Install the site package manager
+        run: npm install -g pnpm@11.22.0
+
+      - name: Install dependencies
+        run: pnpm -C website install --frozen-lockfile
+
+      - name: Build
+        run: pnpm -C website build
+
+      - name: Deploy to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: "false"
+        run: pnpm -C website exec wrangler deploy

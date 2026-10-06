@@ -1,0 +1,26 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/*
+ * Tailwind does not scan node_modules. Fumadocs renders utility classes from
+ * its own distribution, so name that distribution as a source.
+ */
+@source '../../node_modules/fumadocs-ui/dist';
+
+/*
+ * The one accent is the beacon amber in DESIGN.md. The light theme uses the
+ * deep fill so that white text on it keeps AA contrast. The dark theme uses
+ * the bright fill with dark ink.
+ */
+:root {
+  --color-fd-primary: #b45309;
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-ring: #b45309;
+}
+
+.dark {
+  --color-fd-primary: #f0b23e;
+  --color-fd-primary-foreground: #1a1204;
+  --color-fd-ring: #f0b23e;
+}
