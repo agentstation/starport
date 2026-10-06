@@ -1,0 +1,17 @@
+# This file holds pnpm settings for the website package alone. The package is
+# not a member of the console workspace.
+
+overrides:
+  # mdast-util-to-markdown 2.2.0 serializes strong and emphasis through a
+  # handler property. The Fumadocs stringifier wraps each handler and does not
+  # copy that property. Thus the search index build recurses without end.
+  # Keep the 2.1 line until Fumadocs supports 2.2.
+  mdast-util-to-markdown: 2.1.2
+
+# No dependency runs an install script. esbuild, unrs-resolver, and workerd
+# install their platform binaries as optional dependencies. The build and the
+# deploy do not need their scripts.
+allowBuilds:
+  esbuild: false
+  unrs-resolver: false
+  workerd: false
