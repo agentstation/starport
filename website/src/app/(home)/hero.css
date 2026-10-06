@@ -1,0 +1,544 @@
+/* The hero above the journey: the nav, the headline, the lede, the two calls
+   to action, the install tabs, and the world drawn as a still. It is the same
+   night ground as the stage under it, so the scroll into the journey changes
+   nothing but the scene. */
+
+/* ---- Nav ---- */
+
+.splash .nav {
+  width: var(--width);
+  height: 88px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.splash .nav .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--text-1);
+  font: 600 16px/1 var(--sans);
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.splash .nav nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.splash .nav nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text-3);
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: color 160ms linear;
+}
+
+.splash .nav nav a:hover {
+  color: var(--text-1);
+}
+
+/* The run link is a pill, but an outline one: the hero has the one accent
+   fill of the screen. */
+.splash .nav nav a.run {
+  margin-left: 8px;
+  padding: 0 16px;
+  border: 1px solid var(--border-control);
+  border-radius: 999px;
+  color: var(--text-1);
+  white-space: nowrap;
+  transition: border-color 160ms linear;
+}
+
+.splash .nav nav a.run:hover {
+  border-color: var(--text-1);
+}
+
+/* ---- Hero: copy beside the scene, the scroll prompt under both ---- */
+
+.splash .hero {
+  position: relative;
+  min-height: calc(100svh - 88px);
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+
+.splash .hero-body {
+  width: var(--width);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+  align-items: center;
+  gap: clamp(28px, 3vw, 56px);
+  padding: 8px 0 24px;
+}
+
+.splash .hero-copy {
+  max-width: 680px;
+  /* The headline takes its size from this column, so its longest line
+     always fits. */
+  container-type: inline-size;
+}
+
+/* Four claims, one to a line. Two limits set the size. The column width:
+   the longest line is about 7.24em, so 13cqw keeps it inside the column. The
+   viewport height: the nav, the lede, the actions, the install block, and
+   the scroll prompt take about 680px, and each of the four lines is 0.98em. */
+.splash h1 {
+  margin: 0;
+  font-size: clamp(32px, min(13cqw, (100svh - 680px) / 3.92), 104px);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.splash h1 span {
+  display: block;
+  white-space: nowrap;
+}
+
+.splash .lede {
+  margin: 24px 0 0;
+  max-width: 36em;
+  color: var(--text-2);
+  font-size: clamp(15px, 1.15vw, 18px);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.splash .actions,
+.splash .final-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.splash .pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 22px;
+  border: 1px solid var(--border-control);
+  border-radius: 999px;
+  color: var(--text-1);
+  font: 600 11.5px/1 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition:
+    border-color 160ms linear,
+    background-color 160ms linear;
+}
+
+.splash .pill:hover {
+  border-color: var(--text-1);
+}
+
+.splash .pill.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.splash .pill.primary:hover {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}
+
+/* ---- Install tabs ---- */
+
+.splash .install {
+  margin-top: 28px;
+  max-width: 600px;
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.splash .install-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 0 6px;
+  border-bottom: 1px solid var(--border-2);
+}
+
+.splash .install-tabs {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.splash .install-tabs button,
+.splash .install-copy {
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.splash .install-tabs button {
+  position: relative;
+  flex: none;
+  min-height: 44px;
+  padding: 0 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+  transition: color 160ms linear;
+}
+
+/* The selected tab carries an underline on the rule of the head. */
+.splash .install-tabs button::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 1px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.splash .install-tabs button:hover,
+.splash .install-tabs button[aria-selected='true'] {
+  color: var(--text-1);
+}
+
+.splash .install-tabs button[aria-selected='true']::after {
+  transform: scaleX(1);
+}
+
+.splash .install-tabs button:focus-visible {
+  outline-offset: -4px;
+}
+
+.splash .install-copy {
+  flex: none;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--text-2);
+}
+
+.splash .install-copy span {
+  display: inline-block;
+  min-width: 7ch;
+  padding: 7px 10px;
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  text-align: center;
+  transition:
+    color 160ms linear,
+    border-color 160ms linear;
+}
+
+.splash .install-copy:hover span {
+  border-color: var(--border-control);
+  color: var(--text-1);
+}
+
+.splash .install-note {
+  margin: 0;
+  padding: 14px 18px 0;
+  color: var(--text-3);
+  font: 500 10px/1.2 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ---- The scene ---- */
+
+.splash .hero-scene {
+  position: relative;
+  margin: 0;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: calc(100svh - 220px);
+  /* The still bleeds into the right gutter: the drawing is the widest
+     element of the hero, and the nav above keeps the margin the eye
+     expects. */
+  margin-right: calc(-1 * var(--gutter));
+  overflow: hidden;
+}
+
+.splash .hero-scene canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* The part under the pointer: an outline on the drawn part, and a card that
+   names it and restates its chapter in a few lines. HeroScene places both in
+   the still's pixels. The card is a fixed width, so it stays inside the still
+   without a measure. */
+.splash .hero-part {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
+  pointer-events: none;
+  animation: hero-part-in 140ms ease-out;
+}
+
+.splash .hero-tip {
+  position: absolute;
+  z-index: 1;
+  width: 264px;
+  padding: 12px 14px 13px;
+  border: 1px solid var(--border-3);
+  border-radius: 10px;
+  background: var(--raised);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  animation: hero-part-in 140ms ease-out;
+}
+
+.splash .hero-tip strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-1);
+  font: 600 10.5px/1 var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.splash .hero-tip p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+@keyframes hero-part-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- Scroll prompt ---- */
+
+/* The prompt is the one control in the hero that moves: a ring that pulses
+   and a chevron that drops through it. It travels to the first chapter. The
+   accent keeps its four jobs, so the ring stays neutral. */
+.splash .hero-scroll {
+  justify-self: center;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding: 8px 12px;
+  color: var(--text-1);
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.splash .hero-scroll span {
+  color: var(--text-2);
+  transition: color 160ms linear;
+}
+
+.splash .hero-scroll:hover span {
+  color: var(--text-1);
+}
+
+.splash .hero-scroll-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border-control);
+  border-radius: 50%;
+  color: var(--text-1);
+  transition: border-color 160ms linear;
+}
+
+.splash .hero-scroll:hover .hero-scroll-ring {
+  border-color: var(--text-1);
+}
+
+.splash .hero-scroll-ring::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--text-2);
+  border-radius: 50%;
+  animation: hero-pulse 2.4s ease-out infinite;
+}
+
+.splash .hero-scroll-ring svg {
+  animation: hero-arrow 1.6s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+}
+
+@keyframes hero-arrow {
+  0% {
+    transform: translateY(-9px);
+    opacity: 0;
+  }
+  40% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+}
+
+@keyframes hero-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+/* ---- Responsive compositions ---- */
+
+@media (max-width: 1100px) {
+  .splash .nav {
+    height: 76px;
+  }
+
+  .splash .hero {
+    min-height: calc(100svh - 76px);
+  }
+
+  /* Beside the copy at this width, the still would draw its cards under
+     their title size; under the copy it takes the full width. */
+  .splash .hero-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+  }
+
+  .splash .lede {
+    font-size: 15px;
+  }
+
+  /* The headline spans the page now, so the viewport height caps it and
+     the first screen keeps the lede and the actions. */
+  .splash h1 {
+    font-size: clamp(36px, min(8cqw, (100svh - 480px) / 4.4), 72px);
+  }
+
+  .splash .hero-scene {
+    aspect-ratio: 16 / 11;
+    max-height: none;
+    margin-right: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .splash .nav {
+    height: 64px;
+  }
+
+  .splash .nav nav a {
+    padding: 0 10px;
+    font-size: 10.5px;
+  }
+
+  .splash .nav nav a.run {
+    margin-left: 4px;
+    padding: 0 14px;
+  }
+
+  .splash .hero {
+    min-height: calc(100svh - 64px);
+  }
+
+  .splash .hero-body {
+    gap: 28px;
+    padding: 4px 0 16px;
+  }
+
+  .splash h1 {
+    font-size: clamp(32px, 13cqw, 80px);
+  }
+
+  .splash .lede {
+    margin-top: 18px;
+  }
+
+  .splash .actions {
+    margin-top: 22px;
+  }
+
+  .splash .pill {
+    padding: 0 18px;
+  }
+
+  .splash .install {
+    margin-top: 22px;
+  }
+
+  .splash .install-tabs {
+    flex-wrap: wrap;
+  }
+
+  .splash .install-tabs button {
+    padding: 0 8px;
+  }
+
+  .splash .install-tabs button::after {
+    left: 8px;
+    right: 8px;
+  }
+
+  /* The still keeps its text at a screen-pixel floor, so a narrow frame
+     needs height for the host and the parts on it. */
+  .splash .hero-scene {
+    aspect-ratio: auto;
+    height: clamp(300px, 92vw, 420px);
+  }
+
+  .splash .hero-scroll {
+    margin-bottom: 12px;
+  }
+}
+
+@media (max-width: 479px) {
+  /* The afterword keeps the GitHub link, so the nav drops it on a phone. */
+  .splash .nav nav a.nav-github {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash .hero-scroll-ring::before {
+    display: none;
+  }
+
+  .splash .hero-scroll-ring svg,
+  .splash .hero-part,
+  .splash .hero-tip {
+    animation: none;
+  }
+}

@@ -1,16 +1,30 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  type Viewport,
+  cameras,
+  chapterIndexFor,
+  chapterRest,
+  chapterStop,
+  chapters,
+  requestStates,
+} from '../src/components/journey/timeline';
+import {
   CHAPTERS,
   type CodeBlock,
+  COMPOSE_METHOD,
   HEADLINE,
   INSTALL_METHODS,
   lede,
   posterSize,
   README,
   readRepoFile,
-  SCENE_PARTS,
+  REQUEST_STATES,
   type TableBlock,
+  WORLD_LABELS,
+  WORLD_PARTS,
+  WORLD_PROVIDERS,
+  WORLD_SOURCES,
 } from '../src/lib/splash';
 
 const readme = readRepoFile(README);
@@ -60,6 +74,7 @@ const tables = CHAPTERS.flatMap((chapter) =>
 // Every repository file that a block or a status names, and the README.
 const sources = [
   README,
+  ...WORLD_SOURCES,
   ...CHAPTERS.flatMap((chapter) => [
     ...chapter.visuals.map((visual) => visual.source),
     ...(chapter.status ? [chapter.status.source] : []),
@@ -71,7 +86,11 @@ const corpus = [...new Set(sources)].map(readRepoFile).join('\n');
 const prose = [
   ...HEADLINE,
   ...INSTALL_METHODS.map((method) => method.note),
-  ...SCENE_PARTS.flatMap((part) => [part.role, part.label, part.card, ...part.details]),
+  COMPOSE_METHOD.note,
+  ...WORLD_PARTS.flatMap((part) => [part.title, part.label, part.card, ...part.details]),
+  ...WORLD_PROVIDERS,
+  ...Object.values(REQUEST_STATES),
+  ...Object.values(WORLD_LABELS),
   ...CHAPTERS.flatMap((chapter) => [
     chapter.eyebrow,
     chapter.claim,
@@ -172,11 +191,103 @@ describe('splash facts', () => {
     }
   });
 
-  it('draws the five parts of the request path', () => {
-    expect(SCENE_PARTS.map((part) => part.id).sort()).toEqual(['app', 'catalog', 'providers', 'starport', 'state']);
+  it('draws each part of the request path once, with a title and a card', () => {
+    expect(WORLD_PARTS.map((part) => part.id).sort()).toEqual([
+      'app',
+      'catalog',
+      'console',
+      'controls',
+      'host',
+      'keys',
+      'listener',
+      'planning',
+      'providers',
+      'state',
+      'stream',
+    ]);
+    for (const part of WORLD_PARTS) {
+      expect(part.title, part.id).not.toBe('');
+      expect(part.card, part.id).toMatch(/\.$/);
+    }
+  });
+
+  it('restates the Compose note from README.md', () => {
+    expect(readme).toContain('The default Compose file builds one Starport process');
   });
 
   it('reads the poster size from the PNG header', () => {
     expect(posterSize()).toEqual({ width: 1280, height: 800 });
+  });
+});
+
+const VIEWPORTS: Viewport[] = ['wide', 'medium', 'compact'];
+
+describe('journey timeline', () => {
+  it('keeps the chapters sourced from the splash facts, in order', () => {
+    expect(chapters.map((chapter) => chapter.id)).toEqual(CHAPTERS.map((chapter) => chapter.id));
+    chapters.forEach((chapter, index) => expect(chapter.facts, chapter.id).toBe(CHAPTERS[index]));
+  });
+
+  it('has ten chapters in seven acts, with alternating sides', () => {
+    expect(chapters).toHaveLength(10);
+    expect([...new Set(chapters.map((chapter) => chapter.act))]).toEqual([
+      'client',
+      'gateway',
+      'catalog',
+      'request',
+      'state',
+      'operate',
+      'deploy',
+    ]);
+    chapters.forEach((chapter, index) => expect(chapter.align, chapter.id).toBe(index % 2 === 0 ? 'left' : 'right'));
+  });
+
+  it('orders the chapter windows, keeps them disjoint, and keeps them inside 0..1', () => {
+    expect(chapters[0].start).toBe(0);
+    expect(chapters[chapters.length - 1].end).toBe(1);
+    chapters.forEach((chapter, index) => {
+      expect(chapter.start, chapter.id).toBeGreaterThanOrEqual(0);
+      expect(chapter.end, chapter.id).toBeLessThanOrEqual(1);
+      expect(chapter.end, chapter.id).toBeGreaterThan(chapter.start);
+      if (index > 0) expect(chapter.start, chapter.id).toBeGreaterThan(chapters[index - 1].end);
+      const rest = chapterRest(index);
+      expect(rest.to, chapter.id).toBeGreaterThan(rest.from);
+      const stop = chapterStop(index);
+      expect(stop, chapter.id).toBeGreaterThanOrEqual(rest.from);
+      expect(stop, chapter.id).toBeLessThanOrEqual(rest.to);
+    });
+  });
+
+  it.each(VIEWPORTS)('has a camera keyframe at each end of each chapter on a %s stage', (viewport) => {
+    const frames = cameras[viewport];
+    expect(frames).toHaveLength(chapters.length * 2);
+    chapters.forEach((chapter, index) => {
+      expect(frames[index * 2].at, chapter.id).toBe(chapter.start);
+      expect(frames[index * 2 + 1].at, chapter.id).toBe(chapter.end);
+    });
+    for (const frame of frames) {
+      expect(frame.zoom).toBeGreaterThan(0);
+      expect(frame.anchorX).toBeGreaterThanOrEqual(0);
+      expect(frame.anchorX).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('names a chapter for each position, monotone in the scroll', () => {
+    let previous = 0;
+    for (let step = 0; step <= 1000; step += 1) {
+      const index = chapterIndexFor(step / 1000);
+      expect(index).toBeGreaterThanOrEqual(previous);
+      expect(index - previous).toBeLessThanOrEqual(1);
+      previous = index;
+    }
+    expect(previous).toBe(chapters.length - 1);
+    chapters.forEach((chapter, index) => expect(chapterIndexFor(chapterStop(index)), chapter.id).toBe(index));
+  });
+
+  it('moves the request through its states in order', () => {
+    expect(requestStates.map((state) => state.label)).toEqual(Object.values(REQUEST_STATES));
+    for (let index = 1; index < requestStates.length; index += 1) {
+      expect(requestStates[index].at).toBeGreaterThan(requestStates[index - 1].at);
+    }
   });
 });

@@ -1,0 +1,330 @@
+// The timeline owns the scroll → scene-time contract: acts, chapter windows,
+// the request's narrative state, and the camera path for each viewport class.
+// Everything here is pure data and pure math so the world renderer, the
+// static storyboard, and the tests can share it.
+
+import { CHAPTERS, type Chapter as ChapterFacts, REQUEST_STATES } from '@/lib/splash-facts';
+
+export type Align = 'left' | 'right';
+export type Viewport = 'wide' | 'medium' | 'compact';
+export type ActId = 'client' | 'gateway' | 'catalog' | 'request' | 'state' | 'operate' | 'deploy';
+
+export type Chapter = {
+  id: string;
+  act: ActId;
+  // The facts of the chapter: the eyebrow, the claim, the body, the chips,
+  // and the code. src/lib/splash-facts.ts owns them.
+  facts: ChapterFacts;
+  start: number;
+  end: number;
+  align: Align;
+};
+
+// `rail` is the label on the progress rail, where an act's span is too short
+// for its full name.
+export type Act = { id: ActId; label: string; rail?: string };
+
+export const acts: Act[] = [
+  { id: 'client', label: 'Client', rail: 'SDK' },
+  { id: 'gateway', label: 'Gateway', rail: 'Keys' },
+  { id: 'catalog', label: 'Catalog' },
+  { id: 'request', label: 'Request', rail: 'Stream' },
+  { id: 'state', label: 'State' },
+  { id: 'operate', label: 'Operate', rail: 'Controls' },
+  { id: 'deploy', label: 'Deploy', rail: 'Run' },
+];
+
+const ACT_OF: Record<string, ActId> = {
+  sdk: 'client',
+  surfaces: 'client',
+  credentials: 'gateway',
+  catalog: 'catalog',
+  'first-request': 'request',
+  lifetime: 'state',
+  console: 'state',
+  storage: 'state',
+  enterprise: 'operate',
+  deploy: 'deploy',
+};
+
+export type CameraKeyframe = {
+  at: number;
+  x: number;
+  y: number;
+  zoom: number;
+  // Screen-space anchor (0..1) where the camera target lands. Alternating the
+  // anchor keeps the world in the negative space beside the copy.
+  anchorX: number;
+  anchorY: number;
+};
+
+export type Camera = Omit<CameraKeyframe, 'at'>;
+
+// Ten chapters. Each window is 0.0806 of the scroll, with a 0.0216 gap where
+// the camera travels and the copy crossfades. Nimbus spaces nineteen
+// chapters at 0.0505 with a 0.0399 window; the ten windows here keep its
+// window-to-period ratio, and the section height (journey.css) keeps its
+// scroll distance per chapter.
+const PERIOD = 0.1022;
+const WINDOW = 0.0806;
+
+export const chapters: Chapter[] = CHAPTERS.map((facts, index) => {
+  const act = ACT_OF[facts.id];
+  if (!act) throw new Error(`splash chapter ${facts.id} has no act`);
+  const start = Number((index * PERIOD).toFixed(4));
+  const end = index === CHAPTERS.length - 1 ? 1 : Number((start + WINDOW).toFixed(4));
+  return { id: facts.id, act, facts, start, end, align: index % 2 === 0 ? 'left' : 'right' };
+});
+
+export function actFor(chapter: Chapter) {
+  return acts.find((act) => act.id === chapter.act) ?? null;
+}
+
+// Progress span of each act, from its first chapter's start to its last
+// chapter's end. The first act owns the start of the rail.
+export function actSpans() {
+  return acts.map((act) => {
+    const own = chapters.filter((chapter) => chapter.act === act.id);
+    return { act, start: own[0].start, end: own[own.length - 1].end };
+  });
+}
+
+// The request's narrative state, read out in the status bar and drawn beside
+// the travelling token. Each entry starts at `at` and holds until the next.
+// The first request chapter plans, streams, and finishes inside its window,
+// so it holds three entries.
+function at(id: string, offset = 0) {
+  const chapter = chapters.find((entry) => entry.id === id);
+  if (!chapter) throw new Error(`no chapter ${id}`);
+  return Number((chapter.start + offset * (chapter.end - chapter.start)).toFixed(4));
+}
+
+export const requestStates: { at: number; label: string }[] = [
+  { at: 0, label: REQUEST_STATES.queued },
+  { at: at('surfaces'), label: REQUEST_STATES.received },
+  { at: at('credentials'), label: REQUEST_STATES.authorized },
+  { at: at('catalog'), label: REQUEST_STATES.resolved },
+  { at: at('first-request'), label: REQUEST_STATES.planned },
+  { at: at('first-request', 0.25), label: REQUEST_STATES.streaming },
+  { at: at('first-request', 0.62), label: REQUEST_STATES.done },
+  { at: at('lifetime'), label: REQUEST_STATES.temporary },
+  { at: at('console'), label: REQUEST_STATES.console },
+  { at: at('storage'), label: REQUEST_STATES.stored },
+  { at: at('enterprise'), label: REQUEST_STATES.logged },
+  { at: at('deploy'), label: REQUEST_STATES.served },
+];
+
+export function requestStateFor(progress: number) {
+  let state = requestStates[0].label;
+  for (const entry of requestStates) {
+    if (progress >= entry.at) state = entry.label;
+  }
+  return state;
+}
+
+export function clamp(value: number, min = 0, max = 1) {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function mix(from: number, to: number, amount: number) {
+  return from + (to - from) * amount;
+}
+
+export function smoothstep(value: number) {
+  const t = clamp(value);
+  return t * t * (3 - 2 * t);
+}
+
+export function range(value: number, start: number, end: number) {
+  return clamp((value - start) / Math.max(0.0001, end - start));
+}
+
+// 0 outside [start, end], 1 inside, eased over `edge` at both ends.
+export function visibilityWindow(value: number, start: number, end: number, edge = 0.03) {
+  const fadeIn = smoothstep(range(value, start, start + edge));
+  const fadeOut = 1 - smoothstep(range(value, end - edge, end));
+  return clamp(fadeIn * fadeOut);
+}
+
+// A chapter's copy fades over this much of the journey at each end. Nimbus
+// uses 0.0114 for a 0.0505 period; this is the same share of a 0.1022
+// period.
+export const COPY_EDGE = 0.023;
+
+// Where chapter travel lands: the point where the chapter's copy is fully on
+// stage and its scene has played. The first stop is the top of the page,
+// where the first chapter is already on stage.
+export function chapterStop(index: number) {
+  return index === 0 ? 0 : chapters[index].end - COPY_EDGE;
+}
+
+// A chapter's rest: from the point where its copy is fully on stage to the
+// point where it starts to leave. The reader can stop anywhere inside it, and
+// the scene's beats play under the scroll. The first chapter rests from the
+// top of the page; the last rests to the end of the journey.
+export function chapterRest(index: number) {
+  const chapter = chapters[index];
+  return {
+    from: index === 0 ? 0 : chapter.start + COPY_EDGE,
+    to: index === chapters.length - 1 ? 1 : chapter.end - COPY_EDGE,
+  };
+}
+
+export function chapterIndexFor(progress: number) {
+  let active = 0;
+  for (let index = 1; index < chapters.length; index += 1) {
+    const threshold = (chapters[index - 1].end + chapters[index].start) / 2;
+    if (progress >= threshold) active = index;
+  }
+  return active;
+}
+
+export function viewportFor(width: number): Viewport {
+  if (width < 760) return 'compact';
+  if (width < 1100) return 'medium';
+  return 'wide';
+}
+
+// Monotone cubic (Fritsch–Carlson) interpolation through keyframes. Velocity
+// is continuous across keyframes, repeated values hold with zero velocity,
+// and nothing overshoots. Camera moves and the request's route both use it,
+// so neither stops dead at every waypoint.
+export function monotoneCubic(times: number[], values: number[], t: number) {
+  const count = times.length;
+  if (count === 0) return 0;
+  if (count === 1 || t <= times[0]) return values[0];
+  if (t >= times[count - 1]) return values[count - 1];
+  let index = 0;
+  while (index < count - 2 && t > times[index + 1]) index += 1;
+  const h = times[index + 1] - times[index];
+  if (h <= 0) return values[index + 1];
+  const slopes = (k: number) => (values[k + 1] - values[k]) / (times[k + 1] - times[k]);
+  const secant = slopes(index);
+  const tangentAt = (k: number) => {
+    if (k === 0 || k === count - 1) return 0;
+    const left = slopes(k - 1);
+    const right = slopes(k);
+    if (left * right <= 0) return 0;
+    const m = (left + right) / 2;
+    const bound = 3 * Math.min(Math.abs(left), Math.abs(right));
+    return Math.sign(m) * Math.min(Math.abs(m), bound);
+  };
+  let m0 = tangentAt(index);
+  let m1 = tangentAt(index + 1);
+  if (secant === 0) {
+    m0 = 0;
+    m1 = 0;
+  }
+  const s = (t - times[index]) / h;
+  const s2 = s * s;
+  const s3 = s2 * s;
+  const h00 = 2 * s3 - 3 * s2 + 1;
+  const h10 = s3 - 2 * s2 + s;
+  const h01 = -2 * s3 + 3 * s2;
+  const h11 = s3 - s2;
+  return h00 * values[index] + h10 * h * m0 + h01 * values[index + 1] + h11 * h * m1;
+}
+
+// One composition per chapter and viewport class: the world point the camera
+// frames, its zoom, and the screen anchor. Each chapter holds two keyframes,
+// at the start and at the end of its window, so the camera drifts a little
+// while the copy is on stage and travels in the gap between two chapters.
+type Shot = { x: number; y: number; zoom: number; anchorX: number; anchorY: number; dx?: number; dz?: number };
+
+// Wide (1440×900 composition): the copy sits in a left or right column and
+// the world takes the other side. The credentials, first-request and deploy
+// chapters pull back to show the whole route; the others frame one part and
+// its neighbours.
+const wideShots: Record<string, Shot> = {
+  sdk: { x: 240, y: 0, zoom: 1, anchorX: 0.68, anchorY: 0.5, dx: 20 },
+  surfaces: { x: 330, y: 0, zoom: 0.9, anchorX: 0.32, anchorY: 0.5, dx: 20 },
+  credentials: { x: 1025, y: -250, zoom: 0.37, anchorX: 0.68, anchorY: 0.5 },
+  catalog: { x: 1220, y: -300, zoom: 0.74, anchorX: 0.32, anchorY: 0.5, dx: 20 },
+  'first-request': { x: 1025, y: 40, zoom: 0.37, anchorX: 0.68, anchorY: 0.5 },
+  lifetime: { x: 1000, y: 610, zoom: 0.8, anchorX: 0.32, anchorY: 0.5, dx: 20 },
+  console: { x: 590, y: -380, zoom: 0.76, anchorX: 0.68, anchorY: 0.5, dx: 20 },
+  storage: { x: 1000, y: 620, zoom: 0.8, anchorX: 0.32, anchorY: 0.5, dx: 20 },
+  enterprise: { x: 880, y: -150, zoom: 0.9, anchorX: 0.68, anchorY: 0.5, dx: 20 },
+  deploy: { x: 1025, y: 60, zoom: 0.32, anchorX: 0.31, anchorY: 0.45, dz: 0.01 },
+};
+
+// Medium (1024×768 composition): the copy column is wider, so the world is
+// framed tighter and sits lower to clear the headline.
+const mediumShots: Record<string, Shot> = {
+  sdk: { x: 240, y: 0, zoom: 0.6, anchorX: 0.73, anchorY: 0.56 },
+  surfaces: { x: 330, y: 0, zoom: 0.52, anchorX: 0.27, anchorY: 0.56 },
+  credentials: { x: 1025, y: -250, zoom: 0.23, anchorX: 0.69, anchorY: 0.56 },
+  catalog: { x: 1250, y: -300, zoom: 0.48, anchorX: 0.27, anchorY: 0.56 },
+  'first-request': { x: 1025, y: 40, zoom: 0.23, anchorX: 0.69, anchorY: 0.56 },
+  lifetime: { x: 1000, y: 620, zoom: 0.5, anchorX: 0.27, anchorY: 0.56 },
+  console: { x: 590, y: -380, zoom: 0.56, anchorX: 0.73, anchorY: 0.56 },
+  storage: { x: 1000, y: 620, zoom: 0.5, anchorX: 0.27, anchorY: 0.56 },
+  enterprise: { x: 880, y: -150, zoom: 0.6, anchorX: 0.73, anchorY: 0.56 },
+  deploy: { x: 1025, y: 60, zoom: 0.22, anchorX: 0.27, anchorY: 0.5 },
+};
+
+// Compact (390×844 composition): the copy owns the upper band, the world
+// lives in the lower band, centred, and the camera never pans with the copy.
+const compactShots: Record<string, Shot> = {
+  sdk: { x: 240, y: 0, zoom: 0.45, anchorX: 0.5, anchorY: 0.78 },
+  surfaces: { x: 400, y: 0, zoom: 0.45, anchorX: 0.5, anchorY: 0.78 },
+  credentials: { x: 1025, y: -250, zoom: 0.16, anchorX: 0.5, anchorY: 0.78 },
+  catalog: { x: 1220, y: -300, zoom: 0.36, anchorX: 0.5, anchorY: 0.8 },
+  'first-request': { x: 1025, y: 40, zoom: 0.16, anchorX: 0.5, anchorY: 0.8 },
+  lifetime: { x: 1000, y: 640, zoom: 0.4, anchorX: 0.5, anchorY: 0.8 },
+  console: { x: 590, y: -400, zoom: 0.4, anchorX: 0.5, anchorY: 0.8 },
+  storage: { x: 1000, y: 640, zoom: 0.4, anchorX: 0.5, anchorY: 0.8 },
+  enterprise: { x: 880, y: -130, zoom: 0.52, anchorX: 0.5, anchorY: 0.8 },
+  deploy: { x: 1025, y: 60, zoom: 0.16, anchorX: 0.5, anchorY: 0.78 },
+};
+
+function keyframes(shots: Record<string, Shot>): CameraKeyframe[] {
+  return chapters.flatMap((chapter) => {
+    const shot = shots[chapter.id];
+    if (!shot) throw new Error(`no camera for chapter ${chapter.id}`);
+    const { dx = 0, dz = 0, ...camera } = shot;
+    return [
+      { at: chapter.start, ...camera },
+      { at: chapter.end, ...camera, x: camera.x + dx, zoom: camera.zoom + dz },
+    ];
+  });
+}
+
+export const cameras: Record<Viewport, CameraKeyframe[]> = {
+  wide: keyframes(wideShots),
+  medium: keyframes(mediumShots),
+  compact: keyframes(compactShots),
+};
+
+type Track = { times: number[]; values: Record<keyof Camera, number[]> };
+const tracks = new Map<Viewport, Track>();
+
+function trackFor(viewport: Viewport): Track {
+  let track = tracks.get(viewport);
+  if (!track) {
+    const frames = cameras[viewport];
+    track = {
+      times: frames.map((key) => key.at),
+      values: {
+        x: frames.map((key) => key.x),
+        y: frames.map((key) => key.y),
+        zoom: frames.map((key) => key.zoom),
+        anchorX: frames.map((key) => key.anchorX),
+        anchorY: frames.map((key) => key.anchorY),
+      },
+    };
+    tracks.set(viewport, track);
+  }
+  return track;
+}
+
+export function interpolateCamera(progress: number, viewport: Viewport): Camera {
+  const track = trackFor(viewport);
+  return {
+    x: monotoneCubic(track.times, track.values.x, progress),
+    y: monotoneCubic(track.times, track.values.y, progress),
+    zoom: monotoneCubic(track.times, track.values.zoom, progress),
+    anchorX: monotoneCubic(track.times, track.values.anchorX, progress),
+    anchorY: monotoneCubic(track.times, track.values.anchorY, progress),
+  };
+}
