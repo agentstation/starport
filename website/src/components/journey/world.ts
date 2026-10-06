@@ -577,15 +577,28 @@ function drawState(world: World) {
 }
 
 // The credential roles: three tags, each beside the part its credential
-// opens. They show while the credentials chapter is on stage.
+// opens. They show while the credentials chapter is on stage. A phone frames
+// the key check and the planning, not the app and the providers; when a frame
+// leaves the app out, the gateway key tags the check that reads it, and when
+// it leaves the providers out, the provider credential tags the planning that
+// sends the request on.
 function drawCredentialTags(world: World) {
   const { scene } = world;
   const alpha = weightOf(world, 'credentials') * scene.far;
   if (alpha <= 0.01) return;
   const { palette } = scene;
   const [gateway, provider, catalog] = credentialChips;
-  scene.chip(gateway, APP.x, top(APP) - scene.px(24), alpha, 0.7, palette.accent, 'center');
-  scene.chip(provider, PROVIDER.x + PROVIDER.w / 2, PROVIDER.ys[0] - PROVIDER.h / 2 - scene.px(56), alpha, 0.7, palette.accent, 'right');
+  if (scene.inView(left(APP), right(APP), 0, top(APP), bottom(APP))) {
+    scene.chip(gateway, APP.x, top(APP) - scene.px(24), alpha, 0.7, palette.accent, 'center');
+  } else {
+    scene.chip(gateway, KEYS.x, top(KEYS) - scene.px(24), alpha, 0.7, palette.accent, 'center');
+  }
+  const providerTop = PROVIDER.ys[0] - PROVIDER.h / 2;
+  if (scene.inView(PROVIDER.x - PROVIDER.w / 2, PROVIDER.x + PROVIDER.w / 2, 0, providerTop, -providerTop)) {
+    scene.chip(provider, PROVIDER.x + PROVIDER.w / 2, providerTop - scene.px(56), alpha, 0.7, palette.accent, 'right');
+  } else {
+    scene.chip(provider, right(PLANNING), top(PLANNING) - scene.px(24), alpha, 0.7, palette.accent, 'right');
+  }
   scene.chip(catalog, SOURCE.x + scene.px(12), (bottom(SOURCE) + BINARY.y0) / 2, alpha, 0.5, palette.ink);
 }
 
@@ -842,6 +855,16 @@ export function drawFrame(ctx: CanvasRenderingContext2D, options: FrameOptions) 
   drawRequest(world, time, ambient);
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // On a phone, the deploy chapter's install tabs, actions, and afterword
+  // fill the stage, so the world steps out under them as the chapter comes
+  // on stage.
+  if (viewport === 'compact' && !centered && !options.camera) {
+    const cover = world.weights[chapters.length - 1];
+    if (cover > 0.001) {
+      ctx.fillStyle = rgba(palette.background, cover);
+      ctx.fillRect(0, 0, width, height);
+    }
+  }
   // The chrome mask: the nav band and the status rail lie over the stage, so
   // whatever a tall composition leaves under them fades into the background
   // before it reaches them. Storyboard stills have no chrome.

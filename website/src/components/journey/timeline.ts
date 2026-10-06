@@ -226,10 +226,14 @@ export function monotoneCubic(times: number[], values: number[], t: number) {
 }
 
 // One composition per chapter and viewport class: the world point the camera
-// frames, its zoom, and the screen anchor. Each chapter holds two keyframes,
-// at the start and at the end of its window, so the camera drifts a little
+// frames, its zoom, and the screen anchor. Each chapter holds a keyframe at
+// the start and at the end of its window, so the camera drifts a little
 // while the copy is on stage and travels in the gap between two chapters.
-type Shot = { x: number; y: number; zoom: number; anchorX: number; anchorY: number; dx?: number; dz?: number };
+// A `pan` holds the frame until `from` (a share of the window), moves it by
+// `dx` until `to`, and holds it again: a phone frame follows the request
+// where the route is wider than the screen.
+type Pan = { from: number; to: number; dx: number };
+type Shot = { x: number; y: number; zoom: number; anchorX: number; anchorY: number; dx?: number; dz?: number; pan?: Pan };
 
 // Wide (1440×900 composition): the copy sits in a left or right column and
 // the world takes the other side. The credentials, first-request and deploy
@@ -265,16 +269,23 @@ const mediumShots: Record<string, Shot> = {
 
 // Compact (390×844 composition): the copy owns the upper band, the world
 // lives in the lower band, centred, and the camera never pans with the copy.
+// A phone is too narrow for the whole route at a legible size, so each frame
+// holds only the parts its chapter names: the key check, the catalog and the
+// planning for the credentials; the catalog pipeline; the providers and then
+// the stream home for the first request; one card for the console and the
+// controls. The deploy chapter's copy owns the phone stage (world.ts).
 const compactShots: Record<string, Shot> = {
   sdk: { x: 240, y: 0, zoom: 0.45, anchorX: 0.5, anchorY: 0.78 },
   surfaces: { x: 400, y: 0, zoom: 0.45, anchorX: 0.5, anchorY: 0.78 },
-  credentials: { x: 1025, y: -250, zoom: 0.16, anchorX: 0.5, anchorY: 0.78 },
-  catalog: { x: 1220, y: -300, zoom: 0.36, anchorX: 0.5, anchorY: 0.8 },
-  'first-request': { x: 1025, y: 40, zoom: 0.16, anchorX: 0.5, anchorY: 0.8 },
+  credentials: { x: 1215, y: -250, zoom: 0.37, anchorX: 0.5, anchorY: 0.69 },
+  catalog: { x: 1220, y: 0, zoom: 0.7, anchorX: 0.5, anchorY: 0.74 },
+  // The stream runs from 0.3 to 0.52 of the window (world.ts); the frame
+  // moves with it from the providers to the app.
+  'first-request': { x: 1780, y: 60, zoom: 0.4, anchorX: 0.5, anchorY: 0.76, pan: { from: 0.3, to: 0.52, dx: -1430 } },
   lifetime: { x: 1000, y: 640, zoom: 0.4, anchorX: 0.5, anchorY: 0.8 },
-  console: { x: 590, y: -400, zoom: 0.4, anchorX: 0.5, anchorY: 0.8 },
+  console: { x: 590, y: -560, zoom: 0.62, anchorX: 0.5, anchorY: 0.76 },
   storage: { x: 1000, y: 640, zoom: 0.4, anchorX: 0.5, anchorY: 0.8 },
-  enterprise: { x: 880, y: -130, zoom: 0.52, anchorX: 0.5, anchorY: 0.8 },
+  enterprise: { x: 880, y: -230, zoom: 0.85, anchorX: 0.5, anchorY: 0.76 },
   deploy: { x: 1025, y: 60, zoom: 0.16, anchorX: 0.5, anchorY: 0.78 },
 };
 
@@ -282,7 +293,16 @@ function keyframes(shots: Record<string, Shot>): CameraKeyframe[] {
   return chapters.flatMap((chapter) => {
     const shot = shots[chapter.id];
     if (!shot) throw new Error(`no camera for chapter ${chapter.id}`);
-    const { dx = 0, dz = 0, ...camera } = shot;
+    const { dx = 0, dz = 0, pan, ...camera } = shot;
+    if (pan) {
+      const at = (share: number) => Number((chapter.start + share * (chapter.end - chapter.start)).toFixed(4));
+      return [
+        { at: chapter.start, ...camera },
+        { at: at(pan.from), ...camera },
+        { at: at(pan.to), ...camera, x: camera.x + pan.dx },
+        { at: chapter.end, ...camera, x: camera.x + pan.dx },
+      ];
+    }
     return [
       { at: chapter.start, ...camera },
       { at: chapter.end, ...camera, x: camera.x + dx, zoom: camera.zoom + dz },

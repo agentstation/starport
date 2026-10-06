@@ -7,8 +7,11 @@ import {
   chapterRest,
   chapterStop,
   chapters,
+  interpolateCamera,
+  monotoneCubic,
   requestStates,
 } from '../src/components/journey/timeline';
+import { requestRoute } from '../src/components/journey/world';
 import {
   CHAPTERS,
   type CodeBlock,
@@ -258,18 +261,56 @@ describe('journey timeline', () => {
     });
   });
 
-  it.each(VIEWPORTS)('has a camera keyframe at each end of each chapter on a %s stage', (viewport) => {
+  it.each(VIEWPORTS)('has camera keyframes in order, with one at each end of each chapter, on a %s stage', (viewport) => {
     const frames = cameras[viewport];
-    expect(frames).toHaveLength(chapters.length * 2);
-    chapters.forEach((chapter, index) => {
-      expect(frames[index * 2].at, chapter.id).toBe(chapter.start);
-      expect(frames[index * 2 + 1].at, chapter.id).toBe(chapter.end);
+    for (let index = 1; index < frames.length; index += 1) {
+      expect(frames[index].at).toBeGreaterThan(frames[index - 1].at);
+    }
+    chapters.forEach((chapter) => {
+      expect(frames.some((frame) => frame.at === chapter.start), chapter.id).toBe(true);
+      expect(frames.some((frame) => frame.at === chapter.end), chapter.id).toBe(true);
     });
     for (const frame of frames) {
       expect(frame.zoom).toBeGreaterThan(0);
       expect(frame.anchorX).toBeGreaterThanOrEqual(0);
       expect(frame.anchorX).toBeLessThanOrEqual(1);
     }
+  });
+
+  // The composed stage width of each viewport class (timeline.ts).
+  const STAGE_WIDTH: Record<Viewport, number> = { wide: 1440, medium: 1024, compact: 390 };
+
+  it.each(VIEWPORTS)('keeps the request in frame through each chapter rest on a %s stage', (viewport) => {
+    const route = requestRoute();
+    const times = route.map((point) => point.at);
+    const xs = route.map((point) => point.x);
+    const width = STAGE_WIDTH[viewport];
+    chapters.forEach((chapter, index) => {
+      const rest = chapterRest(index);
+      for (let step = 0; step <= 40; step += 1) {
+        const progress = rest.from + ((rest.to - rest.from) * step) / 40;
+        const camera = interpolateCamera(progress, viewport);
+        const x = monotoneCubic(times, xs, progress);
+        const left = camera.x - (camera.anchorX * width) / camera.zoom;
+        const right = camera.x + ((1 - camera.anchorX) * width) / camera.zoom;
+        expect(x, `${chapter.id} at ${progress.toFixed(4)}`).toBeGreaterThanOrEqual(left);
+        expect(x, `${chapter.id} at ${progress.toFixed(4)}`).toBeLessThanOrEqual(right);
+      }
+    });
+  });
+
+  it('frames every phone chapter at a zoom where its card titles stay inside their cards', () => {
+    // Below this zoom, a title on the compact screen floor is wider than its
+    // card. The deploy chapter's copy covers the world on a phone.
+    const legible = 0.35;
+    chapters.forEach((chapter, index) => {
+      if (chapter.id === 'deploy') return;
+      const rest = chapterRest(index);
+      for (let step = 0; step <= 20; step += 1) {
+        const progress = rest.from + ((rest.to - rest.from) * step) / 20;
+        expect(interpolateCamera(progress, 'compact').zoom, chapter.id).toBeGreaterThanOrEqual(legible);
+      }
+    });
   });
 
   it('names a chapter for each position, monotone in the scroll', () => {

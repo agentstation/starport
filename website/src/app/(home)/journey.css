@@ -566,11 +566,13 @@
 .splash .beat::before {
   content: '';
   position: absolute;
-  inset: -32px -40px;
+  inset: -40px -64px;
   z-index: -1;
-  border-radius: 48px;
+  border-radius: 64px;
   background: var(--canvas);
-  filter: blur(20px);
+  /* A wide feather: a card that reaches under the copy fades out over about
+     100px instead of ending at a visible edge. */
+  filter: blur(52px);
   pointer-events: none;
 }
 
