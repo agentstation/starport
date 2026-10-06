@@ -4,6 +4,10 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "starport-site",
   "compatibility_date": "2026-10-05",
+  // The deploy binds the public host as a Worker custom domain. Cloudflare
+  // creates the DNS record and the certificate in the agentstation.ai zone.
+  "routes": [{ "pattern": "starport.agentstation.ai", "custom_domain": true }],
+  "workers_dev": false,
   "assets": {
     "directory": "./out",
     // An unknown path gets out/404.html with status 404.

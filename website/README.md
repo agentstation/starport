@@ -71,3 +71,9 @@ The `Site` workflow in `.github/workflows/site.yaml` has two jobs:
 The environment must have the secrets `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID`. To roll back, start the workflow again with an
 earlier reference.
+
+`wrangler.jsonc` binds the Worker to the custom domain
+`starport.agentstation.ai`. The first deploy creates the DNS record and the
+certificate in the `agentstation.ai` zone. The API token needs the Workers
+Scripts edit permission for the account and the DNS edit and Workers Routes
+edit permissions for the zone.
