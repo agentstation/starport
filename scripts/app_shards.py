@@ -98,11 +98,13 @@ def run(root, output, index, package=PACKAGE, race=True):
     expression = "^(" + "|".join(re.escape(n) for n in selected) + ")$"
     print(f"Running {package} shard {index}: {len(selected)} discovered owners.", flush=True)
     # Each shard runs a quarter of its package. Both packages need a larger
-    # allowance than Go's default. Individual contract deadlines remain unchanged.
-    timeout = "20m" if package == RECOVERY_PACKAGE else "25m"
+    # allowance than Go's default. The heaviest recovery shard takes about
+    # nineteen minutes on windows-2025, so the recovery allowance keeps a
+    # margin above it. Individual contract deadlines remain unchanged.
+    timeout = "30m" if package == RECOVERY_PACKAGE else "25m"
     args = ["go", "test", "-json", *race_flags, "-count=1", "-timeout", timeout, "-run", expression, path]
     with (output / "tests.jsonl").open("w", encoding="utf-8") as stream:
-        result = subprocess.run(args, cwd=root, stdout=stream, timeout=1800, check=False)
+        result = subprocess.run(args, cwd=root, stdout=stream, timeout=2100, check=False)
     # Keep the native Go exit status. Validation cannot turn a failed run green.
     if result.returncode:
         return result.returncode

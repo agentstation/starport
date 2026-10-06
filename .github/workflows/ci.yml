@@ -497,7 +497,9 @@ jobs:
             --retry-delay 1 --max-time 3 "$TEST_BLOB_S3_ENDPOINT/minio/health/live"
           go test -json -race -count=1 -timeout 5m ./internal/limits/reservation ./internal/jobs > fleet-reservation-jobs.jsonl
           # Separate the full runtime from transfer adapters to bound peak memory.
-          go test -json -race -count=1 -p 1 -timeout 10m \
+          # The complete recovery package takes eight to ten minutes under the
+          # race detector on ubuntu-latest, so each package gets fifteen.
+          go test -json -race -count=1 -p 1 -timeout 15m \
             ./internal/storage ./internal/sqlstore ./internal/blob ./internal/recovery > backup-storage.jsonl
           go test -json -race -count=1 -timeout 7m ./internal/catalog \
             -run '^TestCapturedFleetCatalogNativeReferences$' > backup-catalog.jsonl
