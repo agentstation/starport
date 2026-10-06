@@ -360,6 +360,6 @@
     "TestUnsupportedCatalogPrimitivesRemainUnavailable"
   ],
   "package": "github.com/agentstation/starport/internal/app",
-  "source": "1f6b2461afd7b15c945a840e63d29f2d183e2da2",
-  "workflow_head": "60db1856066a0933d9603b6a468c1d3dc9301137"
+  "source": "516a0659caae6abc31be7a32601a85c6ed8fefb7",
+  "workflow_head": "cc8fe3516f235a2ff54c1d9a171e14054c86113f"
 }
