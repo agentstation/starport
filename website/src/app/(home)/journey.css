@@ -24,7 +24,7 @@
   height: 100svh;
   min-height: 620px;
   overflow: hidden;
-  background: var(--canvas);
+  background: var(--bg-canvas);
   color: var(--text-1);
   text-rendering: geometricPrecision;
 }
@@ -58,13 +58,13 @@
 .splash .journey-stage::before {
   top: 0;
   height: 112px;
-  background: linear-gradient(var(--canvas) 55%, transparent);
+  background: linear-gradient(var(--bg-canvas) 55%, transparent);
 }
 
 .splash .journey-stage::after {
   bottom: 0;
   height: 132px;
-  background: linear-gradient(transparent, var(--canvas) 45%);
+  background: linear-gradient(transparent, var(--bg-canvas) 45%);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -92,7 +92,7 @@
   gap: 10px;
   min-height: 44px;
   color: var(--text-1);
-  font: 600 15px/1 var(--sans);
+  font: 600 15px/1 var(--font-sans);
   letter-spacing: -0.01em;
 }
 
@@ -147,7 +147,7 @@
   position: relative;
   padding: 10px 10px 12px;
   color: var(--text-3);
-  font: 500 10px/1 var(--mono);
+  font: 500 10px/1 var(--font-mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   transition: color 160ms linear;
@@ -233,19 +233,20 @@
   align-items: center;
   min-height: 40px;
   padding: 0 16px;
-  border: 1px solid var(--border-control);
   border-radius: 999px;
-  color: var(--text-1);
-  font: 500 10.5px/1 var(--mono);
+  background: var(--text-1);
+  color: var(--bg-canvas);
+  font: 600 10.5px/1 var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   text-decoration: none;
   white-space: nowrap;
-  transition: border-color 160ms linear;
+  transition: background-color 160ms linear;
 }
 
 .splash .run-link:hover {
-  border-color: var(--text-1);
+  background: var(--text-2);
+  color: var(--bg-canvas);
 }
 
 /* The status row is the rail, edge to edge, closed by the percent. The rail's
@@ -261,7 +262,7 @@
   display: flex;
   align-items: center;
   gap: 24px;
-  font: 500 10.5px/1 var(--mono);
+  font: 500 10.5px/1 var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -325,7 +326,7 @@
   background: var(--text-3);
   transition:
     background-color 120ms linear,
-    transform 200ms ease;
+    transform 200ms var(--ease-standard);
 }
 
 .splash .progress-track button:hover::before {
@@ -343,8 +344,8 @@
   top: 50%;
   left: calc(var(--journey-progress) * 100%);
   z-index: 1;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 24px;
   translate: -50% -50%;
   cursor: grab;
   touch-action: none;
@@ -368,16 +369,27 @@
   transform: translateX(calc(var(--rail-gust, 0) * -6px)) rotate(calc(var(--rail-gust, 0) * 16deg));
 }
 
-/* The request token, as the world draws it: an amber diamond with a halo of
-   the ground, so it lifts off the rail's hairline and its chapter dots. */
+/* The mascot rides the rail. The drop shadows are its halo of the ground,
+   so it lifts off the rail's hairline and its chapter dots, and the drift is
+   a slow bob under the gust's lean: the gust runs on the wrapper, so the two
+   transforms never fight. */
 .splash .progress-track .rail-mark {
   display: block;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px var(--canvas);
-  rotate: 45deg;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 2px var(--bg-canvas)) drop-shadow(0 0 1px var(--bg-canvas));
+  animation: rail-drift 3.4s ease-in-out infinite;
+}
+
+@keyframes rail-drift {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+
+  50% {
+    translate: 0 -1.5px;
+  }
 }
 
 .splash .progress-track .playhead:focus-visible {
@@ -427,8 +439,13 @@
   white-space: nowrap;
 }
 
+/* The count is gold on its carrier: the one accent mark on the status row,
+   and a mark with area, so it takes the pair. */
 .splash .telemetry b {
-  color: var(--accent);
+  padding: 3px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--accent-ink);
+  color: var(--accent-text);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -445,7 +462,7 @@
   align-items: center;
   gap: 12px;
   color: var(--text-3);
-  font: 500 10px/1 var(--mono);
+  font: 500 10px/1 var(--font-mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   opacity: var(--scroll-hint-opacity);
@@ -455,7 +472,7 @@
 .splash .scroll-prompt i {
   width: 1px;
   height: 34px;
-  background: var(--text-2);
+  background: var(--accent);
   transform-origin: top;
   animation: scroll-pulse 1.8s cubic-bezier(0.6, 0, 0.4, 1) infinite;
 }
@@ -465,7 +482,7 @@
   padding: 10px 14px 10px 16px;
   border: 1px solid var(--border-control);
   border-radius: 999px;
-  background: var(--panel);
+  background: var(--bg-panel);
   color: var(--text-1);
   font-size: 11px;
   opacity: 1;
@@ -475,7 +492,7 @@
 }
 
 .splash .scroll-prompt.is-next:hover {
-  border-color: var(--text-1);
+  border-color: var(--accent);
 }
 
 .splash .scroll-prompt.is-next i {
@@ -484,7 +501,7 @@
   width: auto;
   height: auto;
   background: none;
-  color: var(--text-2);
+  color: var(--accent);
   animation: none;
 }
 
@@ -569,7 +586,7 @@
   inset: -40px -64px;
   z-index: -1;
   border-radius: 64px;
-  background: var(--canvas);
+  background: var(--bg-canvas);
   /* A wide feather: a card that reaches under the copy fades out over about
      100px instead of ending at a visible edge. */
   filter: blur(52px);
@@ -586,22 +603,35 @@
   transform-origin: right center;
 }
 
-/* The chapter's index and name, in the mono voice of the chrome. A chapter
-   with a target status carries its badge after the name. */
+/* The chapter's index and name, as one gold chip on its carrier: the accent
+   mark of the beat, in the mono voice of the chrome. The negative margin
+   sets the type, not the chip, on the column's edge. A chapter with a target
+   status carries its badge after the chip, muted, so the chip stays the one
+   gold mark. */
 .splash .beat-eyebrow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 14px;
-  margin: 0 0 20px;
+  margin: 0 0 20px -9px;
   color: var(--text-3);
-  font: 500 11.5px/1.2 var(--mono);
-  letter-spacing: 0.16em;
+  font: 600 14px/1 var(--font-mono);
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
 .splash .beat-eyebrow span {
-  color: var(--text-1);
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-ink);
+  color: var(--accent-text);
+}
+
+/* The dot between the index and the name. */
+.splash .beat-eyebrow i {
+  margin: 0 0.5em;
+  font-style: normal;
+  opacity: 0.6;
 }
 
 .splash .beat-eyebrow em {
@@ -652,7 +682,7 @@
 .splash .beat-status span {
   margin-right: 6px;
   color: var(--text-2);
-  font: 500 10.5px/1.5 var(--mono);
+  font: 500 10.5px/1.5 var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -662,7 +692,7 @@
   padding: 12px 0 0;
   border-top: 1px solid var(--border-2);
   color: var(--text-3);
-  font: 500 10.5px/1.6 var(--mono);
+  font: 500 10.5px/1.6 var(--font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -696,7 +726,7 @@
   min-width: 0;
   border: 1px solid var(--border-2);
   border-radius: 10px;
-  background: var(--panel);
+  background: var(--bg-panel);
   overflow: hidden;
 }
 
@@ -707,7 +737,7 @@
   padding: 10px 16px;
   border-bottom: 1px solid var(--border-1);
   color: var(--text-3);
-  font: 500 10px/1.2 var(--mono);
+  font: 500 10px/1.2 var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -755,7 +785,7 @@
 
 .splash .block thead th {
   color: var(--text-3);
-  font: 500 10px/1.2 var(--mono);
+  font: 500 10px/1.2 var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -837,7 +867,7 @@
   gap: 10px 32px;
   padding: 0 0 14px;
   color: var(--text-3);
-  font: 500 10.5px/1.6 var(--mono);
+  font: 500 10.5px/1.6 var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   opacity: 0;
@@ -855,7 +885,7 @@
   inset: -16px -24px -8px;
   z-index: -1;
   border-radius: 32px;
-  background: var(--canvas);
+  background: var(--bg-canvas);
   filter: blur(16px);
   pointer-events: none;
 }
@@ -967,8 +997,12 @@
   }
 
   .splash .beat-eyebrow {
-    margin-bottom: 12px;
-    font-size: 10.5px;
+    margin: 0 0 12px -8px;
+    font-size: 12px;
+  }
+
+  .splash .beat-eyebrow span {
+    padding: 5px 8px;
   }
 
   .splash .beat h2 {
@@ -1096,7 +1130,7 @@
     width: 100%;
     padding: 0 var(--gutter);
     border-bottom: 1px solid var(--border-2);
-    background: color-mix(in srgb, var(--canvas) 88%, transparent);
+    background: color-mix(in srgb, var(--bg-canvas) 88%, transparent);
     backdrop-filter: blur(10px);
   }
 
@@ -1165,17 +1199,30 @@
     margin-top: 12px;
   }
 
+  /* The colophon closes the storyboard as the gold band: the one accent
+     fill of the page, edge to edge, with the gutter inside it. */
   .splash .afterword {
     position: relative;
     left: auto;
     bottom: auto;
     translate: 0;
-    width: var(--width);
-    margin: 0 auto;
-    padding: 24px 0 40px;
-    border-top: 1px solid var(--border-2);
+    width: 100%;
+    margin: 0;
+    padding: 24px var(--gutter) 40px;
+    background: var(--accent);
+    color: var(--accent-ink);
     opacity: 1 !important;
     pointer-events: auto;
+  }
+
+  .splash .afterword a,
+  .splash .afterword .build code {
+    color: var(--accent-ink);
+    border-bottom-color: color-mix(in srgb, var(--accent-ink) 40%, transparent);
+  }
+
+  .splash .afterword a:hover {
+    border-bottom-color: var(--accent-ink);
   }
 
   .splash .still {
@@ -1187,7 +1234,7 @@
     width: 100%;
     aspect-ratio: var(--still-aspect, 16 / 10);
     border: 1px solid var(--border-2);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
   }
 
   @media (max-width: 900px) {
@@ -1213,6 +1260,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .splash .progress-track .rail-mark,
   .splash .scroll-prompt i,
   .splash .scroll-prompt.is-next,
   .splash .scroll-prompt.is-next svg {

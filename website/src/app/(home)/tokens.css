@@ -1,11 +1,15 @@
-/* The splash page tokens and base rules. The page is a night surface in both
-   color schemes, and it uses the console tokens from DESIGN.md. Every rule is
-   scoped under `.splash`, because these sheets load on one route and the docs
-   keep the Fumadocs themes. The fonts are the console fonts;
-   scripts/copy-assets.mjs copies them into public/fonts/.
+/* The splash page tokens and base rules: the Nimbus role tokens, the same
+   sheet its site and console ship, scoped under `.splash` because these
+   sheets load on one route and the docs keep the Fumadocs themes. The splash
+   is a night surface in both colour schemes, like the Nimbus hero, so only
+   the dark block of that sheet is here; the light block has no ground to sit
+   on until a splash surface is light. The values are the Nimbus dark values
+   exactly, so a change to one sheet belongs in the other. The fonts are the
+   console fonts; scripts/copy-assets.mjs copies them into public/fonts/.
 
    hero.css styles the hero above the journey, and journey.css styles the
-   sticky stage and its storyboard fallback. */
+   sticky stage and its storyboard fallback. The mascot's colour and motion
+   are page-wide, in app/global.css, so the mark is one sticker everywhere. */
 
 @font-face {
   font-family: 'Geist';
@@ -67,34 +71,71 @@
   background: #0a0b0c;
 }
 
+/* ---- Role tokens: dark ---- */
 .splash {
-  --canvas: #0a0b0c;
-  --panel: #101112;
-  --raised: #18191b;
-  --hover: #1f2124;
+  --bg-canvas: #0a0b0c;
+  --bg-panel: #101112;
+  --bg-raised: #18191b;
+  --bg-hover: #1f2124;
+
   --border-1: rgba(255, 255, 255, 0.05);
   --border-2: rgba(255, 255, 255, 0.08);
   --border-3: rgba(255, 255, 255, 0.12);
   /* An outline control needs more contrast than a hairline, so it uses this
-     stronger neutral. */
+     stronger neutral. Not in the Nimbus sheet, which mixes its ink at 28 to
+     35% for the same job. */
   --border-control: rgba(255, 255, 255, 0.26);
+
   --text-1: #f6f7f8;
   --text-2: #c9ced6;
   --text-3: #8b909a;
+  --text-4: #62666d;
+
+  /* The gold. One literal, and the only accent hue in the sheet. An accent
+     mark with area pairs it with `--accent-ink` as carrier or keyline. */
   --accent: #f0b23e;
   --accent-hover: #f6c35c;
   --accent-ink: #1a1204;
-  --sans: 'Geist', system-ui, 'Segoe UI', sans-serif;
-  --mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* Whichever member of the pair the ground can show, for the marks with no
+     area to hold both: a 1px rule, a counter, a label, a prose link. Never a
+     third colour, always `--accent` or `--accent-ink` exactly. On the night
+     grounds the gold clears the text floor at 10.45:1, so here it is the
+     gold itself. */
+  --accent-text: #f0b23e;
+
+  --success: #4ade80;
+  --warning: #fb923c;
+  --error: #f87171;
+  --error-ink: #1f0a0a;
+  --success-ink: #06210f;
+  --info: #60a5fa;
+  --success-tint: rgba(74, 222, 128, 0.14);
+  --warning-tint: rgba(251, 146, 60, 0.14);
+  --error-tint: rgba(248, 113, 113, 0.14);
+  --info-tint: rgba(96, 165, 250, 0.14);
+  --accent-tint: rgba(240, 178, 62, 0.14);
+
+  --font-sans: 'Geist', system-ui, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --ease-standard: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
   --gutter: 28px;
   --width: min(calc(100% - 2 * var(--gutter)), 1440px);
 
   position: relative;
   flex: 1;
   min-height: 100svh;
-  background: var(--canvas);
+  background: var(--bg-canvas);
   color: var(--text-1);
-  font-family: var(--sans);
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -104,6 +145,11 @@
   overflow-x: clip;
 }
 
+.splash ::selection {
+  background-color: var(--accent-tint);
+}
+
+/* The stage ground is one night, so the ring is the accent outright. */
 .splash :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -119,15 +165,15 @@
 
 .splash code,
 .splash pre {
-  font-family: var(--mono);
+  font-family: var(--font-mono);
 }
 
 /* A machine value in prose: mono on a raised chip. */
 .splash :is(.lede, .beat-body, .hero-tip) code {
   padding: 1px 5px;
   border: 1px solid var(--border-2);
-  border-radius: 4px;
-  background: var(--raised);
+  border-radius: var(--radius-xs);
+  background: var(--bg-raised);
   color: var(--text-1);
   font-size: 0.88em;
 }
@@ -138,16 +184,29 @@
   left: 16px;
   z-index: 30;
   padding: 12px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--accent-ink);
-  font: 600 14px/1 var(--sans);
+  font: 600 14px/1 var(--font-sans);
   text-decoration: none;
   transform: translateY(-200%);
 }
 
 .splash .skip:focus-visible {
   transform: none;
+}
+
+/* ---- The mark ---- */
+
+/* The mascot beside the wordmark, in the hero nav and on the stage. Height
+   only: a fitted mark's box is 104 by 100 rather than 120 by 104, so the
+   width follows the drawing. 32px, the same as the Nimbus brand row: the
+   mascot blinks and winks here, and the eye is a tenth of the mark, so under
+   30 neither registers. */
+.splash .brand-mark {
+  flex: none;
+  height: 32px;
+  width: auto;
 }
 
 /* ---- Code ---- */
@@ -157,7 +216,7 @@
   margin: 0;
   padding: 10px 18px 18px;
   color: var(--text-1);
-  font: 400 12.5px/1.7 var(--mono);
+  font: 400 12.5px/1.7 var(--font-mono);
   letter-spacing: 0;
   white-space: pre;
   overflow-x: auto;

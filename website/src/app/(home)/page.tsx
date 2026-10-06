@@ -1,11 +1,12 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { preload } from 'react-dom';
 
 import { HeroScene, HeroScroll } from '@/components/journey/hero-scene';
 import { Journey, SkipToEnd } from '@/components/journey/journey';
+import { Mascot } from '@/components/mascot';
 import { Inline } from '@/components/splash/inline';
 import { InstallTabs } from '@/components/splash/install-tabs';
+import { BookIcon, GitHubIcon } from '@/components/splash/nav-icons';
 import { GITHUB_URL } from '@/lib/layout.shared';
 import { HEADLINE, INSTALL_METHODS, lede, posterSize, siteBuild } from '@/lib/splash';
 
@@ -23,13 +24,17 @@ export default function HomePage() {
       <SkipToEnd />
       <header className="nav">
         <Link href="/" className="brand">
-          {/* The mark is decoration beside the name, so it has empty alt text. */}
-          <Image src="/favicon.svg" alt="" width={26} height={26} />
+          {/* The mark is decoration beside the name, so it carries no title. */}
+          <Mascot className="brand-mark" />
           <span>Starport</span>
         </Link>
         <nav aria-label="Site">
-          <Link href="/docs">Docs</Link>
+          <Link href="/docs">
+            <BookIcon className="nav-icon" />
+            Docs
+          </Link>
           <a href={GITHUB_URL} className="nav-github">
+            <GitHubIcon className="nav-icon" />
             GitHub
           </a>
           <Link href="/docs/start" className="run">

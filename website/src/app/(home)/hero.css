@@ -18,10 +18,10 @@
 .splash .nav .brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: 44px;
   color: var(--text-1);
-  font: 600 16px/1 var(--sans);
+  font: 600 15px/1 var(--font-sans);
   letter-spacing: -0.01em;
   text-decoration: none;
 }
@@ -35,10 +35,11 @@
 .splash .nav nav a {
   display: inline-flex;
   align-items: center;
+  gap: 7px;
   min-height: 44px;
   padding: 0 12px;
   color: var(--text-3);
-  font: 500 11px/1 var(--mono);
+  font: 500 11px/1 var(--font-mono);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   text-decoration: none;
@@ -49,20 +50,37 @@
   color: var(--text-1);
 }
 
-/* The run link is a pill, but an outline one: the hero has the one accent
-   fill of the screen. */
+/* The docs and GitHub links lead with their marks, sized to the cap height
+   of the label beside them. */
+.splash .nav-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  opacity: 0.85;
+  transition: opacity 160ms linear;
+}
+
+.splash .nav nav a:hover .nav-icon {
+  opacity: 1;
+}
+
+/* The run link is the ink pill: the hero keeps the one accent fill of the
+   screen for the primary action. */
 .splash .nav nav a.run {
   margin-left: 8px;
   padding: 0 16px;
-  border: 1px solid var(--border-control);
   border-radius: 999px;
-  color: var(--text-1);
+  background: var(--text-1);
+  color: var(--bg-canvas);
+  font-weight: 600;
+  letter-spacing: 0.12em;
   white-space: nowrap;
-  transition: border-color 160ms linear;
+  transition: background-color 160ms linear;
 }
 
 .splash .nav nav a.run:hover {
-  border-color: var(--text-1);
+  background: var(--text-2);
+  color: var(--bg-canvas);
 }
 
 /* ---- Hero: copy beside the scene, the scroll prompt under both ---- */
@@ -133,7 +151,7 @@
   border: 1px solid var(--border-control);
   border-radius: 999px;
   color: var(--text-1);
-  font: 600 11.5px/1 var(--mono);
+  font: 600 11.5px/1 var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   text-decoration: none;
@@ -164,7 +182,7 @@
   max-width: 600px;
   border: 1px solid var(--border-2);
   border-radius: 10px;
-  background: var(--panel);
+  background: var(--bg-panel);
   overflow: hidden;
 }
 
@@ -186,7 +204,7 @@
 
 .splash .install-tabs button,
 .splash .install-copy {
-  font: 500 10.5px/1 var(--mono);
+  font: 500 10.5px/1 var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -240,7 +258,7 @@
   min-width: 7ch;
   padding: 7px 10px;
   border: 1px solid var(--border-2);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   text-align: center;
   transition:
     color 160ms linear,
@@ -256,7 +274,7 @@
   margin: 0;
   padding: 14px 18px 0;
   color: var(--text-3);
-  font: 500 10px/1.2 var(--mono);
+  font: 500 10px/1.2 var(--font-mono);
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -292,10 +310,10 @@
   position: absolute;
   box-sizing: border-box;
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
   pointer-events: none;
-  animation: hero-part-in 140ms ease-out;
+  animation: hero-part-in 140ms var(--ease-standard);
 }
 
 .splash .hero-tip {
@@ -303,19 +321,19 @@
   z-index: 1;
   width: 264px;
   padding: 12px 14px 13px;
-  border: 1px solid var(--border-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   border-radius: 10px;
-  background: var(--raised);
+  background: var(--bg-raised);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   pointer-events: none;
-  animation: hero-part-in 140ms ease-out;
+  animation: hero-part-in 140ms var(--ease-standard);
 }
 
 .splash .hero-tip strong {
   display: block;
   margin-bottom: 6px;
-  color: var(--text-1);
-  font: 600 10.5px/1 var(--mono);
+  color: var(--accent-text);
+  font: 600 10.5px/1 var(--font-mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -340,8 +358,8 @@
 /* ---- Scroll prompt ---- */
 
 /* The prompt is the one control in the hero that moves: a ring that pulses
-   and a chevron that drops through it. It travels to the first chapter. The
-   accent keeps its four jobs, so the ring stays neutral. */
+   on the accent and a chevron in the accent that drops through it. It
+   travels to the first chapter. */
 .splash .hero-scroll {
   justify-self: center;
   display: inline-flex;
@@ -351,7 +369,7 @@
   margin: 0 0 20px;
   padding: 8px 12px;
   color: var(--text-1);
-  font: 500 11px/1 var(--mono);
+  font: 500 11px/1 var(--font-mono);
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
@@ -373,21 +391,21 @@
   height: 44px;
   border: 1px solid var(--border-control);
   border-radius: 50%;
-  color: var(--text-1);
+  color: var(--accent);
   transition: border-color 160ms linear;
 }
 
 .splash .hero-scroll:hover .hero-scroll-ring {
-  border-color: var(--text-1);
+  border-color: var(--accent);
 }
 
 .splash .hero-scroll-ring::before {
   content: '';
   position: absolute;
   inset: -1px;
-  border: 1px solid var(--text-2);
+  border: 1px solid var(--accent);
   border-radius: 50%;
-  animation: hero-pulse 2.4s ease-out infinite;
+  animation: hero-pulse 2.4s var(--ease-standard) infinite;
 }
 
 .splash .hero-scroll-ring svg {
@@ -528,6 +546,10 @@
   /* The afterword keeps the GitHub link, so the nav drops it on a phone. */
   .splash .nav nav a.nav-github {
     display: none;
+  }
+
+  .splash .brand-mark {
+    height: 28px;
   }
 }
 

@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { type CSSProperties, Fragment, useEffect, useRef, useState } from 'react';
 
+import { Mascot } from '@/components/mascot';
 import { Code, Table } from '@/components/splash/code-block';
 import { Inline } from '@/components/splash/inline';
 import { InstallTabs } from '@/components/splash/install-tabs';
@@ -930,8 +931,11 @@ function Beat({ beat, index, final, poster }: { beat: Chapter; index: number; fi
       style={{ opacity: index === 0 ? 1 : 0, '--still-aspect': stillAspect(beat.id).toFixed(3) } as CSSProperties}
     >
       <p className="beat-eyebrow">
-        <span>{String(index + 1).padStart(2, '0')}</span>
-        {facts.eyebrow}
+        <span>
+          {String(index + 1).padStart(2, '0')}
+          <i aria-hidden="true">·</i>
+          {facts.eyebrow}
+        </span>
         {facts.status ? <em>{facts.status.badge}</em> : null}
       </p>
       <h2 id={`chapter-${beat.id}-title`}>{facts.claim}</h2>
@@ -1032,8 +1036,8 @@ export function Journey({ poster, build }: { poster: Poster; build: { release: s
 
         <header className="nav-shell">
           <button type="button" className="brand" onClick={() => homeRegistry.current()} aria-label="Starport. Back to the top of the page.">
-            {/* The mark is decoration beside the name, so it has empty alt text. */}
-            <Image src="/favicon.svg" alt="" width={22} height={22} />
+            {/* The mark is decoration beside the name, so it carries no title. */}
+            <Mascot className="brand-mark" />
             <span>Starport</span>
           </button>
           <nav className="chapter-nav" aria-label="Chapters">
@@ -1107,7 +1111,10 @@ export function Journey({ poster, build }: { poster: Poster; build: { release: s
               aria-valuetext={chapters[activeChapter].facts.eyebrow}
             >
               <span className="rail-gust" aria-hidden="true">
-                <span className="rail-mark" />
+                {/* The playhead is the mascot, small: at this size the face
+                    needs the heavy line. It leans with the gust and bobs on
+                    the drift; the eyes keep their own blink underneath. */}
+                <Mascot className="rail-mark" small />
               </span>
             </span>
             {/* Where the journey is, as a caption that rides under the

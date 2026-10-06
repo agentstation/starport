@@ -64,7 +64,7 @@ export function setFonts(mono: string, sans: string) {
 // The page declares its families on the `.splash` scope (tokens.css).
 export function resolveFonts(scope: Element) {
   const styles = getComputedStyle(scope);
-  setFonts(styles.getPropertyValue('--mono'), styles.getPropertyValue('--sans'));
+  setFonts(styles.getPropertyValue('--font-mono'), styles.getPropertyValue('--font-sans'));
 }
 
 // A label never renders below the viewport's minimum screen size, whatever

@@ -1,5 +1,8 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { Mascot, type MascotProps, type MascotState } from '../src/components/mascot';
 import {
   type Viewport,
   cameras,
@@ -330,5 +333,86 @@ describe('journey timeline', () => {
     for (let index = 1; index < requestStates.length; index += 1) {
       expect(requestStates[index].at).toBeGreaterThan(requestStates[index - 1].at);
     }
+  });
+});
+
+describe('mascot', () => {
+  const render = (props: MascotProps = {}) => renderToStaticMarkup(createElement(Mascot, props));
+  const parts = (markup: string) => [...markup.matchAll(/data-part="([a-z]+)"/g)].map((m) => m[1]);
+  const viewBox = (markup: string) => /viewBox="([^"]+)"/.exec(markup)?.[1];
+
+  // The fitted box closes in on the body; the reserved one keeps the notch
+  // the accessories draw in. Both numbers are the contract the favicon and
+  // the brand slot size against.
+  const FITTED = '8 2 104 100';
+  const RESERVED = '0 0 120 104';
+
+  it('draws the body and a face in every state, with the accessory its state owns', () => {
+    const expected: Record<MascotState, string[]> = {
+      idle: ['body', 'eyes', 'mouth'],
+      wink: ['body', 'eyes', 'mouth'],
+      working: ['body', 'eyes', 'mouth', 'thinking'],
+      error: ['body', 'eyes', 'mouth', 'drop'],
+      empty: ['body', 'eyes', 'mouth', 'sleep'],
+      celebrate: ['body', 'eyes', 'mouth', 'sparks'],
+    };
+    for (const [state, want] of Object.entries(expected) as [MascotState, string[]][]) {
+      const markup = render({ state });
+      expect(markup).toContain(`data-state="${state}"`);
+      expect(parts(markup)).toEqual(want);
+    }
+  });
+
+  it('colours the body with the mark and the face with its ink', () => {
+    const markup = render();
+    expect(markup).toContain('fill="var(--mark)"');
+    expect(markup).toContain('fill="var(--mark-ink)"');
+  });
+
+  it('blinks and winks at rest, and only blinks while working', () => {
+    const idle = render();
+    expect(idle).toContain('class="mascot-blink"');
+    expect(idle).toContain('class="mascot-wink-open"');
+    expect(idle).toContain('class="mascot-wink-shut"');
+
+    const working = render({ state: 'working' });
+    expect(working).toContain('class="mascot-blink"');
+    expect(working).not.toContain('mascot-wink');
+
+    for (const state of ['wink', 'error', 'empty', 'celebrate'] as const) {
+      expect(render({ state })).not.toContain('mascot-');
+    }
+  });
+
+  it('fits the box to the body for a face-only state', () => {
+    expect(viewBox(render())).toBe(FITTED);
+    expect(viewBox(render({ state: 'wink' }))).toBe(FITTED);
+  });
+
+  it('reserves the accessory room for a state that draws one, or on request', () => {
+    for (const state of ['working', 'error', 'empty', 'celebrate'] as const) {
+      expect(viewBox(render({ state }))).toBe(RESERVED);
+    }
+    expect(viewBox(render({ reserveAccessories: true }))).toBe(RESERVED);
+    expect(viewBox(render({ state: 'wink', reserveAccessories: true }))).toBe(RESERVED);
+  });
+
+  it('is an image when titled and hidden from the tree when not', () => {
+    const titled = render({ title: 'Starport' });
+    expect(titled).toContain('role="img"');
+    expect(titled).toContain('aria-label="Starport"');
+    expect(titled).not.toContain('aria-hidden');
+
+    const plain = render();
+    expect(plain).toContain('aria-hidden="true"');
+    expect(plain).not.toContain('role=');
+    expect(plain).not.toContain('aria-label');
+  });
+
+  it('passes the slot its class and thickens the face when small', () => {
+    const markup = render({ className: 'rail-mark', small: true });
+    expect(markup).toContain('class="rail-mark"');
+    expect(markup).toContain('stroke-width="5.5"');
+    expect(render()).toContain('stroke-width="4"');
   });
 });
