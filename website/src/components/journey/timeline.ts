@@ -152,32 +152,57 @@ export function visibilityWindow(value: number, start: number, end: number, edge
 // period.
 export const COPY_EDGE = 0.0209;
 
-// The ground under the stage. Nimbus moves its page through three grounds:
-// night, daylight paper, and the gold wash of its finale. Each crossing is
-// eased over a short span at the middle of the gap between two chapters,
-// where no copy is on stage. The Client act is night; the paper comes up as
-// the camera pulls back from the listener to the whole route for the
-// credentials, so the ground turns while the world moves. The wash comes up
-// between the storage recipes and the production server, where the story
-// leaves the gateway for the hosts that run it.
+// The ground under the stage. As in Nimbus, the acts alternate, starting
+// light against the night hero: paper for the client, night for the
+// gateway, paper for the request, night for operating it, and the gold wash
+// for deploying it. The stage is paper from its first frame, so the edge
+// between the hero and the stage is the first turn, as Nimbus has it.
+export type Ground = 'night' | 'paper' | 'wash';
+
+export const ACT_GROUNDS: Record<ActId, Ground> = {
+  client: 'paper',
+  gateway: 'night',
+  request: 'paper',
+  operate: 'night',
+  deploy: 'wash',
+};
+
+// Each turn is eased over a short span at the middle of the gap between the
+// last chapter of one act and the first of the next, inside the middle
+// third of the gap, where no copy is on stage.
 const CROSSING = 0.0035;
 
-function crossing(after: string, progress: number) {
-  const index = chapters.findIndex((chapter) => chapter.id === after);
-  if (index < 0 || index === chapters.length - 1) throw new Error(`no gap after chapter ${after}`);
-  const middle = (chapters[index].end + chapters[index + 1].start) / 2;
-  return smoothstep(range(progress, middle - CROSSING / 2, middle + CROSSING / 2));
+export type GroundCrossing = { after: string; from: Ground; to: Ground; middle: number };
+
+export const groundCrossings: GroundCrossing[] = chapters.slice(0, -1).flatMap((chapter, index) => {
+  const next = chapters[index + 1];
+  const from = ACT_GROUNDS[chapter.act];
+  const to = ACT_GROUNDS[next.act];
+  if (from === to) return [];
+  return [{ after: chapter.id, from, to, middle: Number(((chapter.end + next.start) / 2).toFixed(4)) }];
+});
+
+function turn(crossing: GroundCrossing, progress: number) {
+  return smoothstep(range(progress, crossing.middle - CROSSING / 2, crossing.middle + CROSSING / 2));
 }
 
-export const PAPER_AFTER = 'surfaces';
-export const WASH_AFTER = 'storage';
+// How far the ground has turned to `ground`, from the first act's ground
+// through every turn to or from it.
+function mixFor(ground: Ground, progress: number) {
+  let amount = ACT_GROUNDS[chapters[0].act] === ground ? 1 : 0;
+  for (const crossing of groundCrossings) {
+    if (crossing.to === ground) amount += turn(crossing, progress);
+    else if (crossing.from === ground) amount -= turn(crossing, progress);
+  }
+  return clamp(amount);
+}
 
 export function paperMixFor(progress: number) {
-  return crossing(PAPER_AFTER, progress);
+  return mixFor('paper', progress);
 }
 
 export function washMixFor(progress: number) {
-  return crossing(WASH_AFTER, progress);
+  return mixFor('wash', progress);
 }
 
 // Where chapter travel lands: the point where the chapter's copy is fully on
@@ -254,10 +279,12 @@ export function monotoneCubic(times: number[], values: number[], t: number) {
   return h00 * values[index] + h10 * h * m0 + h01 * values[index + 1] + h11 * h * m1;
 }
 
-// The two places below the host that the last chapters travel to. world.ts
-// draws them; the camera frames them.
-export const FLEET = { x: 1025, y: 1500, replicaY: 1450, storeY: 1730 };
-export const LAPTOP = { x: 1025, y: 2330 };
+// The three places below the host that the last chapters travel to: the
+// production server over its row of hosts, the fleet, and the laptop.
+// world.ts draws them; the camera frames them.
+export const SERVER = { x: 1025, y: 1450, hostsY: 2000 };
+export const FLEET = { x: 1025, y: 2750, replicaY: 2700, storeY: 2980 };
+export const LAPTOP = { x: 1025, y: 3580 };
 
 // One composition per chapter and viewport class: the world point the camera
 // frames, its zoom, and the screen anchor. Each chapter holds a keyframe at
@@ -270,10 +297,11 @@ type Pan = { from: number; to: number; dx?: number; dy?: number };
 type Shot = { x: number; y: number; zoom: number; anchorX: number; anchorY: number; dx?: number; dz?: number; pan?: Pan };
 
 // Wide (1440×900 composition): the copy sits in a left or right column and
-// the world takes the other side. The credentials, first-request and server
+// the world takes the other side. The credentials and first-request
 // chapters pull back to show the whole route; the others frame one part and
-// its neighbours. The scale-out chapter goes down under the host to the
-// fleet, and the laptop chapter goes down again to the laptop.
+// its neighbours. The server chapter goes down under the host to the machine
+// and its row of hosts, the scale-out chapter goes down again to the fleet,
+// and the laptop chapter goes down to the laptop.
 const wideShots: Record<string, Shot> = {
   sdk: { x: 240, y: 0, zoom: 1, anchorX: 0.68, anchorY: 0.5, dx: 20 },
   surfaces: { x: 330, y: 0, zoom: 0.9, anchorX: 0.32, anchorY: 0.5, dx: 20 },
@@ -283,7 +311,7 @@ const wideShots: Record<string, Shot> = {
   console: { x: 590, y: -380, zoom: 0.76, anchorX: 0.32, anchorY: 0.5, dx: 20 },
   enterprise: { x: 880, y: -150, zoom: 0.9, anchorX: 0.68, anchorY: 0.5, dx: 20 },
   storage: { x: 1000, y: 620, zoom: 0.8, anchorX: 0.32, anchorY: 0.5, dx: 20 },
-  server: { x: 1025, y: 60, zoom: 0.32, anchorX: 0.69, anchorY: 0.45, dz: 0.01 },
+  server: { x: SERVER.x, y: SERVER.y + 185, zoom: 0.62, anchorX: 0.68, anchorY: 0.5, dz: 0.02 },
   'scale-out': { x: FLEET.x, y: FLEET.y, zoom: 0.6, anchorX: 0.32, anchorY: 0.5, dx: 20 },
   laptop: { x: LAPTOP.x, y: LAPTOP.y, zoom: 0.78, anchorX: 0.68, anchorY: 0.5, dz: 0.02 },
 };
@@ -299,7 +327,7 @@ const mediumShots: Record<string, Shot> = {
   console: { x: 590, y: -380, zoom: 0.56, anchorX: 0.27, anchorY: 0.56 },
   enterprise: { x: 880, y: -150, zoom: 0.6, anchorX: 0.73, anchorY: 0.56 },
   storage: { x: 1000, y: 620, zoom: 0.5, anchorX: 0.27, anchorY: 0.56 },
-  server: { x: 1025, y: 60, zoom: 0.22, anchorX: 0.73, anchorY: 0.5 },
+  server: { x: SERVER.x, y: SERVER.y + 185, zoom: 0.5, anchorX: 0.73, anchorY: 0.5 },
   'scale-out': { x: FLEET.x, y: FLEET.y, zoom: 0.4, anchorX: 0.27, anchorY: 0.56 },
   laptop: { x: LAPTOP.x, y: LAPTOP.y, zoom: 0.52, anchorX: 0.73, anchorY: 0.56 },
 };
@@ -310,9 +338,9 @@ const mediumShots: Record<string, Shot> = {
 // holds only the parts its chapter names: the key check, the catalog and the
 // planning for the credentials; the catalog pipeline; the providers and then
 // the stream home for the first request; one card for the console and the
-// controls; the durable state and the host row for the server; the balancer
-// and the replicas, then the shared stores, for the scale-out. The laptop
-// chapter's copy owns the phone stage (world.ts).
+// controls; the durable state; the machine, then its row of hosts, for the
+// server; the balancer and the replicas, then the shared stores, for the
+// scale-out. The laptop chapter's copy owns the phone stage (world.ts).
 const compactShots: Record<string, Shot> = {
   sdk: { x: 240, y: 0, zoom: 0.45, anchorX: 0.5, anchorY: 0.78 },
   surfaces: { x: 400, y: 0, zoom: 0.45, anchorX: 0.5, anchorY: 0.78 },
@@ -324,7 +352,16 @@ const compactShots: Record<string, Shot> = {
   console: { x: 590, y: -560, zoom: 0.62, anchorX: 0.5, anchorY: 0.76 },
   enterprise: { x: 880, y: -230, zoom: 0.85, anchorX: 0.5, anchorY: 0.76 },
   storage: { x: 1000, y: 640, zoom: 0.4, anchorX: 0.5, anchorY: 0.8 },
-  server: { x: 1000, y: 690, zoom: 0.38, anchorX: 0.5, anchorY: 0.78 },
+  // The frame holds the machine while the request comes in, then moves down
+  // until the hosts it can run on are in frame under it.
+  server: {
+    x: SERVER.x,
+    y: SERVER.y,
+    zoom: 0.38,
+    anchorX: 0.5,
+    anchorY: 0.78,
+    pan: { from: 0.35, to: 0.6, dy: SERVER.hostsY - 140 - SERVER.y },
+  },
   // The frame holds the balancer and the replicas while the request goes in,
   // then moves down to the stores they share.
   'scale-out': {

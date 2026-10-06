@@ -4,15 +4,17 @@
 // route to a provider, and streams back to the app as server-sent events.
 // Beside the route sit the catalog source, the durable state, the console,
 // the enterprise controls, and the host that runs the one binary. Under the
-// host sit the two other places Starport runs: a fleet of replicas behind one
-// load balancer, and a laptop with one process. Every part is drawn from
+// host sit the three places Starport runs: one production server over a row
+// of the hosts it can run on, a fleet of replicas behind one load balancer,
+// and a laptop with one process. Every part is drawn from
 // `progress` (0..1), so the scrolling stage, the static storyboard, and the
 // hero still share one source of truth.
 
-import { CHAPTERS, WORLD_LABELS, WORLD_PARTS, WORLD_PROVIDERS, type WorldPartId } from '@/lib/splash-facts';
+import { CHAPTERS, HOSTING, type HostGlyph, WORLD_LABELS, WORLD_PARTS, WORLD_PROVIDERS, type WorldPartId } from '@/lib/splash-facts';
 import {
   FLEET,
   LAPTOP,
+  SERVER,
   type Viewport,
   chapterIndexFor,
   chapters,
@@ -95,18 +97,28 @@ const streamPath = [
 const CHUNK_XS = [1700, 1380, 1060];
 const LAST_CHUNK_X = 700;
 
-// The fleet under the host: the clients above one load balancer, three
+// The production server under the host: one machine, a rack unit with its
+// ears, that holds the one Starport process over its three durable volumes.
+// Under it, the row of hosts it can run on. The machine is narrow enough
+// that a phone frames it whole at a legible zoom.
+const MACHINE = { x: SERVER.x, y: SERVER.y, w: 840, h: 580, ear: 36, head: 64 };
+const MACHINE_PROCESS = { x: SERVER.x, y: SERVER.y - 105, w: 760, h: 150 };
+const VOLUME = { xs: [SERVER.x - 240, SERVER.x, SERVER.x + 240], y: SERVER.y + 90, w: 200, h: 140 };
+const HOST_TILE = { y: SERVER.hostsY, w: 210, h: 150, step: 236 };
+const hostX = (index: number) => SERVER.x + (index - (HOSTING.hosts.length - 1) / 2) * HOST_TILE.step;
+
+// The fleet under the server: the clients above one load balancer, three
 // replicas under it, and the shared stores under the replicas, all inside
 // one region. The request goes to the middle replica; the left one holds the
 // refresh lease.
-const CLIENTS_Y = 1080;
-const BALANCER = { x: FLEET.x, y: 1230, w: 360, h: 92 };
+const CLIENTS_Y = FLEET.y - 420;
+const BALANCER = { x: FLEET.x, y: FLEET.y - 270, w: 360, h: 92 };
 const REPLICA = { xs: [FLEET.x - 360, FLEET.x, FLEET.x + 360], y: FLEET.replicaY, w: 300, h: 150 };
 const LEASE_REPLICA = 0;
 const REQUEST_REPLICA = 1;
-const BUS_Y = 1600;
+const BUS_Y = FLEET.y + 100;
 const STORE = { y: FLEET.storeY, w: 170, h: 150 };
-const REGION = { x0: FLEET.x - 530, x1: FLEET.x + 530, y0: 1140, y1: 1850 };
+const REGION = { x0: FLEET.x - 530, x1: FLEET.x + 530, y0: FLEET.y - 360, y1: FLEET.y + 350 };
 
 // The laptop under the fleet: a screen with one Starport process on it, over
 // the base. The screen is night on every ground, like the code blocks.
@@ -131,6 +143,7 @@ const REST = {
   state: { x: STATE.x, y: top(STATE) },
   console: { x: CONSOLE.x, y: -480 },
   controls: { x: CONTROLS.x, y: -150 },
+  server: { x: MACHINE_PROCESS.x, y: top(MACHINE_PROCESS) },
   replica: { x: REPLICA.xs[REQUEST_REPLICA], y: REPLICA.y - REPLICA.h / 2 },
   process: { x: PROCESS.x, y: PROCESS.y - PROCESS.h / 2 },
 };
@@ -156,7 +169,7 @@ function share(id: string, offset: number) {
 
 // The parts each chapter is about. The other parts on stage step back so
 // the chapter's diagram reads on its own.
-type Key = WorldPartId | 'source' | 'binary' | 'fleet' | 'laptop';
+type Key = WorldPartId | 'source' | 'binary' | 'machine' | 'fleet' | 'laptop';
 const FOCUS: Record<string, Key[]> = {
   sdk: ['app', 'listener'],
   surfaces: ['app', 'listener', 'binary'],
@@ -166,7 +179,8 @@ const FOCUS: Record<string, Key[]> = {
   console: ['console', 'listener'],
   enterprise: ['controls', 'keys', 'binary'],
   storage: ['state', 'binary'],
-  server: ['app', 'listener', 'keys', 'catalog', 'planning', 'providers', 'stream', 'state', 'console', 'controls', 'source', 'host', 'binary'],
+  // The hero draws the server stop, so the route on the host stays lit here.
+  server: ['app', 'listener', 'keys', 'catalog', 'planning', 'providers', 'stream', 'state', 'console', 'controls', 'source', 'host', 'binary', 'machine'],
   'scale-out': ['fleet'],
   laptop: ['laptop'],
 };
@@ -181,6 +195,7 @@ const INTRO: Partial<Record<Key, string>> = {
   controls: 'enterprise',
   state: 'storage',
   host: 'server',
+  machine: 'server',
   fleet: 'scale-out',
   laptop: 'laptop',
 };
@@ -607,6 +622,136 @@ function drawState(world: World) {
   scene.text(WORLD_LABELS.cacheNote, left(STATE) + 44, cacheY + 21, palette.muted, detail);
 }
 
+// The production server: one rack unit, with its ears, a header that names
+// it, and a lamp that breathes while it runs. Inside it the one Starport
+// process writes to its three durable volumes, drawn solid because they
+// outlive the container. Under it, the row of hosts it can run on: a neutral
+// tile per host, with our own outline glyph and the host's name in our type.
+function drawServer(world: World) {
+  const { scene } = world;
+  const alpha = alphaOf(world, 'machine');
+  if (alpha <= 0.01 || !scene.inView(left(MACHINE) - MACHINE.ear, right(MACHINE) + MACHINE.ear, 120, top(MACHINE), HOST_TILE.y + 200)) return;
+  const { ctx, palette } = scene;
+  const here = weightOf(world, 'server');
+
+  // The chassis and its ears, in the ground's ink.
+  for (const side of [-1, 1]) {
+    const x = side < 0 ? left(MACHINE) - MACHINE.ear : right(MACHINE);
+    scene.roundRect(x, top(MACHINE) + 10, MACHINE.ear, MACHINE.h - 20, 6);
+    ctx.fillStyle = rgba(mixRgb(palette.background, palette.ink, 0.1), alpha);
+    ctx.fill();
+    ctx.lineWidth = scene.px(1);
+    ctx.strokeStyle = rgba(palette.ink, alpha * 0.35);
+    ctx.stroke();
+    for (const y of [top(MACHINE) + 50, bottom(MACHINE) - 50]) {
+      ctx.beginPath();
+      ctx.arc(x + MACHINE.ear / 2, y, 7, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  scene.roundRect(left(MACHINE), top(MACHINE), MACHINE.w, MACHINE.h, 14);
+  ctx.fillStyle = rgba(mixRgb(palette.background, palette.ink, 0.04), alpha);
+  ctx.fill();
+  ctx.lineWidth = scene.px(1.2);
+  ctx.strokeStyle = rgba(palette.ink, alpha * 0.45);
+  ctx.stroke();
+
+  // The header: the name, the vent, and the lamp.
+  const headY = top(MACHINE) + MACHINE.head / 2;
+  scene.sans(13, 600);
+  scene.text(WORLD_LABELS.server, left(MACHINE) + 28, headY, palette.ink, alpha * scene.far);
+  for (let index = 0; index < 6; index += 1) {
+    const x = right(MACHINE) - 96 - index * 16;
+    scene.line(x, headY - 12, x, headY + 12, palette.ink, alpha * 0.25, 1.4);
+  }
+  ctx.beginPath();
+  ctx.arc(right(MACHINE) - 44, headY, 8, 0, Math.PI * 2);
+  ctx.fillStyle = rgba(palette.accentText, alpha * (0.55 + here * 0.3 + scene.breath(0.8) * 0.15));
+  ctx.fill();
+  scene.line(left(MACHINE), top(MACHINE) + MACHINE.head, right(MACHINE), top(MACHINE) + MACHINE.head, palette.ink, alpha * 0.12);
+
+  // The process and its lanes to the volumes.
+  VOLUME.xs.forEach((x, index) => {
+    const y1 = VOLUME.y - VOLUME.h / 2;
+    scene.line(x, bottom(MACHINE_PROCESS), x, y1, palette.muted, alpha * 0.5);
+    scene.lineTraffic(x, bottom(MACHINE_PROCESS), x, y1, palette.ink, alpha * 0.45, { count: 1, speed: 1.4, phase: index * 0.31 });
+  });
+  scene.panel(MACHINE_PROCESS.x, MACHINE_PROCESS.y, MACHINE_PROCESS.w, MACHINE_PROCESS.h, alpha, 0.2 + here * 0.4, palette.accent);
+  // The request rests on the panel's top edge, so the title starts under the
+  // mark, and the chip stays under the title when the floor lifts the type.
+  const titleHalf = scene.fontSize(13) / 2;
+  const titleY = top(MACHINE_PROCESS) + Math.max(30, scene.px(12) + titleHalf);
+  if (titleFits(scene, WORLD_LABELS.process, MACHINE_PROCESS.w - 40)) {
+    scene.text(WORLD_LABELS.process, left(MACHINE_PROCESS) + 20, titleY, palette.ink, alpha * scene.far);
+  }
+  const chipY = Math.max(bottom(MACHINE_PROCESS) - Math.max(34, scene.px(24)), titleY + titleHalf + scene.px(15));
+  scene.chip(WORLD_LABELS.gateway, left(MACHINE_PROCESS) + 20, chipY, alpha * scene.far, 0.3, palette.ink);
+
+  // The durable volumes.
+  WORLD_LABELS.volumes.forEach((name, index) => {
+    const x = VOLUME.xs[index];
+    scene.cylinder(x, VOLUME.y, VOLUME.w, VOLUME.h, alpha, 0.3);
+    if (titleFits(scene, name, VOLUME.w - 24)) scene.text(name, x, scene.cylinderBodyTop(VOLUME.y, VOLUME.w, VOLUME.h) + 30, palette.ink, alpha * scene.far, 'center');
+  });
+  const volumesY = VOLUME.y + VOLUME.h / 2 + Math.max(36, scene.px(22));
+  scene.chip(WORLD_LABELS.volumesNote, SERVER.x, volumesY, alpha * scene.far, 0.3, palette.ink, 'center');
+
+  // The row of hosts, under a caption that says what they are, and a dashed
+  // lane that drops from the machine to the caption.
+  const rowTop = HOST_TILE.y - HOST_TILE.h / 2;
+  const captionY = rowTop - Math.max(40, scene.px(28));
+  scene.line(SERVER.x, bottom(MACHINE), SERVER.x, captionY - Math.max(20, scene.px(14)), palette.ink, alpha * 0.35, 1, [4, 4]);
+  scene.sans(12, 500);
+  scene.text(HOSTING.caption, SERVER.x, captionY, palette.muted, alpha * scene.far, 'center');
+  HOSTING.hosts.forEach((host, index) => {
+    const x = hostX(index);
+    scene.panel(x, HOST_TILE.y, HOST_TILE.w, HOST_TILE.h, alpha, 0.15);
+    hostGlyph(scene, host.glyph, x, HOST_TILE.y - 24, alpha);
+    if (titleFits(scene, host.name, HOST_TILE.w - 24)) scene.text(host.name, x, HOST_TILE.y + 40, palette.ink, alpha * scene.far, 'center');
+  });
+  // The restricted case under the on-premises tile, flush with the row's
+  // right edge so that a phone frame keeps it.
+  HOSTING.hosts.forEach((host, index) => {
+    if (!host.note) return;
+    const y = HOST_TILE.y + HOST_TILE.h / 2 + Math.max(30, scene.px(22));
+    scene.chip(host.note, hostX(index) + HOST_TILE.w / 2, y, alpha * scene.far, 0.3, palette.ink, 'right');
+  });
+}
+
+// A host glyph of our own, in the ground's ink: a cloud outline for a cloud
+// host and a rack outline for one on the premises. Never a brand mark.
+function hostGlyph(scene: Scene, glyph: HostGlyph, x: number, y: number, alpha: number) {
+  const { ctx, palette } = scene;
+  if (glyph === 'cloud') {
+    // Three lobes over a flat floor.
+    ctx.beginPath();
+    ctx.arc(x - 24, y + 2, 14, Math.PI * 0.5, Math.PI * 1.6);
+    ctx.arc(x, y - 6, 20, Math.PI * 1.05, Math.PI * 1.95);
+    ctx.arc(x + 22, y + 4, 12, Math.PI * 1.4, Math.PI * 0.5);
+    ctx.closePath();
+  } else {
+    // A rack frame with three units.
+    scene.roundRect(x - 30, y - 24, 60, 48, 5);
+    for (const row of [-8, 8]) {
+      ctx.moveTo(x - 30, y + row);
+      ctx.lineTo(x + 30, y + row);
+    }
+  }
+  ctx.lineWidth = scene.px(1.4);
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = rgba(palette.ink, alpha * 0.7);
+  ctx.stroke();
+  if (glyph === 'rack') {
+    // The lamp of each unit.
+    ctx.fillStyle = rgba(palette.ink, alpha * 0.7);
+    for (const row of [-16, 0, 16]) {
+      ctx.beginPath();
+      ctx.arc(x + 20, y + row, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
 // The fleet: the clients reach one load balancer, the balancer sends the
 // request to one replica, and every replica reads and writes the same shared
 // stores. The lease replica owns provider acquisition; the others follow the
@@ -796,7 +941,7 @@ function routePoints(): RoutePoint[] {
     ...hold(REST.console, 'console'),
     ...hold(REST.controls, 'enterprise'),
     ...hold(REST.state, 'storage'),
-    ...hold(REST.door, 'server'),
+    ...hold(REST.server, 'server'),
     // The fleet: from the clients, through the balancer, into one replica.
     { x: BALANCER.x, y: CLIENTS_Y + 30, at: start('scale-out') },
     { x: BALANCER.x, y: top(BALANCER), at: share('scale-out', 0.15) },
@@ -832,8 +977,9 @@ const SPOTS: Spot[] = [
   { id: 'console', sx: 16, align: 'left' },
   { id: 'enterprise', sx: 16, align: 'left' },
   { id: 'storage', sx: 16, sy: -28, align: 'left' },
-  // The server chapter frames the whole host; the status rail carries the
-  // state there, and the hero still shows the request alone.
+  // The request sits on the machine's process, under the header, and the
+  // status rail carries the state there. The hero still shows the request
+  // alone.
   { id: 'server', align: 'center', hide: true },
   { id: 'scale-out', from: 0.4, sx: 16, sy: -28, align: 'left' },
   { id: 'laptop', sx: 16, sy: -28, align: 'left' },
@@ -933,8 +1079,8 @@ const STILLS: Record<string, Box> = {
   console: { x: 600, y: -390, w: 760, h: 800 },
   enterprise: { x: 900, y: -130, w: 800, h: 580 },
   storage: { x: 1000, y: 600, w: 1000, h: 540 },
-  server: { x: 1025, y: 60, w: 2460, h: 1780 },
-  'scale-out': { x: FLEET.x, y: 1475, w: 1260, h: 880 },
+  server: { x: SERVER.x, y: SERVER.y + 185, w: 1080, h: 1060 },
+  'scale-out': { x: FLEET.x, y: FLEET.y - 25, w: 1260, h: 880 },
   laptop: { x: LAPTOP.x, y: LAPTOP.y, w: 900, h: 640 },
 };
 
@@ -995,7 +1141,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, options: FrameOptions) 
     camera.zoom *= room;
     camera.anchorY += (1 - room) * 0.08;
   }
-  const palette = paletteFor(options.ground ?? progress);
+  const palette = options.ground ?? paletteFor(progress);
 
   drawBackdrop(ctx, options, camera, palette);
 
@@ -1014,6 +1160,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, options: FrameOptions) 
   drawSource(world);
   drawConsole(world);
   drawState(world);
+  drawServer(world);
   drawStream(world);
   drawListener(world);
   drawApp(world);

@@ -44,9 +44,9 @@ export type FrameOptions = {
   // A frame composed by its caller: the splash names its own camera, and the
   // stage fitting that follows the chapter keyframes is skipped.
   camera?: Partial<Camera>;
-  // The progress the ground is read at, when it is not the frame's own: the
-  // hero still frames the server chapter on the night ground of the hero.
-  ground?: number;
+  // The ground, when it is not the frame's own: the hero still frames the
+  // server chapter on the night ground of the hero.
+  ground?: Palette;
 };
 
 // The palette stops: the Starport role tokens, read off the ground scopes in
@@ -86,10 +86,10 @@ const STOPS: PaletteStops = {
   accentTextPaper: [26, 18, 4], // --accent-ink, #1a1204
 };
 
-// The night stop, for a surface that stays night on every ground: the
-// laptop screen in the last chapter.
+// The night ground, for a surface that stays night on every ground: the hero
+// and the laptop screen in the last chapter.
 export function night(): Palette {
-  return paletteFor(0);
+  return paletteOf(0, 0);
 }
 
 // Canvas fonts cannot read CSS variables; the page resolves the loaded
@@ -154,8 +154,10 @@ export function rgba(color: Rgb, alpha: number) {
 }
 
 export function paletteFor(progress: number): Palette {
-  const paperMix = paperMixFor(progress);
-  const washMix = washMixFor(progress);
+  return paletteOf(paperMixFor(progress), washMixFor(progress));
+}
+
+function paletteOf(paperMix: number, washMix: number): Palette {
   const background = mixRgb(mixRgb(STOPS.night, STOPS.paper, paperMix), STOPS.wash, washMix);
   // The ink swaps in one step as the background passes its midpoint, so the
   // two never meet at the same grey and the frame keeps its contrast through

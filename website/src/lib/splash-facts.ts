@@ -186,7 +186,10 @@ export const REQUEST_STATES = {
 };
 
 // The labels that the world draws beside its parts: the catalog source, the
-// credential on each lane, the stream back, the fleet, and the laptop.
+// credential on each lane, the stream back, the server, the fleet, and the
+// laptop. The server holds the one process of the README Compose file and
+// its three named volumes: the T2 storage recipe on durable volumes, and one
+// active gateway (targets.md T3).
 export const WORLD_LABELS = {
   binary: 'Starport · one binary',
   source: 'Catalog source',
@@ -197,6 +200,10 @@ export const WORLD_LABELS = {
   stream: 'Server-sent events',
   chunk: '`data:`',
   last: '`data: [DONE]`',
+  server: 'Your server',
+  gateway: 'One active gateway',
+  volumes: ['Badger', 'SQLite', 'Files'],
+  volumesNote: 'Three named volumes',
   clients: 'Clients',
   balancer: 'Load balancer',
   replicas: ['Starport 1', 'Starport 2', 'Starport N'],
@@ -208,6 +215,28 @@ export const WORLD_LABELS = {
   dev: '`starport dev`',
   process: 'Starport · one process',
   memory: ['In-memory Badger', 'In-memory SQLite'],
+};
+
+// The hosts under the production server: examples of the host you own, not
+// qualified targets. The README Compose block runs on any of them, and the
+// docs name no tested cloud. On-premises also covers the restricted or
+// air-gapped installation of targets.md T6, where no host inside the
+// boundary reaches GitHub. Each name is plain text in our own type, and each
+// glyph is our own outline, a cloud or a rack, never a brand mark.
+export type HostGlyph = 'cloud' | 'rack';
+export const HOSTING: {
+  caption: string;
+  hosts: { name: string; glyph: HostGlyph; note?: string }[];
+  sources: string[];
+} = {
+  caption: 'One Compose file on the host you own: a cloud VM or your own rack.',
+  hosts: [
+    { name: 'AWS', glyph: 'cloud' },
+    { name: 'Google Cloud', glyph: 'cloud' },
+    { name: 'Azure', glyph: 'cloud' },
+    { name: 'On-premises', glyph: 'rack', note: 'Restricted or air-gapped' },
+  ],
+  sources: [README, 'docs/site/architecture/targets.md'],
 };
 
 // The repository files that the world parts and the request states restate.

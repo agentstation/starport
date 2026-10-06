@@ -6,6 +6,7 @@ import { Inline } from '@/components/splash/inline';
 import { WORLD_PARTS, type WorldPartId } from '@/lib/splash-facts';
 
 import { travelTo } from './journey';
+import { night } from './scene';
 import { type Viewport, chapterStop, chapters } from './timeline';
 import { type Part, drawFrame, parts, resolveFonts } from './world';
 
@@ -97,7 +98,7 @@ function mountScene(canvas: HTMLCanvasElement) {
       viewport,
       ambient: !reduced.matches,
       centered: true,
-      ground: 0,
+      ground: night(),
       camera: { x: frame.x, y: frame.y, zoom, anchorX: 0.5, anchorY: 0.5 },
     });
   };

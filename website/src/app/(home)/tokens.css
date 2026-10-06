@@ -2,13 +2,13 @@
    sheet its site and console ship, scoped under `.splash` because these
    sheets load on one route and the docs keep the Fumadocs themes. The splash
    opens on night in both colour schemes, like the Nimbus hero, and the
-   journey turns its ground to daylight paper and then to the gold wash. The
-   journey names the ground with `data-ground` on the stage, or on a beat of
-   the storyboard, and the token set for that ground applies under it. The
-   night and paper values are the Nimbus dark and light values exactly, so a
-   change to one sheet belongs in the other. A code surface is a terminal, so
-   it keeps the night set on every ground. The fonts are the console fonts;
-   scripts/copy-assets.mjs copies them into public/fonts/.
+   journey alternates daylight paper and night by act, then ends on the gold
+   wash. The journey names the ground with `data-ground` on the stage, or on
+   a beat of the storyboard, and the token set for that ground applies under
+   it. The night and paper values are the Nimbus dark and light values
+   exactly, so a change to one sheet belongs in the other. A code surface is
+   a terminal, so it keeps the night set on every ground. The fonts are the
+   console fonts; scripts/copy-assets.mjs copies them into public/fonts/.
 
    hero.css styles the hero above the journey, and journey.css styles the
    sticky stage and its storyboard fallback. The mascot's colour and motion

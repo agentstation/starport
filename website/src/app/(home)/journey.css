@@ -4,8 +4,9 @@
    the journey. mountJourney in components/journey/journey.tsx writes the
    progress variables below on the stage every frame.
 
-   The stage runs the Nimbus cycle of grounds: night, then daylight paper,
-   then the gold wash for the last act. `paletteFor` in
+   The stage runs the Nimbus cycle of grounds: the acts alternate daylight
+   paper and night under the night hero, and the last act takes the gold
+   wash. `paletteFor` in
    components/journey/scene.ts writes the ground as `--stage-*` every frame,
    so the copy, the nav, the rail, and the scroll hint read `--stage-*` and
    not the role tokens: the ground moves under the type, so the type moves
@@ -15,7 +16,8 @@
    the active state only: the played rail, the playhead, the act fill, and
    the percent. */
 
-/* The rest values are the first frame, night. `mountJourney` overwrites the
+/* The rest values are night, the ground before the script runs. The first
+   frame is paper; `mountJourney` overwrites the
    stage vars on the stage element every frame; the storyboard writes the
    ground of each beat as `--beat-*` on the beat. */
 .splash .journey {

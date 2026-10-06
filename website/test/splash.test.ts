@@ -5,27 +5,29 @@ import { describe, expect, it } from 'vitest';
 import { Journey } from '../src/components/journey/journey';
 import { Mascot, type MascotProps, type MascotState } from '../src/components/mascot';
 import {
+  ACT_GROUNDS,
   COPY_EDGE,
-  PAPER_AFTER,
   type Viewport,
-  WASH_AFTER,
   acts,
   cameras,
   chapterIndexFor,
   chapterRest,
   chapterStop,
   chapters,
+  groundCrossings,
   interpolateCamera,
   monotoneCubic,
   requestStates,
   visibilityWindow,
 } from '../src/components/journey/timeline';
+import { night } from '../src/components/journey/scene';
 import { paletteFor, requestRoute, stillAspect } from '../src/components/journey/world';
 import {
   CHAPTERS,
   type CodeBlock,
   COMPOSE_METHOD,
   HEADLINE,
+  HOSTING,
   INSTALL_METHODS,
   lede,
   PERSISTENT_METHOD,
@@ -88,6 +90,7 @@ const tables = CHAPTERS.flatMap((chapter) =>
 const sources = [
   README,
   ...WORLD_SOURCES,
+  ...HOSTING.sources,
   ...CHAPTERS.flatMap((chapter) => [
     ...chapter.visuals.map((visual) => visual.source),
     ...(chapter.status ? [chapter.status.source] : []),
@@ -105,6 +108,8 @@ const prose = [
   ...WORLD_PROVIDERS,
   ...Object.values(REQUEST_STATES),
   ...Object.values(WORLD_LABELS).flat(),
+  HOSTING.caption,
+  ...HOSTING.hosts.flatMap((host) => [host.name, ...(host.note ? [host.note] : [])]),
   ...CHAPTERS.flatMap((chapter) => [
     chapter.eyebrow,
     chapter.claim,
@@ -245,6 +250,33 @@ describe('splash facts', () => {
     }
   });
 
+  it('draws the production server from the README Compose block and targets.md T3', () => {
+    const targets = readRepoFile('docs/site/architecture/targets.md');
+    const text = readme.replace(/\s+/g, ' ');
+    expect(text).toContain('one Starport process with persistent Badger, SQLite, and file storage');
+    expect(text).toContain('The three named volumes retain configuration, application data, and catalog state');
+    expect(targets).toContain('T3 uses the T2 storage recipe on durable volumes with explicit service paths. It runs one active gateway.');
+    expect(targets).toContain('Badger for records, SQLite for relational data, and a local directory for file bytes');
+    expect(WORLD_LABELS.volumes).toEqual(['Badger', 'SQLite', 'Files']);
+  });
+
+  it('names the hosts as plain text, claims no tested cloud, and sources the restricted case to T6', () => {
+    const targets = readRepoFile('docs/site/architecture/targets.md');
+    expect(HOSTING.sources).toEqual([README, 'docs/site/architecture/targets.md']);
+    expect(HOSTING.hosts.map((host) => host.name)).toEqual(['AWS', 'Google Cloud', 'Azure', 'On-premises']);
+    expect(HOSTING.hosts.map((host) => host.glyph)).toEqual(['cloud', 'cloud', 'cloud', 'rack']);
+    // The README names each cloud, as a secret manager, never as a host.
+    for (const host of HOSTING.hosts.slice(0, 3)) expect(readme, host.name).toContain(host.name);
+    const restricted = HOSTING.hosts.filter((host) => host.note);
+    expect(restricted.map((host) => host.name)).toEqual(['On-premises']);
+    expect(targets).toContain('| T6 | Restricted or air-gapped installation |');
+    expect(restricted[0].note).toBe('Restricted or air-gapped');
+    for (const text of [HOSTING.caption, ...HOSTING.hosts.flatMap((host) => [host.name, host.note ?? ''])]) {
+      expect(text, text).not.toMatch(/\b(tested|supported|certified|qualified|official)\b/i);
+    }
+    expect(CHAPTERS.find((chapter) => chapter.id === 'server')?.status).toMatchObject({ badge: 'Qualification open', target: 'T3 one production server' });
+  });
+
   it('restates the Compose note from README.md', () => {
     expect(readme).toContain('The default Compose file builds one Starport process');
   });
@@ -361,49 +393,73 @@ describe('journey timeline', () => {
     chapters.forEach((chapter, index) => expect(chapterIndexFor(chapterStop(index)), chapter.id).toBe(index));
   });
 
-  it('turns the ground from night to paper to the gold wash', () => {
+  it('alternates paper and night by act and ends on the gold wash', () => {
     const at = (id: string) => chapterStop(chapters.findIndex((chapter) => chapter.id === id));
-    const night = paletteFor(0);
-    expect(night.paperMix).toBe(0);
-    expect(night.washMix).toBe(0);
-    expect(night.background).toEqual([10, 11, 12]);
-    for (const id of ['sdk', 'surfaces']) expect(paletteFor(at(id)).paperMix, id).toBe(0);
-    for (const id of ['credentials', 'catalog', 'first-request', 'console', 'enterprise', 'storage']) {
-      const palette = paletteFor(at(id));
-      expect(palette.paperMix, id).toBe(1);
-      expect(palette.washMix, id).toBe(0);
-      expect(palette.background, id).toEqual([250, 250, 250]);
+    expect(acts.map((act) => ACT_GROUNDS[act.id])).toEqual(['paper', 'night', 'paper', 'night', 'wash']);
+    const paper = [250, 250, 250];
+    const nightGround = [10, 11, 12];
+    const expected: Record<string, number[]> = {
+      sdk: paper,
+      surfaces: paper,
+      credentials: nightGround,
+      catalog: nightGround,
+      'first-request': paper,
+      console: nightGround,
+      enterprise: nightGround,
+      storage: nightGround,
+      server: [240, 178, 62],
+      'scale-out': [240, 178, 62],
+      laptop: [240, 178, 62],
+    };
+    for (const chapter of chapters) {
+      const palette = paletteFor(at(chapter.id));
+      expect(palette.background, chapter.id).toEqual(expected[chapter.id]);
+      // The ink steps with the ground, so no frame reads ink on its own tone.
+      expect(palette.ink, chapter.id).toEqual(
+        palette.washMix === 1 ? [26, 18, 4] : palette.paperMix === 1 ? [24, 24, 27] : [246, 247, 248],
+      );
     }
-    expect(paletteFor(0.45).background).toEqual([250, 250, 250]);
-    for (const id of ['server', 'scale-out', 'laptop']) {
-      const palette = paletteFor(at(id));
-      expect(palette.washMix, id).toBe(1);
-      expect(palette.background, id).toEqual([240, 178, 62]);
-      expect(palette.ink, id).toEqual([26, 18, 4]);
-    }
+    // The stage is paper from its first frame; the hero keeps the night.
+    expect(paletteFor(0).background).toEqual(paper);
     expect(paletteFor(1).background).toEqual([240, 178, 62]);
+    expect(night().background).toEqual(nightGround);
+    expect(night().ink).toEqual([246, 247, 248]);
   });
 
-  it('turns the ground in the gap between two chapters, with no copy on stage', () => {
-    for (const [id, mixOf] of [
-      [PAPER_AFTER, (progress: number) => paletteFor(progress).paperMix],
-      [WASH_AFTER, (progress: number) => paletteFor(progress).washMix],
-    ] as const) {
-      const index = chapters.findIndex((chapter) => chapter.id === id);
+  it('turns the ground once per act gap, mid-gap, with no copy on stage', () => {
+    expect(groundCrossings.map((crossing) => [crossing.after, crossing.from, crossing.to])).toEqual([
+      ['surfaces', 'paper', 'night'],
+      ['catalog', 'night', 'paper'],
+      ['first-request', 'paper', 'night'],
+      ['storage', 'night', 'wash'],
+    ]);
+    const groundOf = (progress: number) => {
+      const palette = paletteFor(progress);
+      return palette.washMix === 1 ? 'wash' : palette.paperMix === 1 ? 'paper' : palette.paperMix === 0 && palette.washMix === 0 ? 'night' : 'turning';
+    };
+    for (const crossing of groundCrossings) {
+      const index = chapters.findIndex((chapter) => chapter.id === crossing.after);
       const before = chapters[index];
       const after = chapters[index + 1];
+      const gap = after.start - before.end;
+      expect(groundOf(before.end), crossing.after).toBe(crossing.from);
+      expect(groundOf(after.start), crossing.after).toBe(crossing.to);
       for (let step = 0; step <= 200; step += 1) {
-        const progress = before.end - COPY_EDGE + ((after.start + COPY_EDGE - before.end + COPY_EDGE) * step) / 200;
-        const turning = mixOf(progress) > 0 && mixOf(progress) < 1;
-        if (!turning) continue;
-        expect(progress, id).toBeGreaterThan(before.end);
-        expect(progress, id).toBeLessThan(after.start);
+        const progress = before.end + (gap * step) / 200;
+        if (groundOf(progress) !== 'turning') continue;
+        // The middle third of the gap.
+        expect(progress, crossing.after).toBeGreaterThanOrEqual(before.end + gap / 3);
+        expect(progress, crossing.after).toBeLessThanOrEqual(after.start - gap / 3);
         for (const chapter of chapters) {
           expect(visibilityWindow(progress, chapter.start, chapter.end, COPY_EDGE), `${chapter.id} at ${progress}`).toBe(0);
         }
       }
-      expect(mixOf(before.end)).toBe(0);
-      expect(mixOf(after.start)).toBe(1);
+    }
+    // Inside a chapter window the ground holds.
+    for (const chapter of chapters) {
+      const grounds = new Set<string>();
+      for (let step = 0; step <= 50; step += 1) grounds.add(groundOf(chapter.start + ((chapter.end - chapter.start) * step) / 50));
+      expect([...grounds], chapter.id).toEqual([ACT_GROUNDS[chapter.act]]);
     }
   });
 
