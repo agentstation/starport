@@ -273,6 +273,103 @@ class ReadmeDemoVerifierTests(unittest.TestCase):
         self.save()
         self.assertEqual(self.failed(), {"invalidation"})
 
+    def test_rehearsal_that_claims_release_cases_fails(self):
+        self.record["qualifies_release_cases"] = True
+        self.save()
+        self.assertEqual(self.failed(), {"invalidation"})
+
+    def make_release(self):
+        """Turn the synthetic rehearsal into a complete release record."""
+        content = "Hello from Starport!"
+        events = self.capture["events"]
+        interval = self.capture["inference_interval"]
+        events[interval["start_event"]]["data"], events[interval["end_event"]]["data"] = "Hello ", "from Starport!"
+        self.capture.update(kind="release", release_tag="v1.3.0", real_provider=True)
+        self.capture["response"].update(content=content, content_length=len(content))
+        self.record["discovery"]["answer_stream"]["content_length"] = len(content)
+        self.files["TRANSCRIPT.md"] = f"Release v1.3.0. The provider answered \"{content}\".\n"
+        self.record.update(kind="release", qualifies_release_cases=True, fixtures=[], real_provider=True)
+        self.record["candidate"].update(source="release", run_id=None, pull_request=None, release_tag="v1.3.0",
+                                        head_commit="d" * 40, archive_name="starport_1.3.0_darwin_arm64.tar.gz",
+                                        checksum_verified=True, attestation_verified=True)
+        self.save()
+
+    def test_complete_release_record_passes_every_check(self):
+        self.make_release()
+        # A release record never invalidates by tree, even after a product change.
+        (self.root / "internal" / "app.go").write_text("package internal\n\nconst changed = true\n")
+        self.commit("product change")
+        code, report, checks = self.verify()
+        self.assertEqual((code, report["status"], report["kind"]), (0, "PASS", "release"), report)
+        self.assertIn("release tag v1.3.0", checks["invalidation"]["detail"])
+        self.assertIn("real provider answer", checks["transcript_fixtures"]["detail"])
+
+    def test_release_record_binding_refusals(self):
+        cases = {
+            "no tag": {"release_tag": None},
+            "inexact tag": {"release_tag": "latest"},
+            "rehearsal source": {"source": "ci-run"},
+            "unverified attestation": {"attestation_verified": False},
+            "absent attestation": {"attestation_verified": None},
+            "unverified checksum": {"checksum_verified": False},
+            "other archive": {"archive_name": "starport_1.2.0_darwin_arm64.tar.gz"},
+            "short tag commit": {"head_commit": "d" * 12},
+            "CI run": {"run_id": "1"},
+        }
+        for name, change in cases.items():
+            with self.subTest(case=name):
+                self.make_release()
+                self.record["candidate"].update(change)
+                self.save()
+                self.assertEqual(self.failed(), {"invalidation"})
+
+    def test_release_record_must_qualify_release_cases(self):
+        self.make_release()
+        self.record["qualifies_release_cases"] = False
+        self.save()
+        self.assertEqual(self.failed(), {"invalidation"})
+
+    def test_release_record_refuses_fixture_markers(self):
+        for marker in ("starport-demo-fixture-", "gpt-4o-mini-rehearsal-fixture", "Rehearsal fixture: Hello"):
+            with self.subTest(marker=marker):
+                self.make_release()
+                self.files["TRANSCRIPT.md"] += marker + "\n"
+                self.save()
+                self.assertEqual(self.failed(), {"no_fixture_token"})
+
+    def test_release_record_needs_the_real_provider_answer(self):
+        self.make_release()
+        self.record["fixtures"] = [{"name": "fixture_upstream"}]
+        self.save()
+        self.assertIn("transcript_fixtures", self.failed())
+        self.make_release()
+        self.record.pop("real_provider")
+        self.save()
+        self.assertEqual(self.failed(), {"transcript_fixtures"})
+        self.make_release()
+        self.files["TRANSCRIPT.md"] = "Release v1.3.0.\n"
+        self.save()
+        self.assertEqual(self.failed(), {"transcript_fixtures"})
+
+    def test_review_records_the_verdict_on_a_release_record(self):
+        self.make_release()
+        self.record["human_review"] = {"reviewer": None, "date": None, "pacing_verdict": "PENDING", "notes": None}
+        self.save()
+        self.assertEqual(self.failed(), {"human_review"})
+        script = Path(__file__).resolve().parent / "record-readme-demo.sh"
+        subprocess.run(["bash", str(script), "--review", str(self.directory), "--reviewer", "Reviewer",
+                        "--pacing-verdict", "PASS"], check=True, capture_output=True, text=True, timeout=60)
+        review = json.loads((self.directory / "record.json").read_text())["human_review"]
+        self.assertEqual((review["reviewer"], review["pacing_verdict"]), ("Reviewer", "PASS"))
+        code, report, _ = self.verify()
+        self.assertEqual((code, report["status"], report["kind"]), (0, "PASS", "release"), report)
+
+    def test_release_record_may_be_linked_from_the_readme(self):
+        self.make_release()
+        (self.root / "README.md").write_text(f"![Demo]({RECORD}/first-use.gif)\n")
+        code, report, _ = self.verify()
+        self.assertEqual((code, report["status"]), (0, "PASS"))
+
 
 class MediaHeaderTests(unittest.TestCase):
     def setUp(self):
