@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 const (
@@ -31,6 +32,10 @@ const (
 // implements behind this same contract.
 type Filesystem struct {
 	root string
+
+	// publishing serializes the step that links or renames a publication, so
+	// two publications in this process never contend for one identity.
+	publishing sync.Mutex
 }
 
 // NewFilesystem opens a filesystem store rooted at the directory. It creates
