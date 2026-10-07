@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 // lists the served bytes. The dashboard setting for the site must stay on
 // manual setup. The automatic setup injects a second tag at the edge, and the
 // served bytes then differ from the manifest.
-const analyticsToken = 'eafc887402d04f999b2b4233a3f21f54';
+const analyticsToken = '2a073dbbefa34f60b5e4e8390634300b';
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   return (
