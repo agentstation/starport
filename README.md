@@ -9,11 +9,11 @@ OpenAI-compatible API at `/v1` and the OpenRouter-compatible API at `/api/v1`.
 One Starmap catalog generation gives it every provider, model, capability,
 context, and price fact.
 
-[![Starport returns a real streamed OpenAI answer after installation, catalog inspection, and provider setup. Select the preview to play.](docs/assets/first-use-v1.2.0/poster.png)](docs/assets/first-use-v1.2.0/first-use.gif)
+[![Starport returns a real streamed OpenAI answer after installation, catalog inspection, and provider setup. Select the preview to play.](docs/assets/first-use-v1.3.0/poster.png)](docs/assets/first-use-v1.3.0/first-use.gif)
 
-[Watch the 38-second first request](docs/assets/first-use-v1.2.0/first-use.gif)
-or read the [transcript and reproduction steps](docs/assets/first-use-v1.2.0/TRANSCRIPT.md).
-The recording uses release v1.2.0 and a real provider. It shortens the credential-entry wait and preserves inference timing.
+[Watch the 41-second first request](docs/assets/first-use-v1.3.0/first-use.gif)
+or read the [transcript and reproduction steps](docs/assets/first-use-v1.3.0/TRANSCRIPT.md).
+The recording uses release v1.3.0 and a real provider. It shortens the credential-entry wait and preserves inference timing.
 The static preview does not autoplay. The earlier [console tour](docs/assets/2026-08-29_starport-console.gif) shows the catalog and provider views.
 
 Starport serves individual developers, startups, and enterprises:

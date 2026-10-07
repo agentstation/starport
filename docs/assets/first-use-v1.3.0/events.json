@@ -1,0 +1,335 @@
+{
+  "schema_version": 1,
+  "kind": "release",
+  "release_tag": "v1.3.0",
+  "real_provider": true,
+  "captured_at": "2026-10-07T05:08:26Z",
+  "events": [
+    {
+      "seconds": 1.004236,
+      "data": "\u001b[2J\u001b[H\u001b[1;36mSTARPORT\u001b[0m  /  first request  \u00b7  verified release\n\n1  INSTALL  /  macOS ARM64 \u00b7 verified release v1.3.0\n\n",
+      "scene": "install"
+    },
+    {
+      "seconds": 1.004274,
+      "data": "Release: v1.3.0 \u00b7 tag commit b649dbf5184e\n"
+    },
+    {
+      "seconds": 1.004283,
+      "data": "Archive: starport_1.3.0_darwin_arm64.tar.gz\n"
+    },
+    {
+      "seconds": 1.025788,
+      "data": "SHA-256 verified against checksums.txt.\n"
+    },
+    {
+      "seconds": 1.025817,
+      "data": "Provenance verified by gh attestation.\n\n"
+    },
+    {
+      "seconds": 1.415176,
+      "data": "\u001b[32m$\u001b[0m starport --version\n"
+    },
+    {
+      "seconds": 2.469036,
+      "data": "starport version 1.3.0\n"
+    },
+    {
+      "seconds": 3.469674,
+      "data": "\u001b[2J\u001b[H\u001b[1;36mSTARPORT\u001b[0m  /  first request  \u00b7  verified release\n\n2  EXPLORE  /  catalog before provider credentials\n\n",
+      "scene": "catalog"
+    },
+    {
+      "seconds": 3.469724,
+      "data": "\u001b[32m$\u001b[0m starport models show openai/gpt-4o-mini --json\n"
+    },
+    {
+      "seconds": 4.408226,
+      "data": "Selected fields: id, context_length, pricing\n"
+    },
+    {
+      "seconds": 4.408332,
+      "data": "{\n  \"id\": \"openai/gpt-4o-mini\",\n  \"context_length\": 128000,\n  \"pricing\": {\n    \"prompt\": \"1.5e-07\",\n    \"completion\": \"6e-07\",\n    \"currency\": \"USD\"\n  }\n}\n"
+    },
+    {
+      "seconds": 5.408777,
+      "data": "\u001b[2J\u001b[H\u001b[1;36mSTARPORT\u001b[0m  /  first request  \u00b7  verified release\n\n3  CONNECT  /  temporary development gateway\n\n",
+      "scene": "setup"
+    },
+    {
+      "seconds": 5.408805,
+      "data": "Provider: OpenAI \u00b7 real inference through the gateway\n"
+    },
+    {
+      "seconds": 5.408812,
+      "data": "Provider credential: OPENAI_API_KEY [from the environment, value hidden]\n\n"
+    },
+    {
+      "seconds": 5.408817,
+      "data": "\u001b[32m$\u001b[0m starport dev --no-open\n"
+    },
+    {
+      "seconds": 8.208072,
+      "data": "http://127.0.0.1:19325  \u00b7  ready\n"
+    },
+    {
+      "seconds": 8.208301,
+      "data": "Gateway API key: [value hidden]  \u00b7  client authentication\n"
+    },
+    {
+      "seconds": 8.208315,
+      "data": "Provider credential and gateway key serve separate roles.\n"
+    },
+    {
+      "seconds": 8.20832,
+      "data": "Startup logs omitted. This development session is temporary.\n"
+    },
+    {
+      "seconds": 9.226866,
+      "data": "\u001b[2J\u001b[H\u001b[1;36mSTARPORT\u001b[0m  /  first request  \u00b7  verified release\n\n4  ASK  /  real provider response, original timing\n\n",
+      "scene": "answer"
+    },
+    {
+      "seconds": 9.226907,
+      "data": "REAL PROVIDER: OpenAI answers through the gateway. Timing is unchanged.\n\n"
+    },
+    {
+      "seconds": 9.226914,
+      "data": "Model: openai/gpt-4o-mini  \u00b7  streaming  \u00b7  max_tokens: 32\n"
+    },
+    {
+      "seconds": 9.22692,
+      "data": "Message: Say: Hello from Starport!\n\n"
+    },
+    {
+      "seconds": 9.226924,
+      "data": "POST http://127.0.0.1:19325/api/v1/chat/completions\n"
+    },
+    {
+      "seconds": 9.226928,
+      "data": "Authorization: Starport gateway key [value hidden]\n\n"
+    },
+    {
+      "seconds": 9.904303,
+      "data": "Hello"
+    },
+    {
+      "seconds": 9.904342,
+      "data": " from"
+    },
+    {
+      "seconds": 9.923658,
+      "data": " Star"
+    },
+    {
+      "seconds": 9.923714,
+      "data": "port"
+    },
+    {
+      "seconds": 9.962647,
+      "data": "!"
+    },
+    {
+      "seconds": 9.962698,
+      "data": " How"
+    },
+    {
+      "seconds": 9.97726,
+      "data": " can"
+    },
+    {
+      "seconds": 9.977298,
+      "data": " I"
+    },
+    {
+      "seconds": 10.029117,
+      "data": " assist"
+    },
+    {
+      "seconds": 10.029168,
+      "data": " you"
+    },
+    {
+      "seconds": 10.052243,
+      "data": " today"
+    },
+    {
+      "seconds": 10.052314,
+      "data": "?"
+    },
+    {
+      "seconds": 10.092893,
+      "data": "\n\nStream complete: [DONE]\n"
+    },
+    {
+      "seconds": 10.092922,
+      "data": "Provider reported by Starport: openai\n"
+    },
+    {
+      "seconds": 10.092929,
+      "data": "Upstream: the real provider answered one chat request.\n"
+    },
+    {
+      "seconds": 11.095421,
+      "data": "\u001b[2J\u001b[H\u001b[1;36mSTARPORT\u001b[0m  /  first request  \u00b7  verified release\n\n5  USE YOUR CLIENT  /  change its base URL\n\n",
+      "scene": "next"
+    },
+    {
+      "seconds": 11.095466,
+      "data": "OpenAI client       http://127.0.0.1:19325/v1\n"
+    },
+    {
+      "seconds": 11.095473,
+      "data": "OpenRouter client   http://127.0.0.1:19325/api/v1\n\n"
+    },
+    {
+      "seconds": 11.095477,
+      "data": "Client credential: the Starport gateway API key\n\n"
+    },
+    {
+      "seconds": 11.095481,
+      "data": "Keep the gateway: starport init \u2192 starport serve\n"
+    },
+    {
+      "seconds": 11.095485,
+      "data": "Persistent and team setups: docs/OPERATOR-GUIDE.md\n"
+    }
+  ],
+  "commands": [
+    {
+      "scene": "install",
+      "command": [
+        "starport",
+        "--version"
+      ],
+      "environment_names": [
+        "HOME",
+        "PATH",
+        "STARPORT_SERVER_PORT",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_STATE_HOME"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.053812
+    },
+    {
+      "scene": "catalog",
+      "command": [
+        "starport",
+        "models",
+        "show",
+        "openai/gpt-4o-mini",
+        "--json"
+      ],
+      "environment_names": [
+        "HOME",
+        "PATH",
+        "STARPORT_SERVER_PORT",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_STATE_HOME"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.938387
+    },
+    {
+      "scene": "setup",
+      "command": [
+        "starport",
+        "dev",
+        "--no-open"
+      ],
+      "environment_names": [
+        "HOME",
+        "OPENAI_API_KEY",
+        "PATH",
+        "STARPORT_SERVER_PORT",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_STATE_HOME"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": null
+    }
+  ],
+  "network_egress_denied": false,
+  "network_egress_reason": "real provider",
+  "persistent_selectors_present": false,
+  "binary_sha256": "b17f6cf44cf740a4d3ed74add310a2920032aa798aa787a143af8825c4e56b2d",
+  "starport_version": "starport version 1.3.0",
+  "catalog_model": "openai/gpt-4o-mini",
+  "catalog_environment_has_provider_key": false,
+  "base_url_mechanism": null,
+  "provider_credential_source": "environment",
+  "catalog_generation": "bindings-9157a3e797c02e21193a26a2233dcbc5967390eee9ced9cb5416bdf1dae7d620.local.010adf9f3137",
+  "request": {
+    "model": "openai/gpt-4o-mini",
+    "max_tokens": 32,
+    "stream": true,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say: Hello from Starport!"
+      }
+    ]
+  },
+  "inference_interval": {
+    "start_event": 25,
+    "end_event": 36,
+    "start_seconds": 9.227033,
+    "end_seconds": 10.092881
+  },
+  "response": {
+    "content": "Hello from Starport! How can I assist you today?",
+    "stream_events": 16,
+    "final_event": "[DONE]",
+    "status": 200,
+    "content_type": "text/event-stream",
+    "reported_provider": "openai",
+    "reported_model": "gpt-4o-mini-2024-07-18",
+    "content_length": 48
+  },
+  "fixture_requests": [],
+  "shutdown_exit_code": 0,
+  "leftover_home_files": [],
+  "verdict": "PASS",
+  "scratch_removed": true,
+  "scenes": [
+    {
+      "name": "install",
+      "start_event": 0,
+      "end_event": 6,
+      "start_seconds": 1.004236,
+      "end_seconds": 2.469036
+    },
+    {
+      "name": "catalog",
+      "start_event": 7,
+      "end_event": 10,
+      "start_seconds": 3.469674,
+      "end_seconds": 4.408332
+    },
+    {
+      "name": "setup",
+      "start_event": 11,
+      "end_event": 18,
+      "start_seconds": 5.408777,
+      "end_seconds": 8.20832
+    },
+    {
+      "name": "answer",
+      "start_event": 19,
+      "end_event": 39,
+      "start_seconds": 9.226866,
+      "end_seconds": 10.092929
+    },
+    {
+      "name": "next",
+      "start_event": 40,
+      "end_event": 45,
+      "start_seconds": 11.095421,
+      "end_seconds": 11.095485
+    }
+  ]
+}

@@ -29,7 +29,7 @@ export function lede(): string {
 // posterSize reads the width and the height from the PNG header of the demo
 // poster. The page uses them to keep the space of the demo before it loads.
 export function posterSize(): { width: number; height: number } {
-  const png = readFileSync(path.join(repoRoot, 'docs/assets/first-use-v1.2.0/poster.png'));
+  const png = readFileSync(path.join(repoRoot, 'docs/assets/first-use-v1.3.0/poster.png'));
   return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
 }
 

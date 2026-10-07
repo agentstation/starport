@@ -956,7 +956,7 @@ export function SkipToEnd() {
 type Poster = { width: number; height: number };
 
 // Demo is the README recording. The preview is static, as in the README. The
-// link opens the 38-second recording, so the page plays no animation on its
+// link opens the 41-second recording, so the page plays no animation on its
 // own. On the animated stage the world beside the copy is the picture, so
 // the stage shows the caption and its links only.
 function Demo({ poster }: { poster: Poster }) {
@@ -971,8 +971,8 @@ function Demo({ poster }: { poster: Poster }) {
         />
       </a>
       <figcaption>
-        <a href="/demo/first-use.gif">Watch the 38-second first request</a> or read the{' '}
-        <a href={`${GITHUB_URL}/blob/main/docs/assets/first-use-v1.2.0/TRANSCRIPT.md`}>transcript</a>.
+        <a href="/demo/first-use.gif">Watch the 41-second first request</a> or read the{' '}
+        <a href={`${GITHUB_URL}/blob/main/docs/assets/first-use-v1.3.0/TRANSCRIPT.md`}>transcript</a>.
       </figcaption>
     </figure>
   );
