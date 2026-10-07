@@ -11,8 +11,8 @@ const publicDir = path.join(repoRoot, "website", "public");
 
 // The published path under public/, then the repository source.
 export const ASSETS = [
-  ["demo/first-use.gif", "docs/assets/first-use-v1.2.0/first-use.gif"],
-  ["demo/poster.png", "docs/assets/first-use-v1.2.0/poster.png"],
+  ["demo/first-use.gif", "docs/assets/first-use-v1.3.0/first-use.gif"],
+  ["demo/poster.png", "docs/assets/first-use-v1.3.0/poster.png"],
   ["favicon.svg", "console/src/favicon.svg"],
   // The splash page uses the console fonts and ships their license.
   ...[

@@ -589,6 +589,16 @@ class ReleaseRenderTests(RecordHarness):
         with self.assertRaisesRegex(SystemExit, "release candidate"):
             self.render_release(self.release_capture(), candidate)
 
+    @unittest.skipUnless(RENDER_AVAILABLE, "rendering needs Pillow and the Menlo font")
+    def test_release_render_refuses_a_character_outside_the_font(self):
+        # A real answer once carried a galaxy emoji, and Menlo drew a missing-glyph box in the published media.
+        events = self.release_capture()
+        answer = next(event for event in events["events"] if event["data"] == "from Starport!")
+        answer["data"] = "from Starport! \U0001F30C"
+        events["response"]["content"] = "Hello from Starport! \U0001F30C"
+        with self.assertRaisesRegex(ValueError, "no glyph for U\\+1F30C"):
+            self.render_release(events, self.release_candidate())
+
 
 class CaptureTests(unittest.TestCase):
     def test_scene_ranges_cover_events_between_markers(self):

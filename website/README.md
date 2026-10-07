@@ -24,7 +24,7 @@ The build makes no network request. It reads these repository files:
 
 - `docs/site/` for the pages.
 - `console/src/docs/areas.ts` for the sidebar areas and their order.
-- `README.md`, `docs/assets/first-use-v1.2.0/`, and the `docs/site/` pages
+- `README.md`, `docs/assets/first-use-v1.3.0/`, and the `docs/site/` pages
   that `src/lib/splash.ts` names for the splash page.
 - `console/src/favicon.svg` and `console/src/fonts/` for the mark and the
   splash fonts.
