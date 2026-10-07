@@ -60,6 +60,16 @@ The build changes each relative Markdown link:
   pins the release tag. A dev build pins the commit.
 - A link to a missing file stops the build.
 
+## Analytics
+
+`src/app/layout.tsx` writes the Cloudflare Web Analytics beacon tag into each
+page. The site token is a public identifier. The build puts the tag in the
+served bytes, so the manifest lists it.
+
+The Web Analytics site in the Cloudflare dashboard must use manual setup. The
+automatic setup injects a second tag at the edge. The served bytes then differ
+from the manifest, and the public site check fails.
+
 ## Deploy
 
 The `Site` workflow in `.github/workflows/site.yaml` has two jobs:
