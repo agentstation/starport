@@ -1,6 +1,6 @@
 {
-  "completed_at": "2026-10-08T16:33:31.652047+00:00",
-  "final_head_commit": "1579627f777b932995ad9cad081b165cdadf55ca",
+  "completed_at": "2026-10-08T16:35:06.931564+00:00",
+  "final_head_commit": "7b6f44d30fcfb18837b684065d531e32c63ef4ea",
   "go_source_matches_post_correction_verified_snapshot": true,
   "go_source_snapshot_commit": "3be51869234239d71323606e73ff0c5e5af68322",
   "GOWORK": "off",
@@ -53,11 +53,11 @@
     "passed_files": 4
   },
   "optional_go_skip_reason_counts": {
-    "UNVERIFIED: TEST_VALKEY_URL is not set": 356,
+    "UNVERIFIED: TEST_VALKEY_URL is not set": 392,
     "UNVERIFIED: set TEST_AUTHORIZATION_CAPACITY=1 for the capacity profile": 1,
     "UNVERIFIED: Valkey and PostgreSQL are required for separate-process authorization": 1,
     "UNVERIFIED: TEST_POSTGRES_URL is not set": 14,
-    "UNVERIFIED: TEST_MYSQL_DSN is not set": 12,
+    "UNVERIFIED: TEST_MYSQL_DSN is not set": 13,
     "UNVERIFIED: set TEST_DEFAULT_CACHE_CAPACITY=1 for default-capacity qualification": 1,
     "UNVERIFIED: TEST_SHARED_CACHE_FAULT_URL is not set": 1,
     "UNVERIFIED: TEST_SHARED_CACHE_URL is not set": 5,
@@ -75,7 +75,7 @@
     "UNVERIFIED: namespace recovery requires dedicated source Valkey, PostgreSQL, and object storage": 1,
     "SDK qualification requires STARPORT_CATALOG_SDK_PYTHON": 1,
     "UNVERIFIED: TEST_UNPREFIXED_VALKEY_URL requires a dedicated empty database": 4,
-    "UNVERIFIED: real Valkey and PostgreSQL are required": 45,
+    "UNVERIFIED: real Valkey and PostgreSQL are required": 46,
     "TEST_VALKEY_URL is not configured": 1,
     "Skipping Valkey integration tests: TEST_VALKEY_URL not set": 1,
     "Skipping Valkey pub/sub tests: TEST_VALKEY_URL not set": 1,
@@ -86,7 +86,6 @@
     "UNVERIFIED: real PostgreSQL and Valkey are required": 18,
     "UNVERIFIED: real PostgreSQL and Valkey are required for process fencing": 1,
     "UNVERIFIED: shared backup requires PostgreSQL and object storage fixtures": 19,
-    "Level Done": 38,
     "UNVERIFIED: populated adoption requires the object storage fixture": 27,
     "UNVERIFIED: dedicated fresh Valkey and PostgreSQL are required": 1,
     "UNVERIFIED: complete activation needs native Valkey, PostgreSQL, and object storage": 31,
@@ -131,6 +130,23 @@
     "/tmp/starport-pre-pr-gates-20261008/retry-20261008T162547Z",
     "/tmp/starport-pre-pr-gates-20261008/website-20261008T153856Z"
   ],
+  "full_suite_skips_qualified_by_dedicated_gate": [
+    {
+      "package": "github.com/agentstation/starport/internal/server/controllers",
+      "test": "TestGatewayOverheadBenchmark",
+      "reason": "set STARPORT_OVERHEAD_BENCH=1 to run the overhead benchmark harness",
+      "status": "QUALIFIED_SEPARATELY",
+      "qualification_gate": 28
+    },
+    {
+      "package": "github.com/agentstation/starport/internal/server",
+      "test": "TestSDKCanonicalRemovalAfterSuccessfulInference",
+      "reason": "SDK qualification requires STARPORT_CATALOG_SDK_PYTHON",
+      "status": "QUALIFIED_SEPARATELY",
+      "qualification_gate": 35
+    }
+  ],
+  "remaining_optional_cases_unverified": 715,
   "runner_cleanup": {
     "remaining_owned_runner_pids": [],
     "script_cleanup_traps_completed": true,

@@ -1,5 +1,5 @@
 {
-  "status": "in_progress",
+  "status": "published",
   "authorization_date": "2026-10-08",
   "vhs": {
     "commit": "346bbb1e1f769d8d8d789eca87b4aa8a108bb3d1",
@@ -21,7 +21,8 @@
       "pr": "https://github.com/agentstation/vhs/pull/11",
       "missing_upstream_commits_after": 0,
       "checks": "vhs-sync-check.json",
-      "autoreview": "vhs-sync-autoreview.json"
+      "autoreview": "vhs-sync-autoreview.json",
+      "ci": "All eight build and lint checks pass"
     }
   },
   "starmap": {
@@ -31,10 +32,18 @@
     "autoreview": "starmap-autoreview.json",
     "media_pr": "https://github.com/agentstation/starmap/pull/251",
     "implementation_pr": "https://github.com/agentstation/starmap/pull/252",
-    "implementation_base": "codex/product-demo-media"
+    "implementation_base": "codex/product-demo-media",
+    "media_ci": {
+      "run": 37804616122,
+      "initial_failure": "Unchanged baseline runtime-2 race package exceeded aggregate 30m timeout; 502 cases passed; no assertion or race failure reported",
+      "diagnosis": "starmap-media-ci-diagnosis.json",
+      "retry_attempt": 2,
+      "retry_status": "in_progress",
+      "cause_of_slowdown": "unproven"
+    }
   },
   "starport": {
-    "head": "1579627f777b932995ad9cad081b165cdadf55ca",
+    "head": "7b6f44d30fcfb18837b684065d531e32c63ef4ea",
     "base": "ecde4dfb8b583b05b3c573bd7fc21c65dd6e6a75",
     "dependency": "v0.17.1-0.20261008155418-ab3c76584e5a",
     "media_pr": "https://github.com/agentstation/starport/pull/435",
@@ -46,6 +55,15 @@
     },
     "checks": "starport-publication-check.json",
     "format": "87 inherited goimports findings; both changed Go files pass",
-    "implementation_status": "pre-pr review"
-  }
+    "implementation_status": "published",
+    "implementation_pr": "https://github.com/agentstation/starport/pull/436",
+    "implementation_base": "codex/product-demo-media",
+    "autoreview": "starport-autoreview.json"
+  },
+  "merge_order": [
+    "VHS sync PR 11 can merge independently after approval",
+    "Starmap media PR 251, then retarget source PR 252 to main and require green CI",
+    "Starport media PR 435, then retarget source PR 436 to main and require green CI",
+    "Merge Starmap source PR 252 before Starport source PR 436"
+  ]
 }
