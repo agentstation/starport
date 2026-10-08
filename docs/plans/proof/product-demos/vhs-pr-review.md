@@ -1,6 +1,6 @@
 # VHS open PR review
 
-Do not merge any of the four current heads. Published main supersedes PR #6. PR #8 has the same core goal as main, but its remaining resolver and subset behavior needs changes. PRs #7 and #9 have useful separate goals and need export fixes before merge.
+Do not merge any of the four reviewed contributor heads. Published main supersedes PR #6. PR #8 has the same core goal as main, but its remaining resolver and subset behavior needs changes. PRs #7 and #9 have useful separate goals and need export fixes before merge.
 
 Reviewed on 2026-10-08 against `346bbb1e1f769d8d8d789eca87b4aa8a108bb3d1`. Reviewers preserved published history. No user source, contributor branch, GitHub comment, or PR state changed.
 

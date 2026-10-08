@@ -10,7 +10,14 @@
     "checks": "vhs-publication-check.json",
     "autoreview": "vhs-autoreview.json",
     "ci": "GitHub lint and build pass",
-    "contributor_review": "vhs-pr-review.md"
+    "contributor_review": "vhs-pr-review.md",
+    "upstream_sync": {
+      "status": "in_progress",
+      "branch": "codex/sync-vhs-upstream",
+      "upstream_commit": "24fa225",
+      "missing_upstream_commits_before": 31,
+      "merge_authorized": false
+    }
   },
   "starmap": {
     "head": "ab3c76584e5a0fce8054e75e09c19b655cc79506",
@@ -25,6 +32,12 @@
     "head": "78ba3833cee0f1031155e75fea630beaf13e0157",
     "base": "ecde4dfb8b583b05b3c573bd7fc21c65dd6e6a75",
     "dependency": "v0.17.1-0.20261008155418-ab3c76584e5a",
-    "media_pr": "https://github.com/agentstation/starport/pull/435"
+    "media_pr": "https://github.com/agentstation/starport/pull/435",
+    "media_ci": {
+      "run": 37805032126,
+      "failed_job": 113406958369,
+      "cause": "Go proxy HTTP2 INTERNAL_ERROR while downloading monitoring and jwt modules; compile did not complete",
+      "retry_attempt": "GitHub reports job cannot be rerun while current workflow remains active"
+    }
   }
 }
