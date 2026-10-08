@@ -1,0 +1,5 @@
+=== RUN   TestReviewRoundedCornerPixel
+    review_corner_test.go:18: corner pixel: [0 0 0 0]
+--- PASS: TestReviewRoundedCornerPixel (2.13s)
+PASS
+ok  	github.com/agentstation/vhs	2.499s

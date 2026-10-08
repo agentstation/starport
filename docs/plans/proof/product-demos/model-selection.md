@@ -28,7 +28,7 @@ Starmap's embedded generation contains an OpenAI review candidate for
 already contains the exact ID, but the authored model and provider offering
 records are absent.
 
-[Starmap's authoring rules](../../../../../starmap-product-demos/README.md)
+[Starmap's authoring rules](https://github.com/agentstation/starmap/blob/ab3c76584e5a0fce8054e75e09c19b655cc79506/README.md)
 require an explicit canonical model link before an offering can publish.
 Generated endpoint projections are not authoring sources. A bootstrap manifest
 must match its committed generation and membership evidence.

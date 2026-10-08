@@ -1,0 +1,10 @@
+{"Time":"2026-10-08T10:52:08.893159-05:00","Action":"start","Package":"github.com/agentstation/vhs"}
+{"Time":"2026-10-08T10:52:09.232074-05:00","Action":"run","Package":"github.com/agentstation/vhs","Test":"TestReviewTimingPreservesVisibleHold"}
+{"Time":"2026-10-08T10:52:09.232147-05:00","Action":"output","Package":"github.com/agentstation/vhs","Test":"TestReviewTimingPreservesVisibleHold","Output":"=== RUN   TestReviewTimingPreservesVisibleHold\n","OutputType":"frame"}
+{"Time":"2026-10-08T10:52:12.502133-05:00","Action":"output","Package":"github.com/agentstation/vhs","Test":"TestReviewTimingPreservesVisibleHold","Output":"2026/10/08 10:52:12 Creating /var/folders/kw/d608x5pn4cq73rz78ztl92cw0000gn/T/TestReviewTimingPreservesVisibleHold2250024972/001/visible.svg...\n"}
+{"Time":"2026-10-08T10:52:12.522963-05:00","Action":"output","Package":"github.com/agentstation/vhs","Test":"TestReviewTimingPreservesVisibleHold","Output":"    review_timing_test.go:35: visible tape duration 2.5s, SVG duration 2.5000s\n"}
+{"Time":"2026-10-08T10:52:12.523309-05:00","Action":"output","Package":"github.com/agentstation/vhs","Test":"TestReviewTimingPreservesVisibleHold","Output":"--- PASS: TestReviewTimingPreservesVisibleHold (3.29s)\n","OutputType":"frame"}
+{"Time":"2026-10-08T10:52:12.523325-05:00","Action":"pass","Package":"github.com/agentstation/vhs","Test":"TestReviewTimingPreservesVisibleHold","Elapsed":3.29}
+{"Time":"2026-10-08T10:52:12.523565-05:00","Action":"output","Package":"github.com/agentstation/vhs","Output":"PASS\n","OutputType":"frame"}
+{"Time":"2026-10-08T10:52:12.524248-05:00","Action":"output","Package":"github.com/agentstation/vhs","Output":"ok  \tgithub.com/agentstation/vhs\t3.631s\n"}
+{"Time":"2026-10-08T10:52:12.524303-05:00","Action":"pass","Package":"github.com/agentstation/vhs","Elapsed":3.6310000000000002}

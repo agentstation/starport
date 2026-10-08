@@ -9,7 +9,8 @@
     "history_rewritten": false,
     "checks": "vhs-publication-check.json",
     "autoreview": "vhs-autoreview.json",
-    "ci": "GitHub lint and build pass"
+    "ci": "GitHub lint and build pass",
+    "contributor_review": "vhs-pr-review.md"
   },
   "starmap": {
     "head": "ab3c76584e5a0fce8054e75e09c19b655cc79506",
@@ -23,6 +24,7 @@
   "starport": {
     "head": "78ba3833cee0f1031155e75fea630beaf13e0157",
     "base": "ecde4dfb8b583b05b3c573bd7fc21c65dd6e6a75",
-    "dependency": "v0.17.1-0.20261008155418-ab3c76584e5a"
+    "dependency": "v0.17.1-0.20261008155418-ab3c76584e5a",
+    "media_pr": "https://github.com/agentstation/starport/pull/435"
   }
 }
