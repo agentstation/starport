@@ -1,0 +1,28 @@
+{
+  "status": "in_progress",
+  "authorization_date": "2026-10-08",
+  "vhs": {
+    "commit": "346bbb1e1f769d8d8d789eca87b4aa8a108bb3d1",
+    "published_ref": "refs/heads/main",
+    "push_result": "unexpected destination from push.default=upstream and main tracking",
+    "pr_created": false,
+    "history_rewritten": false,
+    "checks": "vhs-publication-check.json",
+    "autoreview": "vhs-autoreview.json",
+    "ci": "GitHub lint and build pass"
+  },
+  "starmap": {
+    "head": "ab3c76584e5a0fce8054e75e09c19b655cc79506",
+    "base": "747ac19bb82db1307c5447c2bb4d53cbeb776d06",
+    "checks": "starmap-publication-check.json",
+    "autoreview": "starmap-autoreview.json",
+    "media_pr": "https://github.com/agentstation/starmap/pull/251",
+    "implementation_pr": "https://github.com/agentstation/starmap/pull/252",
+    "implementation_base": "codex/product-demo-media"
+  },
+  "starport": {
+    "head": "78ba3833cee0f1031155e75fea630beaf13e0157",
+    "base": "ecde4dfb8b583b05b3c573bd7fc21c65dd6e6a75",
+    "dependency": "v0.17.1-0.20261008155418-ab3c76584e5a"
+  }
+}

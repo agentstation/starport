@@ -1,0 +1,6 @@
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "I found no P0 defects in this diff. The new recording code tracks only visible time across Hide and Show. A capture error is sent on a buffered channel and stops the next command. Teardown reads the remaining errors, then shuts down the browser and the terminal process. Raster frame preparation repeats captured states through hard links and keeps screenshot frames separately. SVG keyframes now come from capture timestamps, and the SVG duration includes the final hold after the last capture. The font file is read, base64-encoded, and embedded under a fixed font-family name, so the CSS has no injection path. Encoder and capture failures now return errors instead of only being logged. The remaining risks depend on code outside the diff, such as the order of `Start` and the `Setup` call in `Evaluate`. They could also be narrower behavior changes, such as the `LoopOffset` meaning changing to a percentage. None of them reaches the P0 threshold.",
+  "overall_confidence": 0.72
+}
