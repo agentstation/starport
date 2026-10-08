@@ -161,6 +161,7 @@
 <p>Updated: 2026-10-08. PD7 and PD8 are in progress with root. The user authorized repository updates and demo PRs. VHS commit <code>346bbb1e</code> passes tests and Opus 5.5 high autoreview. Its push unexpectedly advanced origin/main because this branch tracked main under push.default=upstream. Root reported the mistake and will not rewrite published history.</p>
 
 <p>Starmap publication is complete. Media PR: <a href="https://github.com/agentstation/starmap/pull/251">251</a>. Implementation PR: <a href="https://github.com/agentstation/starmap/pull/252">252</a>. Merge the media first, then retarget the implementation to main. The media split preserves binary review limits.</p>
+
 <p>Required catalog-generation and verification checks pass. Extra broad runs hit local timeouts. Opus 5.5 high autoreview passes with no P0 findings.</p>
 
 <p>Starport pins published Starmap commit <code>ab3c76584e5a0fce8054e75e09c19b655cc79506</code>. Module version: <code>v0.17.1-0.20261008155418-ab3c76584e5a</code>. starport_cli_demo owns all 35 standalone repository checks. Website lint and 84 tests pass. Root owns commits, autoreview, explicit branch pushes, and PR submission.</p>
@@ -239,7 +240,9 @@ Starmap: catalog server + catalog-source SVG</pre></figure></div></section></hea
 
 <h3>PD5 Integration</h3><p>Add separate CLI and Console README embeds. Preserve release proof links. Run README quickstart and demo verifiers, document-link checks, focused tests, and technical-writing lint. Check media sizes, durations, SVG playback, and secret-free provenance.</p>
 
-<h3>PD7 Publication</h3><p>Integrate current main without overwriting unrelated work. Run repository checks on the final branch. Pin Starport to the reviewed Starmap commit. Run autoreview with <code>--gate pre-pr --mode auto</code> after final checks and commits.</p><p>Publish each complete code diff above its verified media prerequisite. Link dependencies and merge order. Attach every PR to this chat.</p>
+<h3>PD7 Publication</h3><p>Integrate current main without overwriting unrelated work. Run repository checks on the final branch. Pin Starport to the reviewed Starmap commit. Run autoreview with <code>--gate pre-pr --mode auto</code> after final checks and commits.</p>
+
+<p>Publish each complete code diff above its verified media prerequisite. Link dependencies and merge order. Attach every PR to this chat.</p>
 
 <h3>PD8 Contributor review</h3><p>Inspect every open VHS PR, its exact head, merge state, source contracts, tests, and checks. Test concrete regressions against current main. Report defects with file and line references. Recommend merge, revision, or superseded status for each PR. Do not merge, close, or comment on these PRs.</p>
 
