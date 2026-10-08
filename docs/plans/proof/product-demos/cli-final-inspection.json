@@ -1,0 +1,14 @@
+{
+  "gif_frames": 1357,
+  "gif_duration_seconds": 54.28,
+  "gif_size": [
+    1280,
+    720
+  ],
+  "svg_duration_seconds": 54.26,
+  "mp4_duration_seconds": 54.28,
+  "inspection_frames": 7,
+  "font_exactly_embedded": true,
+  "binary_sha256": "b123965c872b88c2fda6883eebcaae7c28fa01a45403e4035f3b2648f857d5d6",
+  "old_chrome_cleanup_evidence": "/tmp/starport-cli-chrome-cleanup.json"
+}

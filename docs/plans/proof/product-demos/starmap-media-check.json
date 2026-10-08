@@ -1,0 +1,108 @@
+{
+  "checks": {
+    "runner_sha256": true,
+    "tape_sha256": true,
+    "transcript_sha256": true,
+    "font_sha256": true,
+    "demo.svg": true,
+    "demo.gif": true,
+    "vhs": true,
+    "final_source_hashes": true,
+    "new_binary": true,
+    "same_reviewed_generation": true,
+    "catalog_inventory_unchanged": true,
+    "partial_typing": true,
+    "clean_commands": true,
+    "font_bytes": true
+  },
+  "partial_serve_states": 45,
+  "duration": 54.37,
+  "gif_duration": 54.4,
+  "assets": {
+    "demo.svg": {
+      "sha256": "8b85b123f6977efd63d0787a830bc62d8d46803c81eb3d75aa5411f9727efbe9",
+      "bytes": 695057
+    },
+    "demo.gif": {
+      "sha256": "2cf8e2babd96b6dc647c49ba1dd287b9420411b7189ca0ac242894c67ee0cf1c",
+      "bytes": 363565
+    }
+  },
+  "generation_id": "bindings-a09b2fbbb3a32b1f5cbe5d745746e66bf46c520175934205b7bcef3498690915.local.72ae50b97f55",
+  "payload_sha256": "ad6b71e899dd9b5e0f4ee4195cdc4b07117447479e7f6b11117245ef33a68eb9",
+  "binary_sha256": "be3a281169b0c5c608937fdf101c439766dd045cc8d3bf5fc9a58444a7537880",
+  "source_commit": "c3e38970db9c23d3023972b71bce132ee6efbb39",
+  "source_file_sha256": {
+    "runtime/runtime.go": "79a646bc36083cfa9f49ff58389897a7e95bd13044b48571b9fb3d15fccdaa05",
+    "runtime/acquisition_policy_publication.go": "832e2bf61a2e671fbee034d42a62ba337f6b7c564a0cbfe1e049e72c4cad5ec6",
+    "scripts/record-demo.py": "b0f5cbb69b352987d83281e12d9a2d92d2c9c62b5fc877006b9b05d12a9a5f17",
+    "scripts/demo.tape": "4c195800ebdf20ff48ffa6ec808880396b0f7e5a07aca6fde27905cc8a162004"
+  },
+  "catalog_tree_sha256": "0d687ece31d08a2b7039f2c3f26058368e992b2807b5afbfe2841cf4d4e2a51b",
+  "catalog_input_hashes": 8,
+  "typing_speed_ms": 35,
+  "framerate": 20,
+  "runner_sha256": "b0f5cbb69b352987d83281e12d9a2d92d2c9c62b5fc877006b9b05d12a9a5f17",
+  "tape_sha256": "4c195800ebdf20ff48ffa6ec808880396b0f7e5a07aca6fde27905cc8a162004",
+  "transcript_sha256": "740126db9f7eefea53e622f7ca6d73022a2ad63100c33fd887f0c9526140cb8e",
+  "story": {
+    "checks": 11,
+    "segments": [
+      "Starmap / Serve a model catalog",
+      "1 / Start the catalog server",
+      "2 / Read a model over HTTP",
+      "3 / Fetch and verify a generation",
+      "Result / Model read and payload verified"
+    ],
+    "ending_matches_observed_data": true
+  },
+  "browser_beats": {
+    "model": 20.795233600000003,
+    "ending": 49.9054753
+  },
+  "visual_checks": {
+    "svg_partial_typing_visible": true,
+    "svg_model_result_visible": true,
+    "svg_closing_model_generation_checksum_visible": true,
+    "svg_closing_no_runner_marker": true,
+    "svg_img_animation_advances": true,
+    "gif_partial_typing_visible": true,
+    "gif_model_result_visible": true,
+    "gif_closing_clean": true
+  },
+  "visual_proofs": {
+    "svg-typing": {
+      "path": "/tmp/starmap-sol-svg-typing.png",
+      "sha256": "07a0df312e5d2f2cd53b92554e3002a91d17e1fbc99d95da4dad8b5ff10bdcb9"
+    },
+    "svg-model": {
+      "path": "/tmp/starmap-sol-svg-model.png",
+      "sha256": "85a9f142c966c89a80845ab9db96ef41d8f3d496e360cd76024ce1e54f330d8d"
+    },
+    "svg-ending": {
+      "path": "/tmp/starmap-sol-svg-ending.png",
+      "sha256": "44868dbc9641c9d3dd0899e6168c85ed631ffe571ff894fa9f31edd99b1f28bc"
+    },
+    "svg-img-opening": {
+      "path": "/tmp/starmap-sol-svg-img-opening.png",
+      "sha256": "39eed73c389c599dff251d78572b8772bf0c3d0cfb64179930cba5e43bdebe53"
+    },
+    "svg-img-progress": {
+      "path": "/tmp/starmap-sol-svg-img-progress.png",
+      "sha256": "56615bf9cefccb651ea5a26dc229b23e90c6cc9d00297987ea4ab9174af81cf9"
+    },
+    "gif-typing": {
+      "path": "/tmp/starmap-sol-gif-typing.png",
+      "sha256": "902dddf3947a0764257414fa39e60f6c6291ceea6fc02192242c365deb304e04"
+    },
+    "gif-model": {
+      "path": "/tmp/starmap-sol-gif-model.png",
+      "sha256": "29efae2846fe38763621dccb0ef95b13a7b495765498f18b54555e2a2719d6a5"
+    },
+    "gif-ending": {
+      "path": "/tmp/starmap-sol-gif-ending.png",
+      "sha256": "e5dfbd6b15162bc881f145fe7fe821354137e5059a675f56c7c97d00b0698cf4"
+    }
+  },
+  "visual_proof_method": "Chrome browser pixels from actual final SVG: precise inline animation beats paused through preview-page CSS; unmodified SVG img opening and progress prove animation advances. GIF frames extracted from final media, then visually reviewed."
+}

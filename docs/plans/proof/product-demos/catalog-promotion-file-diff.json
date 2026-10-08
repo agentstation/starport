@@ -1,0 +1,14 @@
+{
+  "added": [
+    "authors/openai/models/gpt-6.1-sol.yaml",
+    "providers/openai/models/gpt-6.1-sol.yaml"
+  ],
+  "removed": [],
+  "changed": [
+    "endpoints.yaml",
+    "generation-manifest.json",
+    "generation-payload.json.gz",
+    "generation.json",
+    "provenance.yaml"
+  ]
+}

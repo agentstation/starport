@@ -1,0 +1,22 @@
+{
+  "observations": 86,
+  "payload_bytes_equal": true,
+  "payload_sha256": "ced7500b3f6cd44907c382b2b1750982edeebd6adc528bcf12af19d8a94315a1",
+  "source_observations_equal": true,
+  "original_review_count": 260,
+  "raw_replay_review_count": 904,
+  "raw_replay_review_contract": "ReplayAcquisition preserves historical reviews; preparation reduces current reviews separately.",
+  "test_command": "GOWORK=off go test ./internal/catalog/publication -run ^TestProductDemoOriginalReplayAudit$ -count=1 -v -timeout 8m",
+  "test_seconds": 103.52,
+  "temporary_test_removed": true,
+  "final_constrained_source_audit": {
+    "passed": true,
+    "test_seconds": 121.88,
+    "package_seconds": 122.503,
+    "payload_bytes_equal": true,
+    "source_observations_equal": true,
+    "observations": 86,
+    "temporary_test_removed": true,
+    "log": "/tmp/starmap-gpt61-original-replay-final.log"
+  }
+}

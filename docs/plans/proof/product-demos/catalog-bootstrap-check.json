@@ -1,0 +1,19 @@
+{
+  "passing_unique_top_level": 51,
+  "passing_unique_cases": 152,
+  "failed_attempts": [
+    {
+      "test": "TestEmbeddedCatalogCheckoutPreservesManifestInputs",
+      "log": "embedded-final-2.log"
+    },
+    {
+      "test": "TestEmbeddedProviderModelsMatchReviewedIdentityMap",
+      "log": "bootstrap-remaining-final.json"
+    },
+    {
+      "test": "TestEmbeddedAuthoredModelsAreCoveredByHistoricalOrServingIdentityReview",
+      "log": "bootstrap-remaining-final.json"
+    }
+  ],
+  "unresolved_failures": []
+}

@@ -1,0 +1,233 @@
+{
+  "browser": "154.0.8037.98",
+  "results": [
+    {
+      "name": "desktop",
+      "width": 1366,
+      "height": 900,
+      "reduced": false,
+      "state": {
+        "paused": true,
+        "autoplay": false,
+        "loop": false,
+        "controls": true,
+        "poster": "http://127.0.0.1:8765/demo/console/poster.png",
+        "rect": {
+          "x": 28,
+          "y": 218.484375,
+          "width": 655.671875,
+          "height": 410.53125
+        }
+      },
+      "playback": {
+        "time": 0.629906,
+        "paused": false,
+        "width": 1280,
+        "height": 800,
+        "duration": 35.24
+      },
+      "errors": [],
+      "verdict": "PASS"
+    },
+    {
+      "name": "phone",
+      "width": 390,
+      "height": 844,
+      "reduced": false,
+      "state": {
+        "paused": true,
+        "autoplay": false,
+        "loop": false,
+        "controls": true,
+        "poster": "http://127.0.0.1:8765/demo/console/poster.png",
+        "rect": {
+          "x": 16,
+          "y": 422,
+          "width": 358,
+          "height": 224.5
+        }
+      },
+      "playback": {
+        "time": 0.72765,
+        "paused": false,
+        "width": 1280,
+        "height": 800,
+        "duration": 35.24
+      },
+      "errors": [],
+      "verdict": "PASS"
+    },
+    {
+      "name": "short-phone",
+      "width": 390,
+      "height": 740,
+      "reduced": false,
+      "state": {
+        "paused": true,
+        "autoplay": false,
+        "loop": false,
+        "controls": true,
+        "poster": "http://127.0.0.1:8765/demo/console/poster.png",
+        "rect": {
+          "x": 16,
+          "y": 450.828125,
+          "width": 358,
+          "height": 224.5
+        }
+      },
+      "playback": {
+        "time": 0.690324,
+        "paused": false,
+        "width": 1280,
+        "height": 800,
+        "duration": 35.24
+      },
+      "errors": [],
+      "verdict": "PASS"
+    },
+    {
+      "name": "reduced-motion",
+      "width": 1366,
+      "height": 900,
+      "reduced": true,
+      "state": {
+        "paused": true,
+        "autoplay": false,
+        "loop": false,
+        "controls": true,
+        "poster": "http://127.0.0.1:8765/demo/console/poster.png",
+        "rect": {
+          "x": 647.53125,
+          "y": 218.25,
+          "width": 690.46875,
+          "height": 432.28125
+        }
+      },
+      "playback": {
+        "time": 0.715611,
+        "paused": false,
+        "width": 1280,
+        "height": 800,
+        "duration": 35.24
+      },
+      "errors": [],
+      "verdict": "PASS"
+    },
+    {
+      "name": "cli",
+      "asset_sha256": "702ddfd8f431373ebdbf84ee7247ca7f4dc297ced5f95dea9145a92f63e46026",
+      "fonts": {
+        "families": [
+          "VHS Capture Font"
+        ],
+        "loaded": true
+      },
+      "animations": [
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        },
+        {
+          "state": "running",
+          "time": 53647.79700002221
+        }
+      ],
+      "image_embed": true,
+      "verdict": "PASS"
+    },
+    {
+      "name": "starmap",
+      "asset_sha256": "8b85b123f6977efd63d0787a830bc62d8d46803c81eb3d75aa5411f9727efbe9",
+      "fonts": {
+        "families": [
+          "VHS Capture Font"
+        ],
+        "loaded": true
+      },
+      "animations": [
+        {
+          "state": "running",
+          "time": 53731.136999890565
+        },
+        {
+          "state": "running",
+          "time": 53731.136999890565
+        },
+        {
+          "state": "running",
+          "time": 53731.136999890565
+        },
+        {
+          "state": "running",
+          "time": 53731.136999890565
+        },
+        {
+          "state": "running",
+          "time": 53731.136999890565
+        },
+        {
+          "state": "running",
+          "time": 53731.136999890565
+        },
+        {
+          "state": "running",
+          "time": 53731.136999890565
+        },
+        {
+          "state": "running",
+          "time": 53731.136999890565
+        },
+        {
+          "state": "running",
+          "time": 53731.136999890565
+        }
+      ],
+      "image_embed": true,
+      "verdict": "PASS"
+    }
+  ]
+}

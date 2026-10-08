@@ -1,0 +1,28 @@
+{
+  "verdict": "PASS",
+  "archive": "/tmp/starmap-gpt61-review-_ed85ydc/prepared-sparse/artifacts/catalog-generations/bac3f69a3733c1cc987816c0308114b8ded2b6291f461673065e29f428b749ca/starmap-catalog.tar.gz",
+  "archive_sha256": "909378de79fa9243e73ce07ea448e7ffcbe4d8768e5f772f5f6a40dca6f63670",
+  "generation_id": "bindings-a09b2fbbb3a32b1f5cbe5d745746e66bf46c520175934205b7bcef3498690915.local.72ae50b97f55",
+  "payload_sha256": "ad6b71e899dd9b5e0f4ee4195cdc4b07117447479e7f6b11117245ef33a68eb9",
+  "payload_bytes": 26776618,
+  "existing_provenance_roots_exact": 42477,
+  "new_model_provenance_roots": 62,
+  "existing_receipt_links_exact": 34,
+  "new_local_receipt_links": 1,
+  "current_reviews_preserved": 259,
+  "resolved_review": {
+    "code": "unresolved_model_reference",
+    "provider_id": "openai",
+    "provider_model_id": "gpt-6.1-sol",
+    "source": "providers",
+    "source_observation_id": "observation:v4:4a6e16812ed5ea20e354f92c79127d7a58ba110f562fdfa5df685c563d043fac",
+    "source_revision": {
+      "kind": "content_digest",
+      "value": "sha256:f925a18256e6c7a095ffaddd84b65d8d6fe7edb6aa7112c5a0acec2eac2b3504"
+    },
+    "evidence_checksum": "sha256:f925a18256e6c7a095ffaddd84b65d8d6fe7edb6aa7112c5a0acec2eac2b3504",
+    "reason": "provider offering has no explicit canonical model reference and was quarantined",
+    "prior_reviewed_model_link": ""
+  },
+  "existing_facts_and_membership_exact": true
+}

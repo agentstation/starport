@@ -1,0 +1,38 @@
+{
+  "verdict": "PASS",
+  "builds": {
+    "starport": {
+      "binary": "/tmp/agentstation-demo-starport-gpt61",
+      "sha256": "b123965c872b88c2fda6883eebcaae7c28fa01a45403e4035f3b2648f857d5d6",
+      "bytes": 167911602,
+      "source_root": "/Users/jack/src/github.com/agentstation/starport-product-demos",
+      "workspace": "/tmp/agentstation-product-demo-go.work",
+      "go_version": "go1.27.1"
+    },
+    "starmap": {
+      "binary": "/tmp/agentstation-demo-starmap-gpt61",
+      "sha256": "44d14cbf9895a74d04cc15274f896972afd39f75184f72bf453e3365bfe1c18d",
+      "bytes": 89503746,
+      "source_root": "/Users/jack/src/github.com/agentstation/starmap-product-demos",
+      "workspace": "off",
+      "go_version": "go1.27.1"
+    }
+  },
+  "frozen_source_sha256": {
+    "/Users/jack/src/github.com/agentstation/starmap-product-demos/runtime/runtime.go": "79a646bc36083cfa9f49ff58389897a7e95bd13044b48571b9fb3d15fccdaa05",
+    "/Users/jack/src/github.com/agentstation/starmap-product-demos/runtime/acquisition_policy_publication.go": "832e2bf61a2e671fbee034d42a62ba337f6b7c564a0cbfe1e049e72c4cad5ec6",
+    "/Users/jack/src/github.com/agentstation/starmap-product-demos/runtime/ordinary_noop_publication_test.go": "0510356fe64ae5309023f4ab1f07b03a7c14beff0784fa79e4331efe5922aafb",
+    "/Users/jack/src/github.com/agentstation/starport-product-demos/internal/app/catalog_source_timestamp_integration_test.go": "d2553f2772dc78511537ced90e0058fbc85b4ace8ecc0b901913ce18d83bf183"
+  },
+  "catalog_input_sha256": {
+    "authors/openai/models/gpt-6.1-sol.yaml": "e9c059fcaa3ba888377b6e4a2045fbfef9cac8f8ef785fd83310a1b4d63d6f3e",
+    "providers/openai/models/gpt-6.1-sol.yaml": "7a2c00c380ccc49355a98ed2bf28efc47d0d97efbef5a190e3d30674d962d3c0",
+    "endpoints.yaml": "aec3f32a3e26278a4b94f2c7d5f041c105cac05c806a1217913e921c06dee7a0",
+    "generation-manifest.json": "7cfe487141523cdc00fd6b5c54766c40b201f28056814f969cb0a301d10f2c5d",
+    "generation-payload.json.gz": "a2175c1f9c92c4935fbe065fbe73bba58898d8f08397007b6ea1f30b9c8c4bf4",
+    "generation.json": "f1051d8babd1f4c5f84747b2933f2e8cd2f50fb6bd40c2b7a40d9e347171253a",
+    "provenance.yaml": "d87974814643069bcd20ced5439e3fe6181e114f681ee354a0aa7ee3bff0a115"
+  },
+  "cli_and_console_same_binary": true,
+  "local_starmap_dependency": "devel"
+}
