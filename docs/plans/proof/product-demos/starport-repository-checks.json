@@ -1,0 +1,779 @@
+[
+  {
+    "index": 1,
+    "command": [
+      "make",
+      "format-check"
+    ],
+    "exit_code": 2,
+    "elapsed_seconds": 1.945,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/01-format-check.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "failure_tail": [
+      "gofmt is required for:",
+      "./internal/recovery/catalog_expiring_preparation_test.go",
+      "make: *** [format-check] Error 1"
+    ],
+    "initial_exit_code": 2,
+    "required_by_agents": false,
+    "latest_owner_result": {
+      "gofmt": "PASS after minimal inherited comment fix",
+      "goimports": "FAIL; 87 inherited files reported by root full check",
+      "changed_go_file_goimports": "PASS both changed Go files; pinned v0.48.0",
+      "baseline_proof": "/tmp/starport-pre-pr-gates-20261008/format-baseline-blobs.json"
+    }
+  },
+  {
+    "original_index": 2,
+    "command": [
+      "bash",
+      "scripts/verify-starmap-ownership.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 115.421,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/retry-20261008T162547Z/02-verify-starmap-ownership.sh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 12 passed, 0 failed"
+      ]
+    },
+    "process_fixture_signing_override": false,
+    "index": 2,
+    "initial_exit_code": 1,
+    "required_by_agents": true
+  },
+  {
+    "original_index": 3,
+    "command": [
+      "bash",
+      "scripts/verify-v1-architecture.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 59.567,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/retry-20261008T162547Z/03-verify-v1-architecture.sh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 11 passed, 0 failed"
+      ]
+    },
+    "process_fixture_signing_override": false,
+    "index": 3,
+    "initial_exit_code": 1,
+    "required_by_agents": true
+  },
+  {
+    "index": 4,
+    "command": [
+      "bash",
+      "scripts/test-dependency-direction-verifier.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.709,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/04-scripts_test-dependency-direction-verifiersh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 5,
+    "command": [
+      "bash",
+      "scripts/verify-dependency-direction.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.762,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/05-scripts_verify-dependency-directionsh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 6 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "original_index": 6,
+    "command": [
+      "bash",
+      "scripts/verify-catalog-driven-providers.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 192.688,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/retry-20261008T162547Z/06-verify-catalog-driven-providers.sh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 19 passed, 0 failed"
+      ]
+    },
+    "process_fixture_signing_override": false,
+    "index": 6,
+    "initial_exit_code": 1,
+    "required_by_agents": true
+  },
+  {
+    "index": 7,
+    "command": [
+      "bash",
+      "scripts/verify-package-layout.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 13.741,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/07-scripts_verify-package-layoutsh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 8,
+    "command": [
+      "bash",
+      "scripts/verify-readme-quickstart.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.087,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/08-scripts_verify-readme-quickstartsh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 9,
+    "command": [
+      "bash",
+      "scripts/verify-v1-release.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.226,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/09-scripts_verify-v1-releasesh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 16 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "original_index": 10,
+    "command": [
+      "bash",
+      "scripts/verify-release-workflow.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 7.176,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/retry-20261008T162547Z/10-verify-release-workflow.sh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Ran 2 tests in 3.097s",
+        "Ran 17 tests in 0.150s"
+      ]
+    },
+    "process_fixture_signing_override": true,
+    "index": 10,
+    "initial_exit_code": 128,
+    "required_by_agents": true
+  },
+  {
+    "index": 11,
+    "command": [
+      "bash",
+      "scripts/verify-developer-experience.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 6.902,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/11-scripts_verify-developer-experiencesh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 47 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 12,
+    "command": [
+      "bash",
+      "scripts/verify-doc-links.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.333,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/12-scripts_verify-doc-linkssh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 13,
+    "command": [
+      "bash",
+      "scripts/test-doc-link-verifier.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.226,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/13-scripts_test-doc-link-verifiersh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 14,
+    "command": [
+      "bash",
+      "scripts/verify-openrouter-parity.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.185,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/14-scripts_verify-openrouter-paritysh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 17 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 15,
+    "command": [
+      "bash",
+      "scripts/verify-console-modernization.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.071,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/15-scripts_verify-console-modernizationsh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 21 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 16,
+    "command": [
+      "bash",
+      "scripts/verify-auth-onboarding.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.126,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/16-scripts_verify-auth-onboardingsh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 26 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 17,
+    "command": [
+      "bash",
+      "scripts/verify-console-session-grants.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.711,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/17-scripts_verify-console-session-grantssh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 16 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 18,
+    "command": [
+      "bash",
+      "scripts/verify-model-modalities.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.34,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/18-scripts_verify-model-modalitiessh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 26 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 19,
+    "command": [
+      "bash",
+      "scripts/verify-files-api.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.183,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/19-scripts_verify-files-apish.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 22 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 20,
+    "command": [
+      "bash",
+      "scripts/verify-async-media-jobs.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.229,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/20-scripts_verify-async-media-jobssh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 18 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 21,
+    "command": [
+      "bash",
+      "scripts/verify-document-parser.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.23,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/21-scripts_verify-document-parsersh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 20 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 22,
+    "command": [
+      "bash",
+      "scripts/verify-reranking.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.65,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/22-scripts_verify-rerankingsh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 22 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 23,
+    "command": [
+      "bash",
+      "scripts/verify-catalog-performance.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.34,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/23-scripts_verify-catalog-performancesh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 20 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 24,
+    "command": [
+      "bash",
+      "scripts/verify-credential-sharing.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.228,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/24-scripts_verify-credential-sharingsh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 23 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 25,
+    "command": [
+      "bash",
+      "scripts/verify-enterprise-readiness.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.034,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/25-scripts_verify-enterprise-readinesssh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 33 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 26,
+    "command": [
+      "bash",
+      "scripts/verify-console-polish.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.234,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/26-scripts_verify-console-polishsh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "Summary: 48 passed, 0 failed"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 27,
+    "command": [
+      "bash",
+      "scripts/verify-action-pins.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 6.982,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/27-scripts_verify-action-pinssh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": [
+        "action pins: 17 reference(s) match their release tags"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 28,
+    "command": [
+      "bash",
+      "scripts/benchmark-overhead.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 12.22,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/28-scripts_benchmark-overheadsh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 29,
+    "command": [
+      "bash",
+      "scripts/smoke-first-run.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 51.483,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/29-scripts_smoke-first-runsh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 30,
+    "command": [
+      "pnpm",
+      "-C",
+      "console",
+      "check"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 35.075,
+    "outer_timeout_seconds": 1200,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/30-check.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [
+        539
+      ],
+      "reported_summaries": [
+        "Test Files  83 passed (83)",
+        "Tests  539 passed (539)"
+      ]
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 31,
+    "command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-timeout",
+      "30m",
+      "./..."
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1096.167,
+    "outer_timeout_seconds": 2400,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/31-_.log",
+    "counts": {
+      "go_test_cases_including_subtests": {
+        "pass": 7845,
+        "skip": 717
+      },
+      "go_packages": {
+        "skip": 11,
+        "pass": 69
+      },
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 32,
+    "command": [
+      "go",
+      "vet",
+      "./..."
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 3.776,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/32-_.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 33,
+    "command": [
+      "make",
+      "lint"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 13.722,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/33-lint.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 34,
+    "command": [
+      "make",
+      "build"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 24.623,
+    "outer_timeout_seconds": 1800,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/34-build.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  },
+  {
+    "index": 35,
+    "command": [
+      "bash",
+      "scripts/smoke-openrouter-sdks.sh"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 34.131,
+    "outer_timeout_seconds": 2400,
+    "timed_out": false,
+    "log": "/private/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z/35-scripts_smoke-openrouter-sdkssh.log",
+    "counts": {
+      "go_test_cases_including_subtests": {},
+      "go_packages": {},
+      "vitest_passed_cases": [],
+      "reported_summaries": []
+    },
+    "initial_exit_code": 0,
+    "required_by_agents": true
+  }
+]

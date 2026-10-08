@@ -12,11 +12,16 @@
     "ci": "GitHub lint and build pass",
     "contributor_review": "vhs-pr-review.md",
     "upstream_sync": {
-      "status": "in_progress",
+      "status": "published",
       "branch": "codex/sync-vhs-upstream",
       "upstream_commit": "24fa225",
       "missing_upstream_commits_before": 31,
-      "merge_authorized": false
+      "merge_authorized": false,
+      "commit": "9d2fd3576a9526f8ac1c8e60bf6f010466aa5a1a",
+      "pr": "https://github.com/agentstation/vhs/pull/11",
+      "missing_upstream_commits_after": 0,
+      "checks": "vhs-sync-check.json",
+      "autoreview": "vhs-sync-autoreview.json"
     }
   },
   "starmap": {
@@ -29,7 +34,7 @@
     "implementation_base": "codex/product-demo-media"
   },
   "starport": {
-    "head": "78ba3833cee0f1031155e75fea630beaf13e0157",
+    "head": "1579627f777b932995ad9cad081b165cdadf55ca",
     "base": "ecde4dfb8b583b05b3c573bd7fc21c65dd6e6a75",
     "dependency": "v0.17.1-0.20261008155418-ab3c76584e5a",
     "media_pr": "https://github.com/agentstation/starport/pull/435",
@@ -38,6 +43,9 @@
       "failed_job": 113406958369,
       "cause": "Go proxy HTTP2 INTERNAL_ERROR while downloading monitoring and jwt modules; compile did not complete",
       "retry_attempt": "GitHub reports job cannot be rerun while current workflow remains active"
-    }
+    },
+    "checks": "starport-publication-check.json",
+    "format": "87 inherited goimports findings; both changed Go files pass",
+    "implementation_status": "pre-pr review"
   }
 }
