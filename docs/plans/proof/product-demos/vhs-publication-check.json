@@ -1,0 +1,67 @@
+{
+  "base": "038df4f741b658981a9176671cd14850ff859d8c",
+  "source_sha256": {
+    "README.md": "82dfec45a68e2928dd7ba263f3406ec01c7ae421fa0b3c02afb51ef6d70af380",
+    "command.go": "db04910ee65ba6c7cf334d9881902d3b3878bf2ebeabe3f0c55cdde7016d6bf8",
+    "evaluator.go": "8d57b5a9876bc80d43d4a07d4c2b1b4cf9aca7e170a15dcfd7a12a4002c2ad18",
+    "examples/meta.tape": "043847e6ae7c5d6c6afde40e6f844c9030d3a7cb6a01a9e0156fbe526471993b",
+    "examples/welcome.tape": "fa448443484ae1f788c9a02bca10a75e89e045fa329e728380a93bb3c9891c3c",
+    "main.go": "f97307ce4ca5331b7dfa0907c88c4a2809b2ba23271ec59c60cb957ffc7f28c1",
+    "svg.go": "ed4ed40c2667e4dedad80bf83b55d94402f2042a48fd44a4da28a7789ad34be7",
+    "svg_test.go": "a834dd686af79865f6525903b1e578c013ed71e47c00c957892666b34cf91595",
+    "vhs.go": "0a8fa607b667169601da0246be178d0d05b9cb20c159c46533e1ffd0a4ca4545",
+    "video.go": "c8cf08020633ea69834e9d2669f6a5003549ff2ff4308173525d03d0abc4cb18",
+    "docs/demo-capture.md": "de257c033f37b3af4c35ea1e0054cd1d85a20958f694cb10f38c26ac43cab1a3",
+    "recording.go": "0c424fd6b51326ea528ce4c345cce8834a924039ca1f2d81dd94c723ca518fad",
+    "recording_test.go": "31dc91546801ba9f02fbab3d3a2c41c25779b86d62791429582e1df20b0774c5",
+    "svg_font.go": "c435e9077ff53d611bc2d3bfd1ef2b8a0ce2716990ba7c6757977dc22d8cb48d",
+    "svg_font_test.go": "31846fbf8df4fae26216853f8b2e535011dddfc5f302a04b4301f1587ca0bf12"
+  },
+  "binary_sha256": "6147d1673364172e9cdc64dd0de7b53b996206608ca87ed6d710c4cea545a3b9",
+  "race": {
+    "top_level": 71,
+    "cases": 190,
+    "fail": 0,
+    "skip": 0,
+    "packages": 4,
+    "browser_integration_ran": true,
+    "command": "VHS_BROWSER_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' go test -race -count=1 -json ./..."
+  },
+  "checks": {
+    "vet": "go vet ./...",
+    "build": "go build -o /tmp/agentstation-demo-vhs-prepr .",
+    "changed_lint": "golangci-lint run --new-from-rev=HEAD",
+    "full_lint_baseline_findings": 50,
+    "full_lint_current_findings": 50,
+    "new_issue_identities": 0,
+    "golangci_lint_version": "2.13.1",
+    "ci_lint_version": "2.3.0",
+    "example_syntax_pass": 103,
+    "example_syntax_excludes": "examples/errors (intentional invalid fixtures)",
+    "gofmt": "pass",
+    "diff_check": "pass",
+    "module_tidy": "go mod tidy -diff: pass, no changes",
+    "prose": "docs/demo-capture.md, new Go files and proposed PR body: pass, no diagnostics"
+  },
+  "limitations": [
+    "Windows and Linux browser captures were not run.",
+    "CI-pinned golangci-lint v2.3.0 was not run; the installed v2.13.1 reports only inherited issues.",
+    "Example validation proves syntax; inherited external-program demos were not all executed."
+  ],
+  "overlapping_prs": [
+    {
+      "number": 6,
+      "sha": "1e430f095a75a8dce41ed8f3b37d076a93b697df",
+      "owner": "xav-ie/vhs",
+      "state": "OPEN",
+      "maintainer_can_modify": true
+    },
+    {
+      "number": 8,
+      "sha": "fb3666d439234c95a7804703a1214bfc4fd16829",
+      "owner": "xav-ie/vhs",
+      "state": "OPEN",
+      "maintainer_can_modify": true
+    }
+  ]
+}

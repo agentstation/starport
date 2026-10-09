@@ -535,7 +535,7 @@
         "completion": "1.5e-05",
         "currency": "USD"
       },
-      "context_length": 1000000,
+      "context_length": 200000,
       "description": "Balanced Claude model for coding, analysis, agent workflows, and cost control",
       "architecture": {
         "input_modalities": [
@@ -550,7 +550,7 @@
         "instruct_type": null
       },
       "top_provider": {
-        "context_length": 1000000,
+        "context_length": 200000,
         "max_completion_tokens": 64000
       },
       "supported_parameters": [
@@ -580,7 +580,7 @@
           "provider": "anthropic",
           "provider_name": "Anthropic",
           "provider_model_id": "claude-sonnet-4-5-20250929",
-          "context_length": 1000000,
+          "context_length": 200000,
           "max_completion_tokens": 64000,
           "availability": "unknown",
           "lifecycle": "unknown",

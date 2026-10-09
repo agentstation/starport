@@ -1,0 +1,60 @@
+{
+  "kind": "current-source-cli",
+  "real_provider": false,
+  "verdict": "PASS",
+  "network_egress_denied": true,
+  "provider_credentials_present": false,
+  "shutdown_exit_code": 0,
+  "leftover_home_files": [],
+  "health": {
+    "status": "ok",
+    "timestamp": "2026-10-08T00:20:47Z",
+    "service": "starport",
+    "version": "dev"
+  },
+  "discovery": {
+    "generation_id": "bindings-a09b2fbbb3a32b1f5cbe5d745746e66bf46c520175934205b7bcef3498690915.local.72ae50b97f55",
+    "model": {
+      "id": "openai/gpt-6.1-sol",
+      "name": "GPT-6.1 Sol",
+      "description": "Reasoning model for coding, computer use, and professional work.",
+      "offerings": [
+        {
+          "provider": "openai",
+          "provider_model_id": "gpt-6.1-sol",
+          "availability": "unknown",
+          "lifecycle": "unknown",
+          "operations": [
+            "chat-completions"
+          ],
+          "routable_operations": [
+            "chat-completions"
+          ],
+          "readiness": "unknown"
+        }
+      ]
+    },
+    "selected_offering": {
+      "provider": "openai",
+      "provider_model_id": "gpt-6.1-sol",
+      "availability": "unknown",
+      "lifecycle": "unknown",
+      "operations": [
+        "chat-completions"
+      ],
+      "routable_operations": [
+        "chat-completions"
+      ],
+      "readiness": "unknown"
+    }
+  },
+  "visible_ending": {
+    "gateway_live": true,
+    "health_status": 200,
+    "authenticated_catalog_status": 200,
+    "anonymous_catalog_status": 401,
+    "selected_model": "openai/gpt-6.1-sol",
+    "provider": "openai",
+    "provider_model_id": "gpt-6.1-sol"
+  }
+}

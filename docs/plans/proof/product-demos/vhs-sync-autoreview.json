@@ -1,0 +1,6 @@
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "I found no P0 defects in this diff. I checked these areas: the new ScrollUp/ScrollDown commands and the Ctrl+arrow keys work end to end through the token, lexer, parser, command map and executor; the Rows/Columns settings check for conflicts and write through the shared Style pointer correctly; startBrowser now detects readiness by polling the DevTools endpoint and cleans up after itself; context is threaded through ttyd, ffmpeg and Render; and the error-returning Setup is wired into Evaluate correctly. The odd `fmt.` / comment / `Fprintf` line breaks in svg.go still compile as valid Go. There are some lower-priority concerns, such as the main.go change that appends `.tape` to file arguments without that suffix, but none reaches the P0 threshold.",
+  "overall_confidence": 0.72
+}

@@ -1,0 +1,20 @@
+package main
+import (
+ "testing"
+ "github.com/go-rod/rod"
+ "github.com/go-rod/rod/lib/launcher"
+)
+func TestReviewRoundedCornerPixel(t *testing.T) {
+ opts:=createTestSVGConfig(); opts.Style.BorderRadius=20
+ svg:=NewSVGGenerator(opts).Generate()
+ url:=launcher.New().Leakless(false).Bin("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome").MustLaunch()
+ browser:=rod.New().ControlURL(url).MustConnect(); t.Cleanup(func(){ _=browser.Close() })
+ page:=browser.MustPage("about:blank")
+ pixel:=page.MustEval(`async (svg) => {
+ const image=new Image(); image.src=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'})); await image.decode();
+ const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+ const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);return Array.from(ctx.getImageData(1,1,1,1).data);
+ }`,svg)
+ t.Logf("corner pixel: %v",pixel)
+ if pixel.Arr()[3].Int()!=0 {t.Fatalf("rounded corner alpha=%d, want transparent",pixel.Arr()[3].Int())}
+}

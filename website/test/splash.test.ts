@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { Journey } from '../src/components/journey/journey';
+import { ConsoleDemo } from '../src/components/journey/console-demo';
 import { Mascot, type MascotProps, type MascotState } from '../src/components/mascot';
 import {
   ACT_GROUNDS,
@@ -470,6 +471,9 @@ describe('journey timeline', () => {
     );
     const order = [...markup.matchAll(/<article id="chapter-([a-z-]+)"/g)].map((match) => match[1]);
     expect(order).toEqual(chapters.map((chapter) => chapter.id));
+    expect([...markup.matchAll(/class="still"/g)]).toHaveLength(chapters.length);
+    const consoleBeat = markup.split('id="chapter-console"')[1].split('</article>')[0];
+    expect(consoleBeat).toContain('aria-label="Starport Console tour"');
   });
 
   it('moves the request through its states in order', () => {
@@ -477,6 +481,20 @@ describe('journey timeline', () => {
     for (let index = 1; index < requestStates.length; index += 1) {
       expect(requestStates[index].at).toBeGreaterThan(requestStates[index - 1].at);
     }
+  });
+});
+
+describe('Console recording', () => {
+  it('offers native playback controls, a static poster, and a transcript', () => {
+    const markup = renderToStaticMarkup(createElement(ConsoleDemo));
+    expect(markup).toContain('controls=""');
+    expect(markup).toContain('playsInline=""');
+    expect(markup).toContain('preload="none"');
+    expect(markup).toContain('poster="/demo/console/poster.png"');
+    expect(markup).toContain('type="video/mp4"');
+    expect(markup).toContain('type="video/webm"');
+    expect(markup).toContain('href="/demo/console/TRANSCRIPT.md"');
+    expect(markup).not.toMatch(/autoplay|loop=/i);
   });
 });
 

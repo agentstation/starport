@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product demos plan</title>
+<style>
+  :root {
+    --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+    --page: #ffffff; --accent: #2563eb;
+    --done: #15803d; --on-done: #ffffff;
+    --in-progress: #eab308; --on-in-progress: #1a1e24;
+    --blocked: #dc2626; --on-blocked: #ffffff;
+    --removed: #9ca3af; --on-removed: #1a1e24;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e5e9ee; --muted: #9aa4af; --line: #333a43; --soft: #1b2027;
+      --page: #11151a; --accent: #60a5fa;
+      --done: #4ade80; --on-done: #1a1e24;
+      --in-progress: #facc15; --on-in-progress: #1a1e24;
+      --blocked: #f87171; --on-blocked: #1a1e24;
+      --removed: #6b7280; --on-removed: #ffffff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 1080px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; border-bottom: 1px solid
+    var(--line); padding-bottom: 0.25rem; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+  code { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  pre { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto;
+    line-height: 1.45; }
+  pre code { background: none; border: none; padding: 0; }
+  blockquote { margin: 0.75rem 0; padding: 0.6rem 1rem; border-left: 3px
+    solid var(--accent); background: var(--soft); }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0;
+    font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.35rem 0.55rem;
+    text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  #status-line { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+  /* Progress bar, left to right: done, in_progress, blocked, todo (the
+     empty track), then deferred, no-action, and rejected. */
+  .bar { display: flex; height: 0.9rem; border: 1px solid var(--muted);
+    border-radius: 999px; overflow: hidden; background: var(--soft); }
+  .bar > span { width: 0; height: 100%; }
+  .bar > span + span { box-shadow: inset 2px 0 0 var(--page); }
+  [data-seg="done"] { --seg: var(--done); }
+  [data-seg="in_progress"] { --seg: var(--in-progress); }
+  [data-seg="blocked"] { --seg: var(--blocked); }
+  [data-seg="todo"] { --seg: transparent; }
+  [data-seg="removed"] { --seg: var(--removed); }
+  .bar > span, .swatch { background-color: var(--seg);
+    print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .bar > [data-seg="blocked"], [data-seg="blocked"] .swatch {
+    background-image: repeating-linear-gradient(135deg, transparent 0 4px,
+      rgb(255 255 255 / 0.45) 4px 6px); }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem;
+    list-style: none; margin: 0.5rem 0 0; padding: 0; font-size: 0.88rem; }
+  .legend li { display: flex; align-items: center; gap: 0.4rem; }
+  .swatch { display: inline-block; width: 0.85rem; height: 0.85rem;
+    border: 1px solid var(--muted); border-radius: 3px; }
+  [data-seg="todo"] .swatch { background-color: var(--soft); }
+  .counts { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit,
+    minmax(280px, 1fr)); gap: 1rem; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem; background: var(--soft); }
+  figcaption { font-weight: 600; margin-bottom: 0.5rem; }
+  figure svg { max-width: 100%; height: auto; }
+  /* Ledger status tokens use the bar colors. */
+  tr[data-status] td:nth-child(3) code { font-weight: 600; }
+  tr[data-status^="done"] td:nth-child(3) code {
+    background: var(--done); color: var(--on-done); border-color: transparent; }
+  tr[data-status^="in_progress"] td:nth-child(3) code {
+    background: var(--in-progress); color: var(--on-in-progress);
+    border-color: transparent; }
+  tr[data-status^="blocked"] td:nth-child(3) code {
+    background: var(--blocked); color: var(--on-blocked);
+    border-color: transparent; }
+  tr[data-status^="deferred"] td:nth-child(3) code,
+  tr[data-status^="no-action"] td:nth-child(3) code,
+  tr[data-status^="rejected"] td:nth-child(3) code {
+    background: var(--removed); color: var(--on-removed);
+    border-color: transparent; }
+  tr[data-status] td:nth-child(3) code {
+    print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  @page { margin: 0.7in 0.6in; size: letter; }
+  @media print {
+    :root {
+      --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+      --page: #ffffff; --accent: #2563eb;
+      --done: #15803d; --on-done: #ffffff;
+      --in-progress: #eab308; --on-in-progress: #1a1e24;
+      --blocked: #dc2626; --on-blocked: #ffffff;
+      --removed: #9ca3af; --on-removed: #1a1e24;
+    }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Each bare task status maps to one bar segment.
+    var segmentOf = { "done": "done", "in_progress": "in_progress",
+      "blocked": "blocked", "todo": "todo", "deferred": "removed",
+      "no-action": "removed", "rejected": "removed" };
+    var terminal = { "done": 1, "no-action": 1, "rejected": 1 };
+    var names = { "done": "Done", "in_progress": "In progress",
+      "blocked": "Blocked", "todo": "To do",
+      "removed": "Deferred, no-action, or rejected" };
+    var counts = { "done": 0, "in_progress": 0, "blocked": 0, "todo": 0,
+      "removed": 0 };
+    var rows = document.querySelectorAll("#ledger tbody tr[data-status]");
+    var total = rows.length, closed = 0, running = [], unknown = [];
+    rows.forEach(function (row) {
+      var status = row.getAttribute("data-status").split("(")[0].trim();
+      if (!segmentOf[status]) { unknown.push(row.id); status = "todo"; }
+      counts[segmentOf[status]] += 1;
+      if (terminal[status]) { closed += 1; }
+      if (status === "in_progress") { running.push(row.id); }
+    });
+    var progress = document.getElementById("progress");
+    var summary = [];
+    progress.querySelectorAll(".bar > [data-seg]").forEach(function (seg) {
+      var key = seg.getAttribute("data-seg"), n = counts[key];
+      seg.style.width = total ? (n / total) * 100 + "%" : "0";
+      seg.title = names[key] + ": " + n;
+      summary.push(names[key] + " " + n);
+    });
+    progress.querySelectorAll(".legend [data-seg]").forEach(function (item) {
+      item.querySelector("b").textContent = counts[item.getAttribute("data-seg")];
+    });
+    var pct = total ? Math.round((closed / total) * 100) : 0;
+    var text = closed + " of " + total + " tasks terminal (" + pct + "%).";
+    if (running.length) { text += " In progress: " + running.join(", ") + "."; }
+    if (unknown.length) {
+      text += " Unknown status, counted as to do: " + unknown.join(", ") + ".";
+    }
+    progress.querySelector(".bar").setAttribute("aria-label",
+      text + " " + summary.join(", ") + ".");
+    progress.querySelector(".counts").textContent = text;
+  });
+</script>
+</head>
+<body>
+<header id="overview"><h1>Product demos plan</h1>
+<p id="status-line">Status: <code data-plan-status="active">active</code>. Owner: this plan. Created: 2026-10-07.</p>
+
+<p>Baseline: Starport c63b6284, Starmap c3e38970d, VHS 038df4f. Proof root: <code>proof/product-demos/</code>. Next action: <a href="#current-resume-state">Current resume state</a>.</p>
+<section id="current-resume-state"><h2>Current resume state</h2>
+
+<p>Updated: 2026-10-09. PD1 through PD8 and PD10 status: done. <a href="proof/product-demos/publication-check.json">Publication proof</a>. PD9 waits for the final implementation merge.</p>
+
+<p>On 2026-10-08, the owner moved ownership of every open Starmap and Starport PR to the lead. Govulncheck failed every PR, so two toolchain PRs merged first. Starmap PR <a href="https://github.com/agentstation/starmap/pull/257">257</a> moved to Go 1.27.2 and x/net v0.60.0 in merge commit <code>0bfa52f64</code>. Starport PR <a href="https://github.com/agentstation/starport/pull/438">438</a> made the same move and pinned gosec to a master commit in merge commit <code>53f00771d</code>. Starport media PR 435 merged as <code>c98767c9f</code>.</p>
+
+<p>On 2026-10-09, the owner chose a revised merge order. First, Starmap PR 252 lands with code fixes and demo tooling only. It adds no catalog records and no media. Next, a separate <code>catalog:</code> PR adds the two GPT-6.1 Sol records and a regenerated embed. Then the lead records the media again against the merged generation, and Starmap PR 251 lands. Starport PR 436 rebases onto main <code>53f00771d</code>, pins Starmap main by pseudo-version instead of a tag, and retargets to main.</p>
+
+<p>VHS sync PR: <a href="https://github.com/agentstation/vhs/pull/11">11</a>. It includes all 31 upstream commits through <code>24fa225</code>. Native Chrome race passes 230 cases with no skips. Static checks, builds, 106 tape checks, and autoreview pass. All eight hosted build and lint checks pass. Main remains behind until PR 11 merges.</p>
+
+<p>Earlier VHS demo commit <code>346bbb1e</code> is already on main. Its push used an unexpected destination through push.default=upstream. Root disclosed the mistake and preserved published history. The dedicated sync uses its own explicit branch ref.</p>
+
+<p>Starmap media PR: <a href="https://github.com/agentstation/starmap/pull/251">251</a>. Source PR: <a href="https://github.com/agentstation/starmap/pull/252">252</a>. Required local checks and autoreview pass. Extra broad race runs hit local timeouts. PR 252 now targets main at head <code>df72b8960</code>, and its CI runs.</p>
+
+<p>The unchanged baseline race runtime-2 package hit its 30-minute aggregate timeout. No assertion or race failure appeared. <a href="proof/product-demos/starmap-media-ci-diagnosis.json">Diagnosis</a>. GitHub runs retry attempt 2. Its result remains unverified.</p>
+
+<p>Starport source PR: <a href="https://github.com/agentstation/starport/pull/436">436</a>. It rebases onto main <code>53f00771d</code>. It pins Starmap through pseudo-version <code>v0.17.1-0.20261009150341-120a49889009</code> on Starmap main. Before the rebase, all 34 required standalone checks passed. The extra format check reported 87 inherited goimports findings. Both changed Go files passed.</p>
+
+<p>These results predate the rebase. Starport tests pass 7,845 Go cases, 539 Console cases, and 84 website cases. The full Go run skips 717 cases. Separate repository checks qualify two skipped cases. The remaining 715 optional cases stay unverified locally. Opus 5.5 high autoreview passes all six review chunks with no P0 findings.</p>
+
+<p>Source PR workflows require a main base. Require green CI before merging source. Merge Starmap source before Starport source. After Starmap PR 252 merges, move the Starport pin to the new Starmap main commit. The new Starmap module declares Go 1.27.2 as its Go version. Update the producer Go version checks in three files to match it.</p>
+
+<p>The contributor VHS review is complete. None of heads 6 through 9 is ready to merge. <a href="proof/product-demos/vhs-pr-review.md">Review</a>. Recordings remain accepted: CLI SVG 54.26 seconds, Starmap SVG 54.37 seconds, and Console 35.206 seconds. Catalog and media remain frozen until the <code>catalog:</code> PR merges.</p>
+
+<p>Next action: wait for Starmap PR 252 to merge. Then move the Starport pin, run the checks again, and retarget PR 436 to main. The lead owns review and merge of these PRs. The owner did not authorize releases, deployment, contributor comments, or history rewrites. Preserve this plan and the worktrees until the final implementation merge triggers PD9.</p>
+
+</section>
+<section id="outcome"><h2>Outcome</h2><blockquote>The READMEs and website show accurate product use through reproducible recordings. Terminal recordings preserve visible elapsed time. Console recordings show the actual browser UI.</blockquote></section>
+  <section id="progress">
+    <h2>Progress</h2>
+    <div class="bar" role="img" aria-label="Progress appears when the page loads.">
+      <span data-seg="done"></span><span data-seg="in_progress"></span><span data-seg="blocked"></span><span data-seg="todo"></span><span data-seg="removed"></span>
+    </div>
+    <ul class="legend">
+      <li data-seg="done"><span class="swatch" aria-hidden="true"></span>Done <b></b></li>
+      <li data-seg="in_progress"><span class="swatch" aria-hidden="true"></span>In progress <b></b></li>
+      <li data-seg="blocked"><span class="swatch" aria-hidden="true"></span>Blocked <b></b></li>
+      <li data-seg="todo"><span class="swatch" aria-hidden="true"></span>To do <b></b></li>
+      <li data-seg="removed"><span class="swatch" aria-hidden="true"></span>Deferred, no-action, or rejected <b></b></li>
+    </ul>
+    <p class="counts">Progress appears here when the page loads. The status
+      ledger below is the source of truth.</p>
+  </section>
+<section id="architecture"><h2>Architecture</h2><div class="pair"><figure><figcaption>Before</figcaption><pre>VHS: sampled frame count → playback time
+Starport: first request poster + old Console link
+Starmap: old catalog-list tape</pre></figure><figure><figcaption>After</figcaption><pre>VHS: visible elapsed timestamps → playback time
+Starport: CLI SVG + Console video/GIF
+Starmap: catalog server + catalog-source SVG</pre></figure></div></section></header>
+<main><section id="scope"><h2>Scope</h2><p>This plan owns product recordings, their scripts, the two README embeds, the website Console scene, and required VHS recording fixes.</p><p>The production catalog plan owns release qualification and its existing evidence. Preserve its v1.3.0 first-request recording and verifier binding.</p><p>Non-goals: new product APIs, paid provider calls, a terminal-engine rewrite, deployment, and release publication. PD10 includes the upstream dependency and security changes.</p></section>
+<section id="ledger"><h2>Status ledger</h2><table><thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr></thead><tbody>
+<tr id="PD1" data-status="done"><td>PD1</td><td>VHS source comparison and timing repairs</td><td><code>done</code></td><td><a href="proof/product-demos/vhs-comparison.md">VHS comparison</a>. Race suite: 190 passes.</td></tr>
+<tr id="PD2" data-status="done"><td>PD2</td><td>Starmap server and catalog-source demo</td><td><code>done</code></td><td>SVG 54.37 seconds, GIF 54.40 seconds. Nine regression tests, 10 source checks, 10 output checks, and 11 story checks pass. <a href="proof/product-demos/starmap-media-check.json">Final source and media evidence</a>.</td></tr>
+<tr id="PD3" data-status="done"><td>PD3</td><td>Starport CLI demo</td><td><code>done</code></td><td>SVG 54.26 seconds, GIF and MP4 54.28 seconds. Exact Sol offering, real typing, three chapters, and an eight-second live result. Twenty-three CLI tests and 42 legacy capture tests pass.</td></tr>
+<tr id="PD4" data-status="done"><td>PD4</td><td>Console capture and website media</td><td><code>done</code></td><td>Console capture 35.206 seconds. Current accepted Starmap payload, visible pointer and search typing, empty credential form, and stable closing. All 84 website tests and four browser layouts pass.</td></tr>
+<tr id="PD5" data-status="done"><td>PD5</td><td>Integrate READMEs and verify all media</td><td><code>done</code></td><td>Separate README media and website scene integrated. Six browser cases, all source and media bindings, documentation links, and prose checks pass. <a href="proof/product-demos/media-checks.json">Final media evidence</a>.</td></tr>
+<tr id="PD6" data-status="done"><td>PD6</td><td>Verify GPT-6.1 Sol catalog availability</td><td><code>done</code></td><td>Catalog preservation and native generation gates pass. Bootstrap: 51 functions and 152 cases. Runtime preservation: 70 functions and 198 cases. Four no-op runtime race tests and the native consumer regression pass. <a href="proof/product-demos/consumer-timestamp-check.json">Timestamp evidence</a>. Final paired binaries are rebuilt.</td></tr>
+<tr id="PD7" data-status="done"><td>PD7</td><td>Publish reviewed repository updates</td><td><code>done</code></td><td>Owner: root in the three product worktrees. User authorized commits, branch pushes, and PR submission on 2026-10-08. Independent checks: vhs_timing and starmap_demo. Starport pins the Starmap main pseudo-version <code>v0.17.1-0.20261009150341-120a49889009</code> after the rebase. PRs: VHS 11, Starmap 251/252, Starport 435/436. All pre-PR gates pass. CI and inherited format limits appear in the resume state.</td></tr>
+<tr id="PD8" data-status="done"><td>PD8</td><td>Review open contributor VHS PRs</td><td><code>done</code></td><td>Owner: root and vhs_timing. User requested a full review on 2026-10-08. Review PRs 6 through 9 against main 346bbb1e. Root tests dimensions and progress. vhs_timing tests timing and fonts. <a href="proof/product-demos/vhs-pr-review.md">Full review and recommendations</a>. Six P2 findings with reproduced probes. No contributor branches, reviews, or PR states will change.</td></tr>
+<tr id="PD10" data-status="done"><td>PD10</td><td>Integrate Charmbracelet VHS main</td><td><code>done</code></td><td>User authorized the dedicated sync PR on 2026-10-08. Owner: vhs_timing, with root publication. Frozen upstream: <code>24fa225</code>. Current fork main: <code>346bbb1e</code>. Integrate all 31 upstream commits and preserve fork SVG, timing, exact fonts, and package trust. Merge commit: <code>9d2fd357</code>. <a href="https://github.com/agentstation/vhs/pull/11">Sync PR 11</a> contains all 31 upstream commits. Native race, static checks, builds, tape checks, and autoreview pass. <a href="proof/product-demos/vhs-sync-check.json">Proof</a>. No main merge or release.</td></tr>
+<tr id="PD9" data-status="todo"><td>PD9</td><td>Cleanup after final implementation merge</td><td><code>todo</code></td><td>Waits for the final implementation merge.</td></tr>
+</tbody></table></section>
+<section id="tasks"><h2>Tasks</h2>
+
+<h3>PD1 VHS</h3><p>Compare pinned fork and upstream commits, releases, open fixes, and browser selection. Test slow capture, hidden spans, failure propagation, and SVG duration. Run <code>go test ./...</code> and <code>go vet ./...</code>. Record actual rendering duration.</p>
+
+<h3>PD2 Starmap</h3><p>Review every maintained product tape. Execute loopback readiness, model lookup, manifest, and generation-pinned payload verification. Require an opening goal and an ending that matches the observed model and generation. Record actual output with no acquisition credentials. Verify SVG typing at 35 milliseconds per character, chapter titles, and fallback duration.</p>
+
+<h3>PD3 Starport CLI</h3><p>Review current capture tools against source. Execute offline catalog inspection, authenticated temporary gateway startup, readiness, and catalog discovery. Record no provider inference claim. Verify SVG and GIF output.</p>
+
+<p>Require at least six intermediate command prefixes for search, model inspection, and gateway startup. Verify the opening goal, titles before actions, live gateway ending, and stop-before-restart instructions. Reject visible capture helpers.</p>
+
+<h3>PD4 Console and website</h3><p>Record actual overview, model search, model detail, selected provider, and empty credential setup. Verify the exact model and missing credential. Require a goal and stable result card. Refuse credential writes.</p>
+
+<p>Add video with a static poster and playback controls to the Console scene. Preserve reduced-motion behavior. Run website lint, tests, and build. Inspect desktop and mobile playback.</p>
+
+<p>Require a fresh validated local Starmap generation without fallback or degradation. Inspect five pointer targets and visible search typing. Verify the goal and three chapter titles before actions. Require a stable closing card.</p>
+
+<h3>PD6 Model selection</h3>
+
+<p>Verify the exact model ID against official OpenAI documentation and current maintained catalog sources.</p>
+
+<p>Use a real catalog publication or maintained local update. Refuse fabricated model records.</p>
+
+<p>Preserve released first-request evidence. Regenerate the three current stories only after the selected model is available.</p>
+
+<p>Repeat source bindings, model guards, relevant tests, and browser checks.</p>
+
+<p>Before catalog promotion, reproduce the preservation failure in focused tests. Repair the owning source or replay contract. Verify all prior model, offering, membership, and provenance facts. Only the new reviewed OpenAI definition and offering can change. Remove only its resolved review candidate. Retain every other candidate and original source receipt.</p>
+
+<p>Run the affected race tests, vet, goago, and repository catalog-generation checks. Replay the authentic attested checkpoint offline within the existing payload bound. Independently compare the resulting payload and metadata with the accepted baseline. Bind the reviewed input files and exact compiled generation in every new capture.</p>
+
+<p>Verify that a real local Starmap server feeds the Starport development gateway. Require accepted route validation, exact source payload checksums, and successful authenticated catalog reads. Reproduce a consumer acceptance conflict before its repair. Preserve generation immutability and acceptance fences.</p>
+
+<h3>PD5 Integration</h3><p>Add separate CLI and Console README embeds. Preserve release proof links. Run README quickstart and demo verifiers, document-link checks, focused tests, and technical-writing lint. Check media sizes, durations, SVG playback, and secret-free provenance.</p>
+
+<h3>PD7 Publication</h3><p>Integrate current main without overwriting unrelated work. Run repository checks on the final branch. Pin Starport to the reviewed Starmap commit. Run autoreview with <code>--gate pre-pr --mode auto</code> after final checks and commits.</p>
+
+<p>Publish each complete code diff above its verified media prerequisite. Link dependencies and merge order. Attach every PR to this chat.</p>
+
+<h3>PD10 Upstream sync</h3><p>Merge frozen Charmbracelet main into the reviewed fork branch. Preserve fork module identity and current SVG, font, timing, raster, and error contracts. Integrate upstream commands, grid sizing, Windows capture, render context, encoder errors, and security updates. Run native Chrome race tests, static checks, build, formatting, module consistency, and tape parsing. Confirm zero missing upstream commits on the PR branch.</p>
+
+<p>Run pre-PR autoreview after final checks and root commit. Submit and attach a dedicated sync PR.</p>
+
+<h3>PD8 Contributor review</h3><p>Inspect every open VHS PR, its exact head, merge state, source contracts, tests, and checks. Test concrete regressions against current main. Report defects with file and line references. Recommend merge, revision, or superseded status for each PR. Do not merge, close, or comment on these PRs.</p>
+
+<h3>PD9 Cleanup</h3><p>After the final implementation merge, archive or delete this plan and remove task worktrees. Preserve unmerged work until that trigger.</p></section>
+<section id="goal"><h2>Goal</h2><pre>Execute this plan to completion. Read Current resume state, repository instructions, and each active task contract. Work only in the three named product worktrees under /Users/jack/src/github.com/agentstation. Resume from git state and this ledger. Run independent tasks in parallel. Preserve unrelated checkouts and existing released first-request evidence. The user authorized commits, branch pushes, demo PRs, and a dedicated VHS upstream sync PR on 2026-10-08. On 2026-10-08 the owner moved review and merge of these PRs to the lead, and on 2026-10-09 the owner authorized the rebase, the pin move, and the force-push of the PR branches. Run final checks and pre-PR autoreview before publication. Merge only reviewed green PRs at exact heads. Do not release or deploy. Completion requires accurate generated product media, passing applicable checks, browser playback inspection, and a source-grounded VHS update recommendation. Record unresolved checks as UNVERIFIED. Update the ledger before any stop. Cleanup waits for the final implementation merge.</pre></section>
+<section id="execution-log"><h2>Execution log</h2><p><a href="proof/product-demos/execution-history.html">Earlier execution entries</a> retain the original actions and evidence.</p>
+<table><thead><tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr></thead><tbody>
+<tr><td>2026-10-07</td><td>PD6 accepted candidate</td><td>Native offline preparation and independent catalog comparison pass.</td><td>All 42,477 existing provenance roots, facts, membership, 34 receipts, and 259 unrelated reviews remain exact. Only Sol records and 62 related roots enter the catalog. Original-history replay passes in 121.88 seconds. Local staging and final gates remain in progress.</td></tr>
+<tr><td>2026-10-07</td><td>PD2 through PD6 final</td><td>Preserve the catalog, repair immutable no-op state, rebuild paired binaries, and recapture all three Sol stories.</td><td><a href="proof/product-demos/audit.md">Final audit</a>. CLI 54.26 seconds, Starmap 54.37 seconds, Console 35.206 seconds. All 84 website tests, six browser cases, media bindings, and focused race regressions pass. Changes remain uncommitted.</td></tr>
+<tr><td>2026-10-08</td><td>PD7 authority</td><td>The user authorized updating AgentStation VHS and submitting Starport and Starmap demo PRs.</td><td>Root owns publication. Current main includes the separate compaction repair. Preserve it and pin the Starport dependency before standalone checks.</td></tr>
+<tr><td>2026-10-08</td><td>PD10 publication</td><td>Merge frozen upstream into a dedicated branch and submit VHS PR 11.</td><td>All 31 commits enter the branch. Native Chrome race: 230 cases, zero failures or skips. Static checks, builds, 106 tape checks, and autoreview pass. Main merge remains unauthorized.</td></tr><tr><td>2026-10-08</td><td>PD7 publication complete</td><td>Publish Starport source PR 436 above media PR 435.</td><td>All 34 required standalone commands pass. Full source review uses six bounded passes. No P0 findings. The exact Starmap dependency and native consumer race pass. CI and optional coverage remain explicit.</td></tr><tr><td>2026-10-08</td><td>Hosted CI limits</td><td>Diagnose Starmap media timeout and request one failed-job retry.</td><td>The selected code, workflow, runner, and dependencies match a previously passing baseline. The package exceeds its aggregate 30-minute budget after 502 passing cases. Slowdown cause remains unproven. Retry attempt 2 runs. Starport media awaits remaining jobs before the Go proxy failure can retry.</td></tr><tr><td>2026-10-09</td><td>PD7 rebase and pin move</td><td>Rebase source PR 436 onto Starport main <code>53f00771d</code>. Drop the media and indent changes that main already holds.</td><td>The branch carries nine signed commits and no merge commits. With the current pin, app tests pass 658 cases, skip 70, and fail none. Recovery tests, 23 CLI demo tests, 84 website tests, and documentation links pass. Against Starmap main <code>0bfa52f64</code>, nine app tests fail. Eight expect producer Go version 1.27.1, and one needs the PR 252 runtime fix. The pin move to <code>v0.17.1-0.20261009150341-120a49889009</code> waits for Starmap PR 252.</td></tr></tbody></table></section></main></body></html>

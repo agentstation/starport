@@ -14,7 +14,7 @@ context, and price fact.
 [Watch the 41-second first request](docs/assets/first-use-v1.3.0/first-use.gif)
 or read the [transcript and reproduction steps](docs/assets/first-use-v1.3.0/TRANSCRIPT.md).
 The recording uses release v1.3.0 and a real provider. It shortens the credential-entry wait and preserves inference timing.
-The static preview does not autoplay. The earlier [console tour](docs/assets/2026-08-29_starport-console.gif) shows the catalog and provider views.
+The static preview does not autoplay.
 
 Starport serves individual developers, startups, and enterprises:
 
@@ -23,6 +23,40 @@ Starport serves individual developers, startups, and enterprises:
 - A startup keeps its OpenAI and OpenRouter clients and changes one base URL.
 - An enterprise adds shared provider inference credentials, BYOK policy,
   budgets, rate limits, encrypted credential storage, and secret references.
+
+## CLI and Console
+
+The recordings below use current source and show catalog inspection and a temporary gateway.
+The CLI uses the reviewed local Starmap catalog embedded in its source build.
+The Console reads that generation from a local Starmap server.
+Neither recording uses provider inference credentials.
+Each recording starts with a goal and ends with its result and next step.
+Short chapter titles introduce each action, and the results pause for reading.
+
+The first-request recording above proves inference with release v1.3.0.
+
+**CLI:** choose a model and verify an authenticated local gateway before configuring inference.
+Search the catalog, inspect the model, start the gateway, and read its catalog API.
+The ending identifies the provider credential and client settings needed for inference.
+
+![Starport CLI searches the catalog and serves authenticated catalog discovery.](docs/assets/cli-current/cli.gif)
+
+[Animated SVG](docs/assets/cli-current/cli.svg),
+[video](docs/assets/cli-current/cli.mp4),
+[static preview](docs/assets/cli-current/poster.png), and
+[transcript and reproduction steps](docs/assets/cli-current/TRANSCRIPT.md).
+
+**Console:** choose a model and find the credential setup for its provider.
+Check the current catalog, find `gpt-6.1-sol`, and inspect its capabilities and offerings.
+Follow its OpenAI offering and open the empty shared credential form.
+The ending states the missing credential and the next step.
+
+![Starport Console finds a model and opens its provider credential setup.](docs/assets/console-demo/console.gif)
+
+[Video](docs/assets/console-demo/console.mp4),
+[static preview](docs/assets/console-demo/poster.png), and
+[transcript and reproduction steps](docs/assets/console-demo/TRANSCRIPT.md).
+The website Console scene uses this video with playback controls.
 
 ## Install
 

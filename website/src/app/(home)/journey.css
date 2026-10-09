@@ -915,6 +915,80 @@
   margin-top: 0;
 }
 
+.splash .console-demo {
+  margin: 0;
+}
+
+.splash .console-demo video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-lg);
+  background: var(--bg-canvas);
+}
+
+.splash .console-demo figcaption {
+  margin-top: 12px;
+  color: var(--stage-body);
+  font-size: 13.5px;
+}
+
+.splash .console-demo a {
+  color: var(--accent-text);
+  text-underline-offset: 3px;
+}
+
+.splash .console-scene {
+  position: absolute;
+  top: 50%;
+  left: max(var(--gutter), calc((100% - 1440px) / 2));
+  width: min(740px, 48vw);
+  translate: 0 -50%;
+}
+
+.splash .journey-stage[data-console='true'] canvas.world {
+  opacity: 0;
+}
+
+.splash .console-story {
+  display: none;
+}
+
+@media (min-height: 780px) and (max-width: 759px) {
+  .splash .console-scene {
+    top: 50%;
+    left: var(--gutter);
+    width: calc(100% - 2 * var(--gutter));
+    translate: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (max-height: 620px), (max-width: 759px) and (max-height: 779px) {
+  .splash .console-scene {
+    display: none;
+  }
+
+  .splash #chapter-console .still {
+    display: none;
+  }
+
+  .splash .beat > .console-story {
+    display: block;
+    grid-column: 2;
+    grid-row: 1 / span 6;
+    align-self: center;
+  }
+
+  @media (max-width: 900px) {
+    .splash .beat > .console-story {
+      grid-column: 1;
+      grid-row: auto;
+      margin-top: 24px;
+    }
+  }
+}
+
 /* ---------------------------------------------------------------------- */
 /* Afterword: the colophon on the end card                                  */
 /* ---------------------------------------------------------------------- */

@@ -1,0 +1,42 @@
+{
+  "recordings": [
+    {
+      "recording": "Starport CLI",
+      "record": "/Users/jack/src/github.com/agentstation/starport-product-demos/docs/assets/cli-current/record.json",
+      "record_sha256": "eebaf30a7963677da67c263fc5f993aa62b1d4a5040be99c03143570833acdc4",
+      "durations": {
+        "svg": 54.26,
+        "gif": 54.28
+      },
+      "chapter_count": 3,
+      "verdict": "PASS"
+    },
+    {
+      "recording": "Starport Console",
+      "record": "/Users/jack/src/github.com/agentstation/starport-product-demos/docs/assets/console-demo/record.json",
+      "record_sha256": "eadf450c856a8e8fa553ec9280218a7540c34ebe8a68ffb7611059c803af72f0",
+      "durations": {
+        "console.mp4": 35.24,
+        "console.webm": 35.24,
+        "console.gif": 35.2
+      },
+      "chapter_count": 3,
+      "verdict": "PASS"
+    },
+    {
+      "recording": "Starmap server",
+      "record": "/Users/jack/src/github.com/agentstation/starmap-product-demos/scripts/demo-record.json",
+      "record_sha256": "c5263c61e4c1a1eb13b7c8667c3263c14ad235c2f6c8ea024c600e6f0e4668ce",
+      "durations": {
+        "svg": 54.37,
+        "gif": 54.4
+      },
+      "chapter_count": 3,
+      "verdict": "PASS"
+    }
+  ],
+  "vhs_sha256": "6147d1673364172e9cdc64dd0de7b53b996206608ca87ed6d710c4cea545a3b9",
+  "browser_checked": "Chrome 154.0.8037.98",
+  "github_image_proxy": "UNVERIFIED",
+  "windows_capture": "UNVERIFIED"
+}

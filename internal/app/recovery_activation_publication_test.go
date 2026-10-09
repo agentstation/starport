@@ -33,7 +33,7 @@ func buildActivationProducerProbe(t *testing.T, owner, source string) string {
 	require.NoError(t, json.Unmarshal(output, &module))
 	require.True(t, strings.HasPrefix(module.Version, "v"))
 	require.True(t, filepath.IsAbs(module.Dir))
-	require.Equal(t, "1.27.1", module.GoVersion)
+	require.Equal(t, "1.27.2", module.GoVersion)
 	require.True(t, strings.HasPrefix(module.Sum, "h1:"))
 	ownedModule := filepath.Join(t.TempDir(), "producer")
 	copyActivationProbeModule(t, module.Dir, ownedModule)

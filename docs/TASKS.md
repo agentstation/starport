@@ -7,7 +7,10 @@ Last Updated: 2026-10-08
 
 ### Active Work
 
-No plan is active.
+The [product demo plan](plans/product-demos-plan.html) owns current Console and CLI media,
+the Starmap server recording, and VHS capture fixes.
+It preserves the production plan's release qualification and released first-request evidence.
+Its [audit](plans/proof/product-demos/audit.md) records local checks and publication limits.
 
 The production catalog plan completed on 2026-10-08 against Starmap `v0.17.0` and Starport `v1.3.0`.
 Its archive lives in `agentstation/starmap` at `docs/reviews/catalog-lifecycle/starport-production-catalog-plan.html`.

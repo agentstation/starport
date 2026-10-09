@@ -1,0 +1,14 @@
+{
+  "command": "GOWORK=off go test -race -count=1 -timeout=5m -json ./internal/app -run '^TestDevelopmentCatalogAcceptsUnchangedDerivedPublication$'",
+  "exit_code": 0,
+  "module_version": "v0.17.1-0.20261008155418-ab3c76584e5a",
+  "module_commit": "ab3c76584e5a0fce8054e75e09c19b655cc79506",
+  "replace": false,
+  "test_seconds": 79.8,
+  "package_seconds": 82.335,
+  "passed_top_level_tests": 1,
+  "failures": 0,
+  "skips": 0,
+  "log": "/tmp/starport-published-starmap-consumer-race-20261008.jsonl",
+  "contract": "Production Starmap server and Starport development app accept the unchanged committed derived generation without changing strict timestamp or sequence acceptance."
+}

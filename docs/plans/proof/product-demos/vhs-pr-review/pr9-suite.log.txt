@@ -1,0 +1,6 @@
+ok  	github.com/agentstation/vhs	2.858s
+?   	github.com/agentstation/vhs/examples/gum/src/lipgloss	[no test files]
+?   	github.com/agentstation/vhs/examples/neofetch	[no test files]
+ok  	github.com/agentstation/vhs/lexer	1.462s
+ok  	github.com/agentstation/vhs/parser	2.089s
+ok  	github.com/agentstation/vhs/token	1.596s

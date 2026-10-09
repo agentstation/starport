@@ -1,0 +1,566 @@
+{
+  "problem": "Relative cursor erasure left a hidden setup command inside the visible terminal viewport",
+  "diagnostic_svg_sha256": "5e3771912e2e9254a38b5249458db17c58b3438928d9ff0b77d2c70024a3efd9",
+  "visible_occurrences": [
+    {
+      "frame": 117,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 118,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 119,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 120,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 121,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 122,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 123,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 124,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 125,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 126,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 127,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 128,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 129,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 130,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 131,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 132,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 133,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 134,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 135,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 136,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 137,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 138,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 139,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 140,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 141,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 142,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 143,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 144,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 145,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 146,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 147,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 148,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 149,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 150,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 151,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 152,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 153,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 154,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 155,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 156,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 157,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 158,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 159,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 160,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 161,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 162,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 163,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 164,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 165,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 166,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 167,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 168,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 169,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 170,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 171,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 172,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 173,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 174,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 175,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 176,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 177,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 178,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 179,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 180,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 181,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 182,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 183,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 184,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 185,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 186,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 187,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 188,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 189,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 190,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 191,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 192,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 193,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 194,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 195,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 196,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 197,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 198,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 199,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 200,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 201,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 202,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 203,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 204,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 205,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 206,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 207,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 208,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 209,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 210,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 211,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 212,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 213,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 214,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 215,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 216,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 217,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 218,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 219,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 220,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 221,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 222,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 223,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 224,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 225,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 226,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    },
+    {
+      "frame": 227,
+      "y": "121.8",
+      "line_prefix": "$ gateway_pid="
+    }
+  ],
+  "failed_workaround": "500-millisecond hidden settling pauses did not remove the retained row",
+  "selected_fix": "Clear the terminal after setup and print its editorial heading; retain real launch, banner, and readiness output",
+  "pending_frame_race": "No evidence from this diagnostic",
+  "corrected_diagnostic_svg_sha256": "72851be6475843868052b15c339c3aec1a58750399cf800d2e062472db7a1c79",
+  "corrected_diagnostic_helper_rows": 0
+}

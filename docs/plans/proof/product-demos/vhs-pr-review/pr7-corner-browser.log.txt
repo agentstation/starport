@@ -1,0 +1,7 @@
+=== RUN   TestReviewRoundedCornerPixel
+    review_corner_test.go:18: corner pixel: [23 23 23 255]
+    review_corner_test.go:19: rounded corner alpha=255, want transparent
+--- FAIL: TestReviewRoundedCornerPixel (1.79s)
+FAIL
+FAIL	github.com/agentstation/vhs	2.496s
+FAIL

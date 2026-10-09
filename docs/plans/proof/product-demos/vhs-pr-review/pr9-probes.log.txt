@@ -1,0 +1,8 @@
+--- FAIL: TestReviewProgressBarValidation (0.00s)
+    review_probe_test.go:14: invalid color "not-a-color" accepted: []parser.Command{parser.Command{Type:"SET", Options:"ProgressBar", Args:"not-a-color", Source:""}}
+    review_probe_test.go:14: invalid color "red\"broken" accepted: []parser.Command{parser.Command{Type:"SET", Options:"ProgressBar", Args:"red\"broken", Source:""}}
+--- FAIL: TestReviewProgressBarXML (0.00s)
+    review_probe_test.go:25: accepted tape generates invalid XML: XML syntax error on line 36: attribute name without = in element
+FAIL
+FAIL	github.com/agentstation/vhs	0.439s
+FAIL

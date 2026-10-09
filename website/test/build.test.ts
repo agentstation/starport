@@ -36,6 +36,14 @@ beforeAll(() => {
 });
 
 describe('site build', () => {
+  it('exports the exact Console media and transcript referenced by the splash', () => {
+    for (const file of ['console.mp4', 'console.webm', 'console.gif', 'poster.png', 'title-preview.png', 'record.json', 'TRANSCRIPT.md']) {
+      const source = readFileSync(path.join(repoRoot, 'docs/assets/console-demo', file));
+      const exported = readFileSync(path.join(outDir, 'demo/console', file));
+      expect(exported.equals(source), file).toBe(true);
+    }
+  });
+
   it('writes the splash page, the docs home, the start page, and the 404 page', () => {
     for (const file of ['index.html', 'docs.html', 'docs/start.html', '404.html']) {
       expect(existsSync(path.join(outDir, file)), file).toBe(true);

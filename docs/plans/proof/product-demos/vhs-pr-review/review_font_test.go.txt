@@ -1,0 +1,90 @@
+package main
+
+import (
+	"encoding/base64"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
+)
+
+func TestReviewFontCollectionLoadsInChrome(t *testing.T) {
+	data, mime := resolveFont("Menlo", []SVGFrame{{Lines: []string{"123"}}})
+	if data == "" {
+		t.Fatal("Menlo resolution returned no font")
+	}
+	url := launcher.New().Leakless(false).Bin("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome").MustLaunch()
+	browser := rod.New().ControlURL(url).MustConnect()
+	t.Cleanup(func() { _ = browser.Close() })
+	page := browser.MustPage("about:blank")
+	result := page.MustEval(`async (url) => {try { const font=new FontFace("Review Embedded Font",'url("'+url+'")'); await font.load(); return "loaded";} catch (err) {return String(err);} }`, "data:"+mime+";base64,"+data).Str()
+	t.Logf("resolved Menlo MIME %s, decoded bytes %d, Chrome result %s", mime, len(data)*3/4, result)
+	if result != "loaded" {
+		t.Errorf("resolved native font is unusable as webfont: %s", result)
+	}
+}
+
+func TestReviewFontSubsetIncludesTitle(t *testing.T) {
+	v := New()
+	v.Options.FontFamily = "JetBrains Mono"
+	v.Options.Video.Output.SVG = filepath.Join(t.TempDir(), "title.svg")
+	v.Options.Video.Style.WindowBar = "Colorful"
+	v.Options.Video.Style.WindowBarTitle = "ZZZ"
+	v.svgFrames = []SVGFrame{{Lines: []string{"123"}, Timestamp: 0, CharWidth: 10, CharHeight: 20}}
+	if err := MakeSVG(&v); err != nil {
+		t.Fatal(err)
+	}
+	svg, err := os.ReadFile(v.Options.Video.Output.SVG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(svg), "ZZZ") {
+		t.Fatal("window title absent")
+	}
+	data, mime := resolveFont(v.Options.FontFamily, v.svgFrames)
+	if mime != "font/woff2" {
+		t.Fatalf("subset unavailable, MIME=%s", mime)
+	}
+	b, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(t.TempDir(), "embedded.woff2")
+	if err := os.WriteFile(file, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("/Users/jack/.pyenv/versions/3.12.1/bin/python3", "-c", `from fontTools.ttLib import TTFont
+import sys
+font=TTFont(sys.argv[1]); chars=font.getBestCmap(); print('title glyph Z present:',ord('Z') in chars); sys.exit(0 if ord('Z') in chars else 1)`, file).CombinedOutput()
+	t.Logf("%s", out)
+	if err != nil {
+		t.Errorf("the SVG displays ZZZ, but its embedded subset omits Z: %v", err)
+	}
+}
+
+func TestReviewResolvedFallbackMatchesCapture(t *testing.T) {
+	family := "ZZZNonexistentFont999"
+	data, mime := resolveFont(family, []SVGFrame{{Lines: []string{"MMMMiiii"}}})
+	if data == "" {
+		t.Fatal("fallback resolution absent")
+	}
+	url := launcher.New().Leakless(false).Bin("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome").MustLaunch()
+	browser := rod.New().ControlURL(url).MustConnect()
+	t.Cleanup(func() { _ = browser.Close() })
+	page := browser.MustPage("about:blank")
+	result := page.MustEval(`async (url,family) => {
+ const font=new FontFace("Embedded Fallback",'url("'+url+'")'); await font.load(); document.fonts.add(font);
+ const canvas=document.createElement("canvas"),ctx=canvas.getContext("2d");
+ ctx.font='22px "'+family+'", "Apple Symbols"'; const captured=ctx.measureText("MMMMiiii").width;
+ ctx.font='22px "Embedded Fallback"'; const embedded=ctx.measureText("MMMMiiii").width;
+ return {captured,embedded}; }`, "data:"+mime+";base64,"+data, family)
+	captured, embedded := result.Get("captured").Num(), result.Get("embedded").Num()
+	t.Logf("capture fallback width %.4f, embedded fc-match fallback width %.4f", captured, embedded)
+	if captured != embedded {
+		t.Errorf("embedded fallback changes capture metrics: %.4f -> %.4f", captured, embedded)
+	}
+}

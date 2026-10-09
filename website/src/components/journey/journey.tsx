@@ -32,6 +32,7 @@ import {
   visibilityWindow,
 } from './timeline';
 import { type Palette, drawFrame, resolveFonts, rgb, stillAspect } from './world';
+import { ConsoleDemo } from './console-demo';
 
 // Reduced motion, or a viewport too short to stage the scene, gets the static
 // storyboard: the same world, drawn once per chapter. A phone stacks copy above
@@ -1033,6 +1034,7 @@ function Beat({ beat, index, final, poster }: { beat: Chapter; index: number; fi
           </Link>
         </div>
       ) : null}
+      {beat.id === 'console' ? <div className="console-story"><ConsoleDemo /></div> : null}
       <canvas className="still" aria-hidden="true" />
     </article>
   );
@@ -1089,8 +1091,10 @@ export function Journey({ poster, build }: { poster: Poster; build: { release: s
 
   return (
     <section className="journey" id="journey" ref={journeyRef} aria-label="Request path through Starport">
-      <div className="journey-stage" ref={stageRef}>
+      <div className="journey-stage" ref={stageRef} data-console={chapters[activeChapter].id === 'console' ? 'true' : undefined}>
         <canvas className="world" ref={canvasRef} aria-hidden="true" />
+
+        {chapters[activeChapter].id === 'console' ? <div className="console-scene"><ConsoleDemo /></div> : null}
 
         <header className="nav-shell">
           <button type="button" className="brand" onClick={() => homeRegistry.current()} aria-label="Starport. Back to the top of the page.">

@@ -1,0 +1,156 @@
+{
+  "completed_at": "2026-10-08T16:35:06.931564+00:00",
+  "final_head_commit": "7b6f44d30fcfb18837b684065d531e32c63ef4ea",
+  "go_source_matches_post_correction_verified_snapshot": true,
+  "go_source_snapshot_commit": "3be51869234239d71323606e73ff0c5e5af68322",
+  "GOWORK": "off",
+  "published_starmap": {
+    "Path": "github.com/agentstation/starmap",
+    "Version": "v0.17.1-0.20261008155418-ab3c76584e5a",
+    "Time": "2026-10-08T15:54:18Z",
+    "Dir": "/Users/jack/go/pkg/mod/github.com/agentstation/starmap@v0.17.1-0.20261008155418-ab3c76584e5a",
+    "GoMod": "/Users/jack/go/pkg/mod/cache/download/github.com/agentstation/starmap/@v/v0.17.1-0.20261008155418-ab3c76584e5a.mod",
+    "GoVersion": "1.27.1",
+    "Sum": "h1:5HlSKENQpnYqkIeOse9Pt9Zoylu5rEPE5DbQDzJUZPU=",
+    "GoModSum": "h1:cCNBcKDllsycjRvn7WPAz9YmT33ydFoVURpGta+veQg="
+  },
+  "go_mod_sha256": "7098c9f24583716865048aee194728a3449f74ff1ebb4da984f3fbbc4404238b",
+  "go_sum_sha256": "4562ee2911ba30faedc2fa6f296a563870683df0962105f402c5686f395961b8",
+  "required_pre_pr_commands": {
+    "passed": 34,
+    "failed": 0
+  },
+  "additional_format_check": {
+    "status": "FAIL inherited baseline",
+    "inherited_goimports_files_reported_by_root": 87,
+    "changed_go_files_clean": true
+  },
+  "all_prepared_commands": {
+    "passed": 34,
+    "failed": 1,
+    "not_fully_green": true
+  },
+  "verifier_conditions_reported_passed": 423,
+  "go_cases_including_subtests": {
+    "pass": 7845,
+    "skip": 717
+  },
+  "go_top_level_cases": {
+    "pass": 3296,
+    "skip": 158
+  },
+  "go_packages": {
+    "skip": 11,
+    "pass": 69
+  },
+  "console": {
+    "passed_cases": 539,
+    "passed_files": 83
+  },
+  "website": {
+    "lint": "PASS",
+    "passed_cases": 84,
+    "passed_files": 4
+  },
+  "optional_go_skip_reason_counts": {
+    "UNVERIFIED: TEST_VALKEY_URL is not set": 392,
+    "UNVERIFIED: set TEST_AUTHORIZATION_CAPACITY=1 for the capacity profile": 1,
+    "UNVERIFIED: Valkey and PostgreSQL are required for separate-process authorization": 1,
+    "UNVERIFIED: TEST_POSTGRES_URL is not set": 14,
+    "UNVERIFIED: TEST_MYSQL_DSN is not set": 13,
+    "UNVERIFIED: set TEST_DEFAULT_CACHE_CAPACITY=1 for default-capacity qualification": 1,
+    "UNVERIFIED: TEST_SHARED_CACHE_FAULT_URL is not set": 1,
+    "UNVERIFIED: TEST_SHARED_CACHE_URL is not set": 5,
+    "TEST_BLOB_S3_ENDPOINT is not configured": 68,
+    "UNVERIFIED: TEST_POSTGRES_URL is required": 1,
+    "STARPORT_RECIPE_IMAGE is required for container qualification": 1,
+    "UNVERIFIED: STARPORT_RECIPE_IMAGE is required for local-to-shared container qualification": 1,
+    "UNVERIFIED: native byte replay requires Valkey": 2,
+    "TEST_VALKEY_URL and TEST_BLOB_S3_ENDPOINT are required": 1,
+    "STARPORT_RECIPE_IMAGE, TEST_VALKEY_URL, TEST_POSTGRES_URL, and TEST_BLOB_S3_ENDPOINT are required for fleet recipe qualification": 1,
+    "STARPORT_RECIPE_IMAGE is required for read-only recipe qualification": 1,
+    "set STARPORT_OVERHEAD_BENCH=1 to run the overhead benchmark harness": 1,
+    "TEST_MYSQL_DSN is required": 12,
+    "UNVERIFIED: TEST_VALKEY_URL is required": 10,
+    "UNVERIFIED: namespace recovery requires dedicated source Valkey, PostgreSQL, and object storage": 1,
+    "SDK qualification requires STARPORT_CATALOG_SDK_PYTHON": 1,
+    "UNVERIFIED: TEST_UNPREFIXED_VALKEY_URL requires a dedicated empty database": 4,
+    "UNVERIFIED: real Valkey and PostgreSQL are required": 46,
+    "TEST_VALKEY_URL is not configured": 1,
+    "Skipping Valkey integration tests: TEST_VALKEY_URL not set": 1,
+    "Skipping Valkey pub/sub tests: TEST_VALKEY_URL not set": 1,
+    "TEST_POSTGRES_URL or TEST_MYSQL_DSN is required": 5,
+    "UNVERIFIED: two native Valkey processes are required": 1,
+    "UNVERIFIED: TEST_VALKEY_URL and TEST_POSTGRES_URL are required": 4,
+    "UNVERIFIED: native recovery admission requires Valkey": 1,
+    "UNVERIFIED: real PostgreSQL and Valkey are required": 18,
+    "UNVERIFIED: real PostgreSQL and Valkey are required for process fencing": 1,
+    "UNVERIFIED: shared backup requires PostgreSQL and object storage fixtures": 19,
+    "UNVERIFIED: populated adoption requires the object storage fixture": 27,
+    "UNVERIFIED: dedicated fresh Valkey and PostgreSQL are required": 1,
+    "UNVERIFIED: complete activation needs native Valkey, PostgreSQL, and object storage": 31,
+    "UNVERIFIED: imported graph inspection requires Valkey, PostgreSQL, and object storage": 1,
+    "UNVERIFIED: local-to-shared migration needs native Valkey, PostgreSQL, and object storage": 5,
+    "UNVERIFIED: full application activation needs native shared owners": 1,
+    "UNVERIFIED: complete fresh gateway needs native shared recovery owners": 1,
+    "UNVERIFIED: gateway history barriers require native Valkey and PostgreSQL": 4,
+    "UNVERIFIED: old reachable primary proof requires a distinct replacement Valkey": 1,
+    "UNVERIFIED: supply the exact source-built Starport executable": 5,
+    "UNVERIFIED: STARPORT_RECOVERY_MEASUREMENT_DIR is unset; recovery measurement did not run": 1,
+    "UNVERIFIED: native shared KV and SQL fixtures are required": 2,
+    "UNVERIFIED: populated operator commands need native shared recovery owners": 1,
+    "UNVERIFIED: populated adoption needs native PostgreSQL and object storage": 2,
+    "UNVERIFIED: shared publication requires Valkey, PostgreSQL, and object storage": 2,
+    "UNVERIFIED: shared restore requires Valkey, PostgreSQL, and object storage": 1
+  },
+  "official_sdk": {
+    "status": "PASS",
+    "skipped_checks": 0,
+    "local_fixture_provider": true,
+    "catalog_transition_race_test": "PASS"
+  },
+  "environmental_correction": {
+    "release_workflow_fixture": "process-only commit.gpgsign=false; fixture tests local monotonic/idempotent publication, not signing; global Git configuration unchanged"
+  },
+  "release_snapshot_owned_checks": [
+    "verify-release-binaries.sh",
+    "verify-release-archives.sh",
+    "verify-homebrew-cask.sh"
+  ],
+  "outer_timeouts": 0,
+  "source_edits_by_check_agent": false,
+  "commits_pushes_deploys_paid_provider_calls_by_check_agent": false,
+  "sessions": {
+    "initial_64904": "completed",
+    "retry_88051": "completed",
+    "website_90506": "completed"
+  },
+  "log_directories": [
+    "/tmp/starport-pre-pr-gates-20261008/repository-20261008T155808Z",
+    "/tmp/starport-pre-pr-gates-20261008/retry-20261008T162547Z",
+    "/tmp/starport-pre-pr-gates-20261008/website-20261008T153856Z"
+  ],
+  "full_suite_skips_qualified_by_dedicated_gate": [
+    {
+      "package": "github.com/agentstation/starport/internal/server/controllers",
+      "test": "TestGatewayOverheadBenchmark",
+      "reason": "set STARPORT_OVERHEAD_BENCH=1 to run the overhead benchmark harness",
+      "status": "QUALIFIED_SEPARATELY",
+      "qualification_gate": 28
+    },
+    {
+      "package": "github.com/agentstation/starport/internal/server",
+      "test": "TestSDKCanonicalRemovalAfterSuccessfulInference",
+      "reason": "SDK qualification requires STARPORT_CATALOG_SDK_PYTHON",
+      "status": "QUALIFIED_SEPARATELY",
+      "qualification_gate": 35
+    }
+  ],
+  "remaining_optional_cases_unverified": 715,
+  "runner_cleanup": {
+    "remaining_owned_runner_pids": [],
+    "script_cleanup_traps_completed": true,
+    "no_outer_timeout_kill_needed": true
+  },
+  "check_commands": "starport-repository-checks.json"
+}

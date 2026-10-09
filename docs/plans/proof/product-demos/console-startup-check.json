@@ -1,0 +1,272 @@
+{
+  "preflight_findings": [
+    {
+      "state": "failed",
+      "reason": "accepted_head_conflict",
+      "source_health": "ok",
+      "freshness": {
+        "catalog": "current",
+        "catalog_age_seconds": 764,
+        "channel": "current",
+        "channel_age_seconds": 764,
+        "source_check": "current",
+        "source_check_age_seconds": 3
+      },
+      "interpretation": "Manual refresh overlapped required-source startup adoption.",
+      "interpretation_status": "rejected: the same conflict occurs during startup without manual refresh"
+    },
+    {
+      "status": 503,
+      "path": "/api/v1/catalog",
+      "cause": "The consumer rejected its startup candidate, so catalog API availability did not recover."
+    },
+    {
+      "status": 429,
+      "path": "/api/v1/catalog",
+      "cause": "The 100-millisecond readiness poll reached the gateway request rate limit."
+    },
+    {
+      "state": "startup-candidate-rejected",
+      "reason": "accepted_head_conflict",
+      "generation_id": "sources-2c4dfc16f61a3f845851ce4be269a54c1e88beffef66377eb83c9b38a817f8c1",
+      "payload_checksum": "sha256:ad6b71e899dd9b5e0f4ee4195cdc4b07117447479e7f6b11117245ef33a68eb9",
+      "runtime_usable": true,
+      "runtime_fallback": false,
+      "source_health": "ok",
+      "accepted_head": "absent",
+      "owner": "vhs_timing investigates Starport consumer acceptance"
+    }
+  ],
+  "recorder_contract": {
+    "wait_for": "actual authenticated catalog API response, bounded at two minutes",
+    "startup_policy": "require_source",
+    "generation": "Source manifest ID bound separately from the accepted effective generation ID; accepted payload checksum must match source manifest.",
+    "freshness": "current",
+    "catalog_age_max_seconds": 3600,
+    "source_check_age_max_seconds": 120,
+    "fallback": false,
+    "degraded": false,
+    "poll": "one-second interval, respects Retry-After for 429 and 503",
+    "route_validation": "accepted, with the same effective generation ID as the catalog API"
+  },
+  "final_capture": {
+    "verdict": "PASS",
+    "record": "../../../assets/console-demo/record.json",
+    "record_sha256": "eadf450c856a8e8fa553ec9280218a7540c34ebe8a68ffb7611059c803af72f0",
+    "duration_seconds": 35.206,
+    "binary_sha256": "b123965c872b88c2fda6883eebcaae7c28fa01a45403e4035f3b2648f857d5d6",
+    "catalog": {
+      "summary": {
+        "generation_id": "sources-2c4dfc16f61a3f845851ce4be269a54c1e88beffef66377eb83c9b38a817f8c1",
+        "generated_at": "2026-10-08T00:20:02.29393Z",
+        "age_seconds": 6,
+        "usable": true,
+        "freshness": "current",
+        "source_kind": "starmap",
+        "fallback": false,
+        "providers": 15,
+        "models": 510,
+        "next_update_at": "2026-10-07T20:20:04.7947975-05:00"
+      },
+      "adoption": {
+        "startup_policy": "require_source",
+        "source_generation_id": "bindings-a09b2fbbb3a32b1f5cbe5d745746e66bf46c520175934205b7bcef3498690915.local.72ae50b97f55",
+        "effective_generation_id": "sources-2c4dfc16f61a3f845851ce4be269a54c1e88beffef66377eb83c9b38a817f8c1",
+        "payload_checksum": "sha256:ad6b71e899dd9b5e0f4ee4195cdc4b07117447479e7f6b11117245ef33a68eb9"
+      },
+      "route_validation": {
+        "state": "accepted",
+        "candidate": {
+          "generation_id": "sources-2c4dfc16f61a3f845851ce4be269a54c1e88beffef66377eb83c9b38a817f8c1",
+          "payload_checksum": "sha256:ad6b71e899dd9b5e0f4ee4195cdc4b07117447479e7f6b11117245ef33a68eb9",
+          "generated_at": "2026-10-08T00:20:02.29393Z",
+          "lease_epoch": 1
+        },
+        "accepted": {
+          "generation_id": "sources-2c4dfc16f61a3f845851ce4be269a54c1e88beffef66377eb83c9b38a817f8c1",
+          "payload_checksum": "sha256:ad6b71e899dd9b5e0f4ee4195cdc4b07117447479e7f6b11117245ef33a68eb9",
+          "generated_at": "2026-10-08T00:20:02.29393Z",
+          "lease_epoch": 1
+        }
+      },
+      "freshness": {
+        "catalog": "current",
+        "catalog_age_seconds": 6,
+        "channel": "current",
+        "channel_age_seconds": 2436,
+        "source_check": "current",
+        "source_check_age_seconds": 4
+      },
+      "capture_limits": {
+        "catalog_age_seconds": 3600,
+        "source_check_age_seconds": 120
+      },
+      "snapshot": {
+        "generation_id": "sources-2c4dfc16f61a3f845851ce4be269a54c1e88beffef66377eb83c9b38a817f8c1",
+        "generated_at": "2026-10-08T00:20:02.29393Z",
+        "age_seconds": 6,
+        "catalog_sequence": 2,
+        "availability_revision": 2,
+        "payload_checksum": "sha256:ad6b71e899dd9b5e0f4ee4195cdc4b07117447479e7f6b11117245ef33a68eb9",
+        "manifest_available": true,
+        "schema_version": 19,
+        "payload_size_bytes": 26776618,
+        "completeness": "complete",
+        "degraded": false,
+        "validation": {
+          "status": "passed",
+          "error_count": 0,
+          "warning_count": 0,
+          "validated_at": "2026-10-08T00:20:02.29393Z"
+        },
+        "source_observations": [
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:36.032022171Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          },
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:36.575687732Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          },
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:36.096602679Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          },
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:35.895605192Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          },
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:36.314932601Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          },
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:36.099178309Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          },
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:35.59316214Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          },
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:35.647891174Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          },
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:35.956917409Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          },
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:35.796305541Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          },
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:35.454571973Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          },
+          {
+            "source": "providers",
+            "observed_at": "2026-10-06T18:21:35.553188734Z",
+            "completeness": "complete",
+            "status": "succeeded"
+          }
+        ],
+        "sync_run_id": "b0a19dc3-79ee-4709-b04a-6ff1ea79cfe3"
+      },
+      "source_health": "ok",
+      "acquisition": {
+        "enabled": false,
+        "health": "unknown",
+        "age_seconds": 0,
+        "freshness": "unknown"
+      }
+    },
+    "catalog_source_binary_sha256": "44d14cbf9895a74d04cc15274f896972afd39f75184f72bf453e3365bfe1c18d",
+    "gateway_exit_code": 0,
+    "catalog_server_exit_code": 0,
+    "browser_errors": []
+  },
+  "startup_status": {
+    "stage": "startup-catalog",
+    "runtime": {
+      "usable": true,
+      "source_kind": "starmap",
+      "fallback": false,
+      "lease": "lease_held",
+      "last_run_id": "914da47e-6f26-4794-8065-dd167a9a0d31",
+      "started_at": "2026-10-07T18:58:15.688203-05:00",
+      "observed_at": "2026-10-07T18:58:19.389323-05:00"
+    },
+    "route_validation": {
+      "state": "rejected",
+      "candidate": {
+        "generation_id": "sources-2c4dfc16f61a3f845851ce4be269a54c1e88beffef66377eb83c9b38a817f8c1",
+        "payload_checksum": "sha256:ad6b71e899dd9b5e0f4ee4195cdc4b07117447479e7f6b11117245ef33a68eb9",
+        "generated_at": "2026-10-07T23:39:32.127825Z",
+        "lease_epoch": 1
+      },
+      "rejected": {
+        "generation": {
+          "generation_id": "sources-2c4dfc16f61a3f845851ce4be269a54c1e88beffef66377eb83c9b38a817f8c1",
+          "payload_checksum": "sha256:ad6b71e899dd9b5e0f4ee4195cdc4b07117447479e7f6b11117245ef33a68eb9",
+          "generated_at": "2026-10-07T23:39:32.127825Z",
+          "lease_epoch": 1
+        },
+        "reason": "accepted_head_conflict",
+        "at": "2026-10-07T18:58:19.293301-05:00"
+      }
+    },
+    "source_health": "ok",
+    "freshness": {
+      "catalog": "current",
+      "catalog_age_seconds": 1127,
+      "channel": "current",
+      "channel_age_seconds": 1127,
+      "source_check": "current",
+      "source_check_age_seconds": 2
+    }
+  },
+  "consumer_root_cause": {
+    "error": "candidate catalog generation timestamp conflict",
+    "state_timestamp": "2026-10-07T23:39:32.127825Z",
+    "durable_timestamp": "2026-10-08T00:08:14.658913Z",
+    "same_generation_and_payload": true,
+    "owning_paths": [
+      "runtime commitOrdinary Published=false",
+      "publishAcquisitionPolicyStartup matching publication"
+    ],
+    "repair_contract": "Return committed client state on a no-op, preserving immutable effective timestamp and separate upstream metadata.",
+    "starport_acceptance_fence": "unchanged",
+    "native_after_fix": "PASS with real Starmap binary and default development app composition",
+    "regression_scope": [
+      "initial derived startup",
+      "repeated source replay",
+      "restart",
+      "committed effective timestamp and sequence",
+      "original upstream generation and publication time"
+    ],
+    "focused_regression_proof": "consumer-timestamp-check.json"
+  }
+}

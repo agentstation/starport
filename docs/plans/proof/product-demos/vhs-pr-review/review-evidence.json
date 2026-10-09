@@ -1,0 +1,89 @@
+{
+  "target_main": "346bbb1e1f769d8d8d789eca87b4aa8a108bb3d1",
+  "recommendations": {
+    "6": "superseded",
+    "7": "changes required",
+    "8": "core superseded; optional follow-up requires changes",
+    "9": "changes required"
+  },
+  "merge_checks": {
+    "6": {
+      "head": "1e430f095a75a8dce41ed8f3b37d076a93b697df",
+      "head_copy": "/tmp/vhs-open-pr-review-20261008/head6",
+      "merge_exit": 1,
+      "merge_output": "a1334ecc2bdbe45fac57b40d088779c7d5ff3948\n100644 64828f8429f05240a1980b2ead0b81791bf8824e 1\tsvg.go\n100644 0419ebfd502de62f6ed0347fca3048d4141fb385 2\tsvg.go\n100644 41d0c81e737eb934956b0b7a8687318647bc132a 3\tsvg.go\n100644 fc1b58930a9fbf40f15bdecb8cdca56a5251bd1d 1\tvhs.go\n100644 e93422c7dcdefef7d10b9b7bc1ee9e6203c2fd46 2\tvhs.go\n100644 c55a9a6a7188287d38ca2f21f167d453d2fc5573 3\tvhs.go\n100644 d90168b0572ad917c04bfccd7322fd713eb67f1a 1\tvideo.go\n100644 b1daa6f5688597c7f08f9aa34370f6debdb54a93 2\tvideo.go\n100644 abe9de5ad961446ad2bd3aa8ece50ec01ff35457 3\tvideo.go\n\nAuto-merging svg.go\nCONFLICT (content): Merge conflict in svg.go\nAuto-merging svg_test.go\nAuto-merging vhs.go\nCONFLICT (content): Merge conflict in vhs.go\nAuto-merging video.go\nCONFLICT (content): Merge conflict in video.go\n"
+    },
+    "7": {
+      "head": "ee7844d7d6516a95dc6998387d87ebb75b43eaab",
+      "head_copy": "/tmp/vhs-open-pr-review-20261008/head7",
+      "merge_exit": 0,
+      "merge_output": "4cd1b1095c5c72c0f2f234eac9c89445ad922204\n",
+      "merged_copy": "/tmp/vhs-open-pr-review-20261008/merged7"
+    },
+    "8": {
+      "head": "fb3666d439234c95a7804703a1214bfc4fd16829",
+      "head_copy": "/tmp/vhs-open-pr-review-20261008/head8",
+      "merge_exit": 1,
+      "merge_output": "f66d14cb1bf3dfc47e691d34e3386e82d8681b23\n100644 64828f8429f05240a1980b2ead0b81791bf8824e 1\tsvg.go\n100644 0419ebfd502de62f6ed0347fca3048d4141fb385 2\tsvg.go\n100644 44cc37cc186e496c1f793efa9a2f633def992de8 3\tsvg.go\n100644 d90168b0572ad917c04bfccd7322fd713eb67f1a 1\tvideo.go\n100644 b1daa6f5688597c7f08f9aa34370f6debdb54a93 2\tvideo.go\n100644 a5fae686c8ae92d4f0560ebc93d2f84c4d55b11c 3\tvideo.go\n\nAuto-merging svg.go\nCONFLICT (content): Merge conflict in svg.go\nAuto-merging svg_test.go\nAuto-merging video.go\nCONFLICT (content): Merge conflict in video.go\n"
+    },
+    "9": {
+      "head": "3b7b233e9eb594e9804d8e7b748f224147a6db93",
+      "head_copy": "/tmp/vhs-open-pr-review-20261008/head9",
+      "merge_exit": 0,
+      "merge_output": "df3cf532e42b954afeac03d4d0d3c83f99ec3532\n",
+      "merged_copy": "/tmp/vhs-open-pr-review-20261008/merged9"
+    }
+  },
+  "confirmed_findings": [
+    {
+      "pr": 6,
+      "priority": "P2",
+      "file": "video.go",
+      "line": 199,
+      "trigger": "1fps, visible Sleep2500ms",
+      "actual_duration": 1.0,
+      "main_duration": 2.5
+    },
+    {
+      "pr": 6,
+      "priority": "P2",
+      "file": "vhs.go",
+      "line": 267,
+      "trigger": "raster-only output",
+      "actual": "requested rate remains unchanged"
+    },
+    {
+      "pr": 7,
+      "priority": "P2",
+      "file": "svg.go",
+      "line": 258,
+      "trigger": "BorderRadius20",
+      "actual": "opaque root fills rounded cutouts"
+    },
+    {
+      "pr": 8,
+      "priority": "P2",
+      "file": "video.go",
+      "line": 241,
+      "trigger": "unavailable requested font",
+      "captured_width": 63.9375,
+      "embedded_width": 98.3125
+    },
+    {
+      "pr": 8,
+      "priority": "P2",
+      "file": "video.go",
+      "line": 294,
+      "trigger": "terminal123, titleZZZ",
+      "actual": "subset lacks Z"
+    },
+    {
+      "pr": 9,
+      "priority": "P2",
+      "file": "svg.go",
+      "line": 318,
+      "trigger": "Set ProgressBar red followed by double quote and broken",
+      "actual": "accepted input produces malformed XML"
+    }
+  ]
+}

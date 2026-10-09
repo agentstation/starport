@@ -1,0 +1,7 @@
+--- FAIL: TestReviewGridDoesNotMutateCallerStyle (0.00s)
+    review_probe_test.go:12: caller style changed: dimensions 1200x600 -> 736x520
+--- FAIL: TestReviewRoundedCornersStayTransparent (0.00s)
+    review_probe_test.go:19: root fills rounded corner cutouts: <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" style="background:#171717"
+FAIL
+FAIL	github.com/agentstation/vhs	0.472s
+FAIL

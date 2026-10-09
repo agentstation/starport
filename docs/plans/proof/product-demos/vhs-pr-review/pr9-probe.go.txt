@@ -1,0 +1,26 @@
+package main
+import (
+ "encoding/xml"
+ "io"
+ "strings"
+ "testing"
+ "github.com/agentstation/vhs/lexer"
+ "github.com/agentstation/vhs/parser"
+)
+func TestReviewProgressBarValidation(t *testing.T) {
+ for _, value := range []string{`not-a-color`, `red"broken`} {
+ p := parser.New(lexer.New("Set ProgressBar '" + value + "'"))
+ cmds := p.Parse()
+ if len(p.Errors()) == 0 { t.Errorf("invalid color %q accepted: %#v", value, cmds) }
+ }
+}
+func TestReviewProgressBarXML(t *testing.T) {
+ p := parser.New(lexer.New(`Set ProgressBar 'red"broken'`))
+ cmds := p.Parse()
+ if len(p.Errors()) != 0 || len(cmds) != 1 { t.Fatalf("input blocked before rendering: %v", p.Errors()) }
+ opts := createTestSVGConfig()
+ opts.Style.ProgressBarColor = cmds[0].Args
+ svg := NewSVGGenerator(opts).Generate()
+ decoder := xml.NewDecoder(strings.NewReader(svg))
+ for { _, err := decoder.Token(); if err == io.EOF { break }; if err != nil { t.Fatalf("accepted tape generates invalid XML: %v", err) } }
+}

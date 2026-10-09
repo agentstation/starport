@@ -1,0 +1,10 @@
+{
+  "command": "env GOWORK=off go test -race ./runtime -run 'Reconciliation|Manual|Replay|Projected|Local|Acquisition' -count=1 -json -timeout 15m",
+  "verdict": "PASS",
+  "top_level_tests": 70,
+  "test_cases": 198,
+  "package_elapsed_seconds": 705.614,
+  "json_sha256": "fd186391ca788c45c0593aaabc3661d83ec09cd8d01a623035532357e7ad7fba",
+  "failures": [],
+  "skips": 0
+}

@@ -1,0 +1,197 @@
+{
+  "head": "b8609b72fce85f5ec7a444bc73f18b21d65641d3",
+  "tracked_file_count": 5713,
+  "source_freeze_inventory": "/tmp/starmap-prepr-source-freeze-20261008.json",
+  "changed_files": [],
+  "git_status": "",
+  "race_checks": {
+    "catalog-race": {
+      "exit_code": 1,
+      "path": "/tmp/starmap-prepr-catalog-race-20261008.jsonl",
+      "passed_cases_including_subtests": 816,
+      "passed_by_package": {
+        "github.com/agentstation/starmap/internal/catalog/reconciler": 733,
+        "github.com/agentstation/starmap/internal/bootstrap": 83
+      },
+      "passed_top_level_tests": 185,
+      "package_pass": [
+        {
+          "Package": "github.com/agentstation/starmap/internal/catalog/reconciler",
+          "Elapsed": 99.583
+        }
+      ],
+      "timeouts": [
+        "8m"
+      ]
+    },
+    "runtime-compaction-race": {
+      "exit_code": 1,
+      "path": "/tmp/starmap-prepr-runtime-compaction-race-20261008.jsonl",
+      "passed_cases_including_subtests": 9,
+      "passed_by_package": {
+        "github.com/agentstation/starmap/runtime": 8,
+        "github.com/agentstation/starmap/internal/catalog/publication": 1
+      },
+      "passed_top_level_tests": 3,
+      "package_pass": [
+        {
+          "Package": "github.com/agentstation/starmap/internal/catalog/publication",
+          "Elapsed": 20.137
+        }
+      ],
+      "timeouts": [
+        "10m"
+      ]
+    },
+    "manual-compaction-race": {
+      "exit_code": 0,
+      "path": "/tmp/starmap-prepr-manual-compaction-race-20261008.jsonl",
+      "passed_cases_including_subtests": 14,
+      "passed_by_package": {
+        "github.com/agentstation/starmap/runtime": 14
+      },
+      "passed_top_level_tests": 4,
+      "package_pass": [
+        {
+          "Package": "github.com/agentstation/starmap/runtime",
+          "Elapsed": 298.544
+        }
+      ],
+      "timeouts": []
+    },
+    "bootstrap-focused-race": {
+      "exit_code": 0,
+      "path": "/tmp/starmap-prepr-bootstrap-focused-race-20261008.jsonl",
+      "passed_cases_including_subtests": 5,
+      "passed_by_package": {
+        "github.com/agentstation/starmap/internal/bootstrap": 5
+      },
+      "passed_top_level_tests": 5,
+      "package_pass": [
+        {
+          "Package": "github.com/agentstation/starmap/internal/bootstrap",
+          "Elapsed": 150.142
+        }
+      ],
+      "timeouts": []
+    },
+    "runtime-focused-race": {
+      "exit_code": 0,
+      "path": "/tmp/starmap-prepr-runtime-focused-race-20261008.jsonl",
+      "passed_cases_including_subtests": 43,
+      "passed_by_package": {
+        "github.com/agentstation/starmap/runtime": 43
+      },
+      "passed_top_level_tests": 8,
+      "package_pass": [
+        {
+          "Package": "github.com/agentstation/starmap/runtime",
+          "Elapsed": 84.998
+        }
+      ],
+      "timeouts": []
+    }
+  },
+  "repository_gates": {
+    "catalog-generation": {
+      "path": "/tmp/starmap-prepr-catalog-generation-20261008.log",
+      "exit_code": 0,
+      "python_tests": 69,
+      "successful_go_package_invocations": 9,
+      "failed_go_packages": [],
+      "timeout_count": 0
+    },
+    "verify-checks": {
+      "path": "/tmp/starmap-prepr-verify-checks-20261008.log",
+      "exit_code": 0,
+      "python_tests": 271,
+      "successful_go_package_invocations": 25,
+      "failed_go_packages": [],
+      "timeout_count": 0,
+      "critical_coverage": {
+        "github.com/agentstation/starmap/internal/catalog/pipeline": "86.9%",
+        "github.com/agentstation/starmap/internal/catalog/query": "77.8%",
+        "github.com/agentstation/starmap/internal/providers/clients": "84.0%",
+        "github.com/agentstation/starmap/internal/sources/providers": "87.9%",
+        "github.com/agentstation/starmap/internal/server/middleware": "97.9%",
+        "github.com/agentstation/starmap/internal/server/openrouter": "89.7%",
+        "github.com/agentstation/starmap/internal/server/params": "98.6%",
+        "github.com/agentstation/starmap/internal/server/response": "97.1%",
+        "github.com/agentstation/starmap/internal/server/sse": "93.4%",
+        "github.com/agentstation/starmap/internal/transport": "89.5%",
+        "github.com/agentstation/starmap/pkg/catalogs/authority": "96.9%",
+        "github.com/agentstation/starmap/pkg/catalogs": "80.9%",
+        "github.com/agentstation/starmap/pkg/errors": "86.7%",
+        "github.com/agentstation/starmap/internal/catalog/reconciler": "91.6%",
+        "github.com/agentstation/starmap/pkg/sources": "67.0%"
+      }
+    },
+    "check": {
+      "path": "/tmp/starmap-prepr-check-20261008.log",
+      "exit_code": 130,
+      "python_tests": 0,
+      "successful_go_package_invocations": 83,
+      "failed_go_packages": [
+        "github.com/agentstation/starmap",
+        "github.com/agentstation/starmap/internal/catalog/publication",
+        "github.com/agentstation/starmap/internal/catalog/workspace",
+        "github.com/agentstation/starmap/internal/cli/app"
+      ],
+      "timeout_count": 4,
+      "result": "Interrupted after four existing large-package default 10m timeouts; no assertion failure lines. Extra ordinary full-suite run is incomplete."
+    },
+    "prose": {
+      "path": "/tmp/starmap-prepr-prose-20261008.log",
+      "exit_code": 0,
+      "python_tests": 0,
+      "successful_go_package_invocations": 0,
+      "failed_go_packages": [],
+      "timeout_count": 0
+    },
+    "demo-tests": {
+      "path": "/tmp/starmap-prepr-demo-tests-20261008.log",
+      "exit_code": 0,
+      "python_tests": 9,
+      "successful_go_package_invocations": 0,
+      "failed_go_packages": [],
+      "timeout_count": 0
+    }
+  },
+  "goago": {
+    "findings": [],
+    "staleIgnores": [],
+    "errors": []
+  },
+  "media_sha256": {
+    "scripts/demo.svg": "8b85b123f6977efd63d0787a830bc62d8d46803c81eb3d75aa5411f9727efbe9",
+    "scripts/demo.gif": "2cf8e2babd96b6dc647c49ba1dd287b9420411b7189ca0ac242894c67ee0cf1c",
+    "scripts/demo.tape": "4c195800ebdf20ff48ffa6ec808880396b0f7e5a07aca6fde27905cc8a162004",
+    "scripts/record-demo.py": "b0f5cbb69b352987d83281e12d9a2d92d2c9c62b5fc877006b9b05d12a9a5f17",
+    "scripts/demo-transcript.md": "740126db9f7eefea53e622f7ca6d73022a2ad63100c33fd887f0c9526140cb8e"
+  },
+  "compatibility_review": "No defect found. Sparse baseline receipt carriers require the same accepted baseline and no fresh observation ID. Compaction preserves original receipts and requires exact payload plus current-review replay before selecting compacted history. Ordinary no-op publication returns committed timestamp and sequence; retained source evidence remains upstream.",
+  "source_edits": false,
+  "catalog_regenerated": false,
+  "media_regenerated": false,
+  "limitations": "The broad bootstrap race and metadata byte-bound race batches timed out at arbitrary local 8m/10m bounds. Focused affected contracts passed. CI owns the full 30m race/capacity matrices.",
+  "commands": {
+    "catalog-generation": "make catalog-generation-check",
+    "verify-checks": "make verify-checks",
+    "check": "make check",
+    "goago-policy": "go tool goago -list -format json",
+    "goago": "go tool goago -stale-ignores -format json ./...",
+    "prose": "make technical-writing-check",
+    "demo-tests": "python3 -m unittest discover -s scripts -p test_record_demo.py -v",
+    "catalog-race": "go test -race -json -count=1 -timeout=8m ./internal/catalog/reconciler ./internal/bootstrap",
+    "runtime-compaction-race": "go test -race -json -count=1 -timeout=10m ./runtime ./internal/catalog/publication -run 'TestOrdinaryNoopRetainsCommittedEffectiveState|TestEmbeddedBaselineStartupPreservesGenerationEvidence|TestOpenReturnsEmbeddedStateBeforeSourceReply|TestRuntimeReadsReachNoExternalSystem|TestRejectedProviderPublicationDoesNotRetainInputs|TestRejectedSourcePublicationDoesNotRetainInputs|TestRetainedPublications|TestManualCompaction|TestAcquisitionCompaction|TestAcquisitionReplayCompactsSupersededMetadataBeforeRetainedBound|TestAcquisitionReplayRejectsRetainedHistoryAboveBound|TestAcquisitionReplayRejectsOneObservationAboveRecordBound|TestPublicationCompactionPreservesChangesAbsenceReturnAndScopeRemoval'",
+    "manual-compaction-race": "go test -race -json -count=1 -timeout=8m ./runtime -run 'TestManualHistoryCompactsRepeatedProviderInventoriesBeforeBatchLimit|TestRepeatedProviderCompactionPreservesReplayBoundaries|TestManualHistoryCompactsRepeatedProviderInventoriesBeforeByteLimit|TestRepeatedProviderCompactionPreservesEffectiveCatalog'",
+    "bootstrap-focused-race": "go test -race -json -count=1 -timeout=5m ./internal/bootstrap -run 'TestEmbeddedProviderModelsMatchReviewedIdentityMap|TestEmbeddedAuthoredModelsAreCoveredByHistoricalOrServingIdentityReview|TestEmbeddedModelYAMLExposesCompleteBooleanCapabilitySurface|TestEmbeddedBootstrapManifestMatchesCanonicalCatalog|TestEmbeddedGenerationPayloadRoundTripsWithoutQuarantine'",
+    "runtime-focused-race": "go test -race -json -count=1 -timeout=5m ./runtime -run 'TestOrdinaryNoopRetainsCommittedEffectiveState|TestEmbeddedBaselineStartupPreservesGenerationEvidence|TestOpenReturnsEmbeddedStateBeforeSourceReply|TestRuntimeReadsReachNoExternalSystem|TestRejectedProviderPublicationDoesNotRetainInputs|TestRejectedSourcePublicationDoesNotRetainInputs|TestRetainedPublications'"
+  },
+  "prose": {
+    "files": 2068,
+    "diagnostics": 0,
+    "glossary_terms": 87,
+    "glossary_errors": 0
+  }
+}

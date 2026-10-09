@@ -1,0 +1,62 @@
+package main
+
+import (
+	"context"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestReviewTimingPreservesVisibleHold(t *testing.T) {
+	dir := t.TempDir()
+	svg := filepath.Join(dir, "visible.svg")
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	errs := Evaluate(ctx, "Output "+strconv.Quote(svg)+"\nSet Shell \"bash\"\nSet Framerate 1\nSleep 2500ms\n", io.Discard)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	b, err := os.ReadFile(svg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`animation: slide ([0-9.]+)s`).FindStringSubmatch(string(b))
+	if len(m) != 2 {
+		t.Fatal("duration absent")
+	}
+	d, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("visible tape duration 2.5s, SVG duration %.4fs", d)
+	if d < 2.3 || d > 2.8 {
+		t.Errorf("visible 2.5s hold rendered as %.4fs", d)
+	}
+}
+
+func TestReviewTimingWithoutSVG(t *testing.T) {
+	v := New()
+	v.totalFrames = 3
+	v.Options.Video.Framerate = 10
+	v.Options.Video.Output.MP4 = filepath.Join(t.TempDir(), "output.mp4")
+	// The real capture took 1.5 seconds. No SVG output means no svgFrames.
+	// Use a successful encoder stand-in so this test isolates Render's rate policy.
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "ffmpeg"), []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := v.Render(); err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Join(buildFFopts(v.Options.Video, v.Options.Video.Output.MP4), " ")
+	t.Logf("raster-only input arguments: %s", args)
+	if v.Options.Video.ActualFramerate == 0 {
+		t.Error("raster-only render still uses requested 10fps instead of observed 2fps")
+	}
+}

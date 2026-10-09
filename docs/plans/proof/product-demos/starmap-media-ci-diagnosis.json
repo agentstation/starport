@@ -1,0 +1,93 @@
+{
+  "pr": "https://github.com/agentstation/starmap/pull/251",
+  "head": "17829e6559b8503962791753bc7db038d472f547",
+  "base": "747ac19bb82db1307c5447c2bb4d53cbeb776d06",
+  "run": "https://github.com/agentstation/starmap/actions/runs/37804616122",
+  "failed_job": "https://github.com/agentstation/starmap/actions/runs/37804616122/job/113409178985",
+  "aggregate_failed_job": "https://github.com/agentstation/starmap/actions/runs/37804616122/job/113423472429",
+  "classification": "Go package timeout on unchanged baseline runtime and test selection; no demonstrated media regression.",
+  "failure": {
+    "message": "panic: test timed out after 30m0s",
+    "package": "github.com/agentstation/starmap/runtime",
+    "elapsed_seconds": 1800.162,
+    "exit_code": 1,
+    "active_test": "TestSourceAndProviderAcquisitionPublishIndependently",
+    "active_test_seconds": 30,
+    "active_subtest": "TestSourceAndProviderAcquisitionPublishIndependently/metadata",
+    "active_subtest_seconds": 5,
+    "prior_provider_subtest": "PASS (24.15s)",
+    "passed_top_level_tests": 144,
+    "passed_cases_including_subtests": 502,
+    "assertion_failure_lines": 0,
+    "data_race_reports": 0,
+    "slowest_completed_test": "TestAcquisitionReplayCompactsSupersededMetadataBeforeRetainedBound",
+    "slowest_completed_seconds": 608.58
+  },
+  "branch_changes": [
+    "scripts/demo-font/GeistMono-Regular.woff2",
+    "scripts/demo-font/LICENSE.txt",
+    "scripts/demo-record.json",
+    "scripts/demo-transcript.md",
+    "scripts/demo.gif",
+    "scripts/demo.svg"
+  ],
+  "unchanged_source_object_ids": {
+    "runtime": {
+      "base": "51f4e2730004953a67a01b611ac4bbe2edf99fa3",
+      "media": "51f4e2730004953a67a01b611ac4bbe2edf99fa3"
+    },
+    "internal/embedded": {
+      "base": "4ce40915c067477b3462fd9978c1d9d4301929d1",
+      "media": "4ce40915c067477b3462fd9978c1d9d4301929d1"
+    },
+    "internal/catalog": {
+      "base": "67d47861bddc266238a7bd9a2520701ef75d3c4d",
+      "media": "67d47861bddc266238a7bd9a2520701ef75d3c4d"
+    },
+    "scripts/verification_tests.py": {
+      "base": "8f27d2e0ad903e5725965136a90af77984ceff2c",
+      "media": "8f27d2e0ad903e5725965136a90af77984ceff2c"
+    },
+    ".github/workflows/pr.yaml": {
+      "base": "d10f57abea69104b811d1dd00dea6f54eefd5b0d",
+      "media": "d10f57abea69104b811d1dd00dea6f54eefd5b0d"
+    },
+    "go.mod": {
+      "base": "2da54e5e11943490610f457d57d0f5c7e52d8840",
+      "media": "2da54e5e11943490610f457d57d0f5c7e52d8840"
+    },
+    "go.sum": {
+      "base": "b288300b687c3bad3e26ac8f46f432b52834bd6b",
+      "media": "b288300b687c3bad3e26ac8f46f432b52834bd6b"
+    }
+  },
+  "baseline_evidence": {
+    "upstream_pr": "https://github.com/agentstation/starmap/pull/248",
+    "head": "8264ab2cd22914edcc13f3df878f5d22f12d95ba",
+    "runtime2_job": "https://github.com/agentstation/starmap/actions/runs/37729284858/job/113156354847",
+    "conclusion": "SUCCESS",
+    "job_seconds": 1243,
+    "selected_step_seconds": 1175.04,
+    "passed_cases": 644,
+    "failures": 0,
+    "same_selected_go_command": true,
+    "same_base_trees_and_dependency_blobs": {
+      ".github": true,
+      "go.mod": true,
+      "go.sum": true,
+      "internal": true,
+      "runtime": true,
+      "scripts": true
+    },
+    "metadata_replay_seconds": 321.65,
+    "active_failure_test_previously_passed_seconds": 27.8
+  },
+  "inference": "The package exhausted its aggregate test budget after earlier work. Several unchanged completed tests were slower than the successful baseline run. The active metadata subtest had not reached its own 30-second wait limit.",
+  "uncertainty": "The log does not establish why hosted execution was slower. One active goroutine stack was unavailable. No baseline or single-test reproduction was run. The current CI failure remains unresolved; media correctness is not established by this diagnosis.",
+  "logs": [
+    "/tmp/starmap-media-ci-runtime2-37804616122.log",
+    "/tmp/starmap-media-ci-runtime2-events.jsonl",
+    "/tmp/starmap-media-ci-base-runtime2-37729284858.log"
+  ],
+  "actions": "Read-only GitHub log/API and local git/source inspection. No source edit, push, comment, rerun or autoreview."
+}

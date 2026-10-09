@@ -1,0 +1,20 @@
+package main
+import (
+ "strings"
+ "testing"
+)
+func TestReviewGridDoesNotMutateCallerStyle(t *testing.T) {
+ opts := createTestSVGConfig()
+ before := *opts.Style
+ opts.Frames[0].TermCols = 70
+ opts.Frames[0].TermRows = 20
+ NewSVGGenerator(opts).Generate()
+ if *opts.Style != before { t.Fatalf("caller style changed: dimensions %dx%d -> %dx%d", before.Width,before.Height,opts.Style.Width,opts.Style.Height) }
+}
+func TestReviewRoundedCornersStayTransparent(t *testing.T) {
+ opts := createTestSVGConfig()
+ opts.Style.BorderRadius = 20
+ svg := NewSVGGenerator(opts).Generate()
+ root := strings.SplitN(svg, ">", 2)[0]
+ if strings.Contains(root, `style="background:`) { t.Fatalf("root fills rounded corner cutouts: %s", root) }
+}

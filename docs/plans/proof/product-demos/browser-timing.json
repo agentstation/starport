@@ -1,0 +1,20 @@
+{
+  "vhs_sha256": "6147d1673364172e9cdc64dd0de7b53b996206608ca87ed6d710c4cea545a3b9",
+  "tape": "Output smoke.svg\nOutput smoke.gif\nSet Shell bash\nSet Width 800\nSet Height 480\nSet Framerate 10\nSet FontFamily \"Geist Mono\"\nHide\nType `printf 'HIDDEN\\n'`\nEnter\nSleep 2s\nCtrl+L\nShow\nType `printf 'Visible elapsed time\\n'`\nEnter\nSleep 3s\n",
+  "results": [
+    {
+      "browser": "Brave",
+      "svg_seconds": 4.69,
+      "gif_seconds": 4.64,
+      "hidden_seconds": 2,
+      "verdict": "PASS"
+    },
+    {
+      "browser": "Chrome",
+      "svg_seconds": 4.69,
+      "gif_seconds": 4.64,
+      "hidden_seconds": 2,
+      "verdict": "PASS"
+    }
+  ]
+}

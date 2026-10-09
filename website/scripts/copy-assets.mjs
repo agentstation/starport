@@ -13,6 +13,9 @@ const publicDir = path.join(repoRoot, "website", "public");
 export const ASSETS = [
   ["demo/first-use.gif", "docs/assets/first-use-v1.3.0/first-use.gif"],
   ["demo/poster.png", "docs/assets/first-use-v1.3.0/poster.png"],
+  ...["console.mp4", "console.webm", "console.gif", "poster.png", "title-preview.png", "record.json", "TRANSCRIPT.md"].map((file) => [
+    `demo/console/${file}`, `docs/assets/console-demo/${file}`,
+  ]),
   ["favicon.svg", "console/src/favicon.svg"],
   // The splash page uses the console fonts and ships their license.
   ...[
