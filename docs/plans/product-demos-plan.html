@@ -153,12 +153,16 @@
 </head>
 <body>
 <header id="overview"><h1>Product demos plan</h1>
-<p id="status-line">Status: <code data-plan-status="active">active</code>. Owner: this plan. Created: 2026-10-07.</p>
+<p id="status-line">Status: <code data-plan-status="complete">complete</code>. Owner: this plan. Created: 2026-10-07. Completed: 2026-10-09.</p>
 
 <p>Baseline: Starport c63b6284, Starmap c3e38970d, VHS 038df4f. Proof root: <code>proof/product-demos/</code>. Next action: <a href="#current-resume-state">Current resume state</a>.</p>
 <section id="current-resume-state"><h2>Current resume state</h2>
 
-<p>Updated: 2026-10-09. PD1 through PD8 and PD10 status: done. <a href="proof/product-demos/publication-check.json">Publication proof</a>. PD9 waits for the final implementation merge.</p>
+<p>Updated: 2026-10-09. All ten tasks have status done. <a href="proof/product-demos/publication-check.json">Publication proof</a>. The plan is complete, and no task remains.</p>
+
+<p>Each final merge is a squash merge at the reviewed exact head with a valid GitHub signature. Starmap PR <a href="https://github.com/agentstation/starmap/pull/252">252</a> merged as <code>120a49889</code> with the code fixes and the demo recorder. Starmap PR <a href="https://github.com/agentstation/starmap/pull/259">259</a> merged as <code>75a37c626</code> with the two GPT-6.1 Sol records and the regenerated embed. Starport PR <a href="https://github.com/agentstation/starport/pull/436">436</a> merged as <code>f6f52171e</code> after a rebase, the pin move, and a refreshed projection golden file.</p>
+
+<p>Starmap PR <a href="https://github.com/agentstation/starmap/pull/251">251</a> merged as <code>5a9b0bec3</code>. Its media comes from the recorder run against the merged Sol generation <code>bindings-53fdce277e…c70aef7a19dd</code>. The Starport pin move surfaced a deterministic golden mismatch, and PR 436 contains the fix. The Starmap test <code>TestReadRefusesActiveWriterProcess</code> timed out once on the <code>filesystem</code> shard and passed on a rerun. A separate Starmap PR owns that fix.</p>
 
 <p>On 2026-10-08, the owner moved ownership of every open Starmap and Starport PR to the lead. Govulncheck failed every PR, so two toolchain PRs merged first. Starmap PR <a href="https://github.com/agentstation/starmap/pull/257">257</a> moved to Go 1.27.2 and x/net v0.60.0 in merge commit <code>0bfa52f64</code>. Starport PR <a href="https://github.com/agentstation/starport/pull/438">438</a> made the same move and pinned gosec to a master commit in merge commit <code>53f00771d</code>. Starport media PR 435 merged as <code>c98767c9f</code>.</p>
 
@@ -180,7 +184,7 @@
 
 <p>The contributor VHS review is complete. None of heads 6 through 9 is ready to merge. <a href="proof/product-demos/vhs-pr-review.md">Review</a>. Recordings remain accepted: CLI SVG 54.26 seconds, Starmap SVG 54.37 seconds, and Console 35.206 seconds. Catalog and media remain frozen until the <code>catalog:</code> PR merges.</p>
 
-<p>Next action: wait for Starmap PR 252 to merge. Then move the Starport pin, run the checks again, and retarget PR 436 to main. The lead owns review and merge of these PRs. The owner did not authorize releases, deployment, contributor comments, or history rewrites. Preserve this plan and the worktrees until the final implementation merge triggers PD9.</p>
+<p>Next action: none. The lead reviewed and merged every PR in this plan. The owner did not authorize releases, deployment, contributor comments, or history rewrites, and none occurred. The lead removed the task worktrees. This file stays in <code>docs/plans/</code> as the record, because <code>docs/TASKS.md</code> and the proof files link to it.</p>
 
 </section>
 <section id="outcome"><h2>Outcome</h2><blockquote>The READMEs and website show accurate product use through reproducible recordings. Terminal recordings preserve visible elapsed time. Console recordings show the actual browser UI.</blockquote></section>
@@ -215,7 +219,7 @@ Starmap: catalog server + catalog-source SVG</pre></figure></div></section></hea
 <tr id="PD7" data-status="done"><td>PD7</td><td>Publish reviewed repository updates</td><td><code>done</code></td><td>Owner: root in the three product worktrees. User authorized commits, branch pushes, and PR submission on 2026-10-08. Independent checks: vhs_timing and starmap_demo. Starport pins the Starmap main pseudo-version <code>v0.17.1-0.20261009150341-120a49889009</code> after the rebase. PRs: VHS 11, Starmap 251/252, Starport 435/436. All pre-PR gates pass. CI and inherited format limits appear in the resume state.</td></tr>
 <tr id="PD8" data-status="done"><td>PD8</td><td>Review open contributor VHS PRs</td><td><code>done</code></td><td>Owner: root and vhs_timing. User requested a full review on 2026-10-08. Review PRs 6 through 9 against main 346bbb1e. Root tests dimensions and progress. vhs_timing tests timing and fonts. <a href="proof/product-demos/vhs-pr-review.md">Full review and recommendations</a>. Six P2 findings with reproduced probes. No contributor branches, reviews, or PR states will change.</td></tr>
 <tr id="PD10" data-status="done"><td>PD10</td><td>Integrate Charmbracelet VHS main</td><td><code>done</code></td><td>User authorized the dedicated sync PR on 2026-10-08. Owner: vhs_timing, with root publication. Frozen upstream: <code>24fa225</code>. Current fork main: <code>346bbb1e</code>. Integrate all 31 upstream commits and preserve fork SVG, timing, exact fonts, and package trust. Merge commit: <code>9d2fd357</code>. <a href="https://github.com/agentstation/vhs/pull/11">Sync PR 11</a> contains all 31 upstream commits. Native race, static checks, builds, tape checks, and autoreview pass. <a href="proof/product-demos/vhs-sync-check.json">Proof</a>. No main merge or release.</td></tr>
-<tr id="PD9" data-status="todo"><td>PD9</td><td>Cleanup after final implementation merge</td><td><code>todo</code></td><td>Waits for the final implementation merge.</td></tr>
+<tr id="PD9" data-status="done"><td>PD9</td><td>Cleanup after final implementation merge</td><td><code>done</code></td><td>Final implementation merge: Starmap PR 251 as <code>5a9b0bec3</code> on 2026-10-09. Earlier merges: Starmap 252 as <code>120a49889</code>, Starmap 259 as <code>75a37c626</code>, Starport 436 as <code>f6f52171e</code>. Merged head branches deleted. Task worktrees removed. The plan stays as the record with status complete.</td></tr>
 </tbody></table></section>
 <section id="tasks"><h2>Tasks</h2>
 
