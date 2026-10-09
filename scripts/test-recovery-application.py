@@ -15,7 +15,7 @@ import recovery_application as recovery
 SOURCE = "a" * 40
 HEAD = "b" * 40
 PRODUCER = {"Path": "github.com/agentstation/starmap", "Version": "v0.16.6-0.20260930115749-2bb995712275",
-            "GoVersion": "1.27.1", "Sum": "h1:source", "GoModSum": "h1:module"}
+            "GoVersion": "1.27.2", "Sum": "h1:source", "GoModSum": "h1:module"}
 
 
 def event(action, name=None):

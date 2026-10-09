@@ -154,7 +154,7 @@ def validate_roster(roster, group, mode, source, head, sources):
         raise ValueError("Application recovery toolchain or native mode differs.")
     producer = roster.get("producer", {})
     if (not isinstance(producer, dict) or producer.get("Path") != "github.com/agentstation/starmap" or producer.get("Replace") is not None
-            or producer.get("GoVersion") != "1.27.1" or not producer.get("Version")
+            or producer.get("GoVersion") != "1.27.2" or not producer.get("Version")
             or not producer.get("Sum") or not producer.get("GoModSum")):
         raise ValueError("Application recovery requires the pinned published producer module.")
 
