@@ -40,7 +40,7 @@ docker run --rm "ghcr.io/agentstation/starport:$STARPORT_VERSION" --version`,
   {
     id: 'source',
     title: 'Source',
-    note: 'Go 1.27.1 · pnpm 11.22.0',
+    note: 'Go 1.27.2 · pnpm 11.22.0',
     command: `git clone https://github.com/agentstation/starport.git
 cd starport
 make build

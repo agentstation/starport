@@ -149,7 +149,7 @@ def validate_roster(roster, group, mode, source, head, sources):
     if not re.fullmatch(r"[0-9a-f]{40}", source) or not re.fullmatch(r"[0-9a-f]{40}", head):
         raise ValueError("Application recovery requires exact source identities.")
     toolchain = roster.get("toolchain", {})
-    if toolchain != {"GOVERSION": "go1.27.1", "GOOS": "linux", "GOARCH": "amd64", "GOHOSTOS": "linux",
+    if toolchain != {"GOVERSION": "go1.27.2", "GOOS": "linux", "GOARCH": "amd64", "GOHOSTOS": "linux",
                      "GOHOSTARCH": "amd64", "CGO_ENABLED": "1" if mode == "race" else "0", "GOWORK": "off"}:
         raise ValueError("Application recovery toolchain or native mode differs.")
     producer = roster.get("producer", {})
@@ -162,7 +162,7 @@ def validate_roster(roster, group, mode, source, head, sources):
 def validate_binary(path, metadata, source, mode, expected_digest):
     if digest(path) != expected_digest:
         raise ValueError("Operator executable bytes differ from the source-bound build.")
-    if not metadata.splitlines() or not metadata.splitlines()[0].endswith(": go1.27.1") or "\tpath\tgithub.com/agentstation/starport/cmd/starport\n" not in metadata:
+    if not metadata.splitlines() or not metadata.splitlines()[0].endswith(": go1.27.2") or "\tpath\tgithub.com/agentstation/starport/cmd/starport\n" not in metadata:
         raise ValueError("Operator executable has a different toolchain or command owner.")
     for setting in ("vcs.revision=" + source, "vcs.modified=false", "GOOS=linux", "GOARCH=amd64",
                     "CGO_ENABLED=" + ("1" if mode == "race" else "0")):
