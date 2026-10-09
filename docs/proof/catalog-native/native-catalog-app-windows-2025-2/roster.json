@@ -362,6 +362,6 @@
     "TestWriteImportedHistoryBindsApplication"
   ],
   "package": "github.com/agentstation/starport/internal/app",
-  "source": "1f6b2461afd7b15c945a840e63d29f2d183e2da2",
-  "workflow_head": "60db1856066a0933d9603b6a468c1d3dc9301137"
+  "source": "fd07ab88a1d3d0abac6ff20e3ff3570406589116",
+  "workflow_head": "ac7baf1ef7b0a460c0c5eef3e6099aa601955f2a"
 }

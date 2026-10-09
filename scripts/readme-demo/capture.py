@@ -286,7 +286,9 @@ def capture_main(args):
             if release:
                 if candidate.get("attestation_verified") is not True:
                     raise RuntimeError("the release candidate has no verified attestation")
-                emit("SHA-256 verified against checksums.txt. Provenance verified by gh attestation.\n\n")
+                # Two lines: the one-line form exceeds the readable frame width.
+                emit("SHA-256 verified against checksums.txt.\n")
+                emit("Provenance verified by gh attestation.\n\n")
             elif candidate["checksum_verified"]:
                 emit("SHA-256 verified against checksums.txt.\n\n")
             else:

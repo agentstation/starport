@@ -52,6 +52,16 @@ class Screen:
         except OSError:
             self.title = ImageFont.truetype(font_path, 30)
         self.footer = ImageFont.truetype(font_path, 20)
+        # The font draws its missing-glyph box for an unassigned code point. A provider answer may carry a
+        # character outside the font, and that box must not reach the published media.
+        self.missing_glyphs = {font: bytes(font.getmask("͸")) for font in (self.font, self.title)}
+
+    def missing_glyph(self, line, font):
+        """Return the first character of the line that the font cannot draw, or None."""
+        for character in line:
+            if not character.isspace() and bytes(font.getmask(character)) == self.missing_glyphs[font]:
+                return character
+        return None
 
     def render(self, text, label):
         image = Image.new("RGB", (WIDTH, HEIGHT), "#0b1019")
@@ -65,6 +75,9 @@ class Screen:
                 color = "#a5b8dc" if line.startswith("$") else "#f2c66d"
             if draw.textlength(line, font=selected) > WIDTH - 112:
                 raise ValueError("A captured line exceeds the readable frame width: " + line)
+            character = self.missing_glyph(line, selected)
+            if character is not None:
+                raise ValueError(f"The font has no glyph for U+{ord(character):04X} in a captured line: " + line)
             y = 46 + index * 32
             if y + 32 > HEIGHT - 74:
                 raise ValueError("The capture exceeds the readable frame height.")

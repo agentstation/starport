@@ -1,28 +1,34 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-10-04
+Last Updated: 2026-10-08
 
 ## 🚀 Current Sprint: Starport v1
 
 ### Active Work
 
-The production catalog plan is active. Its canonical owner is
-`agentstation/starmap`, at `docs/plans/starport-production-catalog-plan.html`.
-It owns catalog lifecycle, configuration, storage, request latency, operator UX,
+No plan is active.
+
+The production catalog plan completed on 2026-10-08 against Starmap `v0.17.0` and Starport `v1.3.0`.
+Its archive lives in `agentstation/starmap` at `docs/reviews/catalog-lifecycle/starport-production-catalog-plan.html`.
+The closure record `docs/reviews/catalog-lifecycle/CLOSURE.md` beside it lists the ledger result, the merge commits, and the proof locations.
+The plan owned catalog lifecycle, configuration, storage, request latency, operator UX,
 documentation, the Starport README, and its demonstration.
 
-The canonical plan holds the current task status and the only status ledger.
-PR #366 merged the first documentation and qualification changes.
-All six native archive jobs passed. The plan records their evidence and the remaining production qualification work.
+### Production catalog plan record
 
-The ledger contains 40 tasks, 50 primary cases, and 324 required subcases.
+The paragraphs below record the Starport outcomes of the plan tasks as they landed.
+The archived plan holds the final status of every task.
+
+PR #366 merged the first documentation and qualification changes.
+All six native archive jobs passed. The plan records their evidence and the production qualification work.
+
+The ledger contains 45 tasks, 50 primary cases, and 331 required subcases.
 Eight additional local checks supplement the candidate gate without qualifying incomplete publication cases.
-The activation proof is `proof/starport-production-catalog/activation-2026-09-05/` beside the canonical plan.
+The activation proof is `proof/starport-production-catalog/activation-2026-09-05/` beside the proof tree on Starmap main.
 Historical storage, latency, and audit evidence remains unchanged.
 
-CSP6.1 now standardizes both products on Go 1.27.1. It preserves behavioral and platform checks while removing older compiler coverage.
-The canonical plan records current qualification and merge status.
+CSP6.1 standardizes both products on Go 1.27.1. It preserves behavioral and platform checks while removing older compiler coverage.
 
 On 2026-10-04, CSP21 found a loader regression from #384.
 The environment decoder materialized an empty inference destination approval set. Every loader-built configuration then denied every inference destination.
@@ -31,7 +37,7 @@ CSP21 also adds `STARPORT_<PROVIDER>_INFERENCE_BASE_URL`. It approves one operat
 
 CSP6.2 repairs recognition billing and protocol facts across both projects.
 Its local implementation preserves actual units, measured usage, and charges after request failures.
-Paired qualification, review, module publication, and merges remain open.
+The archived plan records the paired qualification, review, module publication, and merges.
 
 CSP16 selects one deployment configuration authority.
 Shared management stores catalog deployment settings as SQL revisions, with an audit record and a fleet policy fence.

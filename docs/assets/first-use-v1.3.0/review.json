@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "verdict": "PASS",
+  "release": "v1.3.0",
+  "reviewer": "Jack",
+  "date": "2026-10-07",
+  "observations": {
+    "no_secret_material": true,
+    "readable_at_900px": true,
+    "human_pacing_review": true,
+    "media_links_resolve": true,
+    "poster_alt_transcript": true,
+    "supported_motion_controls": true
+  },
+  "observation_evidence": {
+    "no_secret_material": "events.json and TRANSCRIPT.md hold no credential bytes. The provider credential and the gateway key stay hidden in the setup scene.",
+    "readable_at_900px": "render.json effective_font_at_900px 18.28. A 948 pixel preview shows the poster at 900 pixels with no horizontal overflow.",
+    "human_pacing_review": "record.json human_review: reviewer Jack, pacing verdict PASS, 2026-10-07. The edited animation runs 41.07 seconds.",
+    "media_links_resolve": "README lines 12 to 16 link poster.png, first-use.gif, and TRANSCRIPT.md inside this record. scripts/verify-doc-links.sh passes.",
+    "poster_alt_transcript": "The README image has alt text, and the transcript gives the same content without animation. An unavailable image shows the alt text.",
+    "supported_motion_controls": "The README links the animation instead of playing it in place. The poster is static, and the transcript is a text alternative."
+  },
+  "notes": "Jack recorded the pacing verdict. The lead verified the remaining observations with local browser checks of the README media block at 948 and 320 pixels in light and dark schemes, with keyboard focus, and with an unavailable image. The Starmap proof directory docs/plans/proof/starport-production-catalog/csp24/media retains those checks.",
+  "inputs": {
+    "README.md": "5e921e9ad826549109a3a5368f9d3fe7aff1904cb15878d7eeb1caef0387bf20",
+    "docs/assets/first-use-v1.3.0/first-use.gif": "04200485b939a03ee510d9d9fd10d946dafb65354a7ac1c9a8bce2d39b1354df",
+    "docs/assets/first-use-v1.3.0/poster.png": "8699edff82fa533bae158b8380c063c47b3d3148d8e1aeaaca023236934cb84c",
+    "docs/assets/first-use-v1.3.0/events.json": "21fbeef40375d1026c68eb8d7f52333488b02d9c5e5cbba336a4ee4ea228a61d",
+    "docs/assets/first-use-v1.3.0/render.json": "680ea050fb72c1d2efd9f209ab7a102a0895710e28a7d25bda79ffd55acaad88",
+    "docs/assets/first-use-v1.3.0/TRANSCRIPT.md": "7c7a89a8509bb6f6e3e60284613376345d92815cc68420c37cf3eb10290cb257"
+  }
+}

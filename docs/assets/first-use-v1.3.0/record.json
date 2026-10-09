@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "kind": "release",
+  "qualifies_release_cases": true,
+  "real_provider": true,
+  "captured_at": "2026-10-07T05:08:26Z",
+  "candidate": {
+    "source": "release",
+    "run_id": null,
+    "pull_request": null,
+    "head_commit": "b649dbf5184e53b2c13449b96fc887bcb144e18c",
+    "snapshot_version": "starport version 1.3.0",
+    "archive_name": "starport_1.3.0_darwin_arm64.tar.gz",
+    "archive_sha256": "3b6dd19bb7e9e88de84ac6c795128f06e96cfb7eaf50f62f784c6f1a849d96ca",
+    "binary_sha256": "b17f6cf44cf740a4d3ed74add310a2920032aa798aa787a143af8825c4e56b2d",
+    "release_tag": "v1.3.0",
+    "checksum_verified": true,
+    "attestation_verified": true,
+    "attestation": {
+      "predicate_types": [
+        "https://slsa.dev/provenance/v1"
+      ],
+      "statements": 1
+    }
+  },
+  "fixtures": [],
+  "scenes": [
+    {
+      "name": "install",
+      "start_event": 0,
+      "end_event": 6,
+      "start_seconds": 1.004236,
+      "end_seconds": 2.469036
+    },
+    {
+      "name": "catalog",
+      "start_event": 7,
+      "end_event": 10,
+      "start_seconds": 3.469674,
+      "end_seconds": 4.408332
+    },
+    {
+      "name": "setup",
+      "start_event": 11,
+      "end_event": 18,
+      "start_seconds": 5.408777,
+      "end_seconds": 8.20832
+    },
+    {
+      "name": "answer",
+      "start_event": 19,
+      "end_event": 39,
+      "start_seconds": 9.226866,
+      "end_seconds": 10.092929
+    },
+    {
+      "name": "next",
+      "start_event": 40,
+      "end_event": 45,
+      "start_seconds": 11.095421,
+      "end_seconds": 11.095485
+    }
+  ],
+  "inference_interval": {
+    "start_event": 25,
+    "end_event": 36,
+    "start_seconds": 9.227033,
+    "end_seconds": 10.092881
+  },
+  "cuts": [
+    {
+      "boundary": "install/catalog",
+      "before_event": 7,
+      "original_seconds": 1.000638,
+      "rendered_seconds": 6.0
+    },
+    {
+      "boundary": "catalog/setup",
+      "before_event": 11,
+      "original_seconds": 1.000445,
+      "rendered_seconds": 8.0
+    },
+    {
+      "boundary": "setup/answer",
+      "before_event": 19,
+      "original_seconds": 1.018546,
+      "rendered_seconds": 6.0
+    },
+    {
+      "boundary": "answer/next",
+      "before_event": 40,
+      "original_seconds": 1.002492,
+      "rendered_seconds": 7.0
+    }
+  ],
+  "outputs": {
+    "first-use.gif": {
+      "sha256": "04200485b939a03ee510d9d9fd10d946dafb65354a7ac1c9a8bce2d39b1354df",
+      "bytes": 681361,
+      "width": 1280,
+      "height": 800,
+      "duration_seconds": 41.07,
+      "frames": 17
+    },
+    "poster.png": {
+      "sha256": "8699edff82fa533bae158b8380c063c47b3d3148d8e1aeaaca023236934cb84c",
+      "bytes": 80272,
+      "width": 1280,
+      "height": 800
+    },
+    "events.json": {
+      "sha256": "21fbeef40375d1026c68eb8d7f52333488b02d9c5e5cbba336a4ee4ea228a61d",
+      "bytes": 8534
+    },
+    "render.json": {
+      "sha256": "680ea050fb72c1d2efd9f209ab7a102a0895710e28a7d25bda79ffd55acaad88",
+      "bytes": 1593
+    },
+    "TRANSCRIPT.md": {
+      "sha256": "7c7a89a8509bb6f6e3e60284613376345d92815cc68420c37cf3eb10290cb257",
+      "bytes": 2899
+    }
+  },
+  "uncut": {
+    "path": "first-use-uncut.gif",
+    "sha256": "afdba07c989ee6adcecfe12396a631e6ee2a56a562c83f0d2ee3a30761400ea8",
+    "bytes": 680890,
+    "duration_seconds": 15.1,
+    "frames": 17
+  },
+  "render": {
+    "font": "Menlo",
+    "font_path": "/System/Library/Fonts/Menlo.ttc",
+    "font_size": 26,
+    "effective_font_at_900px": 18.28125
+  },
+  "discovery": {
+    "starport_version": "starport version 1.3.0",
+    "catalog_generation": "bindings-9157a3e797c02e21193a26a2233dcbc5967390eee9ced9cb5416bdf1dae7d620.local.010adf9f3137",
+    "provider_path": "openai",
+    "base_url_mechanism": null,
+    "provider_credential_source": "environment",
+    "network_egress_denied": false,
+    "catalog_environment_has_provider_key": false,
+    "persistent_selectors_present": false,
+    "leftover_home_files": [],
+    "clean_shutdown": true,
+    "answer_stream": {
+      "status": 200,
+      "done_event": true,
+      "content_length": 48
+    }
+  },
+  "human_review": {
+    "reviewer": "Jack",
+    "date": "2026-10-07",
+    "pacing_verdict": "PASS",
+    "notes": null
+  }
+}
