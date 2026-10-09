@@ -4,7 +4,7 @@ Run `make test-catalog-capacity` to check the real decoded retention limit. The 
 
 The large fixture has the `catalogcapacity` build tag. It has no runtime skip. Ordinary native platform tests retain the smaller topology, selection, retention, interruption, import, and recovery contracts. The capacity runner refuses a missing, duplicate, skipped, or failed named result. A package must also report completion.
 
-Final qualification uses Go 1.27.1 and the exact published Starmap module with `GOWORK=off`. The runner rejects a producer module replacement and an inherited workspace setting other than `off`.
+Final qualification uses Go 1.27.2 and the exact published Starmap module with `GOWORK=off`. The runner rejects a producer module replacement and an inherited workspace setting other than `off`.
 
 The regression starts a real offline runtime. It writes two legal historical capsules through the producer's retention owner. Each capsule has a highly compressed recovery record whose decoded size exceeds 128 MiB. The source uses persistent Badger, SQLite, the canonical file inventory, and an actual backup bundle. The compiler reads that original backup.
 

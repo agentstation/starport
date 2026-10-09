@@ -93,10 +93,10 @@ class CatalogCapacityEvidenceTests(unittest.TestCase):
             if command == failed_query:
                 raise RuntimeError("setup query failed")
             if command == ["go", "env", "GOVERSION"]:
-                return "go1.27.1"
+                return "go1.27.2"
             if command[:3] == ["go", "list", "-m"]:
                 return json.dumps(module or {"Version": "v0.16.6-0.20260930082412-e0845d601fb5"})
-            return "go version go1.27.1 linux/amd64"
+            return "go version go1.27.2 linux/amd64"
 
         with mock.patch.dict(os.environ, environment), mock.patch.object(capacity.platform, "system", return_value="Linux"), \
                 mock.patch.object(capacity.os, "sysconf", side_effect=lambda name: 4096 if name == "SC_PAGE_SIZE" else 8 << 20), \

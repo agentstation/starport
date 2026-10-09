@@ -82,7 +82,7 @@ def validate_platform(directory, proof, system, tests):
         prefix = f"native-catalog-{runner}/"
         toolchain = read_bound_file(directory, prefix + "toolchain.txt", proof["sha256"]).splitlines()
         cgo = "0" if (system, arch) == ("windows", "arm64") else "1"
-        if toolchain != [f"go version go1.27.1 {system}/{arch}", system, arch, system, arch, cgo]:
+        if toolchain != [f"go version go1.27.2 {system}/{arch}", system, arch, system, arch, cgo]:
             raise ValueError("Native evidence has a different toolchain, target, or host.")
         raw = read_bound_file(directory, prefix + "tests.jsonl", proof["sha256"])
         events = [json.loads(line) for line in raw.splitlines() if line.strip()]

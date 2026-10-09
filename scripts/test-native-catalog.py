@@ -25,7 +25,7 @@ class NativeCatalogTests(unittest.TestCase):
                               "status": "completed", "conclusion": "success", "headSha": "a" * 40, "jobs": []}, "sha256": {}}
         for arch, runner in native.RUNNERS["windows"].items():
             self.proof["run"]["jobs"].append({"name": f"Test ({runner})", "status": "completed", "conclusion": "success", "databaseId": len(self.proof["run"]["jobs"]) + 1})
-            self.bind(runner, "toolchain.txt", f"go version go1.27.1 windows/{arch}\nwindows\n{arch}\nwindows\n{arch}\n" + ("0\n" if arch == "arm64" else "1\n"))
+            self.bind(runner, "toolchain.txt", f"go version go1.27.2 windows/{arch}\nwindows\n{arch}\nwindows\n{arch}\n" + ("0\n" if arch == "arm64" else "1\n"))
             self.bind_events(runner, [self.event("run"), self.event("pass"), self.event("pass", test=False)])
 
     def event(self, action, test=True, name=None):
@@ -68,7 +68,7 @@ class NativeCatalogTests(unittest.TestCase):
     def test_wrong_host_target_or_toolchain_fails(self):
         runner = native.RUNNERS["windows"]["amd64"]
         original = (self.root / f"native-catalog-{runner}/toolchain.txt").read_text()
-        for content in [original.replace("go1.27.1", "go1.26.6"), original.replace("windows", "linux", 1), original.replace("amd64\nwindows", "arm64\nwindows"), original.removesuffix("1\n") + "0\n"]:
+        for content in [original.replace("go1.27.2", "go1.26.6"), original.replace("windows", "linux", 1), original.replace("amd64\nwindows", "arm64\nwindows"), original.removesuffix("1\n") + "0\n"]:
             self.bind(runner, "toolchain.txt", content)
             with self.assertRaises(ValueError):
                 self.validate()
@@ -384,7 +384,7 @@ class NativeCatalogTests(unittest.TestCase):
             for arch, runner in runners.items():
                 if system != "windows":
                     cgo = "1"
-                    self.bind(runner, "toolchain.txt", f"go version go1.27.1 {system}/{arch}\n{system}\n{arch}\n{system}\n{arch}\n{cgo}\n")
+                    self.bind(runner, "toolchain.txt", f"go version go1.27.2 {system}/{arch}\n{system}\n{arch}\n{system}\n{arch}\n{cgo}\n")
                     self.bind_events(runner, [self.event("run"), self.event("pass"), self.event("pass", test=False)])
         source = self.root / "artifacts"
         shutil.copytree(self.root, source, ignore=shutil.ignore_patterns("artifacts"))

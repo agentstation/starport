@@ -166,8 +166,8 @@ def run_profile(root, output, profile, provisional):
             if environment.get("GOWORK", "off") != "off":
                 raise ValueError("Published-module qualification refuses a Go workspace.")
             environment["GOWORK"] = "off"
-        if command_output(["go", "env", "GOVERSION"], root, environment) != "go1.27.1":
-            raise ValueError("Capacity qualification requires exactly Go 1.27.1.")
+        if command_output(["go", "env", "GOVERSION"], root, environment) != "go1.27.2":
+            raise ValueError("Capacity qualification requires exactly Go 1.27.2.")
         module = json.loads(command_output(["go", "list", "-m", "-json", "github.com/agentstation/starmap"], root, environment))
         if not provisional and (module.get("Replace") is not None or module.get("Main") or not module.get("Version")):
             raise ValueError("Published-module qualification refuses a producer replacement or unpublished module.")

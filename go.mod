@@ -1,6 +1,6 @@
 module github.com/agentstation/starport
 
-go 1.27.1
+go 1.27.2
 
 require (
 	cloud.google.com/go/auth v0.24.0
@@ -200,7 +200,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.42.0 // indirect

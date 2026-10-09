@@ -53,7 +53,7 @@ CI tests each candidate archive on a native runner for each supported target.
 The job checks the checksum and the version and runs the two catalog commands below.
 It also starts a temporary gateway and stops it.
 
-To build from source, install Go 1.27.1 and pnpm 11.22.0.
+To build from source, install Go 1.27.2 and pnpm 11.22.0.
 
 Starport and Starmap use the same exact Go version for development, CI, and releases.
 Qualify future upgrades across both repositories and update their pins together.

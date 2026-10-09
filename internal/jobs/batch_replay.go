@@ -156,9 +156,9 @@ func verifyBatchReplayProgress(before, after Batch) error {
 		return ErrInvalidBatch
 	}
 	// Only the claim owner can increase this count. Final publication verifies every line.
-	comparable := before
-	comparable.ClaimedLines = after.ClaimedLines
-	if err := validateBatchReplacement(comparable, after); err != nil {
+	claimed := before
+	claimed.ClaimedLines = after.ClaimedLines
+	if err := validateBatchReplacement(claimed, after); err != nil {
 		return err
 	}
 	if before.State != after.State && !CanTransition(before.State, after.State) {

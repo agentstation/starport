@@ -38,7 +38,7 @@ func TestCatalogExpiringPreparationRetainsOriginalNativeReceiptUnderSQLGuard(t *
 			f.history.targets.KV = lost
 			f.lane.runner.targets.KV = lost
 			original := []storage.TransferRecord{{Key: "catalog:fleet:{captured}:v1:lease", Value: []byte("original captured lease"), ExpiresAtMillis: 1}}
-	// The native import contract omits this already expired original control. The owning clock proves absence.
+			// The native import contract omits this already expired original control. The owning clock proves absence.
 			require.ErrorIs(t, f.lane.ApplyExpiringCatalogTopology(t.Context(), f.topology, 0, original), errHistoryLostReply)
 			path := filepath.Join(f.history.accepted.state.directory, "catalog-assets", catalogAssetName(0))
 			retained, err := os.ReadFile(path)
