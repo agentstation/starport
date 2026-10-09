@@ -4,6 +4,47 @@ This file carries the summary for each tagged version. The GitHub release for a 
 
 ## Unreleased
 
+## v1.3.0
+
+Starport v1.3.0 is the Starport half of the qualified catalog release pair. It pins Starmap v0.17.0.
+
+### Catalog authority
+
+- Starmap catalog authority gates every request admission. The gateway proves authority startup before it allows a response.
+- The runtime integrates the catalog lifecycle, memory authorization, and isolated caches.
+- The runtime fences fleet publication, and shared acquisition state recovers after an outage.
+- The fleet leader promotes the packaged baseline.
+- Usage records preserve recognition billing units and measured usage.
+
+### Recovery
+
+- Verified backups, restricted restores, guarded replay, and imported-state inspection.
+- Closed recovery positions with native owner controls and independently retained history under closed import barriers.
+- Populated adoption across the native, recovery, application, and command owners.
+- The D42 recovery measurement harness, backup write-history, and the fleet restore activation.
+- Gateway admission withdraws after closure without a forced observation.
+- A populated workload qualifies the local-to-shared migration.
+
+### Configuration and storage
+
+- One deployment configuration authority with shared SQL revisions.
+- Configuration operations, field saves, and receipts in the console and the API.
+- Paid-operation budgets reserve work and recover durable work safely.
+- Complete local and shared storage recipes, qualified on Valkey 7.2.14 and PostgreSQL 16.15.
+- The configuration loader keeps the installation default destination approvals.
+
+### Documentation and console
+
+- An operator documentation site at `/docs/` with a generated settings and file reference, a docs archive, and the accessibility targets.
+- Deployment recipes and read-only Compose recipes.
+- The README follows the first-use sequence and qualifies the candidate installs.
+- The console completes the configuration view, refreshes run state, and reports chat readiness.
+- The console adopts shadcn 4.21 and the shadcn lint.
+
+### Build
+
+- Go 1.27.1 for development, CI, and releases.
+
 ### Features
 
 - `STARPORT_<PROVIDER>_INFERENCE_BASE_URL` approves one replacement inference origin for one provider. It applies to environment credentials only.

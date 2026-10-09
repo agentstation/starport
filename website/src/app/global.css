@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/*
+ * Tailwind does not scan node_modules. Fumadocs renders utility classes from
+ * its own distribution, so name that distribution as a source.
+ */
+@source '../../node_modules/fumadocs-ui/dist';
+
+/*
+ * The one accent is the beacon amber in DESIGN.md. The light theme uses the
+ * deep fill so that white text on it keeps AA contrast. The dark theme uses
+ * the bright fill with dark ink.
+ */
+:root {
+  --color-fd-primary: #b45309;
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-ring: #b45309;
+}
+
+.dark {
+  --color-fd-primary: #f0b23e;
+  --color-fd-primary-foreground: #1a1204;
+  --color-fd-ring: #f0b23e;
+}
+
+/*
+ * The mark. The star body and its face hold the gold on every ground, light
+ * or dark, so the sticker reads the same in the splash nav, on the docs rail
+ * and in the browser tab: `--mark` is the body and `--mark-ink` the face.
+ * They live here, not in the splash sheet, because the docs nav carries the
+ * same mark.
+ */
+:root {
+  --mark: #f0b23e;
+  --mark-ink: #1a1204;
+}
+
+/*
+ * The mascot's eyes. A blink every six seconds closes the dots in place for
+ * three frames; a wink every nineteen swaps the right dot for its closed arc
+ * for three quarters of a second. `steps(1, end)` holds each shape until the
+ * swap, so the open and shut shapes never cross-fade. The two periods are
+ * co-prime, so a blink and a wink only line up once every two minutes.
+ */
+.mascot-blink {
+  animation: mascot-blink 6s ease-in-out infinite;
+}
+
+.mascot-wink-open {
+  animation: mascot-wink-open 19s steps(1, end) infinite;
+}
+
+.mascot-wink-shut {
+  animation: mascot-wink-shut 19s steps(1, end) infinite;
+}
+
+@keyframes mascot-blink {
+  0%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  97% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes mascot-wink-open {
+  0% {
+    opacity: 1;
+  }
+
+  90% {
+    opacity: 0;
+  }
+
+  94% {
+    opacity: 1;
+  }
+}
+
+@keyframes mascot-wink-shut {
+  0% {
+    opacity: 0;
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  94% {
+    opacity: 0;
+  }
+}
+
+/* A still face: no blink, no wink, and the shut arc stays hidden. */
+@media (prefers-reduced-motion: reduce) {
+  .mascot-blink,
+  .mascot-wink-open,
+  .mascot-wink-shut {
+    animation: none;
+  }
+
+  .mascot-wink-shut {
+    opacity: 0;
+  }
+}

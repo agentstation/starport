@@ -1,0 +1,8 @@
+/node_modules
+/.next
+/.source
+/out
+/public
+next-env.d.ts
+*.tsbuildinfo
+.wrangler

@@ -1,0 +1,76 @@
+{
+  "width": 1280,
+  "height": 800,
+  "font_size": 26,
+  "font": "Menlo",
+  "font_path": "/System/Library/Fonts/Menlo.ttc",
+  "effective_font_at_900px": 18.28125,
+  "cuts": [
+    {
+      "boundary": "install/catalog",
+      "before_event": 7,
+      "original_seconds": 1.000638,
+      "rendered_seconds": 6.0
+    },
+    {
+      "boundary": "catalog/setup",
+      "before_event": 11,
+      "original_seconds": 1.000445,
+      "rendered_seconds": 8.0
+    },
+    {
+      "boundary": "setup/answer",
+      "before_event": 19,
+      "original_seconds": 1.018546,
+      "rendered_seconds": 6.0
+    },
+    {
+      "boundary": "answer/next",
+      "before_event": 40,
+      "original_seconds": 1.002492,
+      "rendered_seconds": 7.0
+    }
+  ],
+  "final_hold_ms": {
+    "first-use.gif": 8000,
+    "first-use-uncut.gif": 5000
+  },
+  "outputs": {
+    "first-use-uncut.gif": {
+      "sha256": "afdba07c989ee6adcecfe12396a631e6ee2a56a562c83f0d2ee3a30761400ea8",
+      "bytes": 680890,
+      "duration_ms": 15100,
+      "event_frames": 17
+    },
+    "first-use.gif": {
+      "sha256": "04200485b939a03ee510d9d9fd10d946dafb65354a7ac1c9a8bce2d39b1354df",
+      "bytes": 681361,
+      "duration_ms": 41070,
+      "event_frames": 17
+    },
+    "poster.png": {
+      "sha256": "8699edff82fa533bae158b8380c063c47b3d3148d8e1aeaaca023236934cb84c",
+      "bytes": 80272,
+      "event": 39
+    }
+  },
+  "edited_event_times_ms": [
+    1000,
+    1030,
+    1420,
+    2470,
+    8470,
+    9410,
+    17410,
+    20210,
+    26210,
+    26880,
+    26900,
+    26940,
+    26960,
+    27010,
+    27030,
+    27070,
+    34070
+  ]
+}

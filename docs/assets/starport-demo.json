@@ -2,10 +2,10 @@
   "schema_version": 1,
   "scenes": ["install", "catalog", "setup", "answer", "next"],
   "readme_binding": {
-    "gif": "docs/assets/first-use-v1.2.0/first-use.gif",
-    "poster": "docs/assets/first-use-v1.2.0/poster.png",
-    "uncut": "docs/assets/first-use-v1.2.0/first-use-uncut.gif",
-    "transcript": "docs/assets/first-use-v1.2.0/TRANSCRIPT.md",
+    "gif": "docs/assets/first-use-v1.3.0/first-use.gif",
+    "poster": "docs/assets/first-use-v1.3.0/poster.png",
+    "uncut": "docs/assets/first-use-v1.3.0/first-use-uncut.gif",
+    "transcript": "docs/assets/first-use-v1.3.0/TRANSCRIPT.md",
     "alt_text_required": true,
     "reduced_motion_statement_required": true
   },

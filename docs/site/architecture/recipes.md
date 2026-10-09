@@ -179,6 +179,8 @@ These limits apply:
 
 Several replicas share one Valkey primary, one PostgreSQL database, and one object store. One replica at a time holds the refresh lease and owns provider acquisition. The other replicas follow the shared accepted head. Refer to [Initialize and run a fleet](../operate-starport/fleet.md).
 
+Each fleet runs in one region with one PostgreSQL primary, one Valkey authority, and one object-store bucket. Cross-region replication and multi-region failover are out of scope.
+
 ### Durable owner per role
 
 | Role | Durable owner |
