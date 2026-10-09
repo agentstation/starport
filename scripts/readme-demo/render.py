@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a captured rehearsal and write its record directory.
+"""Render a captured rehearsal or release demonstration and write its record directory.
 
 Cuts name a scene boundary such as `install/catalog`. A cut sets the pause
 before the first event of the later scene. The renderer refuses a cut that
@@ -29,7 +29,12 @@ DEFAULT_CUTS = {"install/catalog": 6.0, "catalog/setup": 8.0, "setup/answer": 6.
 FINAL_HOLD_MS = {"first-use.gif": 8000, "first-use-uncut.gif": 5000}
 EDITED_LABEL = "Rehearsal. Fixture answer. Scene pauses set. Inference timing unchanged."
 UNCUT_LABEL = "Rehearsal. Fixture answer. Original capture timing. Credentials hidden."
+RELEASE_EDITED_LABEL = "Release {tag}. Real provider answer. Scene pauses set. Inference timing unchanged."
+RELEASE_UNCUT_LABEL = "Release {tag}. Real provider answer. Original capture timing. Credentials hidden."
 FIXTURE_CREDENTIAL = "generated throwaway token, disclosed as a fixture, value not recorded"
+CANDIDATE_KEYS = ("source", "run_id", "pull_request", "head_commit", "snapshot_version", "archive_name",
+                  "archive_sha256", "binary_sha256", "release_tag")
+RELEASE_CANDIDATE_KEYS = CANDIDATE_KEYS + ("checksum_verified", "attestation_verified", "attestation")
 
 
 def sha256(path):
@@ -47,6 +52,16 @@ class Screen:
         except OSError:
             self.title = ImageFont.truetype(font_path, 30)
         self.footer = ImageFont.truetype(font_path, 20)
+        # The font draws its missing-glyph box for an unassigned code point. A provider answer may carry a
+        # character outside the font, and that box must not reach the published media.
+        self.missing_glyphs = {font: bytes(font.getmask("͸")) for font in (self.font, self.title)}
+
+    def missing_glyph(self, line, font):
+        """Return the first character of the line that the font cannot draw, or None."""
+        for character in line:
+            if not character.isspace() and bytes(font.getmask(character)) == self.missing_glyphs[font]:
+                return character
+        return None
 
     def render(self, text, label):
         image = Image.new("RGB", (WIDTH, HEIGHT), "#0b1019")
@@ -60,6 +75,9 @@ class Screen:
                 color = "#a5b8dc" if line.startswith("$") else "#f2c66d"
             if draw.textlength(line, font=selected) > WIDTH - 112:
                 raise ValueError("A captured line exceeds the readable frame width: " + line)
+            character = self.missing_glyph(line, selected)
+            if character is not None:
+                raise ValueError(f"The font has no glyph for U+{ord(character):04X} in a captured line: " + line)
             y = 46 + index * 32
             if y + 32 > HEIGHT - 74:
                 raise ValueError("The capture exceeds the readable frame height.")
@@ -138,7 +156,59 @@ def gif_entry(path):
             "duration_seconds": info["duration_seconds"], "frames": info["frames"]}
 
 
+def release_transcript(record, capture, render_manifest):
+    candidate = record["candidate"]
+    tag = candidate["release_tag"]
+    edited = record["outputs"]["first-use.gif"]
+    response = capture["response"]
+    interval = capture["inference_interval"]
+    lines = [
+        f"# README demonstration of release {tag}", "",
+        f"This record is the README demonstration of Starport {tag}. The real OpenAI provider answered one "
+        "streamed request through the gateway. The record binds the attested release archive, so no later "
+        "source change invalidates it.", "",
+        f"The [edited animation](first-use.gif) runs {edited['duration_seconds']:.1f} seconds. "
+        "The [static preview](poster.png) and this transcript provide alternatives to animation. "
+        "The [uncut capture](first-use-uncut.gif) keeps the original output timing.", "",
+        "## Release", "",
+        f"- Source: GitHub release `{tag}` of `agentstation/starport`.",
+        f"- Tag commit: `{candidate['head_commit']}`.",
+        f"- Version: `{candidate['snapshot_version']}`.",
+        f"- Archive: `{candidate['archive_name']}`, SHA-256 `{candidate['archive_sha256']}`, "
+        "verified against `checksums.txt`.",
+        "- Provenance: verified with `gh attestation verify` before the capture.",
+        f"- Binary SHA-256: `{candidate['binary_sha256']}`.", "",
+        "## Provider", "",
+        "- The answer scene calls the real `openai` provider through the gateway. No base URL override and no "
+        "local upstream took part.",
+        "- The provider credential came from `OPENAI_API_KEY` in the capture environment. No output keeps the value.",
+        f"- The provider answered: \"{response['content']}\"", "",
+        "## What the recording shows", "",
+        "1. `install`: Verify the archive digest, extract the archive, and run `starport --version`.",
+        "2. `catalog`: Run `starport models show openai/gpt-4o-mini --json` with no provider key in the environment.",
+        "3. `setup`: Start `starport dev --no-open` with the provider credential in the environment. The provider "
+        "credential and the gateway key stay hidden. They serve separate roles.",
+        "4. `answer`: Stream one request to `/api/v1/chat/completions`. The provider answers with the original "
+        "timing. The stream ends with `[DONE]`.",
+        "5. `next`: Show the client base URLs and the persistent setup path.", "",
+        f"Starport reported provider `{response.get('reported_provider', 'not reported')}` and model "
+        f"`{response.get('reported_model', 'not reported')}`. The provider stream took "
+        f"{interval['end_seconds'] - interval['start_seconds']:.3f} seconds. This is not a latency benchmark.", "",
+    ]
+    return lines
+
+
 def transcript(record, capture, render_manifest):
+    if record["kind"] == "release":
+        lines = release_transcript(record, capture, render_manifest)
+        lines += editing_lines(record)
+        lines += [
+            "", "## Capture environment", "",
+            "The capture used a temporary home without a persistent catalog-state or object-store selector. "
+            "After shutdown, the temporary home held no files.",
+            "The capture ran with network access, because the real provider needs it.",
+            "", f"The renderer used {render_manifest['font']} at {FONT_SIZE} pixels on a {WIDTH} by {HEIGHT} frame.", ""]
+        return "\n".join(lines)
     candidate = record["candidate"]
     fixture = record["fixtures"][0]
     edited = record["outputs"]["first-use.gif"]
@@ -179,18 +249,10 @@ def transcript(record, capture, render_manifest):
         f"Starport reported provider `{response.get('reported_provider', 'not reported')}` and model "
         f"`{response.get('reported_model', 'not reported')}`. The fixture stream took "
         f"{interval['end_seconds'] - interval['start_seconds']:.3f} seconds. This is not a latency benchmark.", "",
-        "## Editing", "",
-        "The edited animation sets the pause at each scene boundary:", "",
     ]
-    for cut in record["cuts"]:
-        lines.append(f"- `{cut['boundary']}`: {cut['original_seconds']:.3f} seconds to "
-                     f"{cut['rendered_seconds']:g} seconds.")
+    lines += editing_lines(record)
     lines += [
-        "", "No edit is inside the inference interval. GIF frame timing rounds cumulative timestamps to centiseconds. "
-        f"The final frame holds for {FINAL_HOLD_MS['first-use.gif'] // 1000} seconds.",
-        "The [render record](render.json) holds the cut points and the output hashes. "
-        "The [events](events.json) hold the captured output.", "",
-        "## Capture environment", "",
+        "", "## Capture environment", "",
         "The capture used a temporary home without a persistent catalog-state or object-store selector. "
         "After shutdown, the temporary home held no files.",
     ]
@@ -198,6 +260,20 @@ def transcript(record, capture, render_manifest):
         lines.append("The sandbox refused network access except loopback during the capture.")
     lines += ["", f"The renderer used {render_manifest['font']} at {FONT_SIZE} pixels on a {WIDTH} by {HEIGHT} frame.", ""]
     return "\n".join(lines)
+
+
+def editing_lines(record):
+    lines = ["## Editing", "", "The edited animation sets the pause at each scene boundary:", ""]
+    for cut in record["cuts"]:
+        lines.append(f"- `{cut['boundary']}`: {cut['original_seconds']:.3f} seconds to "
+                     f"{cut['rendered_seconds']:g} seconds.")
+    lines += [
+        "", "No edit is inside the inference interval. GIF frame timing rounds cumulative timestamps to centiseconds. "
+        f"The final frame holds for {FINAL_HOLD_MS['first-use.gif'] // 1000} seconds.",
+        "The [render record](render.json) holds the cut points and the output hashes. "
+        "The [events](events.json) hold the captured output.",
+    ]
+    return lines
 
 
 def main():
@@ -211,8 +287,18 @@ def main():
     candidate = json.loads((args.work / "candidate.json").read_text())
     if capture.get("verdict") != "PASS":
         raise SystemExit("A successful capture is required.")
-    if capture["response"]["content"] != fixture_upstream.ANSWER:
-        raise SystemExit("The streamed answer is not the fixture answer.")
+    release = capture.get("kind") == "release"
+    if release:
+        if candidate.get("source") != "release" or capture.get("real_provider") is not True:
+            raise SystemExit("A release capture needs a release candidate and a real provider answer.")
+        if not capture["response"]["content"] or fixture_upstream.ANSWER in capture["response"]["content"]:
+            raise SystemExit("The streamed answer is not a real provider answer.")
+        tag = candidate["release_tag"]
+        labels = (RELEASE_UNCUT_LABEL.format(tag=tag), RELEASE_EDITED_LABEL.format(tag=tag))
+    else:
+        if capture["response"]["content"] != fixture_upstream.ANSWER:
+            raise SystemExit("The streamed answer is not the fixture answer.")
+        labels = (UNCUT_LABEL, EDITED_LABEL)
     cuts = plan_cuts(capture, parse_cuts(args.cut))
     args.output.mkdir(parents=True, exist_ok=True)
     if any(args.output.iterdir()):
@@ -224,7 +310,7 @@ def main():
                        "outputs": {}}
     shutil.copyfile(args.work / "events.json", args.output / "events.json")
     poster_event = next(scene for scene in capture["scenes"] if scene["name"] == "answer")["end_event"]
-    for name, selected, label in (("first-use-uncut.gif", [], UNCUT_LABEL), ("first-use.gif", cuts, EDITED_LABEL)):
+    for name, selected, label in (("first-use-uncut.gif", [], labels[0]), ("first-use.gif", cuts, labels[1])):
         frames, times, event_frames = frames_for(capture, screen, selected, label)
         path = args.output / name
         duration = save_gif(path, frames, times, FINAL_HOLD_MS[name])
@@ -240,13 +326,13 @@ def main():
     (args.output / "render.json").write_text(json.dumps(render_manifest, indent=2) + "\n")
     response = capture["response"]
     record = {
-        "schema_version": 1, "kind": "rehearsal", "qualifies_release_cases": False,
+        "schema_version": 1, "kind": "release" if release else "rehearsal", "qualifies_release_cases": release,
+        "real_provider": release,
         "captured_at": capture["captured_at"],
-        "candidate": {key: candidate.get(key) for key in ("source", "run_id", "pull_request", "head_commit",
-                                                          "snapshot_version", "archive_name", "archive_sha256",
-                                                          "binary_sha256", "release_tag")},
-        "fixtures": [{"name": "fixture_upstream", "role": "openai-compatible upstream", "model": fixture_upstream.MODEL,
-                      "answer_text": fixture_upstream.ANSWER, "credential": FIXTURE_CREDENTIAL}],
+        "candidate": {key: candidate.get(key) for key in (RELEASE_CANDIDATE_KEYS if release else CANDIDATE_KEYS)},
+        "fixtures": [] if release else [
+            {"name": "fixture_upstream", "role": "openai-compatible upstream", "model": fixture_upstream.MODEL,
+             "answer_text": fixture_upstream.ANSWER, "credential": FIXTURE_CREDENTIAL}],
         "scenes": capture["scenes"],
         "inference_interval": capture["inference_interval"],
         "cuts": cuts,
@@ -261,6 +347,8 @@ def main():
             "catalog_generation": capture.get("catalog_generation"),
             "provider_path": "openai",
             "base_url_mechanism": capture["base_url_mechanism"],
+            "provider_credential_source": capture.get("provider_credential_source"),
+            "network_egress_denied": capture.get("network_egress_denied"),
             "catalog_environment_has_provider_key": capture["catalog_environment_has_provider_key"],
             "persistent_selectors_present": capture["persistent_selectors_present"],
             "leftover_home_files": capture["leftover_home_files"],

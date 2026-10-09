@@ -1,0 +1,384 @@
+/* The splash page tokens and base rules: the Nimbus role tokens, the same
+   sheet its site and console ship, scoped under `.splash` because these
+   sheets load on one route and the docs keep the Fumadocs themes. The splash
+   opens on night in both colour schemes, like the Nimbus hero, and the
+   journey alternates daylight paper and night by act, then ends on the gold
+   wash. The journey names the ground with `data-ground` on the stage, or on
+   a beat of the storyboard, and the token set for that ground applies under
+   it. The night and paper values are the Nimbus dark and light values
+   exactly, so a change to one sheet belongs in the other. A code surface is
+   a terminal, so it keeps the night set on every ground. The fonts are the
+   console fonts; scripts/copy-assets.mjs copies them into public/fonts/.
+
+   hero.css styles the hero above the journey, and journey.css styles the
+   sticky stage and its storyboard fallback. The mascot's colour and motion
+   are page-wide, in app/global.css, so the mark is one sticker everywhere. */
+
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Geist-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/Geist-Medium.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/Geist-SemiBold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/GeistMono-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/GeistMono-Medium.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/GeistMono-SemiBold.woff2') format('woff2');
+}
+
+/* The overscroll area and the browser chrome take the night ground too. The
+   journey owns its scroll smoothing, so browser smooth scrolling is off. */
+:root:has(.splash) {
+  color-scheme: dark;
+  background: #0a0b0c;
+  scroll-behavior: auto;
+}
+
+:root:has(.splash) body {
+  background: #0a0b0c;
+}
+
+/* The stage writes its ground to <html> each frame, so an overscroll past
+   either end of the journey shows the ground of the stage, not a flash of
+   night. */
+:root:has(.journey) {
+  background: var(--stage-background, #0a0b0c);
+}
+
+/* ---- Role tokens: dark ---- */
+.splash,
+.splash [data-ground='night'],
+.splash :is(.block, .install) {
+  --bg-canvas: #0a0b0c;
+  --bg-panel: #101112;
+  --bg-raised: #18191b;
+  --bg-hover: #1f2124;
+
+  --border-1: rgba(255, 255, 255, 0.05);
+  --border-2: rgba(255, 255, 255, 0.08);
+  --border-3: rgba(255, 255, 255, 0.12);
+  /* An outline control needs more contrast than a hairline, so it uses this
+     stronger neutral. Not in the Nimbus sheet, which mixes its ink at 28 to
+     35% for the same job. */
+  --border-control: rgba(255, 255, 255, 0.26);
+
+  --text-1: #f6f7f8;
+  --text-2: #c9ced6;
+  --text-3: #8b909a;
+  --text-4: #62666d;
+
+  /* The gold. One literal, and the only accent hue in the sheet. An accent
+     mark with area pairs it with `--accent-ink` as carrier or keyline. */
+  --accent: #f0b23e;
+  --accent-hover: #f6c35c;
+  --accent-ink: #1a1204;
+
+  /* Whichever member of the pair the ground can show, for the marks with no
+     area to hold both: a 1px rule, a counter, a label, a prose link. Never a
+     third colour, always `--accent` or `--accent-ink` exactly. On the night
+     grounds the gold clears the text floor at 10.45:1, so here it is the
+     gold itself. */
+  --accent-text: #f0b23e;
+
+  --success: #4ade80;
+  --warning: #fb923c;
+  --error: #f87171;
+  --error-ink: #1f0a0a;
+  --success-ink: #06210f;
+  --info: #60a5fa;
+  --success-tint: rgba(74, 222, 128, 0.14);
+  --warning-tint: rgba(251, 146, 60, 0.14);
+  --error-tint: rgba(248, 113, 113, 0.14);
+  --info-tint: rgba(96, 165, 250, 0.14);
+  --accent-tint: rgba(240, 178, 62, 0.14);
+
+  color-scheme: dark;
+}
+
+/* ---- Role tokens: light ----
+   The daylight paper of the journey. The values are the Nimbus light values
+   exactly. The stage ground is `--bg-panel`, #fafafa, as in Nimbus. */
+.splash [data-ground='paper'] {
+  --bg-canvas: #ffffff;
+  --bg-panel: #fafafa;
+  --bg-raised: #f4f4f5;
+  --bg-hover: #ececee;
+
+  --border-1: rgba(0, 0, 0, 0.06);
+  --border-2: rgba(0, 0, 0, 0.1);
+  --border-3: rgba(0, 0, 0, 0.15);
+  --border-control: rgba(0, 0, 0, 0.45);
+
+  --text-1: #18181b;
+  --text-2: #3f3f46;
+  --text-3: #66666e;
+  --text-4: #a1a1aa;
+
+  --accent: #f0b23e;
+  --accent-hover: #e0a230;
+  --accent-ink: #1a1204;
+  /* On paper the gold is 1.8:1, so a mark with no area takes the ink. */
+  --accent-text: #1a1204;
+
+  --success: #15753a;
+  --warning: #b53b0a;
+  --error: #b91c1c;
+  --error-ink: #ffffff;
+  --success-ink: #ffffff;
+  --info: #1d4ed8;
+  --success-tint: rgba(21, 117, 58, 0.14);
+  --warning-tint: rgba(181, 59, 10, 0.14);
+  --error-tint: rgba(185, 28, 28, 0.14);
+  --info-tint: rgba(29, 78, 216, 0.14);
+  --accent-tint: rgba(240, 178, 62, 0.22);
+
+  color-scheme: light;
+}
+
+/* ---- Role tokens: the gold wash ----
+   The finale ground is the accent itself, under the accent's ink, as in the
+   Nimbus finale. The pair is still `--accent` and `--accent-ink` exactly, so
+   the neutrals are the ink mixed into the gold and the accent text is the
+   ink. The light status tones clear 3:1 on the gold. */
+.splash [data-ground='wash'] {
+  --bg-canvas: #f0b23e;
+  --bg-panel: color-mix(in srgb, #1a1204 5%, #f0b23e);
+  --bg-raised: color-mix(in srgb, #1a1204 9%, #f0b23e);
+  --bg-hover: color-mix(in srgb, #1a1204 13%, #f0b23e);
+
+  --border-1: rgba(26, 18, 4, 0.1);
+  --border-2: rgba(26, 18, 4, 0.16);
+  --border-3: rgba(26, 18, 4, 0.24);
+  --border-control: rgba(26, 18, 4, 0.55);
+
+  --text-1: #1a1204;
+  --text-2: color-mix(in srgb, #1a1204 82%, #f0b23e);
+  --text-3: color-mix(in srgb, #1a1204 60%, #f0b23e);
+  --text-4: color-mix(in srgb, #1a1204 40%, #f0b23e);
+
+  --accent: #f0b23e;
+  --accent-hover: #e0a230;
+  --accent-ink: #1a1204;
+  --accent-text: #1a1204;
+
+  --success: #15753a;
+  --warning: #b53b0a;
+  --error: #b91c1c;
+  --error-ink: #ffffff;
+  --success-ink: #ffffff;
+  --info: #1d4ed8;
+  --success-tint: rgba(21, 117, 58, 0.14);
+  --warning-tint: rgba(181, 59, 10, 0.14);
+  --error-tint: rgba(185, 28, 28, 0.14);
+  --info-tint: rgba(29, 78, 216, 0.14);
+  --accent-tint: rgba(26, 18, 4, 0.12);
+
+  color-scheme: light;
+}
+
+.splash {
+  --font-sans: 'Geist', system-ui, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --ease-standard: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+  --gutter: 28px;
+  --width: min(calc(100% - 2 * var(--gutter)), 1440px);
+
+  position: relative;
+  flex: 1;
+  min-height: 100svh;
+  background: var(--bg-canvas);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Clip, not hidden: a hidden overflow makes a scroll container, and the
+     sticky stage would stick to it instead of the viewport. */
+  overflow-x: clip;
+}
+
+.splash ::selection {
+  background-color: var(--accent-tint);
+}
+
+/* The ring is the accent mark the ground can show: the gold on night, and
+   the accent's ink on paper and on the gold wash. */
+.splash :focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+.splash main:focus {
+  outline: none;
+}
+
+.splash button {
+  cursor: pointer;
+}
+
+.splash code,
+.splash pre {
+  font-family: var(--font-mono);
+}
+
+/* A machine value in prose: mono on a raised chip. */
+.splash :is(.lede, .beat-body, .hero-tip) code {
+  padding: 1px 5px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-xs);
+  background: var(--bg-raised);
+  color: var(--text-1);
+  font-size: 0.88em;
+}
+
+.splash .skip {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  z-index: 30;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 600 14px/1 var(--font-sans);
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.splash .skip:focus-visible {
+  transform: none;
+}
+
+/* ---- The mark ---- */
+
+/* The mascot beside the wordmark, in the hero nav and on the stage. Height
+   only: a fitted mark's box is 104 by 100 rather than 120 by 104, so the
+   width follows the drawing. 32px, the same as the Nimbus brand row: the
+   mascot blinks and winks here, and the eye is a tenth of the mark, so under
+   30 neither registers. */
+.splash .brand-mark {
+  flex: none;
+  height: 32px;
+  width: auto;
+}
+
+/* ---- Code ---- */
+
+/* The install tabs and the code blocks share one code surface. */
+.splash :is(.install, .block) pre {
+  margin: 0;
+  padding: 10px 18px 18px;
+  color: var(--text-1);
+  font: 400 12.5px/1.7 var(--font-mono);
+  letter-spacing: 0;
+  white-space: pre;
+  overflow-x: auto;
+  tab-size: 4;
+}
+
+.splash :is(.install, .block) pre:focus-visible {
+  outline-offset: -2px;
+}
+
+.splash :is(.install, .block) pre code {
+  display: block;
+  font: inherit;
+}
+
+.splash .line {
+  display: block;
+}
+
+.splash .line.comment {
+  color: var(--text-3);
+}
+
+/* The `$` prompt and the indent of a continued line. */
+.splash pre i {
+  font-style: normal;
+  color: var(--text-3);
+  user-select: none;
+}
+
+@media (max-width: 1100px) {
+  .splash {
+    --gutter: 24px;
+  }
+}
+
+@media (max-width: 760px) {
+  .splash {
+    --gutter: 16px;
+  }
+
+  .splash :is(.install, .block) pre {
+    padding-inline: 14px;
+    font-size: 11.5px;
+  }
+
+  /* A narrow shell block wraps its long lines. A wrapped line keeps the
+     indent after its prompt, so each command still starts at the left edge.
+     Other code keeps its lines and scrolls, because its indent has meaning. */
+  .splash :is(.install, .block) pre:has(.line > i) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .splash .line:has(> i) {
+    padding-left: 2ch;
+    text-indent: -2ch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash *,
+  .splash *::before,
+  .splash *::after {
+    transition: none !important;
+  }
+}

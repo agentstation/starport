@@ -2366,7 +2366,7 @@ github.com/agentstation/starport/internal/app/recovery_canonical_roles.go:75.3,7
 github.com/agentstation/starport/internal/app/recovery_canonical_roles.go:75.126,75.185 1 2640
 github.com/agentstation/starport/internal/app/recovery_canonical_roles.go:76.4,76.12 1 51
 github.com/agentstation/starport/internal/app/recovery_canonical_roles.go:78.3,78.74 1 441
-github.com/agentstation/starport/internal/app/recovery_canonical_roles.go:78.76,78.102 1 3721
+github.com/agentstation/starport/internal/app/recovery_canonical_roles.go:78.76,78.102 1 3882
 github.com/agentstation/starport/internal/app/recovery_canonical_roles.go:79.4,79.12 1 344
 github.com/agentstation/starport/internal/app/recovery_canonical_roles.go:81.3,82.17 2 97
 github.com/agentstation/starport/internal/app/recovery_canonical_roles.go:83.4,84.1 1 0
@@ -2764,8 +2764,8 @@ github.com/agentstation/starport/internal/app/restore_publish.go:61.3,62.1 1 19
 github.com/agentstation/starport/internal/app/restore_publish.go:63.2,63.42 1 160
 github.com/agentstation/starport/internal/app/restore_publish.go:64.3,65.1 1 29
 github.com/agentstation/starport/internal/app/restore_publish.go:66.2,67.28 2 160
-github.com/agentstation/starport/internal/app/restore_publish.go:68.3,68.24 1 1607
-github.com/agentstation/starport/internal/app/restore_publish.go:69.4,70.12 2 835
+github.com/agentstation/starport/internal/app/restore_publish.go:68.3,68.24 1 1608
+github.com/agentstation/starport/internal/app/restore_publish.go:69.4,70.12 2 836
 github.com/agentstation/starport/internal/app/restore_publish.go:72.3,72.80 1 772
 github.com/agentstation/starport/internal/app/restore_publish.go:73.4,74.1 1 2
 github.com/agentstation/starport/internal/app/restore_publish.go:75.3,76.82 2 770

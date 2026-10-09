@@ -33,11 +33,16 @@ SECRET_PATTERNS = (
     ("provider key", re.compile(rb"sk-[A-Za-z0-9_-]{20,}")),
     ("gateway key line", re.compile(rb"Gateway API key \(shown once\)")),
 )
+# A release record comes from a real provider, so any fixture marker means that
+# the fixture upstream, its token, or its answer reached the record.
+FIXTURE_MARKERS = re.compile(rb"starport-demo-fixture-|(?i:rehearsal[- ]fixture)")
 TEXT_FILES = ("events.json", "render.json", "TRANSCRIPT.md", "record.json")
 README_LINK = re.compile(r"\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)|(?:src|href)=\"([^\"]+)\"")
 MEDIA_SUFFIXES = (".gif", ".png", ".jpg", ".jpeg", ".webp", ".svg", ".mp4", ".webm")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 HEX40 = re.compile(r"[0-9a-f]{40}")
+HEX64 = re.compile(r"[0-9a-f]{64}")
+RELEASE_TAG = re.compile(r"v\d+\.\d+\.\d+(?:-rc\.\d+)?")
 # GIF frame delays use centiseconds, so durations agree to one centisecond
 # per frame boundary at most.
 DURATION_TOLERANCE_SECONDS = 0.02
@@ -316,6 +321,7 @@ class Verification:
         return f"{uncut['path']} keeps {info['duration_seconds']:.2f} s of original timing"
 
     def check_no_fixture_token(self):
+        release = self.record.get("kind") == "release"
         scanned = 0
         for name in TEXT_FILES:
             path = self.file(name)
@@ -323,7 +329,10 @@ class Verification:
             data = path.read_bytes()
             for label, pattern in SECRET_PATTERNS:
                 require(not pattern.search(data), f"{name} contains a {label}")
+            require(not release or not FIXTURE_MARKERS.search(data), f"the release record file {name} names a fixture")
             scanned += 1
+        if release:
+            return f"{scanned} text files hold no fixture marker, provider key, or gateway key line"
         return f"{scanned} text files hold no fixture token, provider key, or gateway key line"
 
     def check_poster_dimensions(self):
@@ -338,6 +347,13 @@ class Verification:
 
     def check_transcript_fixtures(self):
         fixtures = self.record["fixtures"]
+        if self.record.get("kind") == "release":
+            require(fixtures == [] and self.record.get("real_provider") is True,
+                    "a release record needs no fixtures and the real_provider marker")
+            content = self.events["response"]["content"]
+            require(content and content in self.file("TRANSCRIPT.md").read_text(encoding="utf-8"),
+                    "the transcript does not quote the real provider answer")
+            return "no fixtures; the transcript quotes the real provider answer"
         require(isinstance(fixtures, list) and fixtures, "the record names no fixtures")
         text = self.file("TRANSCRIPT.md").read_text(encoding="utf-8")
         for fixture in fixtures:
@@ -386,10 +402,23 @@ class Verification:
         candidate = self.record["candidate"]
         kind = self.record.get("kind")
         if kind == "release":
-            require(candidate.get("source") == "release" and candidate.get("release_tag"),
+            tag = candidate.get("release_tag")
+            require(candidate.get("source") == "release" and isinstance(tag, str) and RELEASE_TAG.fullmatch(tag),
                     "a release record needs a release candidate and tag")
-            return f"a release record binds release tag {candidate['release_tag']} and never invalidates by tree"
+            require(self.record.get("qualifies_release_cases") is True, "a release record must qualify release cases")
+            require(candidate.get("run_id") is None and candidate.get("pull_request") is None,
+                    "a release candidate names no CI run or pull request")
+            require(candidate.get("archive_name") == f"starport_{tag[1:]}_darwin_arm64.tar.gz",
+                    f"the archive name is not the darwin arm64 asset of {tag}")
+            require(isinstance(candidate.get("archive_sha256"), str) and HEX64.fullmatch(candidate["archive_sha256"]),
+                    "the release candidate has no archive SHA-256")
+            require(isinstance(candidate.get("head_commit"), str) and HEX40.fullmatch(candidate["head_commit"]),
+                    "the release candidate has no 40-character tag commit")
+            require(candidate.get("checksum_verified") is True, "the release archive has no verified checksum")
+            require(candidate.get("attestation_verified") is True, "the release archive has no verified attestation")
+            return f"a release record binds release tag {tag} and never invalidates by tree"
         require(kind == "rehearsal", f"unknown record kind {kind!r}")
+        require(self.record.get("qualifies_release_cases") is False, "a rehearsal record cannot qualify release cases")
         source = candidate.get("source")
         require(source in ("ci-run", "local"), f"unknown candidate source {source!r}")
         head = candidate.get("head_commit")
