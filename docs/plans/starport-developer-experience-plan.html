@@ -156,7 +156,7 @@
 <header id="overview">
   <h1>Starport developer experience</h1>
   <p id="status-line">
-    Status: <code data-plan-status="proposed">proposed</code> ·
+    Status: <code data-plan-status="active">active</code> ·
     Owner: this plan ·
     Created: 2026-10-10 ·
     Baseline: main @ 40d7285f ·
@@ -170,13 +170,13 @@
     <table>
       <thead><tr><th>Field</th><th>Current state</th></tr></thead>
       <tbody>
-        <tr><td>In progress</td><td>None. This plan is proposed.</td></tr>
-        <tr><td>Next action</td><td>The owner approves activation. Then promote the plan and start DX0.</td></tr>
-        <tr><td>Worktree</td><td>None. The plan branch is <code>codex/dx-plan</code>.</td></tr>
+        <tr><td>In progress</td><td>None yet. The owner activated the plan on 2026-10-10.</td></tr>
+        <tr><td>Next action</td><td>Merge pull request #441 (this plan) at its exact head. Then start DX0 in <code>/private/tmp/starport-dx-DX0</code> on <code>codex/dx-DX0</code>.</td></tr>
+        <tr><td>Worktree</td><td>The plan branch is <code>codex/dx-plan</code> in <code>/private/tmp/starport-dx-plan</code>.</td></tr>
         <tr><td>Verification</td><td>None. No implementation started.</td></tr>
         <tr><td>Running processes</td><td>None.</td></tr>
-        <tr><td>Required reads</td><td><a href="#findings">Findings</a>, <a href="#port-review">Port review</a>, and <a href="#decisions">Decisions</a>.</td></tr>
-        <tr><td>Unresolved</td><td>None. D2, D3, and D4 are decided. A Sol review on 2026-10-10 returned 18 findings. This revision applies them. Activation waits on the owner.</td></tr>
+        <tr><td>Required reads</td><td><a href="#findings">Findings</a>, <a href="#decisions">Decisions</a>, <a href="#invariants">Invariants</a>, and the DX0 task contract.</td></tr>
+        <tr><td>Unresolved</td><td>None. D1 through D4 are decided. The Sol findings are applied. The owner activated the plan.</td></tr>
       </tbody>
     </table>
   </section>
@@ -601,6 +601,10 @@ same places.</code></pre>
           F4, F7, welcome.go path, file manifest at
           internal/cli/file_manifest.go), P2 cookie note, P2 capture scripts
           (F12). Rejected: none.</td></tr>
+        <tr><td>2026-10-10</td><td>meta</td><td>activated</td><td>Owner
+          chose "Activate" through the question tool after the Sol revision.
+          Status promoted from proposed to active. DX0 is the next
+          task.</td></tr>
       </tbody>
     </table>
   </section>
