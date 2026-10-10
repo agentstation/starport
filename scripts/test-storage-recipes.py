@@ -69,8 +69,8 @@ def qualify_fleet_local_state(root, image, run):
 
 # Disposable shared stores for the local-to-shared mode. The digests match docker-compose.integration.yml.
 SHARED_STORE_IMAGES = {
-    'valkey': 'valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f',
-    'postgres': 'postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94',
+    'valkey': 'ghcr.io/agentstation/fixtures/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f',
+    'postgres': 'ghcr.io/agentstation/fixtures/postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94',
     'minio': 'quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e',
 }
 
