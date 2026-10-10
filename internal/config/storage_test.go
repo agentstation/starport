@@ -128,3 +128,32 @@ func TestConfigureDevelopmentRuntimeMarksTheLocalTokenReadOnly(t *testing.T) {
 		t.Error("development runtime did not mark the local admin token read-only")
 	}
 }
+
+func TestUsesPlatformStorageRequiresEveryDefaultLocalStore(t *testing.T) {
+	paths := PathsForConfigDir(t.TempDir())
+	tests := []struct {
+		name string
+		edit func(*Config)
+		want bool
+	}{
+		{name: "platform defaults", edit: func(*Config) {}, want: true},
+		{name: "Valkey storage", edit: func(c *Config) { c.Storage.Mode = storageModeValkey }},
+		{name: "in-memory Badger", edit: func(c *Config) { c.Storage.Badger.inMemory = true }},
+		{name: "configured Badger path", edit: func(c *Config) { c.Storage.Badger.Path = "/elsewhere/badger" }},
+		{name: "PostgreSQL", edit: func(c *Config) { c.Storage.SQL.Mode = sqlModePostgres }},
+		{name: "configured SQLite path", edit: func(c *Config) { c.Storage.SQL.SQLite.Path = "/elsewhere/starport.db" }},
+		{name: "object store", edit: func(c *Config) { c.Files.Backend = BlobBackendObjectStore }},
+		{name: "configured files path", edit: func(c *Config) { c.Files.Path = "/elsewhere/files" }},
+		{name: "shared cache", edit: func(c *Config) { c.Cache.Backend = "valkey" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := defaultConfig(paths)
+			cfg.Storage.Mode, cfg.Storage.SQL.Mode, cfg.Files.Backend = storageModeBadger, sqlModeSQLite, BlobBackendFilesystem
+			test.edit(cfg)
+			if got := cfg.UsesPlatformStorage(paths); got != test.want {
+				t.Errorf("UsesPlatformStorage = %t, want %t", got, test.want)
+			}
+		})
+	}
+}

@@ -109,7 +109,7 @@ func (s *Service) Initialize(ctx context.Context, request Request) (_ Result, re
 	case StateReady:
 		return Result{}, fmt.Errorf("%w: %q", ErrAlreadyInitialized, s.paths.ConfigFile)
 	case StatePartial:
-		return Result{}, fmt.Errorf("%w: inspect %q before retrying", ErrPartialState, s.paths.ConfigFile)
+		return Result{}, partialState(s.paths.ConfigFile)
 	case StateAbsent:
 	}
 	prepared, err := s.prepareAcrossRoots(ctx, request)
