@@ -170,10 +170,10 @@
     <table>
       <thead><tr><th>Field</th><th>Current state</th></tr></thead>
       <tbody>
-        <tr><td>In progress</td><td>None yet. The owner activated the plan on 2026-10-10.</td></tr>
-        <tr><td>Next action</td><td>Merge pull request #441 (this plan) at its exact head. Then start DX0 in <code>/private/tmp/starport-dx-DX0</code> on <code>codex/dx-DX0</code>.</td></tr>
-        <tr><td>Worktree</td><td>The plan branch is <code>codex/dx-plan</code> in <code>/private/tmp/starport-dx-plan</code>.</td></tr>
-        <tr><td>Verification</td><td>None. No implementation started.</td></tr>
+        <tr><td>In progress</td><td>DX0 complete on <code>codex/dx-DX0</code>. Its pull request carries this ledger update.</td></tr>
+        <tr><td>Next action</td><td>Merge the DX0 pull request at its exact head. Then start DX1 in <code>/private/tmp/starport-dx-DX1</code> on <code>codex/dx-DX1</code>. Start DX2 in <code>/private/tmp/starport-dx-DX2</code> on <code>codex/dx-DX2</code> at the same time. Both branch from <code>origin/main</code>. One implementer owns each task. The orchestrator reviews each before merge.</td></tr>
+        <tr><td>Worktree</td><td><code>codex/dx-DX0</code> in <code>/private/tmp/starport-dx-DX0</code>. Plan pull request #441 merged as <code>ee6c9ce6</code>.</td></tr>
+        <tr><td>Verification</td><td>DX0 proof linted in developer mode, 0 diagnostics. No code changed.</td></tr>
         <tr><td>Running processes</td><td>None.</td></tr>
         <tr><td>Required reads</td><td><a href="#findings">Findings</a>, <a href="#decisions">Decisions</a>, <a href="#invariants">Invariants</a>, and the DX0 task contract.</td></tr>
         <tr><td>Unresolved</td><td>None. D1 through D4 are decided. The Sol findings are applied. The owner activated the plan.</td></tr>
@@ -352,12 +352,12 @@
         <tr><td>F1</td><td><code>dev</code> creates a scratch root under <code>os.TempDir()</code> and deletes it on every clean exit. The next run mints a new master key and a new API key.</td><td><code>internal/app/development_scratch.go:60,255-303</code>, <code>internal/app/development.go:49</code>, <code>internal/config/development.go:75-80</code>, <code>internal/cli/app.go:210-237</code></td><td>DX3</td></tr>
         <tr><td>F2</td><td><code>serve</code> on a clean machine fails with <code>provider credential master key is required</code>. With a master key and no API key it fails with <code>a gateway API key is required; run "starport init"</code>.</td><td><code>internal/app/app.go:74,76,193-195,1081-1093</code></td><td>DX2</td></tr>
         <tr><td>F3</td><td>Local <code>init</code> writes the master key to <code>config.env</code> and the first API key to Badger. <code>init --configured-storage</code> claims only the first key and writes no master-key file. Both refuse a second run.</td><td><code>internal/setup/service.go:82-121,272-294</code>, <code>internal/setup/preparation.go:54-209</code>, <code>cmd/starport/run.go:193-222</code></td><td>DX2, DX6</td></tr>
-        <tr><td>F4</td><td>Both commands default to port 8080 on 127.0.0.1. No command scans or falls back. On the baseline, <code>git grep -E '\b8080\b'</code> outside <code>docs/proof/</code> and <code>docs/plans/proof/</code> matches 177 lines in 59 tracked files.</td><td><code>internal/config/config.go:143-144</code>, <code>internal/server/server.go:290,381</code>, <code>console/vite.config.ts:26-30</code>, <code>Dockerfile:69</code>, <code>docker-compose.yml:11</code></td><td>DX1</td></tr>
+        <tr><td>F4</td><td>Both commands default to port 8080 on 127.0.0.1. No command scans or falls back. On the baseline, <code>git grep -P '\b8080\b'</code> outside <code>docs/proof/</code> and <code>docs/plans/proof/</code> matches 177 lines in 59 tracked files.</td><td><code>internal/config/config.go:143-144</code>, <code>internal/server/server.go:290,381</code>, <code>console/vite.config.ts:26-30</code>, <code>Dockerfile:69</code>, <code>docker-compose.yml:11</code></td><td>DX1</td></tr>
         <tr><td>F9</td><td><code>serve</code> greets and writes <code>&lt;data&gt;/welcomed</code> before the runner starts. The setup inspector treats a non-empty data directory as partial state. A greeting before initialization therefore blocks first-run initialization.</td><td><code>internal/cli/app.go:179</code>, <code>internal/cli/welcome.go:60</code>, <code>internal/setup/paths.go:100</code></td><td>DX2</td></tr>
         <tr><td>F10</td><td>The developer session contract requires a plaintext key whenever authentication is on. The output prints the key unconditionally. A persistent restart has no new key to print.</td><td><code>internal/cli/development.go:41,58</code>, <code>cmd/starport/run.go:172</code>, <code>internal/app/app.go:1118</code></td><td>DX3</td></tr>
         <tr><td>F11</td><td>Read-only local token access creates an in-memory token when no token file exists. A later <code>auth token</code>, <code>ui</code>, or <code>auth url</code> mints a different disk token. The running gateway rejects that token.</td><td><code>internal/app/app.go:1144,1211</code>, <code>internal/cli/ui.go:32</code></td><td>DX2</td></tr>
         <tr><td>F12</td><td>The developer-experience verifier, the diagnosis report, and the demo capture scripts name the <code>init</code> command or assume an ephemeral <code>dev</code>.</td><td><code>scripts/verify-developer-experience.sh:74</code>, <code>internal/diagnosis/service.go:141</code>, <code>scripts/readme-demo/capture_cli.py:127</code>, <code>scripts/readme-demo/capture.py:452</code></td><td>DX5, DX6</td></tr>
-        <tr><td>F5</td><td><code>dev</code> dials host and port before it opens the browser. A foreign process on the port makes the dial succeed, and the browser opens against the wrong process.</td><td><code>internal/cli/development.go:112-144</code></td><td>DX4</td></tr>
+        <tr><td>F5</td><td><code>dev</code> dials host and port before it opens the browser. A foreign process on the port makes the dial succeed, and the browser opens against the wrong process. The browser opens only when the output is a terminal and <code>--no-open</code> is absent (<code>internal/cli/app.go:221-230</code>).</td><td><code>internal/cli/development.go:112-144</code></td><td>DX4</td></tr>
         <tr><td>F6</td><td><code>dev</code> refuses persistent storage variables and reads no configuration file.</td><td><code>internal/config/development.go:32-51</code>, <code>internal/config/loader.go:126-135</code></td><td>DX3</td></tr>
         <tr><td>F7</td><td><code>docs/PRODUCTION-STATUS.md:8</code> describes a sequence that no longer matches the code.</td><td>File read 2026-10-10</td><td>DX5</td></tr>
         <tr><td>F8</td><td>Tests pin the current sequence: <code>TestReadmeTemporaryPathPrecedesPersistentPath</code>, <code>TestInitOutputUsesProviderNeutralNextStep</code>, <code>TestDevDoesNotGreetOrStamp</code>, <code>TestDevPrintsGatewayKeyOnce</code>, the <code>internal/app</code> startup table, and <code>scripts/smoke-first-run.sh</code>.</td><td><code>cmd/starport/readme_test.go</code>, <code>internal/cli/app_test.go</code>, <code>internal/cli/ui_test.go</code>, <code>internal/app/app_test.go</code></td><td>DX2, DX3, DX5</td></tr>
@@ -421,7 +421,7 @@
         <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
       </thead>
       <tbody>
-        <tr id="DX0" data-status="todo"><td>DX0</td><td>Baseline: pin the baseline commit, create the proof root, capture fail-before evidence for F1, F2, F4, F5, and F9. No production behavior changes.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="DX0" data-status="done"><td>DX0</td><td>Baseline: pin the baseline commit, create the proof root, capture fail-before evidence for F1, F2, F4, F5, and F9. No production behavior changes.</td><td><code>done</code></td><td>Baseline <code>40d7285f</code>. <code>proof/starport-developer-experience/DX0.md</code> holds five observations. 177 lines in 59 files carry 8080. <code>serve</code> exits 1 and leaves <code>welcomed</code> behind. Two <code>dev</code> runs print two key hashes and leave the home empty. <code>dev</code> under a pseudo-terminal opened the launch link against a foreign listener on 8080. Proof commit <code>0ee27f9f</code>.</td></tr>
         <tr id="DX1" data-status="todo"><td>DX1</td><td>Standard port: one owning constant replaces 8080 in code, container files, the Vite proxy, scripts, documents, and generated references. Includes the compatibility note.</td><td><code>todo</code></td><td></td></tr>
         <tr id="DX2" data-status="todo"><td>DX2</td><td>First-run initialization inside <code>serve</code> on an empty platform storage root. Greets after initialization, reloads the configuration, and writes the machine token. Includes its document and script changes.</td><td><code>todo</code></td><td></td></tr>
         <tr id="DX3" data-status="todo"><td>DX3</td><td>Persistent <code>dev</code> on the platform storage root as a separate persistent profile with eligibility checks. <code>--ephemeral</code> keeps the scratch profile. Carries its own document and capture-script changes.</td><td><code>todo</code></td><td></td></tr>
@@ -449,7 +449,7 @@
       <li><strong>Steps:</strong> pin <code>40d7285f</code>. Create the proof root. Record the port footprint count. Run <code>serve</code> on an empty <code>STARPORT_HOME</code> and record the error and the <code>welcomed</code> stamp that the greeting leaves behind. Run <code>dev --no-open</code> twice and record the two API key prefixes. Occupy 8080 and record the browser target.</li>
       <li><strong>Acceptance:</strong> <code>proof/starport-developer-experience/DX0.md</code> holds the five observations with commands and outputs.</li>
       <li><strong>Fail-before:</strong> the observations show the current behavior from F1, F2, F4, F5, and F9.</li>
-      <li><strong>Verification:</strong> <code>git grep -nE '\b8080\b' -- ':!docs/proof' ':!docs/plans/proof' | wc -l</code> and the commands above.</li>
+      <li><strong>Verification:</strong> <code>git grep -nP '\b8080\b' -- ':!docs/proof' ':!docs/plans/proof' | wc -l</code> and the commands above. The macOS git in use has no <code>\b</code> under <code>-E</code>, so every grep in this plan uses <code>-P</code>.</li>
     </ul>
 
     <h3 id="task-DX1">DX1 Standard port</h3>
@@ -605,6 +605,15 @@ same places.</code></pre>
           chose "Activate" through the question tool after the Sol revision.
           Status promoted from proposed to active. DX0 is the next
           task.</td></tr>
+        <tr><td>2026-10-10</td><td>meta</td><td>merged</td><td>Plan pull
+          request #441 merged at head <code>64c3bc5c</code> as
+          <code>ee6c9ce6</code>. Remote branch and worktree removed.</td></tr>
+        <tr><td>2026-10-10</td><td>DX0</td><td>done</td><td>Proof commit
+          <code>0ee27f9f</code>. Two corrections from the evidence. The greps use
+          <code>-P</code>. F5 names the terminal gate in
+          <code>internal/cli/app.go:221-230</code>. <code>DX0.md</code> records
+          the <code>--no-open</code> runs, the pseudo-terminal run, and the
+          foreign listener.</td></tr>
       </tbody>
     </table>
   </section>
