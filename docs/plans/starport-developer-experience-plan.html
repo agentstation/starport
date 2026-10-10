@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starport developer experience</title>
+<style>
+  :root {
+    --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+    --page: #ffffff; --accent: #2563eb;
+    --done: #15803d; --on-done: #ffffff;
+    --in-progress: #eab308; --on-in-progress: #1a1e24;
+    --blocked: #dc2626; --on-blocked: #ffffff;
+    --removed: #9ca3af; --on-removed: #1a1e24;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e5e9ee; --muted: #9aa4af; --line: #333a43; --soft: #1b2027;
+      --page: #11151a; --accent: #60a5fa;
+      --done: #4ade80; --on-done: #1a1e24;
+      --in-progress: #facc15; --on-in-progress: #1a1e24;
+      --blocked: #f87171; --on-blocked: #1a1e24;
+      --removed: #6b7280; --on-removed: #ffffff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 1080px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; border-bottom: 1px solid
+    var(--line); padding-bottom: 0.25rem; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+  code { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  pre { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto;
+    line-height: 1.45; }
+  pre code { background: none; border: none; padding: 0; }
+  blockquote { margin: 0.75rem 0; padding: 0.6rem 1rem; border-left: 3px
+    solid var(--accent); background: var(--soft); }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0;
+    font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.35rem 0.55rem;
+    text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  #status-line { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+  /* Progress bar, left to right: done, in_progress, blocked, todo (the
+     empty track), then deferred, no-action, and rejected. */
+  .bar { display: flex; height: 0.9rem; border: 1px solid var(--muted);
+    border-radius: 999px; overflow: hidden; background: var(--soft); }
+  .bar > span { width: 0; height: 100%; }
+  .bar > span + span { box-shadow: inset 2px 0 0 var(--page); }
+  [data-seg="done"] { --seg: var(--done); }
+  [data-seg="in_progress"] { --seg: var(--in-progress); }
+  [data-seg="blocked"] { --seg: var(--blocked); }
+  [data-seg="todo"] { --seg: transparent; }
+  [data-seg="removed"] { --seg: var(--removed); }
+  .bar > span, .swatch { background-color: var(--seg);
+    print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .bar > [data-seg="blocked"], [data-seg="blocked"] .swatch {
+    background-image: repeating-linear-gradient(135deg, transparent 0 4px,
+      rgb(255 255 255 / 0.45) 4px 6px); }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem;
+    list-style: none; margin: 0.5rem 0 0; padding: 0; font-size: 0.88rem; }
+  .legend li { display: flex; align-items: center; gap: 0.4rem; }
+  .swatch { display: inline-block; width: 0.85rem; height: 0.85rem;
+    border: 1px solid var(--muted); border-radius: 3px; }
+  [data-seg="todo"] .swatch { background-color: var(--soft); }
+  .counts { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit,
+    minmax(280px, 1fr)); gap: 1rem; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem; background: var(--soft); }
+  figcaption { font-weight: 600; margin-bottom: 0.5rem; }
+  figure svg { max-width: 100%; height: auto; }
+  /* Ledger status tokens use the bar colors. */
+  tr[data-status] td:nth-child(3) code { font-weight: 600; }
+  tr[data-status^="done"] td:nth-child(3) code {
+    background: var(--done); color: var(--on-done); border-color: transparent; }
+  tr[data-status^="in_progress"] td:nth-child(3) code {
+    background: var(--in-progress); color: var(--on-in-progress);
+    border-color: transparent; }
+  tr[data-status^="blocked"] td:nth-child(3) code {
+    background: var(--blocked); color: var(--on-blocked);
+    border-color: transparent; }
+  tr[data-status^="deferred"] td:nth-child(3) code,
+  tr[data-status^="no-action"] td:nth-child(3) code,
+  tr[data-status^="rejected"] td:nth-child(3) code {
+    background: var(--removed); color: var(--on-removed);
+    border-color: transparent; }
+  tr[data-status] td:nth-child(3) code {
+    print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  @page { margin: 0.7in 0.6in; size: letter; }
+  @media print {
+    :root {
+      --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+      --page: #ffffff; --accent: #2563eb;
+      --done: #15803d; --on-done: #ffffff;
+      --in-progress: #eab308; --on-in-progress: #1a1e24;
+      --blocked: #dc2626; --on-blocked: #ffffff;
+      --removed: #9ca3af; --on-removed: #1a1e24;
+    }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Each bare task status maps to one bar segment.
+    var segmentOf = { "done": "done", "in_progress": "in_progress",
+      "blocked": "blocked", "todo": "todo", "deferred": "removed",
+      "no-action": "removed", "rejected": "removed" };
+    var terminal = { "done": 1, "no-action": 1, "rejected": 1 };
+    var names = { "done": "Done", "in_progress": "In progress",
+      "blocked": "Blocked", "todo": "To do",
+      "removed": "Deferred, no-action, or rejected" };
+    var counts = { "done": 0, "in_progress": 0, "blocked": 0, "todo": 0,
+      "removed": 0 };
+    var rows = document.querySelectorAll("#ledger tbody tr[data-status]");
+    var total = rows.length, closed = 0, running = [], unknown = [];
+    rows.forEach(function (row) {
+      var status = row.getAttribute("data-status").split("(")[0].trim();
+      if (!segmentOf[status]) { unknown.push(row.id); status = "todo"; }
+      counts[segmentOf[status]] += 1;
+      if (terminal[status]) { closed += 1; }
+      if (status === "in_progress") { running.push(row.id); }
+    });
+    var progress = document.getElementById("progress");
+    var summary = [];
+    progress.querySelectorAll(".bar > [data-seg]").forEach(function (seg) {
+      var key = seg.getAttribute("data-seg"), n = counts[key];
+      seg.style.width = total ? (n / total) * 100 + "%" : "0";
+      seg.title = names[key] + ": " + n;
+      summary.push(names[key] + " " + n);
+    });
+    progress.querySelectorAll(".legend [data-seg]").forEach(function (item) {
+      item.querySelector("b").textContent = counts[item.getAttribute("data-seg")];
+    });
+    var pct = total ? Math.round((closed / total) * 100) : 0;
+    var text = closed + " of " + total + " tasks terminal (" + pct + "%).";
+    if (running.length) { text += " In progress: " + running.join(", ") + "."; }
+    if (unknown.length) {
+      text += " Unknown status, counted as to do: " + unknown.join(", ") + ".";
+    }
+    progress.querySelector(".bar").setAttribute("aria-label",
+      text + " " + summary.join(", ") + ".");
+    progress.querySelector(".counts").textContent = text;
+  });
+</script>
+</head>
+<body>
+
+<header id="overview">
+  <h1>Starport developer experience</h1>
+  <p id="status-line">
+    Status: <code data-plan-status="active">active</code> ·
+    Owner: this plan ·
+    Created: 2026-10-10 ·
+    Baseline: main @ 40d7285f ·
+    Proof root: <code>docs/plans/proof/starport-developer-experience/</code> ·
+    Next action: see <a href="#current-resume-state">Current resume state</a>
+  </p>
+
+  <section id="current-resume-state">
+    <h2>Current resume state</h2>
+    <p>Updated: 2026-10-10 UTC.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Current state</th></tr></thead>
+      <tbody>
+        <tr><td>In progress</td><td>None yet. The owner activated the plan on 2026-10-10.</td></tr>
+        <tr><td>Next action</td><td>Merge pull request #441 (this plan) at its exact head. Then start DX0 in <code>/private/tmp/starport-dx-DX0</code> on <code>codex/dx-DX0</code>.</td></tr>
+        <tr><td>Worktree</td><td>The plan branch is <code>codex/dx-plan</code> in <code>/private/tmp/starport-dx-plan</code>.</td></tr>
+        <tr><td>Verification</td><td>None. No implementation started.</td></tr>
+        <tr><td>Running processes</td><td>None.</td></tr>
+        <tr><td>Required reads</td><td><a href="#findings">Findings</a>, <a href="#decisions">Decisions</a>, <a href="#invariants">Invariants</a>, and the DX0 task contract.</td></tr>
+        <tr><td>Unresolved</td><td>None. D1 through D4 are decided. The Sol findings are applied. The owner activated the plan.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="outcome">
+    <h2>Outcome</h2>
+    <blockquote>
+      A developer runs one command on a clean machine and gets a persistent
+      local gateway on a known port, with no separate initialization step.
+      An operator runs <code>starport serve</code> with explicit
+      configuration and a fixed port that the gateway never changes. Both
+      paths share one storage layout, one key policy, and one documented
+      sequence.
+    </blockquote>
+  </section>
+
+  <section id="progress">
+    <h2>Progress</h2>
+    <div class="bar" role="img" aria-label="Progress appears when the page loads.">
+      <span data-seg="done"></span><span data-seg="in_progress"></span><span data-seg="blocked"></span><span data-seg="todo"></span><span data-seg="removed"></span>
+    </div>
+    <ul class="legend">
+      <li data-seg="done"><span class="swatch" aria-hidden="true"></span>Done <b></b></li>
+      <li data-seg="in_progress"><span class="swatch" aria-hidden="true"></span>In progress <b></b></li>
+      <li data-seg="blocked"><span class="swatch" aria-hidden="true"></span>Blocked <b></b></li>
+      <li data-seg="todo"><span class="swatch" aria-hidden="true"></span>To do <b></b></li>
+      <li data-seg="removed"><span class="swatch" aria-hidden="true"></span>Deferred, no-action, or rejected <b></b></li>
+    </ul>
+    <p class="counts">Progress appears here when the page loads. The status
+      ledger below is the source of truth.</p>
+  </section>
+
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Before</figcaption>
+        <svg viewBox="0 0 360 190" role="img" aria-label="Before diagram">
+          <rect x="10" y="10" width="100" height="60" rx="8" fill="none" stroke="currentColor"/>
+          <text x="60" y="35" text-anchor="middle" fill="currentColor" font-size="13">init</text>
+          <text x="60" y="55" text-anchor="middle" fill="currentColor" font-size="11">writes keys</text>
+          <rect x="130" y="10" width="100" height="60" rx="8" fill="none" stroke="currentColor"/>
+          <text x="180" y="35" text-anchor="middle" fill="currentColor" font-size="13">serve</text>
+          <text x="180" y="55" text-anchor="middle" fill="currentColor" font-size="11">fails without init</text>
+          <rect x="250" y="10" width="100" height="60" rx="8" fill="none" stroke="currentColor"/>
+          <text x="300" y="35" text-anchor="middle" fill="currentColor" font-size="13">dev</text>
+          <text x="300" y="55" text-anchor="middle" fill="currentColor" font-size="11">scratch, deleted</text>
+          <rect x="10" y="110" width="220" height="60" rx="8" fill="none" stroke="currentColor"/>
+          <text x="120" y="135" text-anchor="middle" fill="currentColor" font-size="13">platform storage</text>
+          <text x="120" y="155" text-anchor="middle" fill="currentColor" font-size="11">config.env, badger, sqlite, files</text>
+          <rect x="250" y="110" width="100" height="60" rx="8" fill="none" stroke="currentColor"/>
+          <text x="300" y="135" text-anchor="middle" fill="currentColor" font-size="13">os.TempDir</text>
+          <text x="300" y="155" text-anchor="middle" fill="currentColor" font-size="11">port 8080 shared</text>
+        </svg>
+      </figure>
+      <figure>
+        <figcaption>After</figcaption>
+        <svg viewBox="0 0 360 190" role="img" aria-label="After diagram">
+          <rect x="10" y="10" width="160" height="60" rx="8" fill="none" stroke="currentColor"/>
+          <text x="90" y="35" text-anchor="middle" fill="currentColor" font-size="13">serve</text>
+          <text x="90" y="55" text-anchor="middle" fill="currentColor" font-size="11">fixed port, auto-init</text>
+          <rect x="190" y="10" width="160" height="60" rx="8" fill="none" stroke="currentColor"/>
+          <text x="270" y="35" text-anchor="middle" fill="currentColor" font-size="13">dev</text>
+          <text x="270" y="55" text-anchor="middle" fill="currentColor" font-size="11">standard port, fallback, open</text>
+          <rect x="10" y="110" width="220" height="60" rx="8" fill="none" stroke="currentColor"/>
+          <text x="120" y="135" text-anchor="middle" fill="currentColor" font-size="13">platform storage</text>
+          <text x="120" y="155" text-anchor="middle" fill="currentColor" font-size="11">one root, first run mints keys</text>
+          <rect x="250" y="110" width="100" height="60" rx="8" fill="none" stroke="currentColor"/>
+          <text x="300" y="135" text-anchor="middle" fill="currentColor" font-size="13">--ephemeral</text>
+          <text x="300" y="155" text-anchor="middle" fill="currentColor" font-size="11">scratch, opt in</text>
+          <line x1="90" y1="70" x2="100" y2="110" stroke="currentColor"/>
+          <line x1="250" y1="70" x2="160" y2="110" stroke="currentColor"/>
+          <line x1="290" y1="70" x2="300" y2="110" stroke="currentColor" stroke-dasharray="4 3"/>
+        </svg>
+      </figure>
+    </div>
+    <p>Both commands become profiles of one runtime over one storage root.
+      The top-level <code>init</code> command goes away. Shared storage keeps
+      one explicit step, <code>starport auth bootstrap</code>, and a partial
+      local root keeps one explicit recovery step. The scratch directory
+      becomes an opt-in flag.</p>
+  </section>
+</header>
+
+<main>
+  <section id="scope">
+    <h2>Scope</h2>
+    <p><strong>Owns:</strong> the standard port and its footprint. First-run
+      initialization inside <code>serve</code> and <code>dev</code>.
+      Persistent <code>dev</code> storage. Bind-before-open and the developer
+      port fallback. The documents, tests, and scripts that pin the
+      first-use sequence.</p>
+    <p><strong>Does not own:</strong> the release tag after the merge (owner
+      action). The README GIF regeneration (README funnel procedure).
+      Changes to <code>starmap/pkg/productpaths</code> (Starmap). The
+      <code>Dockerfile</code> base images (separate change). The splash site
+      deploy, which the owner runs with <code>wrangler deploy</code> after
+      the site copy merges.</p>
+    <p><strong>Non-goals:</strong> a <code>start</code> alias. A port
+      fallback for <code>serve</code>. A check for Windows excluded port
+      ranges. More than one gateway per user on one machine. A
+      <code>--reset</code> flag that deletes shared storage. A per-port
+      console session cookie: the local session cookie is shared across
+      ports on one host (<code>internal/localauth/session.go:193</code>), so
+      the port fallback is an availability feature, not a security
+      boundary.</p>
+  </section>
+
+  <section id="decisions">
+    <h2>Decisions</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Decision</th><th>State</th><th>Recommendation and consequence</th></tr></thead>
+      <tbody>
+        <tr><td>D1</td><td><code>starport dev</code> persists by default.</td><td>Decided by the owner, 2026-10-10.</td><td>DX3 moves <code>dev</code> onto the platform storage root. The scratch directory becomes <code>--ephemeral</code>.</td></tr>
+        <tr><td>D2</td><td>Standard port and developer fallback order.</td><td>Decided by the owner, 2026-10-10.</td><td>The standard port is <code>7827</code>. When it is busy, <code>dev</code> tries <code>7373</code>, then <code>7678</code>, then a random free port from 7000 through 7999, then any free port. The command prints the busy port and the bound port. <code>serve</code> never falls back. See <a href="#port-review">Port review</a>.</td></tr>
+        <tr><td>D3</td><td>Command shape: keep <code>dev</code>, or fold it into <code>serve</code>.</td><td>Decided by the owner, 2026-10-10.</td><td>Keep both as two profiles of one runtime. The <code>dev</code> command owns the developer conveniences: standard port with fallback, browser open, loopback only. The <code>serve</code> command owns the operator contract: explicit port, no fallback, no browser. A single command would need mode flags, and a fallback flag on a load balancer target is a defect.</td></tr>
+        <tr><td>D4</td><td>Remove the top-level <code>init</code> command.</td><td>Decided by the owner, 2026-10-10.</td><td>Remove it. DX2 initializes a local root on first run, so the local path never needs it. Shared storage keeps one explicit step, <code>starport auth bootstrap --name &lt;name&gt;</code>, which claims the first API key in an operator terminal and refuses a second run. The operator supplies the master key through the environment, as today. A partial local root keeps one explicit recovery step, <code>starport auth bootstrap --recover</code>, which retries the pending setup transaction through the setup recovery contract (<code>internal/setup/runtime.go:54</code>). Without it, removing <code>init</code> would remove the only recovery entry point.</td></tr>
+      </tbody>
+    </table>
+    <p>All four decisions are closed. The plan promotes to
+      <code>active</code> when the owner approves activation.</p>
+  </section>
+
+  <section id="port-review">
+    <h2>Port review</h2>
+    <p>Sources: the IANA service name and port number registry (downloaded
+      2026-10-10), the Chrome <code>kRestrictedPorts</code> list, and a web
+      search for software that listens on each candidate.</p>
+    <table>
+      <thead><tr><th>Port</th><th>IANA</th><th>Chrome</th><th>Known use</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td>5555</td><td>personal-agent</td><td>allowed</td><td>Android ADB</td><td>Avoid</td></tr>
+        <tr><td>7575</td><td>wtmi-panel</td><td>allowed</td><td>None found</td><td>Avoid, assigned</td></tr>
+        <tr><td>7777</td><td>cbt</td><td>allowed</td><td>Game servers</td><td>Avoid</td></tr>
+        <tr><td>8080</td><td>http-alt</td><td>allowed</td><td>Most common developer collision</td><td>Replace</td></tr>
+        <tr><td>8888</td><td>ddi-tcp-1</td><td>allowed</td><td>Jupyter</td><td>Avoid</td></tr>
+        <tr><td>4444</td><td>krb524</td><td>allowed</td><td>Selenium</td><td>Avoid</td></tr>
+        <tr><td>9999</td><td>distinct</td><td>allowed</td><td>Common tutorials</td><td>Avoid</td></tr>
+        <tr><td>6666</td><td>unassigned</td><td>blocked (6665 to 6669)</td><td>IRC range</td><td>Unusable</td></tr>
+        <tr><td>7827</td><td>unassigned</td><td>allowed</td><td>None found. Spells STAR on a phone keypad.</td><td>Standard port (D2)</td></tr>
+        <tr><td>7373</td><td>unassigned</td><td>allowed</td><td>None found</td><td>First fallback (D2)</td></tr>
+        <tr><td>7678</td><td>unassigned</td><td>allowed</td><td>None found. Spells PORT on a phone keypad.</td><td>Second fallback (D2)</td></tr>
+        <tr><td>4747</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
+        <tr><td>5656</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
+        <tr><td>5959</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
+        <tr><td>6363</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
+        <tr><td>6565</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
+        <tr><td>8484</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
+        <tr><td>9494</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
+        <tr><td>9797</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
+      </tbody>
+    </table>
+    <p>IANA assigns, or Chrome blocks, every other repeating pair from 1111
+      through 9999. IANA assigns every repeating pair from 1313 through
+      3939.</p>
+    <h3>Ports to avoid</h3>
+    <ul>
+      <li>Chrome refuses the <code>kRestrictedPorts</code> list on every host, localhost included.</li>
+      <li>That list includes 0 to 25, 53, 110 to 143, 465, 587, 993, 995, 2049, 5060, 5061, 6000, 6665 to 6669, 6697, and 10080.</li>
+      <li>Chrome has no hidden listeners. Port 9222 opens only with <code>--remote-debugging-port</code>.</li>
+      <li>macOS AirPlay Receiver listens on 5000 and 7000.</li>
+      <li>Ephemeral ranges: macOS 49152 to 65535, Linux 32768 to 60999.</li>
+      <li>Windows Hyper-V and WinNAT exclude ranges that can cover 8000 and 1807.</li>
+      <li>Common collisions: 3000, 4000, 5173, 5432, 6379, 8000, 8080, 8081, 8888, 9000, 9090, 11434, 6060.</li>
+    </ul>
+  </section>
+
+  <section id="findings">
+    <h2>Findings</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Current behavior</th><th>Evidence</th><th>Route</th></tr></thead>
+      <tbody>
+        <tr><td>F1</td><td><code>dev</code> creates a scratch root under <code>os.TempDir()</code> and deletes it on every clean exit. The next run mints a new master key and a new API key.</td><td><code>internal/app/development_scratch.go:60,255-303</code>, <code>internal/app/development.go:49</code>, <code>internal/config/development.go:75-80</code>, <code>internal/cli/app.go:210-237</code></td><td>DX3</td></tr>
+        <tr><td>F2</td><td><code>serve</code> on a clean machine fails with <code>provider credential master key is required</code>. With a master key and no API key it fails with <code>a gateway API key is required; run "starport init"</code>.</td><td><code>internal/app/app.go:74,76,193-195,1081-1093</code></td><td>DX2</td></tr>
+        <tr><td>F3</td><td>Local <code>init</code> writes the master key to <code>config.env</code> and the first API key to Badger. <code>init --configured-storage</code> claims only the first key and writes no master-key file. Both refuse a second run.</td><td><code>internal/setup/service.go:82-121,272-294</code>, <code>internal/setup/preparation.go:54-209</code>, <code>cmd/starport/run.go:193-222</code></td><td>DX2, DX6</td></tr>
+        <tr><td>F4</td><td>Both commands default to port 8080 on 127.0.0.1. No command scans or falls back. On the baseline, <code>git grep -E '\b8080\b'</code> outside <code>docs/proof/</code> and <code>docs/plans/proof/</code> matches 177 lines in 59 tracked files.</td><td><code>internal/config/config.go:143-144</code>, <code>internal/server/server.go:290,381</code>, <code>console/vite.config.ts:26-30</code>, <code>Dockerfile:69</code>, <code>docker-compose.yml:11</code></td><td>DX1</td></tr>
+        <tr><td>F9</td><td><code>serve</code> greets and writes <code>&lt;data&gt;/welcomed</code> before the runner starts. The setup inspector treats a non-empty data directory as partial state. A greeting before initialization therefore blocks first-run initialization.</td><td><code>internal/cli/app.go:179</code>, <code>internal/cli/welcome.go:60</code>, <code>internal/setup/paths.go:100</code></td><td>DX2</td></tr>
+        <tr><td>F10</td><td>The developer session contract requires a plaintext key whenever authentication is on. The output prints the key unconditionally. A persistent restart has no new key to print.</td><td><code>internal/cli/development.go:41,58</code>, <code>cmd/starport/run.go:172</code>, <code>internal/app/app.go:1118</code></td><td>DX3</td></tr>
+        <tr><td>F11</td><td>Read-only local token access creates an in-memory token when no token file exists. A later <code>auth token</code>, <code>ui</code>, or <code>auth url</code> mints a different disk token. The running gateway rejects that token.</td><td><code>internal/app/app.go:1144,1211</code>, <code>internal/cli/ui.go:32</code></td><td>DX2</td></tr>
+        <tr><td>F12</td><td>The developer-experience verifier, the diagnosis report, and the demo capture scripts name the <code>init</code> command or assume an ephemeral <code>dev</code>.</td><td><code>scripts/verify-developer-experience.sh:74</code>, <code>internal/diagnosis/service.go:141</code>, <code>scripts/readme-demo/capture_cli.py:127</code>, <code>scripts/readme-demo/capture.py:452</code></td><td>DX5, DX6</td></tr>
+        <tr><td>F5</td><td><code>dev</code> dials host and port before it opens the browser. A foreign process on the port makes the dial succeed, and the browser opens against the wrong process.</td><td><code>internal/cli/development.go:112-144</code></td><td>DX4</td></tr>
+        <tr><td>F6</td><td><code>dev</code> refuses persistent storage variables and reads no configuration file.</td><td><code>internal/config/development.go:32-51</code>, <code>internal/config/loader.go:126-135</code></td><td>DX3</td></tr>
+        <tr><td>F7</td><td><code>docs/PRODUCTION-STATUS.md:8</code> describes a sequence that no longer matches the code.</td><td>File read 2026-10-10</td><td>DX5</td></tr>
+        <tr><td>F8</td><td>Tests pin the current sequence: <code>TestReadmeTemporaryPathPrecedesPersistentPath</code>, <code>TestInitOutputUsesProviderNeutralNextStep</code>, <code>TestDevDoesNotGreetOrStamp</code>, <code>TestDevPrintsGatewayKeyOnce</code>, the <code>internal/app</code> startup table, and <code>scripts/smoke-first-run.sh</code>.</td><td><code>cmd/starport/readme_test.go</code>, <code>internal/cli/app_test.go</code>, <code>internal/cli/ui_test.go</code>, <code>internal/app/app_test.go</code></td><td>DX2, DX3, DX5</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="rejected-designs">
+    <h2>Rejected designs</h2>
+    <table>
+      <thead><tr><th>Design</th><th>Reason</th><th>Re-open condition</th></tr></thead>
+      <tbody>
+        <tr><td><code>serve</code> falls back to another port.</td><td>A load balancer or a client configuration targets a fixed port. A silent move breaks the fleet.</td><td>None.</td></tr>
+        <tr><td>A separate storage root for <code>dev</code>.</td><td>A developer who runs <code>dev</code> today and <code>serve</code> tomorrow would see two gateways with two key sets.</td><td>The owner asks for isolation between a developer gateway and a local operator gateway on one machine.</td></tr>
+        <tr><td>Auto-init on configured shared storage.</td><td>Each cluster node would mint its own master key. The first API key would print into shipped container logs.</td><td>The master key arrives from a secret manager and an operator console creates the first key.</td></tr>
+        <tr><td>A <code>start</code> alias.</td><td>A third name for the same runtime adds a choice without a new contract.</td><td>The owner asks for it after D3.</td></tr>
+        <tr><td>A <code>--reset</code> flag on <code>dev</code>.</td><td>With shared storage, it would delete operator data. <code>starport backup</code> and the platform paths cover the need.</td><td>The owner asks for it after D3.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="promotion-gate">
+    <h2>Promotion gate</h2>
+    <p>Promote this plan to <code>active</code> only when every item
+      holds:</p>
+    <ul>
+      <li>D2, D3, and D4 read <em>Decided</em> in the decisions table.</li>
+      <li>Scope and non-goals are complete.</li>
+      <li>Every task states verifiable acceptance criteria.</li>
+      <li>The baseline commit exists on <code>origin/main</code>. DX0 creates the proof root.</li>
+      <li>A second-model review ran and the plan applied or rejected each finding in the execution log.</li>
+      <li>The goal block names real documents, paths, and gates.</li>
+      <li>The owner approves activation.</li>
+    </ul>
+  </section>
+
+  <section id="invariants">
+    <h2>Invariants</h2>
+    <ol>
+      <li><code>serve</code> never changes its port. A busy port is an error with the port number in the message.</li>
+      <li>First-run initialization mints a master key only for the local platform storage root. It runs only when no master key, no Badger store, and no setup transaction exist. It runs before any other file lands in the data directory.</li>
+      <li>Partial setup state keeps the current error and names <code>starport auth bootstrap --recover</code>. Configured shared storage never initializes itself. It keeps the explicit <code>starport auth bootstrap --name &lt;name&gt;</code> path.</li>
+      <li>The first gateway API key prints once, in the terminal of the command that minted it. No later run prints it. The setup transaction rolls back when the key output fails, as it does today (<code>internal/setup/service.go:168</code>).</li>
+      <li>After initialization, the command reloads the configuration before <code>app.New</code>. The loader reads the master key from <code>config.env</code> and never mutates the process environment.</li>
+      <li>A persistent <code>dev</code> runs only over local management and local storage. It refuses a shared or external management mode and a configured-storage recipe before it opens any store.</li>
+      <li>First-run composition writes the local machine token to disk. Then <code>auth token</code>, <code>ui</code>, and <code>auth url</code> agree with the running gateway.</li>
+      <li><code>dev</code> binds a loopback address only.</li>
+      <li>An explicit <code>STARPORT_SERVER_PORT</code> wins over the standard port and disables the developer fallback.</li>
+      <li>The browser opens only after the gateway listener is bound, and only to the bound address.</li>
+      <li>When <code>dev</code> falls back, it prints the busy port and the bound port before the console link.</li>
+      <li>No security default weakens. The master key stays required, the local token stays read-only, and the TLS and JWT paths stay unchanged.</li>
+      <li>Documents, tests, the smoke script, and the verifier change in the same pull request as the behavior they pin. <code>cmd/starport/readme_test.go</code> keeps pinning the first-use sequence. Each pull request passes the required checks on its own.</li>
+      <li>Generated references stay current. A pull request that changes a setting or a managed file runs <code>make docs-generate</code>. It keeps <code>TestReferenceFilesMatchCommittedFiles</code> and the file manifest tests green.</li>
+    </ol>
+  </section>
+
+  <section id="ledger">
+    <h2>Status ledger</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr id="DX0" data-status="todo"><td>DX0</td><td>Baseline: pin the baseline commit, create the proof root, capture fail-before evidence for F1, F2, F4, F5, and F9. No production behavior changes.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="DX1" data-status="todo"><td>DX1</td><td>Standard port: one owning constant replaces 8080 in code, container files, the Vite proxy, scripts, documents, and generated references. Includes the compatibility note.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="DX2" data-status="todo"><td>DX2</td><td>First-run initialization inside <code>serve</code> on an empty platform storage root. Greets after initialization, reloads the configuration, and writes the machine token. Includes its document and script changes.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="DX3" data-status="todo"><td>DX3</td><td>Persistent <code>dev</code> on the platform storage root as a separate persistent profile with eligibility checks. <code>--ephemeral</code> keeps the scratch profile. Carries its own document and capture-script changes.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="DX4" data-status="todo"><td>DX4</td><td>Listener bind, serve, and close contract. Developer port fallback with an endpoint record. Operator busy-port error.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="DX6" data-status="todo"><td>DX6</td><td>Remove the top-level <code>init</code> command. Add <code>starport auth bootstrap</code> for the shared first key and local recovery. Includes every README, verifier, smoke, diagnosis, skill, and splash line that names <code>init</code>.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="DX5" data-status="todo"><td>DX5</td><td>Final document pass: Quick start rewrite around persistent <code>dev</code>, recipes, operator guide, and the splash site journey, after the behavior tasks land.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="DX9" data-status="todo"><td>DX9</td><td>Cleanup after the final pull request merges: delete this plan, its proof root, and its index entry.</td><td><code>todo</code></td><td></td></tr>
+      </tbody>
+    </table>
+    <p>Dependencies: DX1 and DX2 start together after DX0. DX3 waits on DX2.
+      DX4 waits on DX1 and DX3. DX6 waits on DX2. DX5 waits on DX1
+      through DX4 and on DX6. DX9 waits on DX5. Each task is one pull request
+      that passes the required checks alone, so each task carries the
+      document, test, smoke, and verifier changes for the behavior it
+      changes.</p>
+  </section>
+
+  <section id="tasks">
+    <h2>Tasks</h2>
+
+    <h3 id="task-DX0">DX0 Baseline</h3>
+    <ul>
+      <li><strong>Problem:</strong> the plan needs a pinned baseline and fail-before evidence for each finding it closes.</li>
+      <li><strong>Owning seam and paths:</strong> this plan and <code>docs/plans/proof/starport-developer-experience/</code>.</li>
+      <li><strong>Steps:</strong> pin <code>40d7285f</code>. Create the proof root. Record the port footprint count. Run <code>serve</code> on an empty <code>STARPORT_HOME</code> and record the error and the <code>welcomed</code> stamp that the greeting leaves behind. Run <code>dev --no-open</code> twice and record the two API key prefixes. Occupy 8080 and record the browser target.</li>
+      <li><strong>Acceptance:</strong> <code>proof/starport-developer-experience/DX0.md</code> holds the five observations with commands and outputs.</li>
+      <li><strong>Fail-before:</strong> the observations show the current behavior from F1, F2, F4, F5, and F9.</li>
+      <li><strong>Verification:</strong> <code>git grep -nE '\b8080\b' -- ':!docs/proof' ':!docs/plans/proof' | wc -l</code> and the commands above.</li>
+    </ul>
+
+    <h3 id="task-DX1">DX1 Standard port</h3>
+    <ul>
+      <li><strong>Problem:</strong> 8080 is the most common developer collision, and 59 tracked files repeat the value.</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/config/config.go</code> owns the default. Consumers: <code>internal/server/config.go</code>, <code>console/vite.config.ts</code>, <code>console/README.md</code>, <code>Dockerfile</code>, <code>docker-compose.yml</code>, <code>docker-compose.fleet.yml</code>, <code>Makefile</code>, <code>scripts/smoke-first-run.sh</code>, <code>scripts/test-storage-recipes.py</code>, <code>examples/cache_control_demo.go</code>, <code>README.md</code>, <code>docs/OPERATOR-GUIDE.md</code>, <code>docs/site/</code>, the generated settings reference under <code>docs/</code>, <code>website/src/lib/splash-facts.ts</code> (lines 310 through 412), <code>skills/starport/</code>.</li>
+      <li><strong>Steps:</strong> add a named default port constant in <code>internal/config</code> with the value <code>7827</code>. Replace each active 8080 default. Keep <code>STARPORT_SERVER_PORT</code> as the override. Map the container port to the same value. Run <code>make docs-generate</code>. Add the compatibility note to the README and the operator guide: the default port changed, and <code>STARPORT_SERVER_PORT=8080</code> restores the old value. Leave historical proof documents, release notes, and recorded transcripts unchanged.</li>
+      <li><strong>Acceptance:</strong> the DX0 grep returns lines only in the compatibility notes, this plan, and recorded transcripts under <code>docs/assets/</code>. The proof file lists each remaining line with its reason. <code>go test ./internal/config/ ./internal/server/ ./internal/cli/</code> passes. <code>TestReferenceFilesMatchCommittedFiles</code> passes. <code>docker compose config --quiet</code> passes.</li>
+      <li><strong>Fail-before:</strong> the DX0 grep reports active defaults in <code>internal/config/config.go</code>, <code>console/vite.config.ts</code>, and <code>Dockerfile</code>.</li>
+      <li><strong>Verification:</strong> the grep, the Go tests, <code>docker compose config --quiet</code>, <code>npm --prefix console run build</code>, and the technical-writing linter in strict mode on each changed document.</li>
+    </ul>
+
+    <h3 id="task-DX2">DX2 First-run initialization in <code>serve</code></h3>
+    <ul>
+      <li><strong>Problem:</strong> <code>serve</code> fails on a clean machine until the user runs <code>init</code>. The two commands exist only because the master key and the first API key need a first writer.</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/setup</code> owns the initialization transaction, its inspection (<code>internal/setup/paths.go:100</code>), and its rollback contract (<code>internal/setup/service.go:168</code>). <code>cmd/starport/run.go</code> composes inspection, initialization, credential delivery, and the configuration reload before <code>app.New</code>. <code>internal/cli/init.go</code> owns the one-time key output and moves it into a shared credential-delivery writer. <code>internal/cli/welcome.go</code> owns the greeting. <code>internal/localauth</code> owns the machine token. <code>internal/app</code> keeps its errors unchanged.</li>
+      <li><strong>Steps:</strong> move <code>greetOnce</code> after a successful initialization (F9). Compose the <code>serve</code> path in this order. Load the configuration. Inspect the setup state. Initialize when the configuration has no master key, the state is <code>absent</code>, and the management mode is local. Deliver the one-time key through the existing transaction, so a failed write rolls back and a post-commit error keeps its contract (<code>internal/cli/app_test.go:240</code>). Reload the configuration so the new master key reaches <code>app.New</code>. Write the machine token to disk through <code>internal/localauth</code>. Then greet and start the runner. Keep the partial-state error and point it at <code>auth bootstrap --recover</code>. Skip initialization on configured storage and on shared or external management.</li>
+      <li><strong>Acceptance:</strong> new tests <code>TestServeInitializesEmptyStorage</code>, <code>TestServeGreetsAfterInitialization</code>, <code>TestServeReloadsConfigurationAfterInitialization</code>, <code>TestServeProvisionsMachineToken</code>, <code>TestServeRollsBackWhenKeyOutputFails</code>, <code>TestServeKeepsPartialStateError</code>, and <code>TestServeSkipsInitializationOnConfiguredStorage</code> pass in <code>internal/cli</code> and <code>cmd/starport</code>. The <code>internal/app</code> startup table stays unchanged. <code>TestInitializeConcurrentSingleWinner</code> still passes. <code>make docs-generate</code> leaves no diff, or the diff is committed.</li>
+      <li><strong>Fail-before:</strong> <code>TestServeInitializesEmptyStorage</code> fails on the baseline with the F2 error. <code>TestServeGreetsAfterInitialization</code> fails on the baseline because the stamp exists before the runner starts.</li>
+      <li><strong>Verification:</strong> <code>go test ./internal/cli/ ./internal/setup/ ./internal/app/ ./internal/localauth/ ./cmd/starport/</code>, <code>scripts/smoke-first-run.sh</code> with the <code>serve</code> case updated to run without <code>init</code>, and <code>gofmt -l</code> on changed files.</li>
+    </ul>
+
+    <h3 id="task-DX3">DX3 Persistent <code>dev</code></h3>
+    <ul>
+      <li><strong>Problem:</strong> a developer loses keys, files, and catalog state on every exit. The command cannot serve as a reliable local gateway.</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/config/development.go</code> and <code>internal/config/storage.go:54</code> own the current ephemeral profile, which selects in-memory stores and clears the master key. <code>internal/app/development.go:46-53</code> mints the scratch keys. <code>internal/config/loader.go:220</code> clears the platform paths in development mode. <code>internal/app/development_recovery.go</code> owns the scratch lifecycle. <code>internal/cli/development.go:36-58</code> owns the session contract and the output. <code>cmd/starport/run.go:154-177</code> composes the path. <code>scripts/readme-demo/capture_cli.py:127</code> and <code>scripts/readme-demo/capture.py:452</code> record the demo.</li>
+      <li><strong>Steps:</strong> add a persistent developer profile next to the ephemeral one. The persistent profile loads the configuration through the same loader as <code>serve</code> and keeps the platform paths. It applies only loopback host, stdout logs, and no TLS. Before it opens any store, it refuses a configured-storage recipe and a shared or external management mode. The refusal names <code>serve</code> (<code>internal/config/management.go:35</code>, <code>internal/app/configuration_authority.go:53</code>). It runs the DX2 composition on an empty root. The ephemeral profile keeps the current in-memory stores, the cleared paths, the minted keys, and the persistent-variable refusal behind <code>--ephemeral</code>. Change the session contract in <code>internal/cli/development.go</code>. A session carries an authentication state and an optional new credential. Print the key block only when the session minted a key. Print the URL and the console link on every run. Update the demo capture scripts to pass <code>--ephemeral</code>, because they reject retained home files.</li>
+      <li><strong>Acceptance:</strong> with a temporary <code>STARPORT_HOME</code>, two runs of <code>dev --no-open</code> share one master key and one API key hash. The uploaded files survive the restart. The second run prints no key block. <code>dev --ephemeral --no-open</code> removes its scratch root on exit. <code>dev</code> with <code>STARPORT_MANAGEMENT=shared</code> exits before it opens a store. Tests: <code>TestDevPersistsAcrossRuns</code>, <code>TestDevSecondRunPrintsNoKey</code>, <code>TestDevRefusesSharedManagement</code>, <code>TestDevRefusesConfiguredStorage</code>, <code>TestDevEphemeralRemovesScratch</code>, and an updated <code>TestDevPrintsGatewayKeyOnce</code>. The file manifest tests in <code>internal/cli/file_manifest_test.go</code> pass with any new session file.</li>
+      <li><strong>Fail-before:</strong> <code>TestDevPersistsAcrossRuns</code> fails on the baseline with two different key hashes. <code>TestDevSecondRunPrintsNoKey</code> fails on the baseline because the session contract requires a plaintext key (F10).</li>
+      <li><strong>Verification:</strong> <code>go test ./internal/cli/ ./internal/config/ ./internal/app/ ./cmd/starport/</code>, <code>scripts/readme-demo/capture_cli.py</code> in dry-run mode when it has one, and the two manual runs recorded in the proof file.</li>
+    </ul>
+
+    <h3 id="task-DX4">DX4 Bind before open and port fallback</h3>
+    <ul>
+      <li><strong>Problem:</strong> a busy port makes <code>dev</code> open the browser against a foreign process. A developer with a collision has no fallback.</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/server/server.go:379-390</code> owns the listener, which <code>ListenAndServe</code> binds and serves in one call today. <code>internal/app/runtime.go:22</code> owns the <code>httpRuntime</code> interface, and <code>internal/cli/app.go:216</code> drives it. <code>internal/cli/development.go</code> owns the open sequence and the fallback policy. <code>internal/config/validation.go:25</code> rejects port 0. A new endpoint record under the state root owns the bound address. Consumers of the record: <code>starport ui</code>, <code>starport auth url</code>, and <code>console/vite.config.ts</code>, which derive the target from the configured port today.</li>
+      <li><strong>Steps:</strong> split the server contract into bind, serve, and close. The command then learns the bound address before it opens the browser, and it can release a listener it never served. Carry the split through <code>httpRuntime</code> and the <code>cli/app.go</code> driver. Keep configuration validation on the configured port. The fallback passes an already-bound listener, so port 0 never reaches the validator. In <code>dev</code> without an explicit port, try 7827, 7373, 7678, up to 20 random ports from 7000 through 7999, then port 0. A port from <code>STARPORT_SERVER_PORT</code> or a configuration file disables the fallback. On a fallback, print the busy port, the bound port, and the bound URL. Write an endpoint record with the bound address, the process ID, and the start time. Define its schema and owner. Make <code>ui</code> and <code>auth url</code> read the record when a gateway is running. Otherwise they use the configured port. Document the Vite proxy override for a fallback port. In <code>serve</code>, report a busy port as an error with the port number.</li>
+      <li><strong>Acceptance:</strong> <code>TestDevFallsBackInOrder</code>, <code>TestDevReportsTheBusyPort</code>, <code>TestDevKeepsExplicitPort</code>, <code>TestDevKeepsConfigurationFilePort</code>, <code>TestDevFallsBackToAnyPortAfterTwentyRandomFailures</code>, <code>TestDevOpensTheBoundAddress</code>, <code>TestDevWritesEndpointRecord</code>, <code>TestUIReadsEndpointRecord</code>, <code>TestServerBindServeClose</code>, and <code>TestServeFailsWhenPortIsBusy</code> pass. The file manifest lists the endpoint record.</li>
+      <li><strong>Fail-before:</strong> <code>TestDevOpensTheBoundAddress</code> fails on the baseline because the open target is the configured port, not the bound port. <code>TestServerBindServeClose</code> fails on the baseline because no bind step exists.</li>
+      <li><strong>Verification:</strong> <code>go test ./internal/server/ ./internal/app/ ./internal/cli/</code>, <code>go test -race ./internal/server/ ./internal/cli/</code>, and <code>make docs-generate</code> for the file manifest.</li>
+    </ul>
+
+    <h3 id="task-DX6">DX6 Remove <code>init</code>, add <code>auth bootstrap</code></h3>
+    <ul>
+      <li><strong>Problem:</strong> after DX2, the local path never needs <code>init</code>. The command stays in the list only for the shared-storage first key and for setup recovery. Both belong under <code>auth</code>.</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/cli/app.go:242-283</code> and <code>internal/cli/init.go</code> own the command. <code>cmd/starport/run.go:193-222</code> composes it. <code>internal/cli/auth.go</code> owns the <code>auth</code> subcommands. <code>internal/setup.InitializeAPIKey</code> stays the first-key seam, and <code>internal/setup/runtime.go:54</code> stays the recovery seam. Every file that names <code>init</code>: <code>README.md</code>, <code>cmd/starport/readme_test.go</code>, <code>scripts/verify-developer-experience.sh:74</code>, <code>scripts/smoke-first-run.sh</code>, <code>internal/diagnosis/service.go:141</code>, <code>skills/starport/</code>, <code>docs/OPERATOR-GUIDE.md</code>, <code>docs/site/</code>, <code>website/src/lib/splash-facts.ts</code> (lines 470 and 512 through 522), <code>website/src/components/journey/world.ts:822</code>.</li>
+      <li><strong>Steps:</strong> add <code>starport auth bootstrap --name &lt;name&gt; [--json]</code> on top of <code>setup.InitializeAPIKey</code> for configured storage. It prints the key once and refuses a second run. Add <code>starport auth bootstrap --recover</code> for a partial local root. It retries the pending setup transaction through the setup recovery contract and refuses a root with no transaction. Remove the top-level <code>init</code> command and its tests. Reword <code>ErrAPIKeyRequired</code>, the partial-state error, the diagnosis message, the welcome text, and the embedded skill guidance to name <code>auth bootstrap</code>. Replace the <code>DX-CLI-3</code> check in the verifier with a check for <code>auth bootstrap</code>. Update the README pins, the smoke script, the operator guide compose sequence, and the splash site facts. Run the site tests in <code>website/test</code>.</li>
+      <li><strong>Acceptance:</strong> <code>starport init</code> exits with the unknown-command error. <code>TestAuthBootstrapClaimsTheFirstKey</code>, <code>TestAuthBootstrapRefusesASecondKey</code>, <code>TestAuthBootstrapRecoversPartialSetup</code>, and <code>TestAuthBootstrapRecoverRefusesCleanRoot</code> pass. <code>TestNoArgumentsShowHelp</code> lists no <code>init</code>. <code>git grep -n 'starport init'</code> returns lines only in historical proof, release notes, and recorded transcripts. <code>scripts/verify-developer-experience.sh</code> passes.</li>
+      <li><strong>Fail-before:</strong> <code>TestAuthBootstrapClaimsTheFirstKey</code> fails on the baseline with an unknown command. The verifier check <code>DX-CLI-3</code> fails when <code>init</code> goes away before the check changes.</li>
+      <li><strong>Verification:</strong> <code>go test ./internal/cli/ ./internal/setup/ ./internal/diagnosis/ ./cmd/starport/</code>, <code>scripts/smoke-first-run.sh</code>, <code>scripts/verify-developer-experience.sh</code>, and the technical-writing linter in strict mode on each changed document.</li>
+    </ul>
+
+    <h3 id="task-DX5">DX5 Final document pass</h3>
+    <ul>
+      <li><strong>Problem:</strong> the Quick start, the site, the operator guide, and the recipes describe the old sequence as a whole. DX1, DX2, DX3, DX4, and DX6 each fix the lines they own. The narrative needs one pass after the behavior lands.</li>
+      <li><strong>Owning seam and paths:</strong> <code>README.md</code>, <code>cmd/starport/readme_test.go</code>, <code>docs/site/start/</code>, <code>docs/OPERATOR-GUIDE.md</code>, <code>docs/site/architecture/recipes.md</code>, <code>docs/site/operate-starport/fleet.md</code>, <code>docs/PRODUCTION-STATUS.md</code>, <code>console/README.md</code>, <code>website/src/lib/splash-facts.ts</code> (lines 55 and 215), <code>website/src/components/journey/world.ts:822</code>.</li>
+      <li><strong>Steps:</strong> rewrite Quick start around a persistent <code>dev</code>. Merge the persistent local section into it. Move <code>auth bootstrap</code> into the team section. Fix F7. Update the README pins and the splash journey. Record the removed README retention claims in the proof file.</li>
+      <li><strong>Acceptance:</strong> <code>go test ./cmd/starport/</code> passes. <code>scripts/smoke-first-run.sh</code> and <code>scripts/verify-developer-experience.sh</code> pass on a clean root. The technical-writing linter reports 0 diagnostics in strict mode on each changed document. The site tests in <code>website/test</code> pass.</li>
+      <li><strong>Fail-before:</strong> <code>TestReadmeTemporaryPathPrecedesPersistentPath</code> fails against the rewritten README before the pins change.</li>
+      <li><strong>Verification:</strong> the commands above. This pull request changes documents and pins only, so the autoreview gate exits without a model call.</li>
+    </ul>
+
+    <h3 id="task-DX9">DX9 Cleanup</h3>
+    <ul>
+      <li><strong>Problem:</strong> a merged plan must not linger as a stale control plane.</li>
+      <li><strong>Owning seam and paths:</strong> this plan file, its proof root, and <code>docs/plans/README.md</code>.</li>
+      <li><strong>Steps:</strong> confirm the merge of the final pull request, then delete the plan, the proof root, and the index entry.</li>
+      <li><strong>Acceptance:</strong> the repository holds no reference to <code>starport-developer-experience</code>.</li>
+      <li><strong>Fail-before:</strong> not applicable, because the ledger row records the merge.</li>
+      <li><strong>Verification:</strong> <code>git grep starport-developer-experience</code> returns nothing.</li>
+    </ul>
+  </section>
+
+  <section id="goal">
+    <h2>Goal</h2>
+    <pre><code>Execute docs/plans/starport-developer-experience-plan.html to completion.
+This is a whole-plan goal, not a single-task goal. Read the compact plan
+fully, then the in-progress task contracts and relevant current proof.
+Required reference owners: this plan, CLAUDE.md and AGENTS.md in the Starport
+repository, README.md, docs/OPERATOR-GUIDE.md, docs/site/start/, and the
+findings table. Work in /private/tmp/starport-dx-&lt;task&gt; on branch
+codex/dx-&lt;task&gt;, one worktree per task, each from origin/main. Chat history
+is not progress state. Resume from Current resume state, the ledger, and
+verified git state.
+Read history only for a named evidence question.
+If compaction happens, continue from the plan and git state rather than
+restarting. Loop: run independent tasks in parallel. Mark each running task
+in_progress with its named owner and its own worktree and branch. A task
+starts only when its dependencies are terminal. For each task, implement at
+the owning seam, capture fail-before evidence, run the verification commands,
+commit the work per the commit policy, write the proof file, append the
+execution log with the work commit, mark the task terminal with
+evidence, commit the plan update the same way, then start the next eligible
+task. Decide rather than ask. Mark a
+wrong or already-satisfied task no-action with a one-line reason. Record
+a blocker and continue with the next eligible task. Binding constraints:
+the sixteen invariants, the non-goals, no release tag, no AI attribution.
+Commit policy: signed commits with scope-prefixed subjects. One draft pull
+request per task. Run autoreview --gate pre-pr --mode auto before
+publication. Squash merge at the exact head after Build, Security Scan,
+Release Snapshot, and Action Pin Provenance pass. Then delete the head
+branch. Stop only at a valid stop state from the plans skill. Before you
+stop, update the ledger and the log, and replace Current resume state. The
+status line links to its exact next action. The goal is met when DX0
+through DX6 read done, DX9 reads done, and go test ./... passes on main.
+The smoke script scripts/smoke-first-run.sh and the verifier
+scripts/verify-developer-experience.sh pass on a clean root. The strict
+linter reports 0 diagnostics on each changed document. The 8080 grep
+returns lines only in compatibility notes, historical proof, release
+notes, and recorded transcripts, and the DX1 proof file lists each
+remaining line with its reason. The init grep returns lines only in the
+same places.</code></pre>
+  </section>
+
+  <section id="execution-log">
+    <h2>Execution log</h2>
+    <p>History: none. Move older rows unchanged to the proof root when the
+      context budget requires it. Keep a link here.</p>
+    <!-- Append short rows at the end of this table.
+         This section stays last in the file. -->
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-10-10</td><td>meta</td><td>authored</td><td>Plan
+          authored from the port review and the command inventory. D1 decided
+          by the owner. D2 and D3 open. No implementation started.</td></tr>
+        <tr><td>2026-10-10</td><td>meta</td><td>decided</td><td>Owner
+          closed D2 (7827, fallback 7373, 7678, random 7000s, any) and D3
+          (keep dev and serve). D4 proposed: remove init, add auth
+          bootstrap. DX6 added.</td></tr>
+        <tr><td>2026-10-10</td><td>meta</td><td>decided</td><td>Owner
+          closed D4 (remove init, add auth bootstrap) and added the splash
+          site to DX1, DX5, and DX6. All decisions closed. Activation
+          pending.</td></tr>
+        <tr><td>2026-10-10</td><td>meta</td><td>reviewed</td><td>Sol
+          (GPT-6.1 Sol) read-only review returned 18 findings, verdict not
+          ready. Accepted and applied: P0 greeting stamp before
+          initialization (F9), P0 configuration reload before app.New, P1
+          recovery entry point (auth bootstrap --recover), P1 persistent
+          dev eligibility and separate profiles, P1 session contract (F10),
+          P1 machine token provisioning (F11), P1 credential-delivery
+          transaction, P1 bind/serve/close contract and endpoint record, P1
+          configured-file port and port 0 handling, P1 generated references,
+          P1 per-task pull request gates (DX6 before DX5, docs with
+          behavior), P1 zero-8080 acceptance replaced by an active-defaults
+          check, P1 command contract reconciled, P2 evidence fixes (F1, F3,
+          F4, F7, welcome.go path, file manifest at
+          internal/cli/file_manifest.go), P2 cookie note, P2 capture scripts
+          (F12). Rejected: none.</td></tr>
+        <tr><td>2026-10-10</td><td>meta</td><td>activated</td><td>Owner
+          chose "Activate" through the question tool after the Sol revision.
+          Status promoted from proposed to active. DX0 is the next
+          task.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+</body>
+</html>
