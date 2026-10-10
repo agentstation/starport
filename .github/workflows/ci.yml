@@ -277,14 +277,14 @@ jobs:
     timeout-minutes: 10
     services:
       valkey:
-        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        image: ghcr.io/agentstation/fixtures/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
         ports:
           - 6379/tcp
         options: >-
           --health-cmd "valkey-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 10
       postgres:
-        image: postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
+        image: ghcr.io/agentstation/fixtures/postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: starport_test
@@ -339,28 +339,28 @@ jobs:
     timeout-minutes: 45
     services:
       valkey:
-        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        image: ghcr.io/agentstation/fixtures/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
         ports:
           - 6379/tcp
         options: >-
           --health-cmd "valkey-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 10
       valkey-replacement:
-        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        image: ghcr.io/agentstation/fixtures/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
         ports:
           - 6379/tcp
         options: >-
           --health-cmd "valkey-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 10
       valkey-fresh:
-        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        image: ghcr.io/agentstation/fixtures/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
         ports:
           - 6379/tcp
         options: >-
           --health-cmd "valkey-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 10
       postgres:
-        image: postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
+        image: ghcr.io/agentstation/fixtures/postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: starport_test
@@ -427,21 +427,21 @@ jobs:
     timeout-minutes: 30
     services:
       valkey:
-        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        image: ghcr.io/agentstation/fixtures/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
         ports:
           - 6379/tcp
         options: >-
           --health-cmd "valkey-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 10
       valkey-replacement:
-        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        image: ghcr.io/agentstation/fixtures/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
         ports:
           - 6379/tcp
         options: >-
           --health-cmd "valkey-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 10
       postgres:
-        image: postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
+        image: ghcr.io/agentstation/fixtures/postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: starport_test
@@ -451,7 +451,7 @@ jobs:
           --health-cmd "pg_isready -U postgres -d starport_test"
           --health-interval 5s --health-timeout 3s --health-retries 10
       mysql:
-        image: mysql@sha256:3466ba4a4828aa8d46fb7c3bc16b67b781c98413cf4ea0fac6feaa6e881faa26
+        image: ghcr.io/agentstation/fixtures/mysql@sha256:3466ba4a4828aa8d46fb7c3bc16b67b781c98413cf4ea0fac6feaa6e881faa26
         env:
           MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
           MYSQL_ROOT_HOST: '%'
@@ -538,21 +538,21 @@ jobs:
         mode: [pure, race]
     services:
       valkey:
-        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        image: ghcr.io/agentstation/fixtures/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
         ports:
           - 6379/tcp
         options: >-
           --health-cmd "valkey-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 10
       valkey-replacement:
-        image: valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
+        image: ghcr.io/agentstation/fixtures/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f
         ports:
           - 6379/tcp
         options: >-
           --health-cmd "valkey-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 10
       postgres:
-        image: postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
+        image: ghcr.io/agentstation/fixtures/postgres@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: starport_test
@@ -562,7 +562,7 @@ jobs:
           --health-cmd "pg_isready -U postgres -d starport_test"
           --health-interval 5s --health-timeout 3s --health-retries 10
       mysql:
-        image: mysql@sha256:3466ba4a4828aa8d46fb7c3bc16b67b781c98413cf4ea0fac6feaa6e881faa26
+        image: ghcr.io/agentstation/fixtures/mysql@sha256:3466ba4a4828aa8d46fb7c3bc16b67b781c98413cf4ea0fac6feaa6e881faa26
         env:
           MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
           MYSQL_ROOT_HOST: '%'

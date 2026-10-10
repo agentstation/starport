@@ -19,7 +19,7 @@ import (
 
 // adoptValkeyImage is the qualified Valkey release by digest, the same image that CI services and
 // storage.QualifiedValkeyVersion name. The private process therefore qualifies the exact release.
-const adoptValkeyImage = "valkey/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f"
+const adoptValkeyImage = "ghcr.io/agentstation/fixtures/valkey@sha256:9acdf6f0ae1771ea63c401e127054b2d1779227b9230dcfae37fa684610eaa4f"
 
 // adoptValkey is one private Valkey process with persistent data that the test owns.
 // Restart and promotion tests change this process only. Shared fixtures stay unchanged.
