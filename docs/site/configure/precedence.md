@@ -28,7 +28,7 @@ The `starport serve` command reads one primary file in the dotenv format. Starpo
 A missing default file is not an error. Starport then uses the environment and the defaults. A missing file at an explicit `STARPORT_CONFIG_FILE` path stops startup. The file must be 1 MiB or smaller.
 
 ```dotenv
-STARPORT_SERVER_PORT=8080
+STARPORT_SERVER_PORT=7827
 STARPORT_STORAGE_MODE=badger
 STARPORT_CATALOG_SOURCE=public
 ```

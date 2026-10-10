@@ -73,7 +73,7 @@ The value `unknown` is correct for an embedded catalog. The command sends no pro
    ```bash
    curl --fail-with-body \
      -H "Authorization: Bearer $STARPORT_API_KEY" \
-     http://127.0.0.1:8080/v1/models
+     http://127.0.0.1:7827/v1/models
    ```
 
 **Expected result:** The response is a JSON object with a `data` array of models.
@@ -107,7 +107,7 @@ curl --fail-with-body \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"openai/gpt-4o-mini","max_tokens":16,"messages":[{"role":"user","content":"Hello"}]}' \
-  http://127.0.0.1:8080/v1/chat/completions
+  http://127.0.0.1:7827/v1/chat/completions
 ```
 
 A `200` response proves that the provider accepted the credential for this offering. Starport records provider failures, such as authentication, quota, and billing failures, in its provider state. Refer to [Catalog failures](../troubleshoot/catalog-failures.md) when a listed model fails.

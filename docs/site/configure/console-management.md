@@ -58,7 +58,7 @@ The storage panel shows one row for each store. `Records` is the KV store. `Rela
 ```bash
 curl --fail-with-body \
   -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
-  http://127.0.0.1:8080/api/v1/admin/config/operations/<operation-id>
+  http://127.0.0.1:7827/api/v1/admin/config/operations/<operation-id>
 ```
 
 The receipt names the operation, the actor, the `saved` revision, and the `applied` revision.

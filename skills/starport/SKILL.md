@@ -2,7 +2,7 @@
 name: starport
 description: Run and operate a self-hosted Starport LLM inference gateway. Use when a task must install Starport, start a gateway, answer model catalog questions, point a harness or SDK at the gateway, or diagnose a deployment.
 license: AGPL-3.0-only
-compatibility: Requires the starport CLI on PATH. The dev gateway binds 127.0.0.1:8080.
+compatibility: Requires the starport CLI on PATH. The dev gateway binds 127.0.0.1:7827.
 metadata:
   author: agentstation
 ---
@@ -39,7 +39,7 @@ export OPENAI_API_KEY="replace-with-provider-inference-key"
 starport dev --no-open
 ```
 
-The command starts a loopback gateway on port 8080 with in-memory state.
+The command starts a loopback gateway on port 7827 with in-memory state.
 It prints one temporary gateway API key and a
 one-time console launch link. Add `--no-open` to print the link instead of
 opening a browser, which fits an agent session. The gateway blocks the terminal,
@@ -48,7 +48,7 @@ so run it in a background process and keep it running.
 Wait for readiness before the first request:
 
 ```bash
-curl --fail http://127.0.0.1:8080/health/ready
+curl --fail http://127.0.0.1:7827/health/ready
 ```
 
 ## Start a durable gateway
@@ -70,12 +70,12 @@ link, it presents this machine's local admin token instead.
 
 Use the printed gateway API key as the bearer token.
 
-- OpenAI SDK or harness: base URL `http://127.0.0.1:8080/v1`.
-- OpenRouter SDK or harness: base URL `http://127.0.0.1:8080/api/v1`.
+- OpenAI SDK or harness: base URL `http://127.0.0.1:7827/v1`.
+- OpenRouter SDK or harness: base URL `http://127.0.0.1:7827/api/v1`.
 
 ```bash
 export STARPORT_API_KEY="replace-with-gateway-api-key"
-curl --fail-with-body http://127.0.0.1:8080/v1/chat/completions \
+curl --fail-with-body http://127.0.0.1:7827/v1/chat/completions \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
