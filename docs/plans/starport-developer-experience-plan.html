@@ -171,12 +171,12 @@
       <thead><tr><th>Field</th><th>Current state</th></tr></thead>
       <tbody>
         <tr><td>In progress</td><td>None. This plan is proposed.</td></tr>
-        <tr><td>Next action</td><td>The owner closes <a href="#decisions">D2 and D3</a>. Then promote the plan and start DX0.</td></tr>
+        <tr><td>Next action</td><td>The owner closes <a href="#decisions">D4</a>. Then promote the plan and start DX0.</td></tr>
         <tr><td>Worktree</td><td>None. The plan branch is <code>codex/dx-plan</code>.</td></tr>
         <tr><td>Verification</td><td>None. No implementation started.</td></tr>
         <tr><td>Running processes</td><td>None.</td></tr>
         <tr><td>Required reads</td><td><a href="#findings">Findings</a>, <a href="#port-review">Port review</a>, and <a href="#decisions">Decisions</a>.</td></tr>
-        <tr><td>Unresolved</td><td>D2 (standard port) and D3 (command shape) wait on the owner.</td></tr>
+        <tr><td>Unresolved</td><td>D4 (remove <code>init</code>) waits on the owner. D2 and D3 are decided.</td></tr>
       </tbody>
     </table>
   </section>
@@ -283,12 +283,13 @@
       <thead><tr><th>ID</th><th>Decision</th><th>State</th><th>Recommendation and consequence</th></tr></thead>
       <tbody>
         <tr><td>D1</td><td><code>starport dev</code> persists by default.</td><td>Decided by the owner, 2026-10-10.</td><td>DX3 moves <code>dev</code> onto the platform storage root. The scratch directory becomes <code>--ephemeral</code>.</td></tr>
-        <tr><td>D2</td><td>Standard port.</td><td>Open.</td><td>Recommendation: <code>7373</code>. IANA lists no assignment, Chrome allows it, and the web search found no software on it. The 7000 range has fewer developer tools than 3000, 4000, 8000, and 9000. See <a href="#port-review">Port review</a>.</td></tr>
-        <tr><td>D3</td><td>Command shape: keep <code>dev</code>, or fold it into <code>serve</code>.</td><td>Open.</td><td>Recommendation: keep both as two profiles of one runtime. The <code>dev</code> command owns the developer conveniences: standard port with fallback, browser open, loopback only. The <code>serve</code> command owns the operator contract: explicit port, no fallback, no browser. <code>init</code> becomes optional. A single command would need mode flags, and a fallback flag on a load balancer target is a defect.</td></tr>
+        <tr><td>D2</td><td>Standard port and developer fallback order.</td><td>Decided by the owner, 2026-10-10.</td><td>The standard port is <code>7827</code>. When it is busy, <code>dev</code> tries <code>7373</code>, then <code>7678</code>, then a random free port from 7000 through 7999, then any free port. The command prints the busy port and the bound port. <code>serve</code> never falls back. See <a href="#port-review">Port review</a>.</td></tr>
+        <tr><td>D3</td><td>Command shape: keep <code>dev</code>, or fold it into <code>serve</code>.</td><td>Decided by the owner, 2026-10-10.</td><td>Keep both as two profiles of one runtime. The <code>dev</code> command owns the developer conveniences: standard port with fallback, browser open, loopback only. The <code>serve</code> command owns the operator contract: explicit port, no fallback, no browser. A single command would need mode flags, and a fallback flag on a load balancer target is a defect.</td></tr>
+        <tr><td>D4</td><td>Remove the top-level <code>init</code> command.</td><td>Proposed. Waits on the owner.</td><td>Recommendation: remove it. DX2 initializes a local root on first run, so the local path never needs it. Shared storage still needs one explicit step: claim the first API key without printing it into shipped container logs. Move that step to <code>starport auth bootstrap --name &lt;name&gt;</code>. It refuses a second run, like <code>init --configured-storage</code> today. The operator supplies the master key through the environment, as today.</td></tr>
       </tbody>
     </table>
-    <p>The owner closes D2 and D3 in this table. The plan promotes to
-      <code>active</code> only after both rows read <em>Decided</em>.</p>
+    <p>The owner closes D4 in this table. The plan promotes to
+      <code>active</code> only after D2, D3, and D4 read <em>Decided</em>.</p>
   </section>
 
   <section id="port-review">
@@ -307,7 +308,9 @@
         <tr><td>4444</td><td>krb524</td><td>allowed</td><td>Selenium</td><td>Avoid</td></tr>
         <tr><td>9999</td><td>distinct</td><td>allowed</td><td>Common tutorials</td><td>Avoid</td></tr>
         <tr><td>6666</td><td>unassigned</td><td>blocked (6665 to 6669)</td><td>IRC range</td><td>Unusable</td></tr>
-        <tr><td>7373</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate, recommended</td></tr>
+        <tr><td>7827</td><td>unassigned</td><td>allowed</td><td>None found. Spells STAR on a phone keypad.</td><td>Standard port (D2)</td></tr>
+        <tr><td>7373</td><td>unassigned</td><td>allowed</td><td>None found</td><td>First fallback (D2)</td></tr>
+        <tr><td>7678</td><td>unassigned</td><td>allowed</td><td>None found. Spells PORT on a phone keypad.</td><td>Second fallback (D2)</td></tr>
         <tr><td>4747</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
         <tr><td>5656</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
         <tr><td>5959</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
@@ -316,8 +319,6 @@
         <tr><td>8484</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
         <tr><td>9494</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
         <tr><td>9797</td><td>unassigned</td><td>allowed</td><td>None found</td><td>Candidate</td></tr>
-        <tr><td>7827</td><td>unassigned</td><td>allowed</td><td>None found. Spells STAR on a phone keypad.</td><td>Candidate</td></tr>
-        <tr><td>7678</td><td>unassigned</td><td>allowed</td><td>None found. Spells PORT on a phone keypad.</td><td>Candidate</td></tr>
       </tbody>
     </table>
     <p>IANA assigns, or Chrome blocks, every other repeating pair from 1111
@@ -371,7 +372,7 @@
     <p>Promote this plan to <code>active</code> only when every item
       holds:</p>
     <ul>
-      <li>D2 and D3 read <em>Decided</em> in the decisions table.</li>
+      <li>D2, D3, and D4 read <em>Decided</em> in the decisions table.</li>
       <li>Scope and non-goals are complete.</li>
       <li>Every task states verifiable acceptance criteria.</li>
       <li>The baseline commit and the proof root exist.</li>
@@ -390,6 +391,7 @@
       <li><code>dev</code> binds a loopback address only.</li>
       <li>An explicit <code>STARPORT_SERVER_PORT</code> wins over the standard port and disables the developer fallback.</li>
       <li>The browser opens only after the gateway listener is bound, and only to the bound address.</li>
+      <li>When <code>dev</code> falls back, it prints the busy port and the bound port before the console link.</li>
       <li>No security default weakens. The master key stays required, the local token stays read-only, and the TLS and JWT paths stay unchanged.</li>
       <li>Documents and tests change in the same pull request. <code>cmd/starport/readme_test.go</code> keeps pinning the first-use sequence.</li>
     </ol>
@@ -408,11 +410,13 @@
         <tr id="DX3" data-status="todo"><td>DX3</td><td>Persistent <code>dev</code> on the platform storage root. <code>--ephemeral</code> keeps the scratch behavior.</td><td><code>todo</code></td><td></td></tr>
         <tr id="DX4" data-status="todo"><td>DX4</td><td>Bind before open. Developer port fallback. Operator busy-port error.</td><td><code>todo</code></td><td></td></tr>
         <tr id="DX5" data-status="todo"><td>DX5</td><td>Documents, README pins, smoke script, recipes, and the compatibility note for the port change.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="DX6" data-status="todo"><td>DX6</td><td>Remove the top-level <code>init</code> command. Move the shared-storage first-key step to <code>starport auth bootstrap</code>. Waits on D4.</td><td><code>todo</code></td><td></td></tr>
         <tr id="DX9" data-status="todo"><td>DX9</td><td>Cleanup after the final pull request merges: delete this plan, its proof root, and its index entry.</td><td><code>todo</code></td><td></td></tr>
       </tbody>
     </table>
     <p>Dependencies: DX1 and DX2 start together after DX0. DX3 waits on DX2.
-      DX4 waits on DX1 and DX3. DX5 waits on DX1 through DX4.</p>
+      DX4 waits on DX1 and DX3. DX6 waits on DX2 and D4. DX5 waits on DX1
+      through DX4 and on DX6.</p>
   </section>
 
   <section id="tasks">
@@ -432,7 +436,7 @@
     <ul>
       <li><strong>Problem:</strong> 8080 is the most common developer collision, and about 30 files repeat the value.</li>
       <li><strong>Owning seam and paths:</strong> <code>internal/config/config.go</code> owns the default. Consumers: <code>internal/server/config.go</code>, <code>console/vite.config.ts</code>, <code>console/README.md</code>, <code>Dockerfile</code>, <code>docker-compose.yml</code>, <code>docker-compose.fleet.yml</code>, <code>Makefile</code>, <code>scripts/smoke-first-run.sh</code>, <code>scripts/test-storage-recipes.py</code>, <code>examples/cache_control_demo.go</code>, <code>README.md</code>, <code>docs/OPERATOR-GUIDE.md</code>, <code>docs/site/</code>, <code>website/src/</code>, <code>skills/starport/</code>.</li>
-      <li><strong>Steps:</strong> add a named default port constant in <code>internal/config</code> with the D2 value. Replace each 8080 default. Keep <code>STARPORT_SERVER_PORT</code> as the override. Map the container port to the same value. Leave historical proof documents unchanged.</li>
+      <li><strong>Steps:</strong> add a named default port constant in <code>internal/config</code> with the value <code>7827</code>. Replace each 8080 default. Keep <code>STARPORT_SERVER_PORT</code> as the override. Map the container port to the same value. Leave historical proof documents unchanged.</li>
       <li><strong>Acceptance:</strong> the grep from DX0 returns 0 lines outside <code>docs/proof/</code> and <code>docs/plans/proof/</code>. <code>go test ./internal/config/ ./internal/server/ ./internal/cli/</code> passes. <code>docker compose config --quiet</code> passes.</li>
       <li><strong>Fail-before:</strong> the DX0 grep count is above 0.</li>
       <li><strong>Verification:</strong> the grep, the Go tests, <code>docker compose config --quiet</code>, and <code>npm --prefix console run build</code>.</li>
@@ -462,8 +466,8 @@
     <ul>
       <li><strong>Problem:</strong> a busy port makes <code>dev</code> open the browser against a foreign process. A developer with a collision has no fallback.</li>
       <li><strong>Owning seam and paths:</strong> <code>internal/server/server.go</code> owns the listener. <code>internal/cli/development.go</code> owns the open sequence and the fallback policy. The session record under the state root owns the bound port.</li>
-      <li><strong>Steps:</strong> split listen from serve so the command knows the bound address before the browser opens. In <code>dev</code>, try the standard port, then the next nine ports. Skip the fallback when <code>STARPORT_SERVER_PORT</code> has a value. Print the bound URL. Write the bound port to the session record. In <code>serve</code>, report a busy port as an error with the port number.</li>
-      <li><strong>Acceptance:</strong> <code>TestDevFallsBackWhenStandardPortIsBusy</code>, <code>TestDevKeepsExplicitPort</code>, <code>TestDevOpensTheBoundAddress</code>, and <code>TestServeFailsWhenPortIsBusy</code> pass.</li>
+      <li><strong>Steps:</strong> split listen from serve so the command knows the bound address before the browser opens. In <code>dev</code>, try <code>7827</code>, then <code>7373</code>, then <code>7678</code>, then up to 20 random ports from 7000 through 7999, then port 0 for any free port. Skip the fallback when <code>STARPORT_SERVER_PORT</code> has a value. On a fallback, print the busy port and the bound port. Print the bound URL. Write the bound port to the session record. In <code>serve</code>, report a busy port as an error with the port number.</li>
+      <li><strong>Acceptance:</strong> <code>TestDevFallsBackInOrder</code>, <code>TestDevReportsTheBusyPort</code>, <code>TestDevKeepsExplicitPort</code>, <code>TestDevOpensTheBoundAddress</code>, and <code>TestServeFailsWhenPortIsBusy</code> pass.</li>
       <li><strong>Fail-before:</strong> <code>TestDevOpensTheBoundAddress</code> fails on the baseline because the open target is the configured port, not the bound port.</li>
       <li><strong>Verification:</strong> <code>go test ./internal/server/ ./internal/cli/</code> and <code>go test -race ./internal/server/</code>.</li>
     </ul>
@@ -476,6 +480,16 @@
       <li><strong>Acceptance:</strong> <code>go test ./cmd/starport/</code> passes. <code>scripts/smoke-first-run.sh</code> passes on a clean root. The technical-writing linter reports 0 diagnostics in strict mode on each changed document.</li>
       <li><strong>Fail-before:</strong> <code>TestReadmeTemporaryPathPrecedesPersistentPath</code> fails against the rewritten README before the pins change.</li>
       <li><strong>Verification:</strong> the commands above plus <code>autoreview --gate pre-pr --mode auto</code> on each pull request with code changes.</li>
+    </ul>
+
+    <h3 id="task-DX6">DX6 Remove <code>init</code></h3>
+    <ul>
+      <li><strong>Problem:</strong> after DX2, the local path never needs <code>init</code>. The command stays in the list only for the shared-storage first key, which belongs under <code>auth</code>.</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/cli/app.go:242-283</code> and <code>internal/cli/init.go</code> own the command. <code>cmd/starport/run.go:129-152,193-222</code> composes it. <code>internal/cli/auth.go</code> owns the <code>auth</code> subcommands. <code>internal/setup.InitializeAPIKey</code> stays the first-key seam.</li>
+      <li><strong>Steps:</strong> add <code>starport auth bootstrap --name &lt;name&gt; [--json]</code> on top of <code>setup.InitializeAPIKey</code>. It prints the key once and refuses a second run. Remove the top-level <code>init</code> command and its tests. Reword <code>ErrAPIKeyRequired</code> and the welcome text to point at <code>auth bootstrap</code>. Update the compose sequence in the README and the operator guide.</li>
+      <li><strong>Acceptance:</strong> <code>starport init</code> exits with the unknown-command error. <code>TestAuthBootstrapClaimsTheFirstKey</code> and <code>TestAuthBootstrapRefusesASecondKey</code> pass. <code>TestNoArgumentsShowHelp</code> lists no <code>init</code>.</li>
+      <li><strong>Fail-before:</strong> <code>TestAuthBootstrapClaimsTheFirstKey</code> fails on the baseline with an unknown command.</li>
+      <li><strong>Verification:</strong> <code>go test ./internal/cli/ ./internal/setup/ ./cmd/starport/</code> and <code>scripts/smoke-first-run.sh</code>.</li>
     </ul>
 
     <h3 id="task-DX9">DX9 Cleanup</h3>
@@ -540,6 +554,10 @@ lines outside the proof directories.</code></pre>
         <tr><td>2026-10-10</td><td>meta</td><td>authored</td><td>Plan
           authored from the port review and the command inventory. D1 decided
           by the owner. D2 and D3 open. No implementation started.</td></tr>
+        <tr><td>2026-10-10</td><td>meta</td><td>decided</td><td>Owner
+          closed D2 (7827, fallback 7373, 7678, random 7000s, any) and D3
+          (keep dev and serve). D4 proposed: remove init, add auth
+          bootstrap. DX6 added.</td></tr>
       </tbody>
     </table>
   </section>

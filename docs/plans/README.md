@@ -3,7 +3,7 @@
 ## Proposed
 
 [Starport developer experience](starport-developer-experience-plan.html) owns the persistent `starport dev` default, first-run initialization inside `starport serve`, the standard port, and bind-before-open.
-Two owner decisions stay open: the port (D2) and the command shape (D3).
+One owner decision stays open: removal of `init` (D4).
 
 ## Complete
 
