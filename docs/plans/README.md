@@ -2,8 +2,8 @@
 
 ## Proposed
 
-[Starport developer experience](starport-developer-experience-plan.html) owns the persistent `starport dev` default, first-run initialization inside `starport serve`, the standard port, and bind-before-open.
-The owner closed all four decisions. Activation waits on the owner.
+[Starport developer experience](starport-developer-experience-plan.html) owns the persistent `starport dev` default, first-run initialization inside `starport serve`, the removal of `starport init`, the standard port, and bind-before-open.
+The owner closed all four decisions. A Sol review on 2026-10-10 returned 18 findings, and the plan applied them. Activation waits on the owner.
 
 ## Complete
 
