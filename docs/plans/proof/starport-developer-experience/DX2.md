@@ -141,3 +141,17 @@ welcome text still names `starport init`. DX6 owns that text.
 This task does not change the `internal/app` startup table. The `internal/app`
 test changes add the new `ServerOutput` argument to the injected server runners
 only.
+
+## Readiness deadline on the CI runners
+
+The first pull request run (`38087337098`) failed `TestServeInitializesEmptyStorage`
+on `macos-15` with `gateway did not become ready; exit code = 0`. The test
+waited 60 s for `/health/ready`. The HTTP server started at 61 s, after the
+cancel. The same first start took 35.7 s on `ubuntu-24.04`, 30.3 s on
+`ubuntu-24.04-arm`, and 60.4 s on `windows-2025`, all under the race
+detector. The second start in the same package took 18 s to 39 s. Locally,
+without the race detector, the first start takes 3 s.
+
+The fix raises the readiness deadline to 5 minutes through `readyDeadline`.
+The poll returns as soon as the gateway is ready, so a passing run pays
+nothing extra.

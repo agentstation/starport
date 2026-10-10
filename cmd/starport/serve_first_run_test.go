@@ -18,6 +18,11 @@ import (
 const (
 	gatewayKeyLine = "Gateway API key (shown once):"
 	welcomeLine    = "Welcome to Starport."
+
+	// readyDeadline bounds a first-run start under the race detector on a
+	// shared runner. The first start took 30 s to 61 s across the CI runners,
+	// so the deadline keeps a wide margin. A ready gateway returns at once.
+	readyDeadline = 5 * time.Minute
 )
 
 func TestServeInitializesEmptyStorage(t *testing.T) {
@@ -118,7 +123,7 @@ func serveUntilReady(t *testing.T, port int, stdout *firstRunOutput) (int, strin
 	ready := fmt.Sprintf("http://127.0.0.1:%d/health/ready", port)
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
-	deadline := time.After(60 * time.Second)
+	deadline := time.After(readyDeadline)
 	for {
 		select {
 		case code := <-exited:
