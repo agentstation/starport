@@ -3,7 +3,7 @@
 ## Proposed
 
 [Starport developer experience](starport-developer-experience-plan.html) owns the persistent `starport dev` default, first-run initialization inside `starport serve`, the standard port, and bind-before-open.
-All four decisions are closed. Activation waits on the owner.
+The owner closed all four decisions. Activation waits on the owner.
 
 ## Complete
 
