@@ -219,18 +219,18 @@ func TestLocalConfigurationSaveRefusals(t *testing.T) {
 }
 
 func TestEditDotenvKeepsUnrelatedLines(t *testing.T) {
-	current := "# comment\nexport STARPORT_CATALOG_ACQUISITION_INTERVAL=7m\nSTARPORT_PORT=8080\nSTARPORT_CATALOG_ACQUISITION_INTERVAL=8m\nSTARMAP_CATALOG_ACQUISITION_INTERVAL=6m"
+	current := "# comment\nexport STARPORT_CATALOG_ACQUISITION_INTERVAL=7m\nSTARPORT_PORT=7827\nSTARPORT_CATALOG_ACQUISITION_INTERVAL=8m\nSTARMAP_CATALOG_ACQUISITION_INTERVAL=6m"
 	edited, err := editDotenv([]byte(current), []FieldEdit{{Name: "STARMAP_CATALOG_ACQUISITION_INTERVAL", Key: "catalog_acquisition_interval", Value: value("9m")}})
 	require.NoError(t, err)
-	require.Equal(t, "# comment\nSTARPORT_CATALOG_ACQUISITION_INTERVAL='9m'\nSTARPORT_PORT=8080\n", string(edited))
+	require.Equal(t, "# comment\nSTARPORT_CATALOG_ACQUISITION_INTERVAL='9m'\nSTARPORT_PORT=7827\n", string(edited))
 
 	removed, err := editDotenv(edited, []FieldEdit{{Name: "STARMAP_CATALOG_ACQUISITION_INTERVAL", Key: "catalog_acquisition_interval"}})
 	require.NoError(t, err)
-	require.Equal(t, "# comment\nSTARPORT_PORT=8080\n", string(removed))
+	require.Equal(t, "# comment\nSTARPORT_PORT=7827\n", string(removed))
 
-	appended, err := editDotenv([]byte("STARPORT_PORT=8080"), []FieldEdit{{Name: "STARMAP_CATALOG_SOURCE_TOKEN", Key: "catalog_source_token", Value: value(`$HOME\x`)}})
+	appended, err := editDotenv([]byte("STARPORT_PORT=7827"), []FieldEdit{{Name: "STARMAP_CATALOG_SOURCE_TOKEN", Key: "catalog_source_token", Value: value(`$HOME\x`)}})
 	require.NoError(t, err)
-	require.Equal(t, "STARPORT_PORT=8080\nSTARPORT_CATALOG_SOURCE_TOKEN='$HOME\\x'\n", string(appended))
+	require.Equal(t, "STARPORT_PORT=7827\nSTARPORT_CATALOG_SOURCE_TOKEN='$HOME\\x'\n", string(appended))
 
 	// A multi-line value that hides an assignment refuses instead of corrupting the file.
 	_, err = editDotenv([]byte("STARPORT_NOTE=\"line\nSTARPORT_CATALOG_ACQUISITION_INTERVAL=1m\"\n"), []FieldEdit{{Name: "STARMAP_CATALOG_ACQUISITION_INTERVAL", Key: "catalog_acquisition_interval", Value: value("9m")}})

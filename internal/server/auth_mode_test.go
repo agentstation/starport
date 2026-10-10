@@ -22,7 +22,7 @@ import (
 // `dev --no-auth` configure it.
 func unauthenticatedConfig(scopes ...string) *Config {
 	return &Config{
-		Port: 8080, Host: "127.0.0.1",
+		Port: 7827, Host: "127.0.0.1",
 		AuthMode:              authmode.Disabled,
 		UnauthenticatedScopes: scopes,
 	}
@@ -122,7 +122,7 @@ func TestDisabledAuthenticationGrantsAdminOnlyWhenNamed(t *testing.T) {
 // TestRequiredAuthenticationRefusesAKeylessRequest pins the default. It is the
 // behavior every other case in this file is a deliberate departure from.
 func TestRequiredAuthenticationRefusesAKeylessRequest(t *testing.T) {
-	server := newTestServer(t, &Config{Port: 8080, Host: "127.0.0.1", MaxRequestSize: 1 << 20})
+	server := newTestServer(t, &Config{Port: 7827, Host: "127.0.0.1", MaxRequestSize: 1 << 20})
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions",
@@ -142,7 +142,7 @@ func TestAuthModeRouteAnswersWithoutAKey(t *testing.T) {
 		config *Config
 		want   authmode.Mode
 	}{
-		{name: "required", config: &Config{Port: 8080, Host: "127.0.0.1"}, want: authmode.Required},
+		{name: "required", config: &Config{Port: 7827, Host: "127.0.0.1"}, want: authmode.Required},
 		{name: "disabled", config: unauthenticatedConfig(), want: authmode.Disabled},
 	}
 	for _, test := range tests {

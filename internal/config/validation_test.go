@@ -16,7 +16,7 @@ func TestServerConfig_Validate(t *testing.T) {
 		{
 			name: "valid config",
 			config: ServerConfig{
-				Port:           8080,
+				Port:           7827,
 				Host:           "0.0.0.0",
 				ReadTimeout:    30 * time.Second,
 				WriteTimeout:   30 * time.Second,
@@ -52,7 +52,7 @@ func TestServerConfig_Validate(t *testing.T) {
 		{
 			name: "localhost is valid",
 			config: ServerConfig{
-				Port:           8080,
+				Port:           7827,
 				Host:           "localhost",
 				ReadTimeout:    30 * time.Second,
 				WriteTimeout:   30 * time.Second,
@@ -64,7 +64,7 @@ func TestServerConfig_Validate(t *testing.T) {
 		{
 			name: "invalid timeout",
 			config: ServerConfig{
-				Port:           8080,
+				Port:           7827,
 				Host:           "0.0.0.0",
 				ReadTimeout:    0,
 				WriteTimeout:   30 * time.Second,

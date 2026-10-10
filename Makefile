@@ -280,7 +280,7 @@ dev-docker: ## Start the Compose development environment
 	@echo "Starting development environment with Docker Compose..."
 	docker compose up -d
 	@echo "Development environment started:"
-	@echo "  - Starport: http://localhost:8080"
+	@echo "  - Starport: http://localhost:7827"
 	@echo "Use 'make dev-docker-logs' to view logs"
 
 .PHONY: dev-docker-logs

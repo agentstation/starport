@@ -11,7 +11,7 @@ services:
         required: true
     # Choose an available loopback port for each replica or add a load balancer.
     ports:
-      - "127.0.0.1::8080"
+      - "127.0.0.1::7827"
     # Use a different Compose project for each replica. Do not share this volume.
     # Durable records and uploaded bytes reside in the external shared stores.
     volumes:

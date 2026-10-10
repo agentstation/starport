@@ -215,7 +215,7 @@ func noopDevelopmentStarter(
 	starportcli.GatewayOptions,
 ) (starportcli.DevelopmentSession, error) {
 	return starportcli.DevelopmentSession{
-		URL: "http://127.0.0.1:8080", APIKey: "development-key",
+		URL: "http://127.0.0.1:7827", APIKey: "development-key",
 		Run:   func(context.Context) error { return nil },
 		Close: func(context.Context) error { return nil },
 	}, nil

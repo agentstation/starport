@@ -59,8 +59,8 @@ func TestLoaderSecurePlatformDefaults(t *testing.T) {
 		t.Fatalf("load defaults: %v", err)
 	}
 
-	if cfg.Server.Port != 8080 {
-		t.Errorf("default port = %d, want 8080", cfg.Server.Port)
+	if cfg.Server.Port != 7827 {
+		t.Errorf("default port = %d, want 7827", cfg.Server.Port)
 	}
 	if cfg.Server.Host != "127.0.0.1" {
 		t.Errorf("default host = %q, want 127.0.0.1", cfg.Server.Host)
@@ -112,6 +112,23 @@ func TestBodyLimitDefaultMatchesItsConstant(t *testing.T) {
 			"default max request size = %d, want %d",
 			cfg.Server.MaxRequestSize, DefaultMaxRequestSize,
 		)
+	}
+}
+
+// TestPortDefaultMatchesItsConstant closes the same gap for the listener port.
+// The tag and DefaultPort state one number, and a change to either alone
+// leaves the loader and the rest of the gateway on different ports.
+func TestPortDefaultMatchesItsConstant(t *testing.T) {
+	cfg, err := NewLoader().
+		WithPaths(PathsForConfigDir(t.TempDir())).
+		WithEnvironment(nil).
+		WithEnvFiles().
+		Load(context.Background())
+	if err != nil {
+		t.Fatalf("load defaults: %v", err)
+	}
+	if cfg.Server.Port != DefaultPort {
+		t.Fatalf("default port = %d, want %d", cfg.Server.Port, DefaultPort)
 	}
 }
 

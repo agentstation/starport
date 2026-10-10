@@ -23,11 +23,11 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/v1": "http://localhost:8080",
-      "/api": "http://localhost:8080",
-      "/health": "http://localhost:8080",
-      "/console/session": "http://localhost:8080",
-      "/console/identity": "http://localhost:8080",
+      "/v1": "http://localhost:7827",
+      "/api": "http://localhost:7827",
+      "/health": "http://localhost:7827",
+      "/console/session": "http://localhost:7827",
+      "/console/identity": "http://localhost:7827",
     },
   },
 });

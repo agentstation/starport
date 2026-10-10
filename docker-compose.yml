@@ -8,7 +8,7 @@ services:
       - path: .env
         required: false
     ports:
-      - "127.0.0.1:${STARPORT_PORT:-8080}:8080"
+      - "127.0.0.1:${STARPORT_PORT:-7827}:7827"
     volumes:
       - starport-config:/var/lib/starport/config
       - starport-data:/var/lib/starport/data

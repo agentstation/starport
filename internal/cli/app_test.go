@@ -121,7 +121,7 @@ func TestDevPrintsGatewayKeyOnce(t *testing.T) {
 	closes := 0
 	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
 		return DevelopmentSession{
-			URL: "http://127.0.0.1:8080", APIKey: "development-key",
+			URL: "http://127.0.0.1:7827", APIKey: "development-key",
 			Run: func(context.Context) error {
 				runs++
 				return nil
@@ -142,7 +142,7 @@ func TestDevPrintsGatewayKeyOnce(t *testing.T) {
 		t.Fatalf("development closes = %d, want 1", closes)
 	}
 	if strings.Count(stdout.String(), "development-key") != 1 ||
-		!strings.Contains(stdout.String(), "http://127.0.0.1:8080") {
+		!strings.Contains(stdout.String(), "http://127.0.0.1:7827") {
 		t.Fatalf("development output = %q", stdout.String())
 	}
 }
@@ -155,7 +155,7 @@ func TestDevClosesSessionWhenCredentialOutputFails(t *testing.T) {
 	runCalls := 0
 	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
 		return DevelopmentSession{
-			URL: "http://127.0.0.1:8080", APIKey: "development-key",
+			URL: "http://127.0.0.1:7827", APIKey: "development-key",
 			Run: func(context.Context) error {
 				runCalls++
 				return nil
@@ -585,7 +585,7 @@ func testDependencies() (Dependencies, *bytes.Buffer, *bytes.Buffer) {
 		RunServer: func(context.Context, GatewayOptions) error { return nil },
 		StartDevelopment: func(context.Context, GatewayOptions) (DevelopmentSession, error) {
 			return DevelopmentSession{
-				URL: "http://127.0.0.1:8080", APIKey: "development-key",
+				URL: "http://127.0.0.1:7827", APIKey: "development-key",
 				Run:   func(context.Context) error { return nil },
 				Close: func(context.Context) error { return nil },
 			}, nil

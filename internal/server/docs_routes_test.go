@@ -24,7 +24,7 @@ func docsTestServer(t *testing.T) *Server {
 		"docs/search-index.json":                {Data: []byte(`{"documents":[]}`)},
 		"docs/manifest.json":                    {Data: []byte(`{"starport_release":"dev"}`)},
 	}
-	return newTestServer(t, &Config{Port: 8080, Host: "127.0.0.1", MaxRequestSize: 1 << 20},
+	return newTestServer(t, &Config{Port: 7827, Host: "127.0.0.1", MaxRequestSize: 1 << 20},
 		withTestConsole(console.NewSPAHandlerFS(&logger, dist)))
 }
 

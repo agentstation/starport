@@ -66,7 +66,7 @@ ENV STARPORT_CONFIG_DIR=/var/lib/starport/config/starport \
 
 WORKDIR /var/lib/starport
 USER 65532:65532
-EXPOSE 8080
+EXPOSE 7827
 
 ENTRYPOINT ["/usr/local/bin/starport"]
 CMD ["serve"]

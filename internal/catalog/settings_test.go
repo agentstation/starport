@@ -48,7 +48,7 @@ func TestRuntimeIdentityFollowsPrivateStateDirectory(t *testing.T) {
 	state := filepath.Join(t.TempDir(), "state")
 	peerState := filepath.Join(t.TempDir(), "state")
 	workspace := t.TempDir()
-	first := instanceIdentity(t, identityTestSettings(state, workspace, "127.0.0.1:8080"))
+	first := instanceIdentity(t, identityTestSettings(state, workspace, "127.0.0.1:7827"))
 	second := instanceIdentity(t, identityTestSettings(peerState, workspace, "127.0.0.1:9090"))
 	repeat := instanceIdentity(t, identityTestSettings(state, workspace, "127.0.0.1:7070"))
 	require.NotEmpty(t, first)
@@ -64,7 +64,7 @@ func TestStateDirectoryIsNeverTheWorkspacePath(t *testing.T) {
 	state := filepath.Join(t.TempDir(), "state")
 	workspace := t.TempDir()
 
-	identity := instanceIdentity(t, identityTestSettings(state, workspace, "127.0.0.1:8080"))
+	identity := instanceIdentity(t, identityTestSettings(state, workspace, "127.0.0.1:7827"))
 	require.NotEmpty(t, identity)
 
 	stateEntries, err := entryNames(state)
@@ -96,7 +96,7 @@ func entryNames(directory string) ([]string, error) {
 
 func TestRuntimeRejectsConcurrentStateDirectoryUse(t *testing.T) {
 	state := filepath.Join(t.TempDir(), "state")
-	settings := identityTestSettings(state, t.TempDir(), "127.0.0.1:8080")
+	settings := identityTestSettings(state, t.TempDir(), "127.0.0.1:7827")
 	first, err := openRuntime(t.Context(), storage.NewMockStore(), settings, runtimeCollectors{})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, first.Close(t.Context())) })

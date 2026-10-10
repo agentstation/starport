@@ -27,7 +27,7 @@ func uiDependencies(t *testing.T) (Dependencies, *bytes.Buffer, config.Paths) {
 	deps.LoadConfig = func(context.Context) (*config.Config, error) {
 		cfg := &config.Config{}
 		cfg.Server.Host = "127.0.0.1"
-		cfg.Server.Port = 8080
+		cfg.Server.Port = 7827
 		cfg.Security.LocalTokenPath = paths.LocalTokenFile
 		return cfg, nil
 	}
@@ -202,10 +202,10 @@ func TestDevelopmentOpensTheConsoleOnceItIsListening(t *testing.T) {
 func TestDevelopmentOpensNoBrowserInAutomation(t *testing.T) {
 	deps, output, _ := uiDependencies(t)
 	t.Setenv("CI", "1")
-	consoleURL := "http://127.0.0.1:8080" + localauth.LaunchPath + "?lt=ticket"
+	consoleURL := "http://127.0.0.1:7827" + localauth.LaunchPath + "?lt=ticket"
 	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
 		return DevelopmentSession{
-			URL: "http://127.0.0.1:8080", APIKey: "development-key",
+			URL: "http://127.0.0.1:7827", APIKey: "development-key",
 			ConsoleURL: consoleURL,
 			Run:        func(context.Context) error { return nil },
 			Close:      func(context.Context) error { return nil },
@@ -219,7 +219,7 @@ func TestDevelopmentOpensNoBrowserInAutomation(t *testing.T) {
 
 	require.NoError(t, runCLI(t, deps, "dev"))
 
-	assert.Contains(t, output.String(), "http://127.0.0.1:8080")
+	assert.Contains(t, output.String(), "http://127.0.0.1:7827")
 	assert.Contains(t, output.String(), consoleURL)
 }
 
@@ -229,10 +229,10 @@ func TestDevelopmentHonoursNoOpen(t *testing.T) {
 	deps, output, _ := uiDependencies(t)
 	t.Setenv("CI", "")
 	t.Setenv("NO_BROWSER", "")
-	consoleURL := "http://127.0.0.1:8080" + localauth.LaunchPath + "?lt=ticket"
+	consoleURL := "http://127.0.0.1:7827" + localauth.LaunchPath + "?lt=ticket"
 	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
 		return DevelopmentSession{
-			URL: "http://127.0.0.1:8080", APIKey: "development-key",
+			URL: "http://127.0.0.1:7827", APIKey: "development-key",
 			ConsoleURL: consoleURL,
 			Run:        func(context.Context) error { return nil },
 			Close:      func(context.Context) error { return nil },
@@ -256,7 +256,7 @@ func TestDevDoesNotGreetOrStamp(t *testing.T) {
 	t.Setenv("CI", "1")
 	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
 		return DevelopmentSession{
-			URL: "http://127.0.0.1:8080", APIKey: "development-key",
+			URL: "http://127.0.0.1:7827", APIKey: "development-key",
 			Run:   func(context.Context) error { return nil },
 			Close: func(context.Context) error { return nil },
 		}, nil

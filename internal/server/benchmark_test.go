@@ -18,7 +18,7 @@ import (
 func BenchmarkProxyHandler(b *testing.B) {
 	// Create test server with mock connector
 	config := &Config{
-		Port:           8080,
+		Port:           7827,
 		MaxRequestSize: 10 * 1024 * 1024,
 	}
 
@@ -84,7 +84,7 @@ func BenchmarkProxyHandler(b *testing.B) {
 // BenchmarkMiddlewareChain measures the overhead of the middleware stack
 func BenchmarkMiddlewareChain(b *testing.B) {
 	config := &Config{
-		Port:           8080,
+		Port:           7827,
 		MaxRequestSize: 10 * 1024 * 1024,
 	}
 
