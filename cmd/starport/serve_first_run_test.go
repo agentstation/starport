@@ -73,6 +73,15 @@ func firstRunEnvironment(t *testing.T) (string, int) {
 	t.Helper()
 	home := t.TempDir()
 	port := freeLoopbackPort(t)
+	for _, name := range []string{
+		"STARPORT_CONFIG_DIR", "STARPORT_DATA_DIR", "STARPORT_STATE_ROOT", "STARPORT_CACHE_DIR",
+		"STARPORT_CONFIG_FILE", "STARPORT_CONFIG_MANAGEMENT", "STARPORT_SECURITY_MASTER_KEY", "STARPORT_SERVER_HOST",
+	} {
+		t.Setenv(name, "")
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatal(err)
+		}
+	}
 	t.Setenv("STARPORT_HOME", home)
 	t.Setenv("STARPORT_SERVER_PORT", strconv.Itoa(port))
 	t.Setenv("STARPORT_CATALOG_NETWORK_MODE", "offline")

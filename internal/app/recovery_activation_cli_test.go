@@ -61,7 +61,7 @@ func localOperatorDependencies(t *testing.T, cfg *config.Config, output *bytes.B
 		LoadConfig:           func(context.Context) (*config.Config, error) { return cfg, nil },
 		WriteImportedHistory: WriteImportedHistory, ActivateRecovery: ActivateRecovery, InspectRecoveryActivation: InspectRecoveryActivation,
 		ResolvePaths: func() (config.Paths, error) { return cfg.EffectivePaths(), nil },
-		RunServer: func(context.Context, cli.GatewayOptions) error {
+		RunServer: func(context.Context, cli.GatewayOptions, cli.ServerOutput) error {
 			t.Fatal("recovery started a gateway")
 			return nil
 		},

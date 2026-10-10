@@ -22,7 +22,7 @@ func runAgentCommand(t *testing.T, args ...string) (string, string, int) {
 		bytes.NewReader(nil),
 		stdout,
 		stderr,
-		func(context.Context, starportcli.GatewayOptions) error { return nil },
+		func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
 		noopDevelopmentStarter,
 		noopInitializer,
 	)

@@ -423,7 +423,7 @@ func runReadmeCommand(t *testing.T, paths config.Paths, args ...string) []string
 	stdout := &bytes.Buffer{}
 	err := starportcli.Run(context.Background(), append([]string{"starport"}, args...), starportcli.Dependencies{
 		Stdin: bytes.NewReader(nil), Stdout: stdout, Stderr: &bytes.Buffer{},
-		RunServer:        func(context.Context, starportcli.GatewayOptions) error { return nil },
+		RunServer:        func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
 		StartDevelopment: noopDevelopmentStarter,
 		Initialize: func(context.Context, starportcli.InitOptions) (starportcli.InitResult, error) {
 			return starportcli.InitResult{ConfigFile: paths.ConfigFile, DataDir: paths.DataDir, APIKey: "readme-gateway-key"}, nil

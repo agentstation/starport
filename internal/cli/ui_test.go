@@ -24,6 +24,11 @@ func uiDependencies(t *testing.T) (Dependencies, *bytes.Buffer, config.Paths) {
 	deps, stdout, _ := testDependencies()
 	paths := config.PathsForConfigDir(t.TempDir())
 	deps.ResolvePaths = func() (config.Paths, error) { return paths, nil }
+	// A gateway that starts greets at its place in the startup sequence.
+	deps.RunServer = func(_ context.Context, _ GatewayOptions, output ServerOutput) error {
+		output.Greet()
+		return nil
+	}
 	deps.LoadConfig = func(context.Context) (*config.Config, error) {
 		cfg := &config.Config{}
 		cfg.Server.Host = "127.0.0.1"

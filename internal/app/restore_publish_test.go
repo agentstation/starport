@@ -164,7 +164,7 @@ func requirePublicationBarriers(t *testing.T, cfg *config.Config) {
 func TestRestorePublishFilesCommandPreservesOwnerPolicyAndBarriers(t *testing.T) {
 	cfg, request := policyPublicationFixture(t, false)
 	deps := starportcli.Dependencies{Stdin: strings.NewReader(""), LoadConfig: func(context.Context) (*config.Config, error) { return cfg, nil }, PublishBackupFiles: PublishBackupFiles,
-		RunServer: func(context.Context, starportcli.GatewayOptions) error {
+		RunServer: func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error {
 			t.Fatal("publication started gateway")
 			return nil
 		},

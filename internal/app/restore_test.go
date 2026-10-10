@@ -51,7 +51,9 @@ func TestRestoreCommandsPrepareRestrictedNativeStores(t *testing.T) {
 		Stdin: strings.NewReader(""), Stdout: &output, Stderr: &stderr,
 		LoadConfig:    func(context.Context) (*config.Config, error) { return cfg, nil },
 		PrepareBackup: PrepareBackup,
-		RunServer:     func(context.Context, starportcli.GatewayOptions) error { panic("restore started gateway") },
+		RunServer: func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error {
+			panic("restore started gateway")
+		},
 	}
 	deps.StartDevelopment = func(context.Context, starportcli.GatewayOptions) (starportcli.DevelopmentSession, error) {
 		panic("restore started development")

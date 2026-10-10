@@ -31,7 +31,7 @@ func runProcessCommand(
 	stderr := &bytes.Buffer{}
 	err := starportcli.Run(context.Background(), args, starportcli.Dependencies{
 		Stdin: bytes.NewReader(nil), Stdout: stdout, Stderr: stderr,
-		RunServer:        func(context.Context, starportcli.GatewayOptions) error { return nil },
+		RunServer:        func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
 		StartDevelopment: noopDevelopmentStarter,
 		Initialize:       noopInitializer,
 		LoadConfig: func(context.Context) (*config.Config, error) {
@@ -211,7 +211,7 @@ func TestModelsSearchReadsTheEmbeddedCatalog(t *testing.T) {
 		bytes.NewReader(nil),
 		stdout,
 		stderr,
-		func(context.Context, starportcli.GatewayOptions) error { return nil },
+		func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
 		noopDevelopmentStarter,
 		noopInitializer,
 	)

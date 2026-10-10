@@ -128,7 +128,7 @@ func runOfflineModelsChild(t *testing.T) {
 		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
 		code := runContext(
 			context.Background(), args, bytes.NewReader(nil), stdout, stderr,
-			func(context.Context, starportcli.GatewayOptions) error { return nil },
+			func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
 			noopDevelopmentStarter, noopInitializer,
 		)
 		if code != 0 {
