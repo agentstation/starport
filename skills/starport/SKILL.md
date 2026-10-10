@@ -53,16 +53,16 @@ curl --fail http://127.0.0.1:8080/health/ready
 
 ## Start a durable gateway
 
-For state that survives restarts, initialize once and then serve:
+For state that survives restarts, serve from the platform root:
 
 ```bash
-starport init
 starport serve
 ```
 
-`starport init` writes local configuration, creates encrypted storage, and
-prints the first gateway API key once. Store that key: no later command
-prints it again. When a browser must reach the console without a launch
+On an empty local root, the first `starport serve` writes local configuration,
+creates encrypted storage, and prints the first gateway API key once. Store
+that key: no later command prints it again. Later runs start from the same
+state and print no key. When a browser must reach the console without a launch
 link, it presents this machine's local admin token instead.
 `starport auth token --copy` puts that token on the clipboard.
 

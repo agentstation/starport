@@ -271,11 +271,20 @@ readers. It does not yet promise a compatibility window.
 
 ### Persistent local gateway
 
-For persistent local state, run `starport init` once. The command creates the
-configuration file, a Starport master key, and the first gateway identity. It
+For persistent local state, run `starport serve`. On an empty local root, the
+first run creates the configuration file, a Starport master key, the first
+gateway identity, and the local admin token. Then it starts the gateway. The
+first run prints the gateway API key once, before the welcome. Initialization
 does not select a provider or persist provider inference credentials.
 [Run a persistent local gateway](docs/site/start/local-persistent.md) gives the
 complete procedure.
+
+```bash
+starport serve
+```
+
+The first identity has the name `local-admin`. To select a different name, run
+`starport init` once before the first `starport serve`:
 
 ```bash
 starport init --name primary-admin
@@ -291,8 +300,9 @@ Gateway API key (shown once): replace-with-generated-gateway-key
 Run: starport serve
 ```
 
-Then start the gateway with `starport serve`, and open the console with
-`starport ui`. Issue further gateway API keys in the console under Keys.
+Then start the gateway with `starport serve`. In both sequences, open the
+console with `starport ui`. Issue further gateway API keys in the console under
+Keys.
 
 `starport config paths` prints each managed location on one labeled line:
 

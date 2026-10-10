@@ -323,26 +323,52 @@ because minting over it would discard a secret the operator may still hold.
 
 ## Initialize Persistent State
 
-For a persistent single-process installation, run local initialization once:
+For a persistent single-process installation, set the provider credentials and
+start the gateway:
+
+```bash
+starport serve
+```
+
+`starport serve` initializes the local root on the first run when all of these
+conditions are true:
+
+- The configuration has no master key.
+- The setup state is absent: no configuration file and an empty data
+  directory.
+- The management mode is `local`.
+- The listener host is a loopback address.
+- The KV, SQL, file, and cache stores use the platform defaults.
+
+Initialization writes the platform `config.env` file with mode `0600`. It
+also creates one named identity, `local-admin`, in the platform Badger
+directory. The command prints the new gateway API key once, before the
+welcome. Save it in a password manager or secret manager. If it cannot write
+the gateway key, it removes the new state so that you can retry.
+
+After initialization, serve reads the new configuration file, writes the local
+admin token, and starts the gateway. The process environment does not change.
+
+When a condition is false, serve does not initialize. Configured storage,
+shared or external management, and a network listener need their master key and
+first identity before startup.
+
+To select the name of the first identity, run local initialization once before
+the first `starport serve`:
 
 ```bash
 starport init --name primary-admin
 ```
 
-Initialization writes the platform `config.env` file with mode `0600`. It
-also creates one named identity in the platform Badger directory. The command
-prints the new gateway API key once. Save it in a password manager or secret
-manager. The command refuses to replace existing configuration or identity
-storage. If it cannot write the gateway key, it removes the new state so that
-you can retry.
+The command refuses to replace existing configuration or identity storage.
 
 Provider inference credentials stay in the process environment or their
 configured secret sources. Initialization does not select, copy, or persist
-them. Start the gateway after you set the provider credentials:
+them.
 
-```bash
-starport serve
-```
+If a setup transaction stopped before it completed, serve does not initialize
+again. The error names the configuration file to inspect and the recovery
+command, `starport auth bootstrap --recover`.
 
 The default listener is `http://127.0.0.1:8080`. The configuration package
 selects the platform configuration directory. The Badger path is
@@ -2623,7 +2649,11 @@ Run `starport doctor --probe` before you start the server. The output names
 each failed check and keeps all secret values redacted.
 
 - `provider credential master key is required`: set
-  `STARPORT_SECURITY_MASTER_KEY`.
+  `STARPORT_SECURITY_MASTER_KEY`. On an empty local root, `starport serve`
+  creates the master key. See
+  [Initialize Persistent State](#initialize-persistent-state).
+- `starport setup state is incomplete`: inspect the named configuration file,
+  then run the named recovery command.
 - `gateway identity is required; run "starport init"`: create the first named
   identity in local or configured storage.
 - Provider credential state is `not_configured`: set one of the conventional,
