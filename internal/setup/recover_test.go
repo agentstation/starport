@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -91,6 +92,7 @@ func TestRecoverRefusesAPartialRootWithoutATransaction(t *testing.T) {
 	_, err := New(paths).Recover(t.Context(), Request{APIKeyName: DefaultAPIKeyName})
 
 	require.ErrorIs(t, err, ErrNoPendingSetup)
-	require.ErrorContains(t, err, paths.ConfigDir)
+	// The message quotes the paths, so a Windows path carries escaped separators.
+	require.ErrorContains(t, err, strconv.Quote(paths.ConfigDir))
 	require.Equal(t, "# operator file\n", string(mustReadFile(t, paths.ConfigFile)))
 }
