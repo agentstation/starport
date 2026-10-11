@@ -94,7 +94,7 @@ Refer to [Imports and the air-gapped mirror](../operate-starmap/imports-and-mirr
 
 ## T7 ephemeral development
 
-`starport dev` uses in-memory Badger and SQLite with isolated scratch files. It loses all data at shutdown. Persistent storage selectors fail before storage access. Refer to [Run a temporary development gateway](../start/temporary-development.md).
+`starport dev --ephemeral` uses in-memory Badger and SQLite with isolated scratch files. It loses all data at shutdown. Persistent storage selectors fail before storage access. Refer to [Run a temporary development gateway](../start/temporary-development.md).
 
 ## Specification targets
 

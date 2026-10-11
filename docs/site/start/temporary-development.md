@@ -5,7 +5,7 @@ order: 2
 summary: Start a gateway that keeps no data, and learn what it loses at shutdown and which settings it refuses.
 ---
 
-`starport dev` starts a gateway that keeps all records in memory. Use it to try Starport, to test a client, or to inspect the console. This mode is architecture target T7.
+`starport dev --ephemeral` starts a gateway that keeps all records in memory. Use it to try Starport, to test a client, or to inspect the console. This mode is architecture target T7. Without `--ephemeral`, `starport dev` keeps its keys and data between runs. Refer to [Run a persistent local gateway](local-persistent.md).
 
 ## Start a development gateway
 
@@ -27,7 +27,7 @@ summary: Start a gateway that keeps no data, and learn what it loses at shutdown
 2. Start the gateway:
 
    ```bash
-   starport dev
+   starport dev --ephemeral
    ```
 
 3. Copy the gateway API key that the command prints.

@@ -28,7 +28,7 @@ Starport checks a stored `disabled` mode against the bind address of each proces
 
 ## The local admin token
 
-The machine makes a local admin token at the first start. The token proves that you are on the machine. It is not a gateway API key. `starport dev` never writes the token file.
+The machine makes a local admin token at the first start. The token proves that you are on the machine. It is not a gateway API key. `starport dev --ephemeral` never writes the token file.
 
 A gateway on an address that the network can reach does not start with the first-boot token. That token went to a terminal, so it is safe only on loopback. Run `starport auth rotate`, and then start the gateway again.
 

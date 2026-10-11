@@ -181,7 +181,7 @@ func TestReadmeTemporaryPathPrecedesPersistentPath(t *testing.T) {
 	quickStart := document.section(t, "Quick start")
 	persistent := subsection(t, document.section(t, "Keep the gateway"), "Persistent local gateway")
 
-	requireContains(t, fullText(quickStart), "`starport dev`, a temporary gateway", "It keeps no state after it stops.")
+	requireContains(t, fullText(quickStart), "`starport dev --ephemeral`, a temporary gateway", "It keeps no state after it stops.")
 	requireLink(t, fullText(quickStart), "docs/site/start/temporary-development.md")
 	requireLink(t, persistent.Text(), "docs/site/start/local-persistent.md")
 	// The persistent path starts with serve, which initializes an empty root.
