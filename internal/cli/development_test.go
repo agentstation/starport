@@ -13,7 +13,7 @@ func TestDevSecondRunPrintsNoKey(t *testing.T) {
 	deps, stdout, _ := testDependencies()
 	const consoleURL = "http://127.0.0.1:7827/console/launch#ticket"
 	ran := false
-	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
+	deps.StartDevelopment = func(context.Context, DevelopmentOptions, CredentialDelivery) (DevelopmentSession, error) {
 		return DevelopmentSession{
 			URL: "http://127.0.0.1:7827", ConsoleURL: consoleURL,
 			Run: func(context.Context) error {

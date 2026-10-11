@@ -138,7 +138,7 @@ func TestBackupCommandsUseNativeApplicationCapture(t *testing.T) {
 		RunServer: func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error {
 			panic("backup started gateway")
 		},
-		StartDevelopment: func(context.Context, starportcli.GatewayOptions) (starportcli.DevelopmentSession, error) {
+		StartDevelopment: func(context.Context, starportcli.DevelopmentOptions, starportcli.CredentialDelivery) (starportcli.DevelopmentSession, error) {
 			panic("backup started development")
 		},
 		Initialize: func(context.Context, starportcli.InitOptions) (starportcli.InitResult, error) {

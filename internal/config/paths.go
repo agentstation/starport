@@ -47,16 +47,21 @@ type Paths struct {
 
 // PlatformPaths resolves product settings from the environment without reading files.
 func PlatformPaths() (Paths, error) {
-	loader := NewLoader()
-	paths, err := loader.bootstrapPaths()
-	if err != nil {
-		return Paths{}, err
-	}
-	paths, err = loader.managedPaths(paths, loader.environment, []productpaths.Layer{rootLayer("environment", loader.environment)})
+	paths, err := NewLoader().environmentPaths()
 	if err == nil {
 		paths.legacyLocations, err = paths.legacyCandidates()
 	}
 	return paths, err
+}
+
+// environmentPaths resolves the product roots from the loader environment
+// alone. A configuration file cannot move them.
+func (l *Loader) environmentPaths() (Paths, error) {
+	paths, err := l.bootstrapPaths()
+	if err != nil {
+		return Paths{}, err
+	}
+	return l.managedPaths(paths, l.environment, []productpaths.Layer{rootLayer("environment", l.environment)})
 }
 
 // PathsForConfigDir selects a caller-owned layout below one absolute directory.

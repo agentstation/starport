@@ -169,7 +169,7 @@ func TestRestorePublishFilesCommandPreservesOwnerPolicyAndBarriers(t *testing.T)
 			return nil
 		},
 	}
-	deps.StartDevelopment = func(context.Context, starportcli.GatewayOptions) (starportcli.DevelopmentSession, error) {
+	deps.StartDevelopment = func(context.Context, starportcli.DevelopmentOptions, starportcli.CredentialDelivery) (starportcli.DevelopmentSession, error) {
 		t.Fatal("publication started development")
 		return starportcli.DevelopmentSession{}, nil
 	}
