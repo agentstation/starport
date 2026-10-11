@@ -467,7 +467,7 @@ starport config validate`,
 chmod 600 .env
 # Edit .env. Set STARPORT_SECURITY_MASTER_KEY and OPENAI_API_KEY.
 docker compose build starport
-docker compose run --rm starport init --configured-storage --name primary-admin
+docker compose run --rm starport auth bootstrap --name primary-admin
 docker compose run --rm starport auth rotate
 docker compose up -d starport`,
       },
@@ -509,8 +509,8 @@ STARPORT_FILES_BACKEND=objectstore`,
     id: 'laptop',
     eyebrow: 'On a laptop',
     claim: 'Temporary by default. Persistent by choice.',
-    body: 'Homebrew installs Starport on macOS and Linux. The `starport dev` command starts a temporary gateway with in-memory Badger and SQLite, and it removes the gateway state at shutdown. To keep data, run `starport init` once and then `starport serve`.',
-    chips: ['Homebrew · macOS · Linux', 'Removed at shutdown', '`starport init` keeps data'],
+    body: 'Homebrew installs Starport on macOS and Linux. The `starport dev` command starts a temporary gateway with in-memory Badger and SQLite, and it removes the gateway state at shutdown. To keep data, run `starport serve`, which initializes persistent state on its first run.',
+    chips: ['Homebrew · macOS · Linux', 'Removed at shutdown', '`starport serve` keeps data'],
     visuals: [
       {
         kind: 'code',
@@ -518,8 +518,7 @@ STARPORT_FILES_BACKEND=objectstore`,
         title: 'Persistent',
         source: 'docs/site/start/local-persistent.md',
         verbatim: 'lines',
-        text: `starport init --name primary-admin
-starport serve
+        text: `starport serve
 starport ui`,
       },
     ],
