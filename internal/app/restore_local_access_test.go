@@ -67,7 +67,7 @@ func TestRestoreLocalAccessRenewsCredentialWithoutOpeningAdmission(t *testing.T)
 		},
 	}
 	deps.LoadConfig = func(context.Context) (*config.Config, error) { return cfg, nil }
-	deps.StartDevelopment = func(context.Context, starportcli.GatewayOptions) (starportcli.DevelopmentSession, error) {
+	deps.StartDevelopment = func(context.Context, starportcli.DevelopmentOptions, starportcli.CredentialDelivery) (starportcli.DevelopmentSession, error) {
 		t.Fatal("rotation started development")
 		return starportcli.DevelopmentSession{}, nil
 	}

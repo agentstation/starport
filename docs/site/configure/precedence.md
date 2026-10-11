@@ -16,7 +16,7 @@ For each setting, Starport uses the first source in this list that defines a val
 3. The configuration file.
 4. The built-in default.
 
-`starport dev` reads the process environment and the defaults. It reads no configuration file.
+`starport dev` reads the same sources as `starport serve`. It then binds to loopback, writes logs to standard output, and turns TLS off. `starport dev --ephemeral` reads the process environment and the defaults. It reads no configuration file.
 
 ## The configuration file
 

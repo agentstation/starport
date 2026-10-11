@@ -305,7 +305,7 @@ A file that fails verification leaves the accepted head in place. Move a verifie
 
 **Status:** Supported
 
-`starport dev` uses in-memory Badger and SQLite with isolated scratch files. Refer to [Run a temporary development gateway](../start/temporary-development.md).
+`starport dev --ephemeral` uses in-memory Badger and SQLite with isolated scratch files. Refer to [Run a temporary development gateway](../start/temporary-development.md).
 
 ### Durable owner per role
 
@@ -326,7 +326,7 @@ T7 has no latency profile. The UNVERIFIED engineering targets in [Latency profil
 ### Runnable checks
 
 ```bash
-starport dev
+starport dev --ephemeral
 curl --fail http://127.0.0.1:7827/health/ready
 ```
 

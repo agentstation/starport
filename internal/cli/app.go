@@ -65,6 +65,10 @@ type GatewayOptions struct {
 	AllowRemoteNoAuth bool
 }
 
+// CredentialDelivery prints the one-time gateway credential of a first run.
+// When the write fails, it rolls back the initialization.
+type CredentialDelivery func(context.Context, InitResult) error
+
 // ServerRunner starts the gateway and blocks until it stops. It calls the
 // output steps at their place in the startup sequence.
 type ServerRunner func(context.Context, GatewayOptions, ServerOutput) error
@@ -74,7 +78,7 @@ type ServerRunner func(context.Context, GatewayOptions, ServerOutput) error
 type ServerOutput struct {
 	// DeliverCredential prints the one-time gateway credential of a first
 	// run. When the write fails, it rolls back the initialization.
-	DeliverCredential func(context.Context, InitResult) error
+	DeliverCredential CredentialDelivery
 	// Greet prints the welcome once per machine. The runner calls it only
 	// after the local root is ready, so a failed first run leaves no stamp.
 	Greet func()
@@ -200,12 +204,16 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 	}
 	development := &urfavecli.Command{
 		Name:         "dev",
-		Usage:        "Run an isolated local development gateway",
+		Usage:        "Run a local development gateway",
 		OnUsageError: usageError,
 		Flags: []urfavecli.Flag{
 			&urfavecli.BoolFlag{
 				Name:  flagNoAuth,
 				Usage: "Serve requests without a gateway API key",
+			},
+			&urfavecli.BoolFlag{
+				Name:  flagEphemeral,
+				Usage: "Run in memory and a scratch directory, and keep nothing after exit",
 			},
 			&urfavecli.BoolFlag{
 				Name:  flagNoOpen,
@@ -218,7 +226,14 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			}
 			// The development gateway binds loopback and nothing else, so the
 			// remote acknowledgment has no meaning here and no flag offers it.
-			session, err := deps.StartDevelopment(ctx, GatewayOptions{DisableAuth: cmd.Bool(flagNoAuth)})
+			options := DevelopmentOptions{
+				GatewayOptions: GatewayOptions{DisableAuth: cmd.Bool(flagNoAuth)},
+				Ephemeral:      cmd.Bool(flagEphemeral),
+			}
+			deliver := func(ctx context.Context, result InitResult) error {
+				return deliverCredential(ctx, cmd.Writer, result, false, "")
+			}
+			session, err := deps.StartDevelopment(ctx, options, deliver)
 			if err != nil {
 				return runtimeFailure{cause: err}
 			}
@@ -231,8 +246,8 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			if err := writeDevelopmentResult(cmd.Writer, session); err != nil {
 				return runtimeFailure{cause: closeDevelopmentSession(ctx, session, err)}
 			}
-			// Development output already includes the console link and key.
-			// A welcome stamp would leave persistent state. Only serve writes that stamp and greets.
+			// Development output already includes the console link and any new key.
+			// Only serve writes the welcome stamp and greets.
 			if session.ConsoleURL != "" && !cmd.Bool(flagNoOpen) {
 				if reason := browserSuppressed(deps, cmd.Writer); reason != "" {
 					if _, err := fmt.Fprintf(cmd.Writer, "Did not open a browser: %s.\n", reason); err != nil {

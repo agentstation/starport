@@ -56,7 +56,7 @@ development_environment=(
 	"STARPORT_SERVER_PORT=$server_port"
 )
 
-"${development_environment[@]}" "$binary" dev >"$development_log" 2>&1 &
+"${development_environment[@]}" "$binary" dev --ephemeral >"$development_log" 2>&1 &
 server_pid=$!
 
 development_ready=false

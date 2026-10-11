@@ -31,7 +31,7 @@ func (c *ServerConfig) Validate() error {
 		if ip := net.ParseIP(c.Host); ip == nil {
 			// Not an IP, validate as hostname
 			// Skip validation for common localhost values
-			if c.Host != "0.0.0.0" && c.Host != "localhost" && c.Host != "127.0.0.1" {
+			if c.Host != "0.0.0.0" && c.Host != "localhost" && c.Host != loopbackHost {
 				// Basic hostname validation without DNS lookup
 				if !isValidHostname(c.Host) {
 					return fmt.Errorf("invalid host: %s", c.Host)
@@ -282,7 +282,7 @@ func (c *LoggingConfig) Validate() error {
 		return fmt.Errorf("invalid log format: %s", c.Format)
 	}
 
-	if c.Output != "stdout" && c.Output != "stderr" && c.Output != "file" {
+	if c.Output != logOutputStdout && c.Output != "stderr" && c.Output != "file" {
 		return fmt.Errorf("invalid log output: %s", c.Output)
 	}
 

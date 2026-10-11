@@ -65,7 +65,7 @@ func localOperatorDependencies(t *testing.T, cfg *config.Config, output *bytes.B
 			t.Fatal("recovery started a gateway")
 			return nil
 		},
-		StartDevelopment: func(context.Context, cli.GatewayOptions) (cli.DevelopmentSession, error) {
+		StartDevelopment: func(context.Context, cli.DevelopmentOptions, cli.CredentialDelivery) (cli.DevelopmentSession, error) {
 			t.Fatal("recovery started development")
 			return cli.DevelopmentSession{}, nil
 		},

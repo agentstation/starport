@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -111,33 +110,7 @@ func freeLoopbackPort(t *testing.T) int {
 // ready, then cancels it. It returns the exit code and the standard error.
 func serveUntilReady(t *testing.T, port int, stdout *firstRunOutput) (int, string) {
 	t.Helper()
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	stderr := &firstRunOutput{}
-	exited := make(chan int, 1)
-	go func() {
-		exited <- runContext(ctx, []string{"starport", "serve"}, bytes.NewReader(nil), stdout, stderr,
-			runServer, noopDevelopmentStarter, runInitializer)
-	}()
-
-	ready := fmt.Sprintf("http://127.0.0.1:%d/health/ready", port)
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-	deadline := time.After(readyDeadline)
-	for {
-		select {
-		case code := <-exited:
-			return code, stderr.String()
-		case <-deadline:
-			cancel()
-			t.Fatalf("gateway did not become ready; exit code = %d", <-exited)
-		case <-ticker.C:
-			if gatewayReady(ctx, ready) {
-				cancel()
-				return <-exited, stderr.String()
-			}
-		}
-	}
+	return commandUntilReady(t, []string{"starport", "serve"}, port, stdout, nil)
 }
 
 func gatewayReady(ctx context.Context, url string) bool {

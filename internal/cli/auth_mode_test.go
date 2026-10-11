@@ -50,8 +50,8 @@ func TestNoAuthFlagsReachTheServerRunner(t *testing.T) {
 // and deliberately offers no remote acknowledgment.
 func TestDevNoAuthFlagReachesTheStarter(t *testing.T) {
 	deps, stdout, _ := testDependencies()
-	var received GatewayOptions
-	deps.StartDevelopment = func(_ context.Context, options GatewayOptions) (DevelopmentSession, error) {
+	var received DevelopmentOptions
+	deps.StartDevelopment = func(_ context.Context, options DevelopmentOptions, _ CredentialDelivery) (DevelopmentSession, error) {
 		received = options
 		return DevelopmentSession{
 			URL: "http://127.0.0.1:7827", AuthDisabled: options.DisableAuth,
@@ -69,11 +69,11 @@ func TestDevNoAuthFlagReachesTheStarter(t *testing.T) {
 	assert.NotContains(t, stdout.String(), "Gateway API key")
 }
 
-// TestDevSessionRejectsAKeyModeMismatch guards an equivalence, not two
-// independent checks. A session that requires a key must carry one to print,
-// and a session that requires none must not have minted one: either mismatch
-// means the runtime and the mode disagree, and the operator is left with no
-// way to make the first request.
+// TestDevSessionRejectsAKeyModeMismatch guards one direction. A session that
+// requires no key must not have minted one, because a printed key that the
+// gateway ignores tells the operator that the gateway checks keys. A session
+// that requires a key can carry none: a persistent second run accepts the key
+// that the first run printed.
 func TestDevSessionRejectsAKeyModeMismatch(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -91,7 +91,6 @@ func TestDevSessionRejectsAKeyModeMismatch(t *testing.T) {
 		{
 			name:    "required without a key",
 			session: DevelopmentSession{URL: "http://127.0.0.1:7827"},
-			wantErr: true,
 		},
 		{
 			name:    "disabled with a key",

@@ -55,7 +55,7 @@ func TestRestoreCommandsPrepareRestrictedNativeStores(t *testing.T) {
 			panic("restore started gateway")
 		},
 	}
-	deps.StartDevelopment = func(context.Context, starportcli.GatewayOptions) (starportcli.DevelopmentSession, error) {
+	deps.StartDevelopment = func(context.Context, starportcli.DevelopmentOptions, starportcli.CredentialDelivery) (starportcli.DevelopmentSession, error) {
 		panic("restore started development")
 	}
 	deps.Initialize = func(context.Context, starportcli.InitOptions) (starportcli.InitResult, error) {

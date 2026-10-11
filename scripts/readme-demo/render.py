@@ -186,7 +186,7 @@ def release_transcript(record, capture, render_manifest):
         "## What the recording shows", "",
         "1. `install`: Verify the archive digest, extract the archive, and run `starport --version`.",
         "2. `catalog`: Run `starport models show openai/gpt-4o-mini --json` with no provider key in the environment.",
-        "3. `setup`: Start `starport dev --no-open` with the provider credential in the environment. The provider "
+        "3. `setup`: Start `starport dev --ephemeral --no-open` with the provider credential in the environment. The provider "
         "credential and the gateway key stay hidden. They serve separate roles.",
         "4. `answer`: Stream one request to `/api/v1/chat/completions`. The provider answers with the original "
         "timing. The stream ends with `[DONE]`.",
@@ -241,7 +241,7 @@ def transcript(record, capture, render_manifest):
         "## What the recording shows", "",
         "1. `install`: Verify the archive digest, extract the archive, and run `starport --version`.",
         "2. `catalog`: Run `starport models show openai/gpt-4o-mini --json` with no provider key in the environment.",
-        "3. `setup`: Start the fixture upstream and `starport dev --no-open`. The provider credential and the "
+        "3. `setup`: Start the fixture upstream and `starport dev --ephemeral --no-open`. The provider credential and the "
         "gateway key stay hidden. They serve separate roles.",
         "4. `answer`: Stream one request to `/api/v1/chat/completions`. The screen shows the fixture notice. "
         "The stream ends with `[DONE]`.",

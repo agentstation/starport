@@ -38,7 +38,7 @@ This path uses a temporary development gateway. It keeps no data after the proce
 
 1. Install Starport. Refer to [Run a persistent local gateway](start/local-persistent.md#install-starport).
 2. Set a provider inference credential, for example `OPENAI_API_KEY`.
-3. Run `starport dev` and keep the terminal open.
+3. Run `starport dev --ephemeral` and keep the terminal open.
 4. Copy the gateway API key that the command prints.
 5. In a second terminal, send a request:
 

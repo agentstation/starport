@@ -347,10 +347,16 @@ def capture_main(args):
                 emit("Fixture upstream: local OpenAI-compatible rehearsal server\n")
                 emit(f"{BASE_URL_MECHANISM}=http://127.0.0.1:{fixture_port}\n")
                 emit(f"Provider credential: {PROVIDER_CREDENTIAL} [fixture token, value hidden]\n\n")
-            emit("\033[32m$\033[0m starport dev --no-open\n")
+            # A release before persistent dev has no --ephemeral flag, and its
+            # dev is already temporary. The capture rejects retained home files.
+            development = ["dev", "--no-open"]
+            if "--ephemeral" in subprocess.run([str(binary), "dev", "--help"], cwd=home, env=environment, check=True,
+                                               capture_output=True, text=True, timeout=30).stdout:
+                development = ["dev", "--ephemeral", "--no-open"]
+            emit("\033[32m$\033[0m starport " + " ".join(development) + "\n")
             log = root / "server.log"
             with log.open("w") as stream:
-                process = subprocess.Popen([str(binary), "dev", "--no-open"], cwd=home, env=environment,
+                process = subprocess.Popen([str(binary), *development], cwd=home, env=environment,
                                            stdout=stream, stderr=subprocess.STDOUT)
             processes.append(process)
 
@@ -366,7 +372,7 @@ def capture_main(args):
             secrets_seen.append(key)
             wait_for(lambda: http_ready(gateway + "/health/ready"), 60, "the development gateway did not become ready")
             command_line = len(capture.commands)
-            capture.commands.append({"scene": "setup", "command": ["starport", "dev", "--no-open"],
+            capture.commands.append({"scene": "setup", "command": ["starport", *development],
                                      "environment_names": sorted(environment), "exit_code": None,
                                      "elapsed_seconds": None})
             emit(f"{gateway}  ·  ready\n")
