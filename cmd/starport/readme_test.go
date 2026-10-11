@@ -16,6 +16,7 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/diagnosis"
 	"github.com/agentstation/starport/internal/markdowntest"
+	"github.com/agentstation/starport/internal/setup"
 )
 
 // The README tests read the repository README and prove the first-use order,
@@ -186,7 +187,7 @@ func TestReadmeTemporaryPathPrecedesPersistentPath(t *testing.T) {
 	requireLink(t, persistent.Text(), "docs/site/start/local-persistent.md")
 	// The persistent path starts with serve, which initializes an empty root.
 	requireContains(t, persistent.Text(), "For persistent local state, run `starport serve`.",
-		"The first identity has the name `"+starportcli.DefaultAPIKeyName+"`.")
+		"The first identity has the name `"+setup.DefaultAPIKeyName+"`.")
 	requireOrdered(t, "temporary and persistent links", []int{
 		strings.Index(document.text, "(docs/site/start/temporary-development.md)"),
 		strings.Index(document.text, "(docs/site/start/local-persistent.md)"),
@@ -402,10 +403,10 @@ func TestReadmeStatesThePathAnchors(t *testing.T) {
 	if initSample == nil || pathsSample == nil {
 		t.Fatalf("README persistent samples = %q", samples)
 	}
-	initialized := runReadmeCommand(t, anchored, "init", "--name", "primary-admin")
-	requireSampleLabels(t, "starport init", initSample, initialized)
+	initialized := runReadmeCommand(t, anchored, "serve")
+	requireSampleLabels(t, "starport serve", initSample, initialized)
 	if !slices.Contains(initialized, "Configuration: "+anchored.ConfigFile) || !slices.Contains(initialized, "Data: "+anchored.DataDir) {
-		t.Errorf("starport init output = %q", initialized)
+		t.Errorf("starport serve output = %q", initialized)
 	}
 	requireSampleLabels(t, "starport config paths", pathsSample, runReadmeCommand(t, anchored, "config", "paths"))
 }
@@ -426,10 +427,15 @@ func runReadmeCommand(t *testing.T, paths config.Paths, args ...string) []string
 	stdout := &bytes.Buffer{}
 	err := starportcli.Run(context.Background(), append([]string{"starport"}, args...), starportcli.Dependencies{
 		Stdin: bytes.NewReader(nil), Stdout: stdout, Stderr: &bytes.Buffer{},
-		RunServer:        func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
+		// serve prints what a first run prints and starts no gateway.
+		RunServer: func(ctx context.Context, _ starportcli.GatewayOptions, output starportcli.ServerOutput) error {
+			return output.DeliverCredential(ctx, starportcli.InitResult{
+				APIKeyName: setup.DefaultAPIKeyName, ConfigFile: paths.ConfigFile, DataDir: paths.DataDir, APIKey: "readme-gateway-key",
+			})
+		},
 		StartDevelopment: noopDevelopmentStarter,
 		Initialize: func(context.Context, starportcli.InitOptions) (starportcli.InitResult, error) {
-			return starportcli.InitResult{ConfigFile: paths.ConfigFile, DataDir: paths.DataDir, APIKey: "readme-gateway-key"}, nil
+			return starportcli.InitResult{}, nil
 		},
 		LoadConfig: func(ctx context.Context) (*config.Config, error) {
 			return config.NewLoader().WithPaths(paths).WithEnvironment(nil).WithEnvFiles().Load(ctx)

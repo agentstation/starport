@@ -34,7 +34,7 @@ func TestConfiguredInitializationRefusesImplicitLegacyMove(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(previous, "MANIFEST"), []byte("old gateway records"), 0o600))
 	paths, err := config.PlatformPaths()
 	require.NoError(t, err)
-	result, err := initializeConfiguredStorage(t.Context(), starportcli.InitOptions{ConfiguredStorage: true, APIKeyName: "local-admin"})
+	result, err := initializeConfiguredStorage(t.Context(), starportcli.InitOptions{APIKeyName: "local-admin"})
 	require.ErrorIs(t, err, config.ErrLegacyPaths)
 	require.Empty(t, result.APIKey)
 	require.NoDirExists(t, paths.DataDir)

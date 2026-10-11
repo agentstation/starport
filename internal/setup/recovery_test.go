@@ -43,18 +43,8 @@ func TestSetupRecoversProcessTermination(t *testing.T) {
 		"rollback-isolated", "rollback-verified", "rollback-config-removed", "rollback-file-removed", "rollback-directory-removed", "rollback-restored"} {
 		t.Run(phase, func(t *testing.T) {
 			paths := productSetupPaths(t)
-			encoded, err := json.Marshal(paths)
-			require.NoError(t, err)
-			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-			defer cancel()
-			command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestSetupCrashHelper$")
-			command.Env = append(os.Environ(), "STARPORT_SETUP_TEST_CHILD=1", "STARPORT_SETUP_TEST_PATHS="+string(encoded),
-				"STARPORT_SETUP_TEST_PHASE="+phase)
-			output, err := command.CombinedOutput()
-			var exit *exec.ExitError
-			require.ErrorAs(t, err, &exit, "%s", output)
-			require.Equal(t, 73, exit.ExitCode(), "%s", output)
-			_, err = GuardLocalStorage(t.Context(), config.Paths{BadgerDir: paths.BadgerDir})
+			interruptSetup(t, paths, phase)
+			_, err := GuardLocalStorage(t.Context(), config.Paths{BadgerDir: paths.BadgerDir})
 			require.ErrorIs(t, err, ErrPartialState)
 
 			service := New(paths)
@@ -85,6 +75,23 @@ func TestSetupRecoversProcessTermination(t *testing.T) {
 			require.NoError(t, store.Close())
 		})
 	}
+}
+
+// interruptSetup runs a first setup in a child process that terminates at
+// the named checkpoint, and leaves its transaction pending under paths.
+func interruptSetup(t *testing.T, paths config.Paths, phase string) {
+	t.Helper()
+	encoded, err := json.Marshal(paths)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestSetupCrashHelper$")
+	command.Env = append(os.Environ(), "STARPORT_SETUP_TEST_CHILD=1", "STARPORT_SETUP_TEST_PATHS="+string(encoded),
+		"STARPORT_SETUP_TEST_PHASE="+phase)
+	output, err := command.CombinedOutput()
+	var exit *exec.ExitError
+	require.ErrorAs(t, err, &exit, "%s", output)
+	require.Equal(t, 73, exit.ExitCode(), "%s", output)
 }
 
 func TestRollbackRestoresRefusedDatabase(t *testing.T) {

@@ -10,8 +10,8 @@ if [[ ! -f "$readme" ]]; then
 	exit 1
 fi
 
-if grep -Eq 'STARPORT_BIN|init --provider' "$readme"; then
-	printf 'README contains an obsolete binary variable or provider-specific init command\n' >&2
+if grep -Eq 'STARPORT_BIN|starport[[:space:]]+init' "$readme"; then
+	printf 'README contains an obsolete binary variable or the removed init command\n' >&2
 	exit 1
 fi
 

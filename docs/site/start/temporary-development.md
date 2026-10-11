@@ -82,7 +82,7 @@ Development mode checks the environment before it opens storage. If the environm
 - Cache selectors: `STARPORT_CACHE_BACKEND`, `STARPORT_CACHE_URL`, `STARPORT_CACHE_ALLOW_INSECURE`, and `STARPORT_CACHE_CA_FILE`.
 - Catalog selector: `STARPORT_CATALOG_STATE_DIR`.
 
-The error names each setting that it found. It tells you to remove them or to use `starport init` and `starport serve`.
+The error names each setting that it found. It tells you to remove them or to use `starport serve` for persistent storage.
 
 ## Why persistent selectors fail
 

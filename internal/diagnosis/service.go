@@ -138,7 +138,7 @@ func (s service) run(ctx context.Context, options Options) Report {
 				case listErr != nil:
 					report.addFailure("api_keys", "gateway API key storage could not be read")
 				case len(records) == 0:
-					report.addFailure("api_keys", "gateway API key storage is empty; run \"starport init\"")
+					report.addFailure("api_keys", "gateway API key storage is empty; run \"starport auth bootstrap --name <name>\"")
 				default:
 					report.addPass("api_keys", "gateway API key storage contains an API key")
 				}

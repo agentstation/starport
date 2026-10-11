@@ -36,10 +36,10 @@ cp -R "$valid" "$obsolete_variable"
 printf '\n`STARPORT_BIN`\n' >>"$obsolete_variable/README.md"
 expect_failure "$obsolete_variable" obsolete-variable
 
-provider_init="$test_root/provider-init"
-cp -R "$valid" "$provider_init"
-printf '\n`starport init --provider openai`\n' >>"$provider_init/README.md"
-expect_failure "$provider_init" provider-init
+removed_init="$test_root/removed-init"
+cp -R "$valid" "$removed_init"
+printf '\n`starport %s --name primary-admin`\n' init >>"$removed_init/README.md"
+expect_failure "$removed_init" removed-init
 
 reversed_terminals="$test_root/reversed-terminals"
 cp -R "$valid" "$reversed_terminals"

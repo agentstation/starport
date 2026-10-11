@@ -30,7 +30,7 @@ function consequence(next: AuthMode["mode"], hasKey: boolean): string {
   if (next === "required") {
     return hasKey
       ? "Every request will need a gateway API key. This browser has one saved, so the console keeps working; anything else calling this gateway without a key starts getting 401."
-      : "Every request will need a gateway API key, and this browser has none saved. The console locks until you save a key under Connection above. Create one on the Keys screen first, or run starport init in a terminal.";
+      : "Every request will need a gateway API key, and this browser has none saved. The console locks until you save a key under Connection above. Create one on the Keys screen first.";
   }
   return "Anyone who can reach this gateway can use it without a key, and their usage is metered against the default account. The admin plane stays closed, and the switch itself can only be changed from this machine.";
 }

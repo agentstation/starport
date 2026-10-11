@@ -248,7 +248,7 @@ contains a configured secret.
 
 Production needs storage, a catalog, and a credential master key. Operator
 provider credentials are optional. Production also needs one named gateway API key in storage. The
-`starport init --configured-storage` command creates that key before the
+`starport auth bootstrap --name <name>` command creates that key before the
 first process starts. Production composition never selects mock dependencies.
 Tests can replace factories through an explicit test-only builder.
 

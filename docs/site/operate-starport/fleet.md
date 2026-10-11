@@ -71,7 +71,7 @@ STARPORT_FILES_BACKEND=objectstore
 ```bash
 starport fleet init --operation initial-deployment --evidence <audit-reference> --json
 starport config init --shared --yes
-starport init --configured-storage
+starport auth bootstrap --name primary-admin
 starport serve
 ```
 
@@ -94,6 +94,6 @@ Correct the reported failure, and then run the same command with the same operat
 
 ### Related settings
 
-- To add a replica, use the same configuration and a new local state directory. Do not run `fleet init` or `init --configured-storage` again.
+- To add a replica, use the same configuration and a new local state directory. Do not run `fleet init` or `auth bootstrap` again.
 - Run `starport auth rotate` on each new replica to make its local admin token.
 - Refer to [Storage backends](../storage/backends.md).

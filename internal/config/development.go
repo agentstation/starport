@@ -36,7 +36,7 @@ func developmentStorageError(names []string) error {
 		return nil
 	}
 	slices.Sort(names)
-	return fmt.Errorf("%w: remove %s or use starport init and starport serve for persistent storage. See docs/OPERATOR-GUIDE.md#initialize-persistent-state", ErrDevelopmentStorage, strings.Join(slices.Compact(names), ", "))
+	return fmt.Errorf("%w: remove %s or use starport serve for persistent storage. See docs/OPERATOR-GUIDE.md#initialize-persistent-state", ErrDevelopmentStorage, strings.Join(slices.Compact(names), ", "))
 }
 
 func rejectDevelopmentEnvironment(source envconfig.Lookuper) error {

@@ -455,7 +455,7 @@ def capture_main(args):
             emit(f"OpenAI client       {gateway}/v1\n")
             emit(f"OpenRouter client   {gateway}/api/v1\n\n")
             emit("Client credential: the Starport gateway API key\n\n")
-            emit("Keep the gateway: starport init → starport serve\n")
+            emit("Keep the gateway: starport serve\n")
             emit("Persistent and team setups: docs/OPERATOR-GUIDE.md\n")
             time.sleep(pause)
             process.send_signal(signal.SIGINT)
