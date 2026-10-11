@@ -66,6 +66,21 @@ state and print no key. When a browser must reach the console without a launch
 link, it presents this machine's local admin token instead.
 `starport auth token --copy` puts that token on the clipboard.
 
+If an earlier first run stopped before it completed, `starport serve` refuses
+the root. Inspect the configuration file that the error names, then retry the
+setup:
+
+```bash
+starport auth bootstrap --recover
+```
+
+Shared storage gets no first run. Set the storage settings and the master key,
+then create the first gateway API key once before the first start:
+
+```bash
+starport auth bootstrap --name primary-admin
+```
+
 ## Point a client at the gateway
 
 Use the printed gateway API key as the bearer token.

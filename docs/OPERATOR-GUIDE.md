@@ -353,14 +353,8 @@ When a condition is false, serve does not initialize. Configured storage,
 shared or external management, and a network listener need their master key and
 first identity before startup.
 
-To select the name of the first identity, run local initialization once before
-the first `starport serve`:
-
-```bash
-starport init --name primary-admin
-```
-
-The command refuses to replace existing configuration or identity storage.
+Initialization never replaces existing configuration or identity storage.
+Create more gateway API keys in the console under Keys.
 
 Provider inference credentials stay in the process environment or their
 configured secret sources. Initialization does not select, copy, or persist
@@ -368,7 +362,17 @@ them.
 
 If a setup transaction stopped before it completed, serve does not initialize
 again. The error names the configuration file to inspect and the recovery
-command, `starport auth bootstrap --recover`.
+command. Inspect the file, then retry the transaction:
+
+```bash
+starport auth bootstrap --recover
+```
+
+The command completes the interrupted setup and prints the new gateway API key
+once. If the interrupted run stored its key before it stopped, the command
+completes the setup and prints no key. Then start the gateway and create a key
+in the console under Keys. The command refuses a root that has no interrupted
+setup transaction.
 
 The default listener is `http://127.0.0.1:7827`. The configuration package
 selects the platform configuration directory. The Badger path is
@@ -458,12 +462,13 @@ Set the storage, master-key, and provider values before the first start. Then
 create the first named identity directly:
 
 ```bash
-starport init --configured-storage --name primary-admin
+starport auth bootstrap --name primary-admin
 ```
 
-This form does not write a local configuration file. It opens the configured
+The command does not write a local configuration file. It opens the configured
 Badger or Valkey service and refuses any identity repository that already
-contains an identity. It prints the new gateway API key once. Save the key in
+contains an identity. It also refuses a clean local root, because
+`starport serve` initializes that root. It prints the new gateway API key once. Save the key in
 a secret manager before you start the gateway.
 
 If credential output fails, the command atomically releases the initial
@@ -856,7 +861,7 @@ mode uses ephemeral policy.
 Request routing reads cached credential material.
 Credential resolution reads policy files and secret sources.
 
-`starport init` creates gateway security and identity state. It never selects
+Initialization creates gateway security and identity state. It never selects
 or writes provider inference credential material. Runtime credential
 resolution uses the catalog contract.
 
@@ -2351,12 +2356,12 @@ cp .env.example .env
 chmod 600 .env
 # Edit .env. Set STARPORT_SECURITY_MASTER_KEY and OPENAI_API_KEY.
 docker compose build starport
-docker compose run --rm starport init --configured-storage --name primary-admin
+docker compose run --rm starport auth bootstrap --name primary-admin
 docker compose run --rm starport auth rotate
 docker compose up -d starport
 ```
 
-Save the gateway key from initialization. Do not initialize the same identity
+Save the gateway key from the bootstrap. Do not bootstrap the same identity
 repository again. Rotation prepares the local admin token for the container's
 network bind. Keep its printed value private.
 
@@ -2660,8 +2665,9 @@ each failed check and keeps all secret values redacted.
   [Initialize Persistent State](#initialize-persistent-state).
 - `starport setup state is incomplete`: inspect the named configuration file,
   then run the named recovery command.
-- `gateway identity is required; run "starport init"`: create the first named
-  identity in local or configured storage.
+- `a gateway API key is required; run "starport auth bootstrap --name <name>"`:
+  create the first named identity in configured storage. On an empty local
+  root, `starport serve` creates it.
 - Provider credential state is `not_configured`: set one of the conventional,
   derived, cloud, or secret-reference values that its Starmap profile declares.
 - HTTP 401: the bearer value does not match an active stored identity.

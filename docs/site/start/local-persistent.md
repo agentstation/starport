@@ -2,7 +2,7 @@
 title: Run a persistent local gateway
 area: start
 order: 1
-summary: Install Starport, initialize persistent state once, start the gateway, and open the console.
+summary: Install Starport, start the gateway, which initializes persistent state on the first run, and open the console.
 ---
 
 A persistent local gateway keeps its keys, records, and uploaded files on one machine. It runs as one process with Badger, SQLite, and local file storage.
@@ -26,25 +26,20 @@ Release archives for macOS, Linux, and Windows are on the release page. The [rep
 **Before you start:**
 
 - Install Starport.
-- Make sure that no configuration file or identity store exists for this user. Initialization refuses to replace them.
 - Set the provider inference credentials that you want the gateway to use, for example `OPENAI_API_KEY`.
 
 **Steps:**
 
-1. Create the configuration, the master key, and the first identity:
-
-   ```bash
-   starport init --name primary-admin
-   ```
-
-2. Save the gateway API key that the command prints. The command shows it one time only.
-3. Start the gateway:
+1. Start the gateway:
 
    ```bash
    starport serve
    ```
 
-4. In a second terminal, open the console:
+   On an empty local root, the first run creates the configuration, the master key, and the first identity, `local-admin`. Then it starts the gateway. Later runs start from the same state.
+
+2. Save the gateway API key that the first run prints before the welcome. The command shows it one time only.
+3. In a second terminal, open the console:
 
    ```bash
    starport ui
@@ -63,7 +58,7 @@ Both commands exit with status 0. `/health/live` answers when the process respon
 
 **If it fails:**
 
-- If `init` reports existing state, keep that state. Run `starport config paths` to find it, and use `starport serve` with it.
+- If `serve` reports that the setup state is incomplete, an earlier first run stopped before it completed. Inspect the named configuration file, then run `starport auth bootstrap --recover`. The [operator guide](../../OPERATOR-GUIDE.md#initialize-persistent-state) describes the recovery.
 - If `/health/ready` returns `503 not_ready`, the gateway has no authorization or catalog prerequisite yet. Read the startup log, then run `starport doctor`.
 - If the console does not open, run `starport ui --no-open` and open the printed link.
 
@@ -71,9 +66,9 @@ Both commands exit with status 0. `/health/live` answers when the process respon
 
 ## What initialization writes
 
-`starport init` writes the platform `config.env` file with mode `0600`. The file holds a generated master key. Starport uses the master key to encrypt stored provider credentials. A master key that you supply must contain at least 32 bytes.
+The first run of `starport serve` writes the platform `config.env` file with mode `0600`. The file holds a generated master key. Starport uses the master key to encrypt stored provider credentials. A master key that you supply must contain at least 32 bytes.
 
-The command also creates the first gateway identity in the Badger directory. Starport stores only the SHA-256 hash of each gateway API key.
+The first run also creates the first gateway identity in the Badger directory. Starport stores only the SHA-256 hash of each gateway API key.
 
 Initialization does not select a provider. It does not copy or store provider inference credentials. Those credentials stay in the process environment or in their secret references.
 
@@ -85,13 +80,13 @@ Back up the master key with the data directory. Without the key, Starport cannot
 
 ## Production form of initialization
 
-A production deployment keeps its configuration in the environment or in a secret manager. Set the storage, master key, and provider values first. Then run:
+A production deployment keeps its configuration in the environment or in a secret manager. Set the storage, master key, and provider values first. Then create the first identity:
 
 ```bash
-starport init --configured-storage --name primary-admin
+starport auth bootstrap --name primary-admin
 ```
 
-This form writes no local configuration file. It opens the configured store and refuses a store that already contains an identity. The [operator guide](../../OPERATOR-GUIDE.md#initialize-configured-storage) describes the retry behavior.
+This command writes no local configuration file. It opens the configured store and refuses a store that already contains an identity. The [operator guide](../../OPERATOR-GUIDE.md#initialize-configured-storage) describes the retry behavior.
 
 ## Next steps
 

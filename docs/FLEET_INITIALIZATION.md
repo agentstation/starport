@@ -54,7 +54,7 @@ starport config init --shared --yes
 5. Create the first gateway API key in the configured storage:
 
 ```bash
-starport init --configured-storage
+starport auth bootstrap --name primary-admin
 ```
 
 6. Protect the returned key with the deployment's credential controls.
@@ -135,7 +135,7 @@ docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starpo
 docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
   config init --shared --yes
 docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
-  init --configured-storage --name primary-admin
+  auth bootstrap --name primary-admin
 docker compose --env-file .env.fleet -f docker-compose.fleet.yml run --rm starport \
   auth rotate
 docker compose --env-file .env.fleet -f docker-compose.fleet.yml up -d starport
