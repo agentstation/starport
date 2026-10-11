@@ -9,7 +9,6 @@ import (
 
 	urfavecli "github.com/urfave/cli/v3"
 
-	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/diagnosis"
 )
@@ -80,7 +79,16 @@ type ServerOutput struct {
 	Greet func()
 }
 
-// Initializer creates local state and returns the new gateway credential once.
+// InitOptions selects one auth bootstrap operation.
+type InitOptions struct {
+	// APIKeyName names the first gateway API key in configured storage.
+	APIKeyName string
+	// Recover retries an interrupted local setup instead.
+	Recover bool
+}
+
+// Initializer claims the first gateway API key in configured storage, or
+// retries an interrupted local setup. It returns a new gateway credential once.
 type Initializer func(context.Context, InitOptions) (InitResult, error)
 
 // ConfigLoader reads and validates effective configuration.
@@ -254,47 +262,6 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		},
 	}
 
-	initialize := &urfavecli.Command{
-		Name:         "init",
-		Usage:        "Initialize secure local configuration and API key storage",
-		OnUsageError: usageError,
-		Flags: []urfavecli.Flag{
-			&urfavecli.StringFlag{
-				Name:  "name",
-				Usage: "Name for the first gateway API key",
-				Value: DefaultAPIKeyName,
-			},
-			&urfavecli.BoolFlag{
-				Name:  initFormatJSON,
-				Usage: "Write initialization results as JSON",
-			},
-			&urfavecli.BoolFlag{
-				Name:  "configured-storage",
-				Usage: "Create only the first API key in configured storage",
-			},
-		},
-		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
-			if err := rejectArguments(cmd); err != nil {
-				return err
-			}
-			configuredStorage := cmd.Bool("configured-storage")
-			apiKeyName := cmd.String("name")
-			if err := apikey.ValidateName(apiKeyName); err != nil {
-				return urfavecli.Exit(err.Error(), ExitCodeUsage)
-			}
-			result, initializeErr := deps.Initialize(ctx, InitOptions{
-				APIKeyName: apiKeyName, ConfiguredStorage: configuredStorage,
-			})
-			if err := deliverCredential(ctx, cmd.Writer, result, cmd.Bool(initFormatJSON), "Run: starport serve"); err != nil {
-				return runtimeFailure{cause: err}
-			}
-			if initializeErr != nil {
-				return runtimeFailure{cause: initializeErr}
-			}
-			return nil
-		},
-	}
-
 	version := &urfavecli.Command{
 		Name:         "version",
 		Usage:        "Show build information",
@@ -357,7 +324,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 	auth := newAuthCommand(deps, usageError)
 	ui := newUICommand(deps, usageError)
 
-	commands := []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand, newMigrationCommand(deps, usageError), newFleetCommand(deps, usageError), newCatalogCommand(deps, usageError), newBackupCommand(deps, usageError), newDocsCommand(deps, usageError)}
+	commands := []*urfavecli.Command{development, serve, ui, auth, doctor, configCommand, newMigrationCommand(deps, usageError), newFleetCommand(deps, usageError), newCatalogCommand(deps, usageError), newBackupCommand(deps, usageError), newDocsCommand(deps, usageError)}
 	commands = append(commands, deps.ExtraCommands...)
 	commands = append(commands, version, man, help)
 	root := &urfavecli.Command{

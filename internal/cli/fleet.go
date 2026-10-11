@@ -43,7 +43,7 @@ func newFleetCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli
 			if cmd.Bool(flagStructuredJSON) {
 				return writeIndentedJSON(cmd.Writer, record)
 			}
-			_, err = fmt.Fprintf(cmd.Writer, "Approved fresh fleet %s at recovery epoch %d.\nCreate the first gateway key with: starport init --configured-storage\n", record.DeploymentID, record.Epoch)
+			_, err = fmt.Fprintf(cmd.Writer, "Approved fresh fleet %s at recovery epoch %d.\nCreate the first gateway key with: starport auth bootstrap --name <name>\n", record.DeploymentID, record.Epoch)
 			return err
 		},
 	}}}

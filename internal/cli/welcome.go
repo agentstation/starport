@@ -28,7 +28,7 @@ Welcome to Starport.
   starport auth url  Print that link instead of opening it.
 
 A gateway API key is for a program calling the gateway, not for the
-console. Create one in the console under Keys, or with ` + "`starport init`" + `.
+console. Create one in the console under Keys.
 `
 
 // greetOnce prints the welcome the first time this machine runs the gateway

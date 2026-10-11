@@ -9,10 +9,15 @@ import (
 
 	urfavecli "github.com/urfave/cli/v3"
 
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/localauth"
 )
 
-const authFormatJSON = "json"
+const (
+	authFormatJSON       = "json"
+	flagBootstrapName    = "name"
+	flagBootstrapRecover = "recover"
+)
 
 // authStatusView is what `starport auth status` reports. It never carries the
 // secret: a status command is the one an operator runs in front of other
@@ -153,11 +158,13 @@ func newAuthCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.
 		},
 	}
 	return &urfavecli.Command{
-		Name: "auth", Usage: "Manage this machine's local admin token",
+		Name: "auth", Usage: "Manage this machine's local admin token and the first gateway API key",
 		Description: "The local admin token is a file on this machine. It is not a gateway " +
 			"API key: it belongs to nobody, it is never issued to an account, and holding it " +
 			"is a claim about where you are rather than who you are.",
-		OnUsageError: usageError, Commands: []*urfavecli.Command{token, status, rotate, newAuthURLCommand(deps, usageError)},
+		OnUsageError: usageError, Commands: []*urfavecli.Command{
+			token, status, rotate, newAuthURLCommand(deps, usageError), newAuthBootstrapCommand(deps, usageError, jsonFlag()),
+		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
 			if cmd.NArg() == 0 {
 				return urfavecli.ShowSubcommandHelp(cmd)
@@ -165,6 +172,73 @@ func newAuthCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.
 			return usageError(ctx, cmd, fmt.Errorf("unknown auth command %q", cmd.Args().First()), true)
 		},
 	}
+}
+
+// newAuthBootstrapCommand claims the first gateway API key in configured
+// shared storage, or retries an interrupted local setup. A clean local root
+// needs neither: the first run of serve initializes it.
+func newAuthBootstrapCommand(deps Dependencies, usageError usageErrorHandler, jsonFlag urfavecli.Flag) *urfavecli.Command {
+	return &urfavecli.Command{
+		Name: "bootstrap", Usage: "Create the first gateway API key in shared storage, or recover an interrupted local setup",
+		Description: "--name creates the first gateway API key in configured shared storage and prints it once. " +
+			"It refuses storage that already holds a key. --recover retries the interrupted setup of this " +
+			"machine's local root. A clean local root needs neither: the first run of starport serve initializes it.",
+		OnUsageError: usageError,
+		Flags: []urfavecli.Flag{
+			&urfavecli.StringFlag{Name: flagBootstrapName, Usage: "Name for the first gateway API key in configured shared storage"},
+			&urfavecli.BoolFlag{Name: flagBootstrapRecover, Usage: "Retry the interrupted setup of this machine's local root"},
+			jsonFlag,
+		},
+		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
+			if err := rejectArguments(cmd); err != nil {
+				return err
+			}
+			options := InitOptions{APIKeyName: cmd.String(flagBootstrapName), Recover: cmd.Bool(flagBootstrapRecover)}
+			switch {
+			case options.Recover && cmd.IsSet(flagBootstrapName):
+				return urfavecli.Exit(fmt.Sprintf("%s accepts --name or --recover, not both", cmd.FullName()), ExitCodeUsage)
+			case options.Recover:
+			case !cmd.IsSet(flagBootstrapName):
+				return urfavecli.Exit(fmt.Sprintf("%s requires --name or --recover", cmd.FullName()), ExitCodeUsage)
+			default:
+				if err := apikey.ValidateName(options.APIKeyName); err != nil {
+					return urfavecli.Exit(err.Error(), ExitCodeUsage)
+				}
+			}
+			asJSON := cmd.Bool(authFormatJSON)
+			result, bootstrapErr := deps.Initialize(ctx, options)
+			// The key prints even when a later step fails. Storage already
+			// holds it, and this output is the only place it exists.
+			if err := deliverCredential(ctx, cmd.Writer, result, asJSON, "Run: starport serve"); err != nil {
+				return runtimeFailure{cause: err}
+			}
+			if bootstrapErr != nil {
+				return runtimeFailure{cause: bootstrapErr}
+			}
+			if options.Recover && result.APIKey == "" {
+				if err := writeSettledRecovery(cmd.Writer, asJSON); err != nil {
+					return runtimeFailure{cause: fmt.Errorf("write the recovery result: %w", err)}
+				}
+			}
+			return nil
+		},
+	}
+}
+
+// writeSettledRecovery reports a recovery that found the interrupted setup
+// already complete. That setup stored its key before the run stopped, so
+// the operator needs another way to get one.
+func writeSettledRecovery(writer io.Writer, asJSON bool) error {
+	if asJSON {
+		return writeIndentedJSON(writer, struct {
+			Recovered bool `json:"recovered"`
+		}{Recovered: true})
+	}
+	_, err := fmt.Fprint(writer, "Recovered the interrupted local setup.\n"+
+		"The interrupted run stored a gateway API key that no command can show again.\n"+
+		"Run: starport serve\n"+
+		"Then create a gateway API key in the console under Keys.\n")
+	return err
 }
 
 // writeAuthToken prints the secret and nothing else in text mode, so the

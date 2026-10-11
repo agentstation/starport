@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/agentstation/starport/internal/apikey"
 	starportcli "github.com/agentstation/starport/internal/cli"
+	"github.com/agentstation/starport/internal/setup"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -32,6 +34,68 @@ func TestAuthBootstrapClaimsTheFirstKey(t *testing.T) {
 	// configuration file.
 	if _, err := os.Stat(filepath.Join(home, "config", "config.env")); !os.IsNotExist(err) {
 		t.Errorf("configuration file after bootstrap: %v", err)
+	}
+}
+
+func TestAuthBootstrapRefusesASecondKey(t *testing.T) {
+	_, badger := sharedStorageEnvironment(t)
+	if code, _, stderr := runAuthBootstrap(t, "--name", "primary-admin"); code != 0 {
+		t.Fatalf("first bootstrap exit code = %d; stderr = %s", code, stderr)
+	}
+
+	code, stdout, stderr := runAuthBootstrap(t, "--name", "second-admin")
+
+	if code != 1 || !strings.Contains(stderr, setup.ErrAlreadyInitialized.Error()) {
+		t.Fatalf("second bootstrap exit code = %d, stderr = %q", code, stderr)
+	}
+	if strings.Contains(stdout, gatewayKeyLine) {
+		t.Errorf("second bootstrap printed a key: %q", stdout)
+	}
+	keys := storedAPIKeys(t, badger)
+	if len(keys) != 1 || keys[0].APIKey.Name != "primary-admin" {
+		t.Fatalf("stored API keys = %#v, want only primary-admin", keys)
+	}
+}
+
+// TestAuthBootstrapNameRefusesAFirstRunRoot keeps --name off a root that
+// serve initializes. A key there without the setup transaction would leave a
+// partial root.
+func TestAuthBootstrapNameRefusesAFirstRunRoot(t *testing.T) {
+	home, _ := firstRunEnvironment(t)
+
+	code, stdout, stderr := runAuthBootstrap(t, "--name", "primary-admin")
+
+	if code != 1 || !strings.Contains(stderr, `"starport serve"`) {
+		t.Fatalf("exit code = %d, stderr = %q", code, stderr)
+	}
+	if strings.Contains(stdout, gatewayKeyLine) {
+		t.Errorf("refused bootstrap printed a key: %q", stdout)
+	}
+	requireNoLocalRoot(t, home)
+}
+
+func TestAuthBootstrapRecoverRefusesCleanRoot(t *testing.T) {
+	home, _ := firstRunEnvironment(t)
+
+	code, stdout, stderr := runAuthBootstrap(t, "--recover")
+
+	if code != 1 || !strings.Contains(stderr, setup.ErrNoPendingSetup.Error()) || !strings.Contains(stderr, `"starport serve"`) {
+		t.Fatalf("exit code = %d, stderr = %q", code, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("refused recovery wrote output: %q", stdout)
+	}
+	requireNoLocalRoot(t, home)
+}
+
+// requireNoLocalRoot proves that a refused command created no configuration
+// or data root under home.
+func requireNoLocalRoot(t *testing.T, home string) {
+	t.Helper()
+	for _, root := range []string{"config", "data"} {
+		if _, err := os.Stat(filepath.Join(home, root)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s root after a refused command: %v", root, err)
+		}
 	}
 }
 

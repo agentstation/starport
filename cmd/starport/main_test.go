@@ -165,12 +165,12 @@ func TestRunContextVersionJSON(t *testing.T) {
 	}
 }
 
-func TestRunContextInitDelegatesToInitializer(t *testing.T) {
+func TestRunContextAuthBootstrapDelegatesToInitializer(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	var got starportcli.InitOptions
 	code := runContext(
 		context.Background(),
-		[]string{"starport", "init", "--json"},
+		[]string{"starport", "auth", "bootstrap", "--name", "primary-admin", "--json"},
 		bytes.NewReader(nil),
 		stdout,
 		&bytes.Buffer{},
@@ -180,19 +180,19 @@ func TestRunContextInitDelegatesToInitializer(t *testing.T) {
 			got = options
 			return starportcli.InitResult{
 				APIKeyName: options.APIKeyName,
-				ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
+				APIKey:     "gateway-key",
 			}, nil
 		},
 	)
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
-	if got.APIKeyName != "local-admin" {
-		t.Errorf("API key name = %q, want local-admin", got.APIKeyName)
+	if got != (starportcli.InitOptions{APIKeyName: "primary-admin"}) {
+		t.Errorf("bootstrap options = %#v", got)
 	}
 	var result starportcli.InitResult
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-		t.Fatalf("decode init JSON: %v", err)
+		t.Fatalf("decode bootstrap JSON: %v", err)
 	}
 	if result.APIKey != "gateway-key" {
 		t.Errorf("API key = %q", result.APIKey)

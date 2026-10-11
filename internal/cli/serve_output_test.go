@@ -17,7 +17,7 @@ func TestServeDeliversTheFirstRunKeyBeforeTheWelcome(t *testing.T) {
 	deps, output, paths := uiDependencies(t)
 	deps.RunServer = func(ctx context.Context, _ GatewayOptions, server ServerOutput) error {
 		if err := server.DeliverCredential(ctx, InitResult{
-			APIKeyName: DefaultAPIKeyName,
+			APIKeyName: "local-admin",
 			ConfigFile: paths.ConfigFile, DataDir: paths.DataDir, APIKey: "gateway-key",
 		}); err != nil {
 			return err
@@ -35,7 +35,7 @@ func TestServeDeliversTheFirstRunKeyBeforeTheWelcome(t *testing.T) {
 	assert.FileExists(t, paths.WelcomeStampFile)
 }
 
-// TestServeOutputRollsBackWhenTheKeyWriteFails keeps the init contract for
+// TestServeOutputRollsBackWhenTheKeyWriteFails keeps the one-time key contract for
 // serve: a key that nobody saw is rolled back, and the error reaches the
 // operator as a runtime failure.
 func TestServeOutputRollsBackWhenTheKeyWriteFails(t *testing.T) {
@@ -45,7 +45,7 @@ func TestServeOutputRollsBackWhenTheKeyWriteFails(t *testing.T) {
 	rollbackCalls := 0
 	deps.RunServer = func(ctx context.Context, _ GatewayOptions, server ServerOutput) error {
 		return server.DeliverCredential(ctx, InitResult{
-			APIKeyName: DefaultAPIKeyName, APIKey: "gateway-key",
+			APIKeyName: "local-admin", APIKey: "gateway-key",
 			Rollback: func(context.Context) error {
 				rollbackCalls++
 				return nil

@@ -126,18 +126,30 @@ func processCommands() []*urfavecli.Command {
 	}
 }
 
+// errFirstRunRoot refuses auth bootstrap --name on a root that serve
+// initializes itself. A key in that store without the setup transaction would
+// leave a partial root that the first run refuses.
+var errFirstRunRoot = errors.New(`the first run of "starport serve" initializes this local root; ` +
+	`"starport auth bootstrap --name" is for configured shared storage`)
+
+// runInitializer composes auth bootstrap: the first key in configured
+// storage, or the recovery of an interrupted local setup.
 func runInitializer(ctx context.Context, options starportcli.InitOptions) (starportcli.InitResult, error) {
-	if options.ConfiguredStorage {
-		return initializeConfiguredStorage(ctx, options)
+	if options.Recover {
+		return recoverLocalSetup(ctx)
 	}
+	return initializeConfiguredStorage(ctx, options)
+}
+
+// recoverLocalSetup retries the interrupted setup of the local root under the
+// name that the first run of serve uses.
+func recoverLocalSetup(ctx context.Context) (starportcli.InitResult, error) {
 	paths, err := config.PlatformPaths()
 	if err != nil {
 		return starportcli.InitResult{}, fmt.Errorf("resolve setup paths: %w", err)
 	}
 	service := setup.New(paths)
-	result, err := service.Initialize(ctx, setup.Request{
-		APIKeyName: options.APIKeyName,
-	})
+	result, err := service.Recover(ctx, setup.Request{APIKeyName: setup.DefaultAPIKeyName})
 	return localInitResult(service, result), err
 }
 
@@ -205,6 +217,13 @@ func initializeConfiguredStorage(
 	}
 	if err := cfg.CheckLegacyPaths(ctx); err != nil {
 		return starportcli.InitResult{}, err
+	}
+	paths, err := config.PlatformPaths()
+	if err != nil {
+		return starportcli.InitResult{}, fmt.Errorf("resolve setup paths: %w", err)
+	}
+	if setup.FirstRun(cfg, paths) {
+		return starportcli.InitResult{}, errFirstRunRoot
 	}
 	storageConfig := cfg.RuntimeStorage()
 	if storageConfig.Type == storage.StorageTypeBadger {
