@@ -92,7 +92,7 @@ func TestDisableAuthenticationOverrideMeetsValidation(t *testing.T) {
 func validExposureConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Port: 8080, Host: "127.0.0.1",
+			Port: 7827, Host: "127.0.0.1",
 			ReadTimeout: 30_000_000_000, WriteTimeout: 30_000_000_000,
 			IdleTimeout: 120_000_000_000, MaxHeaderBytes: 1 << 20,
 		},

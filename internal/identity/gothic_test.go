@@ -273,25 +273,25 @@ func TestNewAuthenticatorValidatesItsConfig(t *testing.T) {
 		cfg  AcquisitionConfig
 		want error
 	}{
-		{"nothing configured", AcquisitionConfig{CallbackBaseURL: "http://localhost:8080"},
+		{"nothing configured", AcquisitionConfig{CallbackBaseURL: "http://localhost:7827"},
 			ErrNoProvidersConfigured},
 		{"no callback base", AcquisitionConfig{
 			OAuthProviders: []OAuthProvider{{Name: "google", ClientID: "id", ClientSecret: "s"}}},
 			ErrCallbackBaseRequired},
 		{"unknown provider", AcquisitionConfig{
-			CallbackBaseURL: "http://localhost:8080",
+			CallbackBaseURL: "http://localhost:7827",
 			OAuthProviders:  []OAuthProvider{{Name: "myspace", ClientID: "id", ClientSecret: "s"}}},
 			ErrUnknownProvider},
 		{"missing secret", AcquisitionConfig{
-			CallbackBaseURL: "http://localhost:8080",
+			CallbackBaseURL: "http://localhost:7827",
 			OAuthProviders:  []OAuthProvider{{Name: "google", ClientID: "id"}}},
 			ErrIncompleteOAuthProvider},
 		{"half a WorkOS", AcquisitionConfig{
-			CallbackBaseURL: "http://localhost:8080",
+			CallbackBaseURL: "http://localhost:7827",
 			WorkOS:          WorkOSConfig{APIKey: "sk_test"}},
 			ErrIncompleteWorkOS},
 		{"WorkOS with nowhere to go", AcquisitionConfig{
-			CallbackBaseURL: "http://localhost:8080",
+			CallbackBaseURL: "http://localhost:7827",
 			WorkOS:          WorkOSConfig{APIKey: "sk_test", ClientID: "client"}},
 			ErrWorkOSDestinationRequired},
 	}
@@ -309,7 +309,7 @@ func TestNewAuthenticatorValidatesItsConfig(t *testing.T) {
 func TestNewAuthenticatorRegistersConfiguredProviders(t *testing.T) {
 	repositories := newTestRepositories(t)
 	path, err := NewAuthenticator(AcquisitionConfig{
-		CallbackBaseURL: "http://localhost:8080/",
+		CallbackBaseURL: "http://localhost:7827/",
 		OAuthProviders: []OAuthProvider{
 			{Name: "google", ClientID: "gid", ClientSecret: "gsecret"},
 			{Name: "github", ClientID: "hid", ClientSecret: "hsecret"},

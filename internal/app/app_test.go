@@ -423,7 +423,7 @@ func testCatalogSettings(t *testing.T) runtimecatalog.Settings {
 	t.Helper()
 	deployment := &config.Config{Catalog: testCatalogConfig()}
 	deployment.Server.Host = "127.0.0.1"
-	deployment.Server.Port = 8080
+	deployment.Server.Port = 7827
 	deployment.Catalog.StateDirectory = filepath.Join(t.TempDir(), "catalog-state")
 	return catalogSettings(deployment)
 }

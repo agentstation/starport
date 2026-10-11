@@ -29,7 +29,7 @@ curl --fail-with-body \
   -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name":"ci-runner","scopes":["chat:write","models:read"]}' \
-  http://127.0.0.1:8080/api/v1/admin/keys
+  http://127.0.0.1:7827/api/v1/admin/keys
 ```
 
 The response holds the new key in the `key.key` field. The admin API refuses a key with no scopes.

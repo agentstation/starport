@@ -170,10 +170,10 @@
     <table>
       <thead><tr><th>Field</th><th>Current state</th></tr></thead>
       <tbody>
-        <tr><td>In progress</td><td>DX0 complete on <code>codex/dx-DX0</code>. Its pull request carries this ledger update.</td></tr>
-        <tr><td>Next action</td><td>Merge the DX0 pull request at its exact head. Then start DX1 in <code>/private/tmp/starport-dx-DX1</code> on <code>codex/dx-DX1</code>. Start DX2 in <code>/private/tmp/starport-dx-DX2</code> on <code>codex/dx-DX2</code> at the same time. Both branch from <code>origin/main</code>. One implementer owns each task. The orchestrator reviews each before merge.</td></tr>
-        <tr><td>Worktree</td><td><code>codex/dx-DX0</code> in <code>/private/tmp/starport-dx-DX0</code>. Plan pull request #441 merged as <code>ee6c9ce6</code>.</td></tr>
-        <tr><td>Verification</td><td>DX0 proof linted in developer mode, 0 diagnostics. No code changed.</td></tr>
+        <tr><td>In progress</td><td>DX1 complete on <code>codex/dx-DX1</code>; its pull request carries this ledger update. DX2 in progress on <code>codex/dx-DX2</code> in <code>/private/tmp/starport-dx-DX2</code>, one implementer.</td></tr>
+        <tr><td>Next action</td><td>Merge the DX1 pull request at its exact head. Review DX2 when its implementer reports, then open and merge its pull request. DX3 starts after DX2 merges. DX4 starts after DX1 and DX3 merge.</td></tr>
+        <tr><td>Worktree</td><td><code>codex/dx-DX1</code> in <code>/private/tmp/starport-dx-DX1</code> and <code>codex/dx-DX2</code> in <code>/private/tmp/starport-dx-DX2</code>. DX0 merged as <code>c027e2b3</code>.</td></tr>
+        <tr><td>Verification</td><td>DX1: 1,236 tests passed and 7 skipped in <code>internal/config</code>, <code>internal/server</code>, and <code>internal/cli</code>; <code>make docs-generate</code> clean; compose config, console build, lint, and the verifier scripts pass. See <code>DX1.md</code>.</td></tr>
         <tr><td>Running processes</td><td>None.</td></tr>
         <tr><td>Required reads</td><td><a href="#findings">Findings</a>, <a href="#decisions">Decisions</a>, <a href="#invariants">Invariants</a>, and the DX0 task contract.</td></tr>
         <tr><td>Unresolved</td><td>None. D1 through D4 are decided. The Sol findings are applied. The owner activated the plan.</td></tr>
@@ -422,7 +422,7 @@
       </thead>
       <tbody>
         <tr id="DX0" data-status="done"><td>DX0</td><td>Baseline: pin the baseline commit, create the proof root, capture fail-before evidence for F1, F2, F4, F5, and F9. No production behavior changes.</td><td><code>done</code></td><td>Baseline <code>40d7285f</code>. <code>proof/starport-developer-experience/DX0.md</code> holds five observations. 177 lines in 59 files carry 8080. <code>serve</code> exits 1 and leaves <code>welcomed</code> behind. Two <code>dev</code> runs print two key hashes and leave the home empty. <code>dev</code> under a pseudo-terminal opened the launch link against a foreign listener on 8080. Proof commit <code>0ee27f9f</code>.</td></tr>
-        <tr id="DX1" data-status="todo"><td>DX1</td><td>Standard port: one owning constant replaces 8080 in code, container files, the Vite proxy, scripts, documents, and generated references. Includes the compatibility note.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="DX1" data-status="done"><td>DX1</td><td>Standard port: one owning constant replaces 8080 in code, container files, the Vite proxy, scripts, documents, and generated references. Includes the compatibility note.</td><td><code>done</code></td><td><code>internal/config.DefaultPort = 7827</code> with two tag-agreement tests. Grep count 177 lines in 59 files down to 9 lines in 4 files: six compatibility-note lines, one recorded transcript line, and two lines on the Starmap central-server page that name Starmap's own default. Commits <code>5b2ed61b</code>, <code>58504514</code>, <code>d59d4184</code>. Proof <code>DX1.md</code>.</td></tr>
         <tr id="DX2" data-status="todo"><td>DX2</td><td>First-run initialization inside <code>serve</code> on an empty platform storage root. Greets after initialization, reloads the configuration, and writes the machine token. Includes its document and script changes.</td><td><code>todo</code></td><td></td></tr>
         <tr id="DX3" data-status="todo"><td>DX3</td><td>Persistent <code>dev</code> on the platform storage root as a separate persistent profile with eligibility checks. <code>--ephemeral</code> keeps the scratch profile. Carries its own document and capture-script changes.</td><td><code>todo</code></td><td></td></tr>
         <tr id="DX4" data-status="todo"><td>DX4</td><td>Listener bind, serve, and close contract. Developer port fallback with an endpoint record. Operator busy-port error.</td><td><code>todo</code></td><td></td></tr>
@@ -457,7 +457,7 @@
       <li><strong>Problem:</strong> 8080 is the most common developer collision, and 59 tracked files repeat the value.</li>
       <li><strong>Owning seam and paths:</strong> <code>internal/config/config.go</code> owns the default. Consumers: <code>internal/server/config.go</code>, <code>console/vite.config.ts</code>, <code>console/README.md</code>, <code>Dockerfile</code>, <code>docker-compose.yml</code>, <code>docker-compose.fleet.yml</code>, <code>Makefile</code>, <code>scripts/smoke-first-run.sh</code>, <code>scripts/test-storage-recipes.py</code>, <code>examples/cache_control_demo.go</code>, <code>README.md</code>, <code>docs/OPERATOR-GUIDE.md</code>, <code>docs/site/</code>, the generated settings reference under <code>docs/</code>, <code>website/src/lib/splash-facts.ts</code> (lines 310 through 412), <code>skills/starport/</code>.</li>
       <li><strong>Steps:</strong> add a named default port constant in <code>internal/config</code> with the value <code>7827</code>. Replace each active 8080 default. Keep <code>STARPORT_SERVER_PORT</code> as the override. Map the container port to the same value. Run <code>make docs-generate</code>. Add the compatibility note to the README and the operator guide: the default port changed, and <code>STARPORT_SERVER_PORT=8080</code> restores the old value. Leave historical proof documents, release notes, and recorded transcripts unchanged.</li>
-      <li><strong>Acceptance:</strong> the DX0 grep returns lines only in the compatibility notes, this plan, and recorded transcripts under <code>docs/assets/</code>. The proof file lists each remaining line with its reason. <code>go test ./internal/config/ ./internal/server/ ./internal/cli/</code> passes. <code>TestReferenceFilesMatchCommittedFiles</code> passes. <code>docker compose config --quiet</code> passes.</li>
+      <li><strong>Acceptance:</strong> the DX0 grep returns lines only in the compatibility notes, this plan, recorded transcripts under <code>docs/assets/</code>, and lines that name Starmap's own server port on <code>docs/site/operate-starmap/central-server.md</code>. The proof file lists each remaining line with its reason. <code>go test ./internal/config/ ./internal/server/ ./internal/cli/</code> passes. <code>TestReferenceFilesMatchCommittedFiles</code> passes. <code>docker compose config --quiet</code> passes.</li>
       <li><strong>Fail-before:</strong> the DX0 grep reports active defaults in <code>internal/config/config.go</code>, <code>console/vite.config.ts</code>, and <code>Dockerfile</code>.</li>
       <li><strong>Verification:</strong> the grep, the Go tests, <code>docker compose config --quiet</code>, <code>npm --prefix console run build</code>, and the technical-writing linter in strict mode on each changed document.</li>
     </ul>
@@ -614,6 +614,17 @@ same places.</code></pre>
           <code>internal/cli/app.go:221-230</code>. <code>DX0.md</code> records
           the <code>--no-open</code> runs, the pseudo-terminal run, and the
           foreign listener.</td></tr>
+        <tr><td>2026-10-10</td><td>meta</td><td>merged</td><td>DX0 pull
+          request #442 merged at head <code>e67fff71</code> as
+          <code>c027e2b3</code>. DX1 and DX2 started together from that
+          commit, one implementer each.</td></tr>
+        <tr><td>2026-10-10</td><td>DX1</td><td>done</td><td>Implementer
+          commits <code>5b2ed61b</code>, <code>58504514</code>,
+          <code>d59d4184</code>, reviewed by the orchestrator. One accepted
+          exception: the Starmap central-server page keeps 8080 because
+          Starmap owns that default. The acceptance text now names it.
+          Console README strict lint went from 3 diagnostics to 0; README,
+          SKILL.md, and the proof lint at 0.</td></tr>
       </tbody>
     </table>
   </section>

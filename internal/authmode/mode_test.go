@@ -124,7 +124,7 @@ func TestLoopbackOrigin(t *testing.T) {
 		// curl and every SDK send no origin. Refusing those would make the
 		// header a requirement rather than a check.
 		{name: "absent", origin: "", want: true},
-		{name: "loopback page", origin: "http://127.0.0.1:8080", want: true},
+		{name: "loopback page", origin: "http://127.0.0.1:7827", want: true},
 		{name: "localhost page", origin: "http://localhost:5173", want: true},
 		{name: "another site", origin: "https://evil.example", want: false},
 		// A sandboxed or file:// document sends this. It names no host, so it

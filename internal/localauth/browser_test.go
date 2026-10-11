@@ -288,7 +288,7 @@ func TestLaunchURLCarriesTheTicketAndNothingElse(t *testing.T) {
 	ticket, err := MintTicket(token, time.Now())
 	require.NoError(t, err)
 
-	raw, err := LaunchURL("http://127.0.0.1:8080", ticket)
+	raw, err := LaunchURL("http://127.0.0.1:7827", ticket)
 	require.NoError(t, err)
 	parsed, err := url.Parse(raw)
 	require.NoError(t, err)
@@ -309,9 +309,9 @@ func TestBrowsableBaseNamesAnAddressAPersonCanOpen(t *testing.T) {
 		secure bool
 		want   string
 	}{
-		"unspecified v4": {host: "0.0.0.0", port: 8080, want: "http://127.0.0.1:8080"},
-		"unspecified v6": {host: "::", port: 8080, want: "http://[::1]:8080"},
-		"empty":          {host: "", port: 8080, want: "http://127.0.0.1:8080"},
+		"unspecified v4": {host: "0.0.0.0", port: 7827, want: "http://127.0.0.1:7827"},
+		"unspecified v6": {host: "::", port: 7827, want: "http://[::1]:7827"},
+		"empty":          {host: "", port: 7827, want: "http://127.0.0.1:7827"},
 		"loopback":       {host: "127.0.0.1", port: 3000, want: "http://127.0.0.1:3000"},
 		"bracketed v6":   {host: "[::1]", port: 3000, want: "http://[::1]:3000"},
 		"named host":     {host: "gateway.internal", port: 443, want: "http://gateway.internal:443"},

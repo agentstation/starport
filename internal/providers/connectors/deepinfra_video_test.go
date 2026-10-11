@@ -70,7 +70,7 @@ func TestNativeVideoKeepsUsageWhenAssetOrStateFails(t *testing.T) {
 		{"oversize asset", `"output_length":5`, "data:video/mp4;base64,bXA0eA==", true},
 		{"wrong media", `"output_length":5`, "data:text/html;base64,bXA0", true},
 		{"external reference", `"output_length":5`, "https://assets.example/video.mp4", false},
-		{"loopback reference", `"output_length":5`, "http://127.0.0.1:8080/video.mp4", false},
+		{"loopback reference", `"output_length":5`, "http://127.0.0.1:7827/video.mp4", false},
 		{"relative reference", `"output_length":5`, "/video.mp4", false},
 		{"network relative", `"output_length":5`, "//assets.example/video.mp4", true},
 		{"credential reference", `"output_length":5`, credentialReference, true},

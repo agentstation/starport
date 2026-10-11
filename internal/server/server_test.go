@@ -14,7 +14,7 @@ import (
 
 func TestNew(t *testing.T) {
 	config := &Config{
-		Port:            8080,
+		Port:            7827,
 		ReadTimeout:     10 * time.Second,
 		WriteTimeout:    10 * time.Second,
 		IdleTimeout:     120 * time.Second,
@@ -48,7 +48,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNewRequiresReadyDependencies(t *testing.T) {
-	config := &Config{Port: 8080}
+	config := &Config{Port: 7827}
 	ready := newTestServer(t, config)
 	base := Dependencies{
 		Service: ready.service, APIKeys: ready.apiKeys, Accounts: ready.accounts,
@@ -81,7 +81,7 @@ func TestNewRequiresReadyDependencies(t *testing.T) {
 
 func TestMiddleware(t *testing.T) {
 	config := &Config{
-		Port: 8080,
+		Port: 7827,
 		CORS: CORSConfig{
 			AllowedOrigins: []string{"*"},
 			AllowedMethods: []string{"GET", "POST"},
@@ -115,7 +115,7 @@ func TestMiddleware(t *testing.T) {
 }
 
 func TestReadinessIgnoresProviderCredentialAvailability(t *testing.T) {
-	server := newTestServer(t, &Config{Port: 8080})
+	server := newTestServer(t, &Config{Port: 7827})
 	request := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
 	recorder := httptest.NewRecorder()
 
@@ -184,7 +184,7 @@ func TestShutdownDoesNotCloseApplicationStorage(t *testing.T) {
 
 func TestCORSHeaders(t *testing.T) {
 	config := &Config{
-		Port: 8080,
+		Port: 7827,
 		CORS: CORSConfig{
 			AllowedOrigins:   []string{"https://example.com"},
 			AllowedMethods:   []string{"GET", "POST"},

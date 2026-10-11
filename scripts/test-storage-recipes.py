@@ -305,7 +305,7 @@ def qualify_readonly_mounts(root, image, run):
                 run(relocated + ['up', '-d', '--no-build', 'starport'])
                 container = run(relocated + ['ps', '-a', '-q', 'starport']).decode().strip()
                 try:
-                    mapping = run(relocated + ['port', 'starport', '8080']).decode().strip()
+                    mapping = run(relocated + ['port', 'starport', '7827']).decode().strip()
                     ready = wait_ready('http://' + mapping, attempts=100)
                 except RuntimeError:
                     ready = False
@@ -472,7 +472,7 @@ def qualify_fleet_records(root, image, inputs, run):
 
         def start(index):
             run(compose(index) + ['up', '-d', '--no-build', 'starport'], timeout=180)
-            base = 'http://' + run(compose(index) + ['port', 'starport', '8080']).decode().strip()
+            base = 'http://' + run(compose(index) + ['port', 'starport', '7827']).decode().strip()
             if not wait_ready(base, attempts=600):
                 dump_replica(index)
                 raise AssertionError(f'fleet replica {index} did not become ready')
@@ -749,7 +749,7 @@ def main():
 
         def start():
             run(compose + ['up', '-d', '--no-build', 'starport'])
-            mapping = run(compose + ['port', 'starport', '8080']).decode().strip()
+            mapping = run(compose + ['port', 'starport', '7827']).decode().strip()
             address = 'http://' + mapping
             for _ in range(100):
                 try:

@@ -21,8 +21,8 @@ const (
 
 // Config holds server configuration
 type Config struct {
-	// Port to listen on
-	Port int `env:"PORT,default=8080"`
+	// Port to listen on. The default repeats config.DefaultPort.
+	Port int `env:"PORT,default=7827"`
 
 	// Host to bind to
 	Host string `env:"HOST,default=0.0.0.0"`

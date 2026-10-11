@@ -17,8 +17,9 @@ every deployment-scope catalog value with the stored shared revision. The
 application applies that revision at startup through `ApplySharedRevision`.
 Starmap `ResolveAuthority` decides the winner. Local deployment values then
 appear in `EffectiveReport` as ignored, with their origin and the
-`shared-authority` reason. Bootstrap values and node-scope values always use
-the order above. A shared revision never supplies them. Requests read the
+`shared-authority` reason.
+
+Bootstrap values and node-scope values always use the order above. A shared revision never supplies them. Requests read the
 loaded `Config` only.
 
 Permission clock settings also accept the canonical `STARMAP_CATALOG_PERMISSION_CLOCK_` names.
@@ -54,7 +55,7 @@ independent of the directory that starts the process.
 
 ## Secure local defaults
 
-The HTTP server listens on `127.0.0.1:8080`. CORS and rate-limit hot reload are
+The HTTP server listens on `127.0.0.1:7827`. CORS and rate-limit hot reload are
 off until an operator enables them. A supplied credential master key must
 contain at least 32 bytes.
 
@@ -73,7 +74,7 @@ container port is an operator action. It also stores Badger data under
 All external fields use the `STARPORT_` prefix. For example:
 
 ```bash
-STARPORT_SERVER_PORT=8080
+STARPORT_SERVER_PORT=7827
 STARPORT_STORAGE_MODE=badger
 STARPORT_LOGGING_LEVEL=info
 ```

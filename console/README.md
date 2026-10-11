@@ -24,7 +24,7 @@ pnpm build
 pnpm check
 ```
 
-The dev server proxies gateway calls to `localhost:8080`. Start the gateway with `starport dev` and open the launch link it prints. The build writes to `internal/console/dist`, and `pnpm check` runs the lint, the build, the typecheck, and the tests in that order.
+The dev server proxies gateway calls to `localhost:7827`. Start the gateway with `starport dev` and open the launch link it prints. The build writes to `internal/console/dist`, and `pnpm check` runs the lint, the build, the typecheck, and the tests in that order.
 
 ## Test conventions
 
@@ -38,4 +38,4 @@ Route tests render the router with the shell through `openConsole` from `src/tes
 
 ## Agent skills
 
-The shadcn skill lives at `.agents/skills/shadcn` in the repository root, pinned by `skills-lock.json`, with `.claude/skills/shadcn` a symlink to it. Every agent that edits the console reads the same rules. `npx skills update` refreshes it. The two PNG icons under its `assets` directory are ignored by git because the review gate refuses a binary diff; the skill reads the same without them.
+The shadcn skill lives at `.agents/skills/shadcn` in the repository root, pinned by `skills-lock.json`, with `.claude/skills/shadcn` a symlink to it. Every agent that edits the console reads the same rules. `npx skills update` refreshes it. Git ignores the two PNG icons under its `assets` directory, because the review gate refuses a binary diff. The skill works the same without them.

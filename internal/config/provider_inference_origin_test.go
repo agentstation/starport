@@ -38,7 +38,7 @@ func TestInferenceBaseURLSettingReplacesCatalogOrigin(t *testing.T) {
 		{value: "http://localhost:8089", want: "http://localhost:8089"},
 		{value: "http://127.0.0.1:8089/relay", want: "http://127.0.0.1:8089/relay"},
 		{value: "http://10.0.0.5", want: "http://10.0.0.5"},
-		{value: "http://192.168.1.20:8080", want: "http://192.168.1.20:8080"},
+		{value: "http://192.168.1.20:7827", want: "http://192.168.1.20:7827"},
 		{value: "http://169.254.10.10", want: "http://169.254.10.10"},
 		{value: "http://[::1]:8089", want: "http://[::1]:8089"},
 		{value: "http://[fd00::1]", want: "http://[fd00::1]"},

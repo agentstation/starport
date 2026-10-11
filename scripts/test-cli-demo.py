@@ -17,14 +17,14 @@ spec.loader.exec_module(recorder)
 
 class BannerTests(unittest.TestCase):
     def test_redacts_gateway_key_and_console_launch_credential(self):
-        banner = safe_banner("Starport development gateway\nURL: http://127.0.0.1:8080\n"
+        banner = safe_banner("Starport development gateway\nURL: http://127.0.0.1:7827\n"
                              "Authentication: required\nGateway API key (shown once): secret-key\n"
-                             "Console (one-time launch link): http://127.0.0.1:8080/launch?ticket=secret-ticket\n")
+                             "Console (one-time launch link): http://127.0.0.1:7827/launch?ticket=secret-ticket\n")
         self.assertNotIn("secret-key", banner)
         self.assertNotIn("secret-ticket", banner)
         self.assertEqual(banner.count("[value hidden]"), 2)
         self.assertIn("Authentication: required", banner)
-        self.assertIn("URL: http://127.0.0.1:8080", banner)
+        self.assertIn("URL: http://127.0.0.1:7827", banner)
 
     def test_omits_startup_logs_even_when_they_contain_credentials(self):
         self.assertEqual(safe_banner("DEBUG key=secret-key\nDEBUG ticket=secret-ticket\n"), "")

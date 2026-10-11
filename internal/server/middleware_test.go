@@ -11,7 +11,7 @@ import (
 
 func TestMiddlewareChain(t *testing.T) {
 	config := &Config{
-		Port:           8080,
+		Port:           7827,
 		RequestTimeout: 60 * time.Second,
 		MaxRequestSize: 10 * 1024 * 1024, // 10MB
 		CORS: CORSConfig{
@@ -62,7 +62,7 @@ func TestClientIPIgnoresUntrustedForwardingHeaders(t *testing.T) {
 
 func TestPanicRecovery(t *testing.T) {
 	config := &Config{
-		Port:           8080,
+		Port:           7827,
 		RequestTimeout: 5 * time.Second,  // Longer timeout to allow panic recovery
 		MaxRequestSize: 10 * 1024 * 1024, // 10MB
 	}
@@ -87,7 +87,7 @@ func TestPanicRecovery(t *testing.T) {
 
 func TestRequestIDMiddleware(t *testing.T) {
 	config := &Config{
-		Port:           8080,
+		Port:           7827,
 		MaxRequestSize: 10 * 1024 * 1024, // 10MB
 	}
 	server := newTestServer(t, config)
@@ -115,7 +115,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 
 func TestCompressionMiddleware(t *testing.T) {
 	config := &Config{
-		Port:           8080,
+		Port:           7827,
 		MaxRequestSize: 10 * 1024 * 1024, // 10MB
 	}
 	server := newTestServer(t, config)

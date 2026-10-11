@@ -54,7 +54,7 @@ func TestDevNoAuthFlagReachesTheStarter(t *testing.T) {
 	deps.StartDevelopment = func(_ context.Context, options GatewayOptions) (DevelopmentSession, error) {
 		received = options
 		return DevelopmentSession{
-			URL: "http://127.0.0.1:8080", AuthDisabled: options.DisableAuth,
+			URL: "http://127.0.0.1:7827", AuthDisabled: options.DisableAuth,
 			Run:   func(context.Context) error { return nil },
 			Close: func(context.Context) error { return nil },
 		}, nil
@@ -82,20 +82,20 @@ func TestDevSessionRejectsAKeyModeMismatch(t *testing.T) {
 	}{
 		{
 			name:    "required with a key",
-			session: DevelopmentSession{URL: "http://127.0.0.1:8080", APIKey: "k"},
+			session: DevelopmentSession{URL: "http://127.0.0.1:7827", APIKey: "k"},
 		},
 		{
 			name:    "disabled without a key",
-			session: DevelopmentSession{URL: "http://127.0.0.1:8080", AuthDisabled: true},
+			session: DevelopmentSession{URL: "http://127.0.0.1:7827", AuthDisabled: true},
 		},
 		{
 			name:    "required without a key",
-			session: DevelopmentSession{URL: "http://127.0.0.1:8080"},
+			session: DevelopmentSession{URL: "http://127.0.0.1:7827"},
 			wantErr: true,
 		},
 		{
 			name:    "disabled with a key",
-			session: DevelopmentSession{URL: "http://127.0.0.1:8080", APIKey: "k", AuthDisabled: true},
+			session: DevelopmentSession{URL: "http://127.0.0.1:7827", APIKey: "k", AuthDisabled: true},
 			wantErr: true,
 		},
 	}
