@@ -66,7 +66,7 @@ Read [Starmap journals and recovery](../operate-starmap/journals-and-recovery.md
 
 **Status:** Supported
 
-One gateway process keeps its state on the local host. Refer to [Run a persistent local gateway](../start/local-persistent.md).
+One gateway process keeps its state on the local host. `starport dev` and `starport serve` run this recipe from the platform storage root. Refer to [Run a persistent local gateway](../start/local-persistent.md).
 
 ### Durable owner per role
 
@@ -305,7 +305,7 @@ A file that fails verification leaves the accepted head in place. Move a verifie
 
 **Status:** Supported
 
-`starport dev --ephemeral` uses in-memory Badger and SQLite with isolated scratch files. Refer to [Run a temporary development gateway](../start/temporary-development.md).
+`starport dev --ephemeral` uses in-memory Badger and SQLite with isolated scratch files. Refer to [Run a scratch development gateway](../start/temporary-development.md).
 
 ### Durable owner per role
 

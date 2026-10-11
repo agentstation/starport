@@ -22,7 +22,7 @@ A gateway API key never pays a provider. A provider inference credential never a
 
 A gateway API key starts with the prefix `STARPORT_`. A client sends it in the `Authorization: Bearer` header. Starport stores only the hash, so it shows a new key one time only.
 
-The first run of `starport serve` and each `starport dev` session issue a first key with the wildcard scope `*`. Issue more keys in the console under Keys, or with the admin API:
+The first run of `starport dev` or `starport serve` on an empty local root issues a first key with the wildcard scope `*`. Each `starport dev --ephemeral` session issues a new first key. Issue more keys in the console under Keys, or with the admin API:
 
 ```bash
 curl --fail-with-body \

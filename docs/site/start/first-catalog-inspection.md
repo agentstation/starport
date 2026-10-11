@@ -1,7 +1,7 @@
 ---
 title: Inspect the catalog
 area: start
-order: 4
+order: 1
 summary: Read the embedded catalog from the command line and the model list from a gateway, and separate catalog membership from a callable offering.
 ---
 
@@ -58,7 +58,7 @@ The value `unknown` is correct for an embedded catalog. The command sends no pro
 
 **Audience:** a client developer who has a gateway API key with the scope `models:read`.
 
-**Before you start:** Start a gateway. Refer to [Run a temporary development gateway](temporary-development.md).
+**Before you start:** Start a gateway. Refer to [Run a persistent local gateway](local-persistent.md).
 
 **Steps:**
 

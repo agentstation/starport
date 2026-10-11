@@ -1,15 +1,15 @@
 ---
-title: Run a temporary development gateway
+title: Run a scratch development gateway
 area: start
-order: 2
+order: 4
 summary: Start a gateway that keeps no data, and learn what it loses at shutdown and which settings it refuses.
 ---
 
-`starport dev --ephemeral` starts a gateway that keeps all records in memory. Use it to try Starport, to test a client, or to inspect the console. This mode is architecture target T7. Without `--ephemeral`, `starport dev` keeps its keys and data between runs. Refer to [Run a persistent local gateway](local-persistent.md).
+`starport dev --ephemeral` starts a scratch gateway that keeps all records in memory. Use it for a test that must leave no data, for example a client test or a recorded demonstration. This mode is architecture target T7. Without `--ephemeral`, `starport dev` keeps its keys and data between runs. Refer to [Run a persistent local gateway](local-persistent.md).
 
-## Start a development gateway
+## Start a scratch gateway
 
-**Audience:** a developer who wants a gateway for one session on a workstation.
+**Audience:** a developer who wants a scratch gateway for one session on a workstation.
 
 **Before you start:**
 
@@ -43,7 +43,7 @@ Gateway API key (shown once): <generated-gateway-api-key>
 Console (one-time launch link): http://127.0.0.1:7827/launch?lt=<ticket>
 ```
 
-The URL uses port 7827, or the next free port, which `dev` prints. When port 7827 is busy, the line `Port 7827 is busy. Bound port 7373.` comes before the URL line. Use the printed URL in the commands on this page.
+The URL uses port 7827, or a fallback port that `dev` prints. When port 7827 is busy, the line `Port 7827 is busy. Bound port 7373.` comes before the URL line. Use the printed URL in the commands on this page.
 
 The console opens in a browser. The launch link is not a key. The gateway accepts the link one time and gives the browser a session. Add `--no-open` to print the link and keep the browser closed.
 
@@ -55,13 +55,13 @@ curl --fail http://127.0.0.1:7827/health/ready
 
 The command exits with status 0.
 
-**If it fails:** Read the error. If the error names storage settings, remove those settings from the shell, or use a persistent gateway. Refer to [Settings that development mode refuses](#settings-that-development-mode-refuses).
+**If it fails:** Read the error. If the error names storage settings, remove those settings from the shell, or run `starport serve` with those settings. Refer to [Settings that development mode refuses](#settings-that-development-mode-refuses).
 
 **Related settings:** `--no-auth`, `--no-open`, `STARPORT_SERVER_PORT`.
 
 ## What the gateway loses at shutdown
 
-A development gateway uses in-memory Badger and in-memory SQLite. It reads the process environment but not `config.env`. It writes no configuration file.
+A scratch gateway uses in-memory Badger and in-memory SQLite. It reads the process environment but not `config.env`. It writes no configuration file.
 
 When the process stops, Starport removes these items:
 
@@ -74,7 +74,7 @@ Provider inference credentials stay in the process environment. Starport does no
 
 ## Settings that development mode refuses
 
-Development mode checks the environment before it opens storage. If the environment holds a persistent storage selector, startup stops. These settings cause the refusal:
+Ephemeral development mode checks the environment before it opens storage. If the environment holds a persistent storage selector, startup stops. These settings cause the refusal:
 
 - KV selectors: `STARPORT_STORAGE_MODE`, `STARPORT_STORAGE_BADGER_PATH`, and the `STARPORT_STORAGE_VALKEY_` settings.
 - SQL selectors: `STARPORT_STORAGE_SQL_MODE`, the SQLite path, `STARPORT_STORAGE_SQL_POSTGRES_URL`, and `STARPORT_STORAGE_SQL_MYSQL_DSN`.
@@ -86,12 +86,12 @@ The error names each setting that it found. It tells you to remove them or to us
 
 ## Why persistent selectors fail
 
-A persistent selector points at storage that must outlive the process. A development gateway requires isolated storage. It binds its catalog state and uploaded files to a session scratch directory that it owns. A persistent selector conflicts with that isolation. Starport stops before it opens any storage, so a development session never reads or writes persistent state.
+A persistent selector points at storage that must outlive the process. A scratch gateway requires isolated storage. It binds its catalog state and uploaded files to a session scratch directory that it owns. A persistent selector conflicts with that isolation. Starport stops before it opens any storage, so a scratch session never reads or writes persistent state.
 
 ## Scratch directory recovery
 
-A development gateway that stops abnormally can leave scratch directories. The next development run removes an abandoned directory after it verifies ownership. It keeps the directories of live sessions. It also keeps changed or unknown directories for a manual decision. The [operator guide](../../OPERATOR-GUIDE.md#development-scratch-recovery) gives the recovery procedure.
+A scratch gateway that stops abnormally can leave scratch directories. The next development run removes an abandoned directory after it verifies ownership. It keeps the directories of live sessions. It also keeps changed or unknown directories for a manual decision. The [operator guide](../../OPERATOR-GUIDE.md#development-scratch-recovery) gives the recovery procedure.
 
 ## Move to a persistent gateway
 
-A development gateway has no upgrade path to persistent state. To keep data, initialize a persistent gateway and issue new keys. Refer to [Run a persistent local gateway](local-persistent.md).
+A scratch gateway has no upgrade path to persistent state. To keep data, run `starport dev` without `--ephemeral`. The first run initializes the platform root and prints a new gateway API key. Refer to [Run a persistent local gateway](local-persistent.md).

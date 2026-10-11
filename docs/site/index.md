@@ -34,12 +34,12 @@ Run `starport version` to see the release of an installed binary. If the release
 
 ## Fastest path to a first request
 
-This path uses a temporary development gateway. It keeps no data after the process stops.
+This path uses a persistent development gateway. It keeps its keys and data between runs.
 
 1. Install Starport. Refer to [Run a persistent local gateway](start/local-persistent.md#install-starport).
 2. Set a provider inference credential, for example `OPENAI_API_KEY`.
-3. Run `starport dev --ephemeral` and keep the terminal open.
-4. Copy the gateway API key that the command prints.
+3. Run `starport dev` and keep the terminal open.
+4. Save the gateway API key that the first run prints.
 5. In a second terminal, send a request:
 
 ```bash
@@ -53,4 +53,4 @@ curl --fail-with-body \
 
 A model in the catalog is not always a callable offering. The request succeeds only when the gateway can call a provider with a usable credential. Refer to [Inspect the catalog](start/first-catalog-inspection.md) for the difference.
 
-For a gateway that keeps its data, read [Run a persistent local gateway](start/local-persistent.md). The [operator guide](../OPERATOR-GUIDE.md#local-development) holds the full reference.
+For the restart, the fallback port, and `starport serve`, read [Run a persistent local gateway](start/local-persistent.md). For a gateway that keeps nothing, read [Run a scratch development gateway](start/temporary-development.md). The [operator guide](../OPERATOR-GUIDE.md#local-development) holds the full reference.
