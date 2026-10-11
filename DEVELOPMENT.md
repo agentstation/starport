@@ -34,13 +34,13 @@ Use an isolated configuration directory during development:
 ```bash
 export STARPORT_CONFIG_DIR="$PWD/tmp/config"
 export OPENAI_API_KEY="replace-with-provider-inference-key"
-go run ./cmd/starport init
-go run ./cmd/starport doctor --probe
 go run ./cmd/starport serve
 ```
 
 `STARPORT_CONFIG_DIR` must be an absolute path. It changes all managed local
-paths together.
+paths together. On the first run, `serve` initializes these paths and prints
+the first gateway API key once. Stop the gateway, then run
+`go run ./cmd/starport doctor --probe` to inspect the stored state.
 
 For automatic rebuilds, install the pinned tools and run:
 

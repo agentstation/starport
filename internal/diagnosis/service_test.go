@@ -155,7 +155,7 @@ func TestProbeReportsExactEmptyAPIKeyCheck(t *testing.T) {
 		t.Fatalf("report = %#v", report)
 	}
 	check := assertCheck(t, report, "api_keys", StatusFail)
-	if !strings.Contains(check.Message, "starport init") {
+	if !strings.Contains(check.Message, "starport auth bootstrap --name") {
 		t.Errorf("API key failure = %q", check.Message)
 	}
 }

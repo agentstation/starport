@@ -300,7 +300,7 @@ def qualify_readonly_mounts(root, image, run):
                     'restart': 'no', 'environment': {'STARPORT_DATA_DIR': path}}}}))
                 relocated = command + ['-f', str(override)]
                 one_off = relocated + ['run', '--rm', '--no-deps', '--pull', 'never', 'starport']
-                initialized = not refused(run, one_off + ['init', '--configured-storage', '--name', 'readonly-admin', '--json'])
+                initialized = not refused(run, one_off + ['auth', 'bootstrap', '--name', 'readonly-admin', '--json'])
                 initialized = not refused(run, one_off + ['auth', 'rotate']) and initialized
                 run(relocated + ['up', '-d', '--no-build', 'starport'])
                 container = run(relocated + ['ps', '-a', '-q', 'starport']).decode().strip()
@@ -497,7 +497,7 @@ def qualify_fleet_records(root, image, inputs, run):
         try:
             cli(0, 'fleet', 'init', '--operation', 'recipe-fleet-init', '--evidence', 'recipe-fleet-harness', '--json')
             cli(0, 'config', 'init', '--shared', '--yes', '--json')
-            admin = json.loads(cli(0, 'init', '--configured-storage', '--name', 'recipe-admin', '--json'))['api_key']
+            admin = json.loads(cli(0, 'auth', 'bootstrap', '--name', 'recipe-admin', '--json'))['api_key']
             for index in (0, 1):
                 cli(index, 'auth', 'rotate')  # Discard the one-time credential output.
             bases = [start(0), start(1)]
@@ -798,7 +798,7 @@ def main():
             }.items():
                 assert paths[name] == expected, f'wrong container path for {name}'
             observations.append('effective_container_paths')
-            initialized = json.loads(cli('init', '--configured-storage', '--name', 'recipe-admin', '--json'))
+            initialized = json.loads(cli('auth', 'bootstrap', '--name', 'recipe-admin', '--json'))
             key = initialized['api_key']
             cli('auth', 'rotate')
             base = start()

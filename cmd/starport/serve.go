@@ -99,7 +99,7 @@ func initializeFirstRun(ctx context.Context, cfg *config.Config, deliver starpor
 		return false, nil
 	}
 	service := setup.New(paths)
-	result, initializeErr := service.InitializeFirstRun(ctx, setup.Request{APIKeyName: starportcli.DefaultAPIKeyName})
+	result, initializeErr := service.InitializeFirstRun(ctx, setup.Request{APIKeyName: setup.DefaultAPIKeyName})
 	if err := deliver(ctx, localInitResult(service, result)); err != nil {
 		return false, err
 	}

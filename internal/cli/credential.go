@@ -11,8 +11,18 @@ import (
 
 const initializationRollbackTimeout = 5 * time.Second
 
+// InitResult contains initialized paths and the one-time gateway credential.
+type InitResult struct {
+	APIKeyName string                      `json:"api_key_name"`
+	ConfigFile string                      `json:"config_file,omitempty"`
+	DataDir    string                      `json:"data_dir,omitempty"`
+	APIKey     string                      `json:"api_key"`
+	Rollback   func(context.Context) error `json:"-"`
+}
+
 // deliverCredential prints the one-time gateway credential of an
-// initialization. init and the first run of serve both deliver through it.
+// initialization. auth bootstrap and the first run of serve both deliver
+// through it.
 //
 // The credential exists nowhere else in readable form, so a failed write rolls
 // the initialization back: an operator who never saw the key must not be left

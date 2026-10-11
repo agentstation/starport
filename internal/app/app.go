@@ -72,8 +72,9 @@ var (
 	ErrCatalogRequired = errors.New("catalog factory returned no catalog")
 	// ErrCredentialsRequired reports an absent provider-credential master key.
 	ErrCredentialsRequired = errors.New("provider credential master key is required")
-	// ErrAPIKeyRequired reports empty gateway API key storage.
-	ErrAPIKeyRequired = errors.New("a gateway API key is required; run \"starport init\"")
+	// ErrAPIKeyRequired reports empty gateway API key storage. A clean local
+	// root never reaches it, because the first run of serve creates its key.
+	ErrAPIKeyRequired = errors.New("a gateway API key is required; run \"starport auth bootstrap --name <name>\"")
 	// ErrLocalTokenPathRequired reports a configuration with nowhere to keep this
 	// machine's local admin token. The loader derives the path from the platform
 	// paths, so an empty value means the configuration did not come from the

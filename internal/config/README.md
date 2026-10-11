@@ -59,10 +59,10 @@ The HTTP server listens on `127.0.0.1:7827`. CORS and rate-limit hot reload are
 off until an operator enables them. A supplied credential master key must
 contain at least 32 bytes.
 
-`starport init --provider openai` and `starport init --provider ollama` create
-the standard local file with mode `0600`. Initialization creates the credential
-master key and the first named identity. It does not replace an existing file
-or identity store.
+On an empty local root, the first run of `starport serve` creates the standard
+local file with mode `0600`. Initialization creates the credential master key
+and the first named identity. It does not replace an existing file or identity
+store.
 
 The container image explicitly listens on `0.0.0.0` because publishing a
 container port is an operator action. It also stores Badger data under

@@ -14,6 +14,7 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/diagnosis"
+	"github.com/agentstation/starport/internal/setup"
 )
 
 func TestNoArgumentsShowHelp(t *testing.T) {
@@ -22,10 +23,17 @@ func TestNoArgumentsShowHelp(t *testing.T) {
 		t.Fatalf("run without arguments: %v", err)
 	}
 	for _, want := range []string{
-		"NAME:", "starport", "COMMANDS:", "dev", "serve", "doctor", "config", "version", "completion", "man",
+		"NAME:", "starport", "COMMANDS:", "dev", "serve", "auth", "doctor", "config", "version", "completion", "man",
 	} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Errorf("help output does not contain %q:\n%s", want, stdout.String())
+		}
+	}
+	// serve initializes a clean local root and auth bootstrap claims shared
+	// storage, so the root lists no init command.
+	for line := range strings.Lines(stdout.String()) {
+		if name, _, _ := strings.Cut(strings.TrimSpace(line), " "); strings.TrimSuffix(name, ",") == "init" {
+			t.Errorf("help output lists an init command: %q", line)
 		}
 	}
 }
@@ -130,7 +138,7 @@ func TestDevPrintsGatewayKeyOnce(t *testing.T) {
 			args: []string{"starport", "dev"},
 			start: func(ctx context.Context, deliver CredentialDelivery) (string, error) {
 				return "", deliver(ctx, InitResult{
-					APIKeyName: DefaultAPIKeyName, APIKey: "development-key",
+					APIKeyName: setup.DefaultAPIKeyName, APIKey: "development-key",
 					ConfigFile: "/home/config/config.env", DataDir: "/home/data",
 				})
 			},
@@ -213,144 +221,6 @@ func TestDevClosesSessionWhenCredentialOutputFails(t *testing.T) {
 	}
 }
 
-func TestInitUsesInjectedRunnerAndJSONOutput(t *testing.T) {
-	deps, stdout, _ := testDependencies()
-	var got InitOptions
-	deps.Initialize = func(_ context.Context, options InitOptions) (InitResult, error) {
-		got = options
-		return InitResult{
-			APIKeyName: options.APIKeyName,
-			ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
-		}, nil
-	}
-	if err := Run(context.Background(), []string{
-		"starport", "init", "--name", "developer", "--json",
-	}, deps); err != nil {
-		t.Fatalf("run init: %v", err)
-	}
-	if got.APIKeyName != "developer" {
-		t.Errorf("init options = %#v", got)
-	}
-	var result InitResult
-	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-		t.Fatalf("decode init JSON: %v", err)
-	}
-	if result.APIKey != "gateway-key" || result.ConfigFile != "/config/config.env" {
-		t.Errorf("init output = %#v", result)
-	}
-}
-
-func TestInitRejectsProviderFlag(t *testing.T) {
-	deps, _, _ := testDependencies()
-	called := false
-	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
-		called = true
-		return InitResult{}, nil
-	}
-	err := Run(context.Background(), []string{"starport", "init", "--provider", "openai"}, deps)
-	if err == nil || ExitCode(err) != ExitCodeUsage {
-		t.Fatalf("provider flag error = %v, exit code = %d", err, ExitCode(err))
-	}
-	if called {
-		t.Fatal("initializer ran for a removed provider flag")
-	}
-}
-
-func TestInitRejectsInvalidAPIKeyNameAsUsageError(t *testing.T) {
-	deps, _, _ := testDependencies()
-	called := false
-	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
-		called = true
-		return InitResult{}, nil
-	}
-	err := Run(context.Background(), []string{
-		"starport", "init", "--name", "invalid name",
-	}, deps)
-	if err == nil || ExitCode(err) != ExitCodeUsage {
-		t.Fatalf("invalid name error = %v, exit code = %d", err, ExitCode(err))
-	}
-	if called {
-		t.Fatal("initializer ran for an invalid API key name")
-	}
-}
-
-func TestInitRollsBackWhenCredentialOutputFails(t *testing.T) {
-	deps, _, _ := testDependencies()
-	outputErr := errors.New("output unavailable")
-	deps.Stdout = failingWriter{err: outputErr}
-	rollbackCalls := 0
-	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
-		return InitResult{
-			APIKeyName: "local-admin",
-			ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
-			Rollback: func(context.Context) error {
-				rollbackCalls++
-				return nil
-			},
-		}, nil
-	}
-	err := Run(context.Background(), []string{"starport", "init"}, deps)
-	if !errors.Is(err, outputErr) || ExitCode(err) != ExitCodeRuntime {
-		t.Fatalf("output error = %v, exit code = %d", err, ExitCode(err))
-	}
-	if rollbackCalls != 1 {
-		t.Fatalf("rollback calls = %d, want 1", rollbackCalls)
-	}
-}
-
-func TestInitReturnsCredentialBeforePostCommitFailure(t *testing.T) {
-	deps, stdout, _ := testDependencies()
-	closeErr := errors.New("storage close failed")
-	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
-		return InitResult{
-			APIKeyName: "local-admin", APIKey: "gateway-key",
-		}, closeErr
-	}
-	err := Run(context.Background(), []string{"starport", "init", "--configured-storage"}, deps)
-	if !errors.Is(err, closeErr) || ExitCode(err) != ExitCodeRuntime {
-		t.Fatalf("initialization error = %v, exit code = %d", err, ExitCode(err))
-	}
-	if !strings.Contains(stdout.String(), "gateway-key") {
-		t.Errorf("initialization output = %q", stdout.String())
-	}
-}
-
-func TestInitConfiguredStorageNeedsNoProvider(t *testing.T) {
-	deps, stdout, _ := testDependencies()
-	var got InitOptions
-	deps.Initialize = func(_ context.Context, options InitOptions) (InitResult, error) {
-		got = options
-		return InitResult{APIKeyName: options.APIKeyName, APIKey: "gateway-key"}, nil
-	}
-	if err := Run(context.Background(), []string{
-		"starport", "init", "--configured-storage",
-	}, deps); err != nil {
-		t.Fatalf("run configured setup: %v", err)
-	}
-	if !got.ConfiguredStorage {
-		t.Errorf("init options = %#v", got)
-	}
-	if strings.Contains(stdout.String(), "Configuration:") || !strings.Contains(stdout.String(), "gateway-key") {
-		t.Errorf("configured setup output = %q", stdout.String())
-	}
-}
-
-func TestInitOutputUsesProviderNeutralNextStep(t *testing.T) {
-	deps, stdout, _ := testDependencies()
-	deps.Initialize = func(_ context.Context, options InitOptions) (InitResult, error) {
-		return InitResult{
-			APIKeyName: options.APIKeyName,
-			ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
-		}, nil
-	}
-	if err := Run(context.Background(), []string{"starport", "init"}, deps); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(stdout.String(), "Run: starport serve") {
-		t.Errorf("setup output = %q", stdout.String())
-	}
-}
-
 func TestUnknownCommandReturnsUsageError(t *testing.T) {
 	deps, stdout, _ := testDependencies()
 	err := Run(context.Background(), []string{"starport", "invalid"}, deps)
@@ -362,6 +232,25 @@ func TestUnknownCommandReturnsUsageError(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "COMMANDS:") {
 		t.Errorf("unknown command did not show help:\n%s", stdout.String())
+	}
+}
+
+func TestInitIsAnUnknownCommand(t *testing.T) {
+	deps, _, stderr := testDependencies()
+	called := false
+	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
+		called = true
+		return InitResult{}, nil
+	}
+	err := Run(context.Background(), []string{"starport", "init"}, deps)
+	if err == nil || ExitCode(err) != ExitCodeUsage {
+		t.Fatalf("init error = %v, exit code = %d", err, ExitCode(err))
+	}
+	if !strings.Contains(err.Error()+stderr.String(), `unknown command "init"`) {
+		t.Errorf("init error = %v, stderr = %q", err, stderr.String())
+	}
+	if called {
+		t.Fatal("init reached the initializer")
 	}
 }
 

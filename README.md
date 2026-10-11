@@ -283,26 +283,18 @@ complete procedure.
 starport serve
 ```
 
-The first identity has the name `local-admin`. To select a different name, run
-`starport init` once before the first `starport serve`:
-
-```bash
-starport init --name primary-admin
-```
-
-On a default macOS installation, the output has this form:
+On a default macOS installation, the first run prints this output before the
+welcome:
 
 ```text
 Initialized Starport.
 Configuration: /Users/<user>/Library/Application Support/starport/config/config.env
 Data: /Users/<user>/Library/Application Support/starport/data
 Gateway API key (shown once): replace-with-generated-gateway-key
-Run: starport serve
 ```
 
-Then start the gateway with `starport serve`. In both sequences, open the
-console with `starport ui`. Issue further gateway API keys in the console under
-Keys.
+The first identity has the name `local-admin`. Open the console with
+`starport ui`. Issue further gateway API keys in the console under Keys.
 
 `starport config paths` prints each managed location on one labeled line:
 
@@ -362,12 +354,12 @@ cp .env.example .env
 chmod 600 .env
 # Edit .env. Set STARPORT_SECURITY_MASTER_KEY and OPENAI_API_KEY.
 docker compose build starport
-docker compose run --rm starport init --configured-storage --name primary-admin
+docker compose run --rm starport auth bootstrap --name primary-admin
 docker compose run --rm starport auth rotate
 docker compose up -d starport
 ```
 
-Save the gateway key from initialization and the local admin token from rotation.
+Save the gateway key from the bootstrap and the local admin token from rotation.
 Keep both values private. Do not initialize the same identity repository again.
 The API is available at `http://127.0.0.1:7827`. The three named volumes retain
 configuration, application data, and catalog state through container replacement.

@@ -33,7 +33,7 @@ func TestDevelopmentRejectsPersistentEnvironmentSelections(t *testing.T) {
 			if err != nil {
 				require.Contains(t, OperatorError(err).Error(), key)
 				require.NotContains(t, OperatorError(err).Error(), "selected-private-value")
-				require.Contains(t, OperatorError(err).Error(), "starport init")
+				require.Contains(t, OperatorError(err).Error(), "use starport serve for persistent storage")
 			}
 			require.NoDirExists(t, paths.DataDir)
 		})
