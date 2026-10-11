@@ -134,7 +134,7 @@ func TestFileManifestDevelopmentDisablesPersistentStores(t *testing.T) {
 	require.NoError(t, err)
 	report, err := cfg.FileManifest("test")
 	require.NoError(t, err)
-	for _, role := range []string{"configuration", "badger", "sqlite", "baseline", "runtime-evidence", "welcome-stamp", "setup-transaction", "setup-storage-guard", "setup-database-stage", "setup-config-publications", "local-token-lock"} {
+	for _, role := range []string{"configuration", "badger", "sqlite", "baseline", "runtime-evidence", "welcome-stamp", "gateway-endpoint", "setup-transaction", "setup-storage-guard", "setup-database-stage", "setup-config-publications", "local-token-lock"} {
 		require.Equal(t, fileDisabled, manifestEntry(t, report, role).Availability)
 	}
 	for _, entry := range report.External {

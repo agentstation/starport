@@ -224,6 +224,15 @@ func (c *Config) CatalogCredentialPolicyDirectory() string {
 	return filepath.Join(c.paths.StateDir, "credentials", "catalog", c.paths.InstanceID)
 }
 
+// EndpointRecordFile selects the record where a running gateway states its
+// bound address. A scratch or unset state root selects no record.
+func (c *Config) EndpointRecordFile() string {
+	if c == nil || c.Catalog.StateDirectoryIsScratch() || c.paths.StateDir == "" {
+		return ""
+	}
+	return filepath.Join(c.paths.StateDir, "gateway-endpoint.json")
+}
+
 // InferenceCredentialPolicyDirectory selects private inference selection history.
 func (c *Config) InferenceCredentialPolicyDirectory() string {
 	if c == nil || c.Catalog.StateDirectoryIsScratch() || c.paths.StateDir == "" {

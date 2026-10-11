@@ -16,6 +16,8 @@ import (
 	"time"
 
 	starportcli "github.com/agentstation/starport/internal/cli"
+	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/endpoint"
 )
 
 const consoleLinkLine = "Console (one-time launch link):"
@@ -101,6 +103,45 @@ func TestDevOpensTheBoundAddress(t *testing.T) {
 			t.Errorf("console link status = %d, want %d from this gateway", status, http.StatusSeeOther)
 		}
 	})
+}
+
+// TestDevWritesEndpointRecord records the bound port while dev runs and
+// removes the record when dev exits. The record names the port in the console
+// link, not the busy first port.
+func TestDevWritesEndpointRecord(t *testing.T) {
+	firstRunEnvironment(t)
+	unsetServerPort(t)
+	busy, free := holdLoopbackPort(t), freeLoopbackPort(t)
+	cfg, err := config.LoadWithDefaults(t.Context())
+	if err != nil {
+		t.Fatalf("load the configuration: %v", err)
+	}
+	path := cfg.EndpointRecordFile()
+	if path == "" {
+		t.Fatal("the persistent profile selects no endpoint record")
+	}
+
+	stdout := &firstRunOutput{}
+	code, stderr := developmentUntilReady(t, developmentOnPorts(busy, free), []string{"starport", "dev", "--no-open"}, free, stdout,
+		func(context.Context, string) {
+			record, live, err := endpoint.ReadRecord(path)
+			if err != nil || !live {
+				t.Errorf("no live endpoint record during the run: live = %t, err = %v", live, err)
+				return
+			}
+			if console := printedLine(stdout.String(), consoleLinkLine); record.Port != linkPort(t, console) {
+				t.Errorf("record port = %d, want the console link port %d", record.Port, linkPort(t, console))
+			}
+			if record.Port != free || record.PID != os.Getpid() || record.Scheme != "http" {
+				t.Errorf("record = %+v, want port %d, pid %d, and scheme http", record, free, os.Getpid())
+			}
+		})
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr = %s", code, stderr)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the endpoint record remains after exit: %v", err)
+	}
 }
 
 // TestDevKeepsExplicitPort binds only the port that the environment names.

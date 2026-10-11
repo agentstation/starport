@@ -55,6 +55,8 @@ func TestBackupInventoryAccountsForEveryCanonicalRole(t *testing.T) {
 	// No configuration file is selected, so no local save journal exists.
 	require.Equal(t, "not-selected", captures["config-operation-journal"])
 	require.Equal(t, "not-selected", captures["logs"])
+	// A backup never captures the record of a running gateway.
+	require.Equal(t, "not-selected", captures["gateway-endpoint"])
 	sourcePaths := map[string]bool{}
 	for _, file := range inventory.Files {
 		sourcePaths[file.Source] = true

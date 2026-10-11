@@ -9,6 +9,8 @@ import (
 
 	urfavecli "github.com/urfave/cli/v3"
 
+	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/endpoint"
 	"github.com/agentstation/starport/internal/localauth"
 )
 
@@ -20,10 +22,11 @@ const (
 
 // launchURL mints a launch ticket and returns the URL that spends it.
 //
-// It reads the configuration for the address and the token file for the
-// secret, and it asks the running gateway for nothing. A command that had to
-// reach the gateway to produce a launch URL would fail in the one case where
-// an operator needs it most: a gateway that is up but not letting them in.
+// It reads the endpoint record or the configuration for the address and the
+// token file for the secret, and it asks the running gateway for nothing. A
+// command that had to reach the gateway to produce a launch URL would fail in
+// the one case where an operator needs it most: a gateway that is up but not
+// letting them in.
 func launchURL(ctx context.Context, deps Dependencies) (string, error) {
 	cfg, err := deps.LoadConfig(ctx)
 	if err != nil {
@@ -44,8 +47,21 @@ func launchURL(ctx context.Context, deps Dependencies) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	base := localauth.BrowsableBase(cfg.Server.Host, cfg.Server.Port, cfg.Security.EnableTLS)
-	return localauth.LaunchURL(base, ticket)
+	return localauth.LaunchURL(gatewayBase(cfg), ticket)
+}
+
+// gatewayBase returns the address of the running gateway from its endpoint
+// record. When no live gateway wrote a record, it returns the configured
+// address, so a link minted before the gateway starts still names the port
+// that the gateway binds by default.
+func gatewayBase(cfg *config.Config) string {
+	if path := cfg.EndpointRecordFile(); path != "" {
+		record, live, err := endpoint.ReadRecord(path)
+		if err == nil && live {
+			return localauth.BrowsableBase(record.Host, record.Port, record.Scheme == "https")
+		}
+	}
+	return localauth.BrowsableBase(cfg.Server.Host, cfg.Server.Port, cfg.Security.EnableTLS)
 }
 
 func newUICommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.Command {

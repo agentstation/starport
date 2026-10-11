@@ -101,6 +101,10 @@ func backupRoleCapture(entry productpaths.FileEntry) (string, error) {
 		return "not-selected", nil
 	}
 	switch entry.ID {
+	case fileRoleEndpoint:
+		// The record names a running process. A backup runs with the gateway
+		// stopped, and a restored record would name a process that exited.
+		return "not-selected", nil
 	case pathRoleBadger:
 		return "kv-snapshot", nil
 	case pathRoleSQLite, "sqlite-wal", "sqlite-shm", "sqlite-journal":

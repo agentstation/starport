@@ -24,7 +24,7 @@ pnpm build
 pnpm check
 ```
 
-The dev server proxies gateway calls to `localhost:7827`. Start the gateway with `starport dev` and open the launch link it prints. The build writes to `internal/console/dist`, and `pnpm check` runs the lint, the build, the typecheck, and the tests in that order.
+The dev server proxies gateway calls to `STARPORT_CONSOLE_PROXY_TARGET`, which defaults to `http://localhost:7827`. Start the gateway with `starport dev` and open the launch link it prints. When `dev` prints `Port 7827 is busy. Bound port 7373.`, start the dev server with `STARPORT_CONSOLE_PROXY_TARGET=http://localhost:7373 pnpm dev`. The build writes to `internal/console/dist`, and `pnpm check` runs the lint, the build, the typecheck, and the tests in that order.
 
 ## Test conventions
 

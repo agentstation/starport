@@ -142,6 +142,7 @@ type App struct {
 	runtimeMu    sync.Mutex
 	closeOnce    sync.Once
 	closeErr     error
+	recordOnce   sync.Once
 }
 
 // New creates the complete production runtime without starting background work.
@@ -1070,6 +1071,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	}
 	b.application.httpServer = httpServer
 	b.application.own("HTTP server", func(ctx context.Context) error { return closeHTTPServer(ctx, httpServer) })
+	b.ownEndpointRecord()
 	return nil
 }
 
@@ -1353,14 +1355,15 @@ func (a *App) Run(ctx context.Context) error {
 	return errors.Join(runErr, a.closeWithTimeout())
 }
 
-// Bind holds the HTTP listen address and returns the bound address. A second
-// call returns the same address. A busy port fails with an error that names
-// the port.
+// Bind holds the HTTP listen address, writes the endpoint record, and returns
+// the bound address. A second call returns the same address. A busy port fails
+// with an error that names the port.
 func (a *App) Bind() (net.Addr, error) {
 	address, err := a.httpServer.Bind()
 	if err != nil {
 		return nil, BindFailure(err)
 	}
+	a.recordOnce.Do(func() { a.writeEndpointRecord(address) })
 	return address, nil
 }
 
