@@ -102,8 +102,9 @@ make build
 
 ## Quick start
 
-The quick start uses `starport dev --ephemeral`, a temporary gateway. It keeps
-no state after it stops. [Keep the gateway](#keep-the-gateway) gives the persistent path.
+The quick start runs `starport dev`, a local gateway that keeps its keys and
+data between runs. [Run a scratch gateway](#run-a-scratch-gateway) gives the
+path that keeps nothing.
 
 ### Inspect the catalog without credentials
 
@@ -131,7 +132,7 @@ Starport uses three credential roles. They are not interchangeable:
 A gateway API key never pays a provider. A provider inference credential never
 authenticates a client. See [Keys and roles](docs/site/start/keys-and-roles.md).
 
-### Terminal 1: start a temporary gateway
+### Terminal 1: start the gateway
 
 Starport checks every provider in the active catalog generation. It discovers
 provider inference credentials from the ordered profiles in that catalog. You
@@ -140,23 +141,43 @@ do not select a provider with a command flag.
 Set one conventional provider inference credential. This example uses OpenAI:
 
 ```bash
-unset STARPORT_CATALOG_STATE_DIR STARPORT_FILES_BACKEND
 export OPENAI_API_KEY="replace-with-provider-inference-key"
-starport dev --ephemeral
+starport dev
 ```
 
-The command starts a temporary development gateway at `http://127.0.0.1:7827`,
-or the next free port, which `dev` prints.
-It uses in-memory state for Badger and SQLite and creates no configuration files.
-It prints one temporary Starport gateway API key and opens the console:
+The command starts a local gateway at `http://127.0.0.1:7827`. On an empty
+local root, the first run creates the configuration file, a Starport master
+key, the first gateway identity, and the local admin token. Initialization
+does not select a provider or persist provider inference credentials. The
+first run prints the gateway API key once. Then the command opens the console.
+
+On a default macOS installation, the first run prints this output:
 
 ```text
+Initialized Starport.
+Configuration: /Users/<user>/Library/Application Support/starport/config/config.env
+Data: /Users/<user>/Library/Application Support/starport/data
+Gateway API key (shown once): replace-with-generated-gateway-key
 Starport development gateway
 URL: http://127.0.0.1:7827
 Authentication: required
-Gateway API key (shown once): replace-with-generated-gateway-key
 Console (one-time launch link): http://127.0.0.1:7827/launch?lt=replace-with-ticket
 ```
+
+Save the gateway API key in a password manager. The first identity has the
+name `local-admin`. Issue further gateway API keys in the console under Keys.
+
+When another process holds port 7827, `dev` tries other ports in this order:
+
+1. Port 7373.
+2. Port 7678.
+3. A random free port from 7000 through 7999.
+4. Any free port.
+
+It prints the busy port and the bound port before the `URL:` line, for
+example `Port 7827 is busy. Bound port 7373.` Use the printed URL in the
+commands below. A port from `STARPORT_SERVER_PORT` or the configuration file
+turns off the fallback.
 
 The console link is not a key. The gateway spends the link on first use and
 exchanges it for a browser session that this machine issued. You paste nothing
@@ -168,18 +189,18 @@ A browser on the gateway machine can also present its local admin token.
 machine. Both paths prove presence at that machine and end in the same console
 session.
 
-Ephemeral development mode reads the process environment but not `config.env`.
-It refuses persistent storage selectors before it opens storage.
-The refused selectors are the KV, SQL, file, and cache backend settings, and `STARPORT_CATALOG_STATE_DIR`.
-The `unset` command above removes two common selectors.
-See [Temporary development](docs/site/start/temporary-development.md) for the full list.
+`starport dev` reads `config.env` and the process environment, as
+`starport serve` does. It binds only `127.0.0.1`. It refuses shared management
+and stores away from the platform roots before it opens storage. The error
+names each refused setting.
 
 Keep this terminal open.
 
 ### Terminal 2: send a request with the gateway key
 
-Copy the printed gateway key into a second terminal. This key authenticates the
-client to Starport. It is not the provider inference credential.
+Set the gateway key from the first run in a second terminal. This key
+authenticates the client to Starport. It is not the provider inference
+credential.
 
 ```bash
 export STARPORT_API_KEY="replace-with-generated-gateway-key"
@@ -214,21 +235,74 @@ credential and whether the account can use the selected offering. Starport
 records authentication, permission, quota, billing, rate-limit, and service
 failures in its scoped provider state.
 
-### Stop the temporary gateway
+### Stop and restart the gateway
 
-Press Ctrl+C in Terminal 1. At shutdown, `starport dev --ephemeral` removes these items:
+Press Ctrl+C in Terminal 1. Then start the gateway again:
 
-- The gateway API keys, accounts, and console sessions.
-- The usage records, request activity, and budgets.
-- The uploaded files, batches, and presets.
-- The catalog baseline and the runtime catalog state in the session scratch directories.
+```bash
+starport dev
+```
 
-Provider inference credentials stay in the process environment. A later
-development run removes abandoned scratch directories after it verifies their
-owner. See [development scratch recovery](docs/OPERATOR-GUIDE.md#development-scratch-recovery).
+The next run reads the same configuration file, master key, and stores. It
+prints no gateway API key, and the key from the first run still works. It
+prints a new console link and opens the console:
 
-An ephemeral gateway has no upgrade path to persistent state. To keep data,
-follow [Run a persistent local gateway](docs/site/start/local-persistent.md).
+```text
+Starport development gateway
+URL: http://127.0.0.1:7827
+Authentication: required
+Console (one-time launch link): http://127.0.0.1:7827/launch?lt=replace-with-ticket
+```
+
+If a first run stops before it completes, the next run stops with an error.
+The error names `starport auth bootstrap --recover`, which retries the
+interrupted setup.
+
+`starport serve` uses the same root, configuration, and keys. It keeps its
+configured port, and it opens no browser. Use `starport serve` for a gateway
+that clients reach at one fixed port.
+[Run a persistent local gateway](docs/site/start/local-persistent.md) gives the
+complete procedure.
+
+### Where the gateway keeps its data
+
+`starport config paths` prints each managed location on one labeled line:
+
+```text
+Configuration directory: /Users/<user>/Library/Application Support/starport/config
+Configuration file: /Users/<user>/Library/Application Support/starport/config/config.env
+Data directory: /Users/<user>/Library/Application Support/starport/data
+State directory: /Users/<user>/Library/Application Support/starport/state
+Cache directory: /Users/<user>/Library/Caches/starport
+```
+
+`STARPORT_HOME` is the shared path anchor. It puts the configuration, data,
+state, and cache roots under one directory. `STARPORT_CONFIG_DIR` moves only
+the configuration root. See [Files and paths](docs/site/configure/paths.md).
+
+Badger holds the durable KV records, for example keys, usage, and accepted
+catalog generations. SQLite holds the relational records. Ristretto holds
+disposable memory caches. A cache never holds durable state. See
+[Storage backends](docs/site/storage/backends.md) and
+[Optional caches](docs/site/storage/caches.md).
+
+### Run a scratch gateway
+
+Add `--ephemeral` for a gateway that keeps nothing after it stops:
+
+```bash
+starport dev --ephemeral
+```
+
+A scratch gateway uses in-memory state for Badger and SQLite.
+It creates no configuration files. It prints a new gateway API key on each
+run. At shutdown, it removes its keys, records, uploaded files, and catalog
+state.
+
+A scratch gateway refuses persistent storage selectors before it opens
+storage. It has no upgrade path to persistent state.
+[Run a scratch development gateway](docs/site/start/temporary-development.md)
+lists the removed items and the refused selectors.
 
 ## Connect a client
 
@@ -268,54 +342,7 @@ that `scripts/smoke-openrouter-sdks.sh` tests.
 Starport uses direct changes and has no legacy provider aliases or storage
 readers. It does not yet promise a compatibility window.
 
-## Keep the gateway
-
-### Persistent local gateway
-
-For persistent local state, run `starport serve`. On an empty local root, the
-first run creates the configuration file, a Starport master key, the first
-gateway identity, and the local admin token. Then it starts the gateway. The
-first run prints the gateway API key once, before the welcome. Initialization
-does not select a provider or persist provider inference credentials.
-[Run a persistent local gateway](docs/site/start/local-persistent.md) gives the
-complete procedure.
-
-```bash
-starport serve
-```
-
-On a default macOS installation, the first run prints this output before the
-welcome:
-
-```text
-Initialized Starport.
-Configuration: /Users/<user>/Library/Application Support/starport/config/config.env
-Data: /Users/<user>/Library/Application Support/starport/data
-Gateway API key (shown once): replace-with-generated-gateway-key
-```
-
-The first identity has the name `local-admin`. Open the console with
-`starport ui`. Issue further gateway API keys in the console under Keys.
-
-`starport config paths` prints each managed location on one labeled line:
-
-```text
-Configuration directory: /Users/<user>/Library/Application Support/starport/config
-Configuration file: /Users/<user>/Library/Application Support/starport/config/config.env
-Data directory: /Users/<user>/Library/Application Support/starport/data
-State directory: /Users/<user>/Library/Application Support/starport/state
-Cache directory: /Users/<user>/Library/Caches/starport
-```
-
-`STARPORT_HOME` is the shared path anchor. It puts the configuration, data,
-state, and cache roots under one directory. `STARPORT_CONFIG_DIR` moves only
-the configuration root. See [Files and paths](docs/site/configure/paths.md).
-
-Badger holds the durable KV records, for example keys, usage, and accepted
-catalog generations. SQLite holds the relational records. Ristretto holds
-disposable memory caches. A cache never holds durable state. See
-[Storage backends](docs/site/storage/backends.md) and
-[Optional caches](docs/site/storage/caches.md).
+## Serve and deploy
 
 ### Serve without a gateway API key
 
@@ -344,6 +371,12 @@ gh attestation verify "oci://ghcr.io/agentstation/starport:$STARPORT_VERSION" \
   --signer-workflow agentstation/starport/.github/workflows/release.yaml
 docker run --rm "ghcr.io/agentstation/starport:$STARPORT_VERSION" --version
 ```
+
+Configured storage does not initialize itself. Set the storage, master-key,
+and provider values before the first start. Then
+`starport auth bootstrap --name <name>` creates the first named identity. The
+command prints the new gateway API key once. It refuses an identity repository
+that already contains an identity.
 
 The default Compose file builds one Starport process with persistent Badger,
 SQLite, and file storage. Use fresh volumes for this recipe. See the

@@ -49,9 +49,8 @@ make build
   {
     id: 'quick-start',
     title: 'Quick start',
-    note: 'Temporary gateway · no state after it stops',
-    command: `unset STARPORT_CATALOG_STATE_DIR STARPORT_FILES_BACKEND
-export OPENAI_API_KEY="replace-with-provider-inference-key"
+    note: 'Persistent gateway · keys survive a restart',
+    command: `export OPENAI_API_KEY="replace-with-provider-inference-key"
 starport dev`,
   },
 ];
@@ -182,12 +181,13 @@ export const REQUEST_STATES = {
   stored: 'Stored · KV · SQL · blob',
   served: 'Served · one process on your host',
   balanced: 'Balanced · one replica of the fleet',
-  temporary: 'Recorded · in-memory state',
+  persisted: 'Recorded · on disk',
 };
 
 // The labels that the world draws beside its parts: the catalog source, the
 // credential on each lane, the stream back, the server, the fleet, and the
-// laptop. The server holds the one process of the README Compose file and
+// laptop. The laptop stores persist on disk under the platform storage root.
+// The server holds the one process of the README Compose file and
 // its three named volumes: the T2 storage recipe on durable volumes, and one
 // active gateway (targets.md T3).
 export const WORLD_LABELS = {
@@ -214,7 +214,7 @@ export const WORLD_LABELS = {
   laptop: 'Your laptop',
   dev: '`starport dev`',
   process: 'Starport · one process',
-  memory: ['In-memory Badger', 'In-memory SQLite'],
+  laptopStores: ['Badger on disk', 'SQLite on disk'],
 };
 
 // The hosts under the production server: examples of the host you own, not
@@ -408,7 +408,6 @@ starport models show openai/gpt-4o-mini --json`,
         text: `Starport development gateway
 URL: http://127.0.0.1:7827
 Authentication: required
-Gateway API key (shown once): replace-with-generated-gateway-key
 Console (one-time launch link): http://127.0.0.1:7827/launch?lt=replace-with-ticket`,
       },
     ],
@@ -508,9 +507,9 @@ STARPORT_FILES_BACKEND=objectstore`,
   {
     id: 'laptop',
     eyebrow: 'On a laptop',
-    claim: 'Temporary by default. Persistent by choice.',
-    body: 'Homebrew installs Starport on macOS and Linux. The `starport dev` command starts a temporary gateway with in-memory Badger and SQLite, and it removes the gateway state at shutdown. To keep data, run `starport serve`, which initializes persistent state on its first run.',
-    chips: ['Homebrew · macOS · Linux', 'Removed at shutdown', '`starport serve` keeps data'],
+    claim: 'Persistent by default. Scratch by choice.',
+    body: 'Homebrew installs Starport on macOS and Linux. The `starport dev` command keeps Badger, SQLite, and files on disk under the platform storage root, and `starport serve` runs the same root on a fixed port. Add `--ephemeral` for a scratch gateway that keeps nothing after it stops.',
+    chips: ['Homebrew · macOS · Linux', 'On disk · kept across restarts', '`--ephemeral` keeps nothing'],
     visuals: [
       {
         kind: 'code',
