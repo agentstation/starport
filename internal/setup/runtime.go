@@ -51,7 +51,7 @@ func lockDatabase(ctx context.Context, paths config.Paths) (*setupWriter, error)
 
 // GuardLocalStorage excludes setup while a persistent local gateway owns storage.
 // The caller must close the guard after all gateway stores close.
-// A pending setup transaction requires an explicit initialization retry.
+// A pending setup transaction requires an explicit recovery.
 func GuardLocalStorage(ctx context.Context, paths config.Paths) (_ io.Closer, resultErr error) {
 	if paths.ConfigFile != "" && (!filepath.IsAbs(paths.ConfigFile) || filepath.Clean(paths.ConfigFile) != paths.ConfigFile) {
 		return nil, ErrPathsRequired
@@ -66,7 +66,7 @@ func GuardLocalStorage(ctx context.Context, paths config.Paths) (_ io.Closer, re
 		}
 	}()
 	if _, err := guard.directory.ReadFile(setupBindingFile, setupJournalLimit); !os.IsNotExist(err) {
-		return nil, errors.Join(fmt.Errorf("%w: retry local initialization before storage opens", ErrPartialState), err)
+		return nil, errors.Join(partialState(paths.ConfigFile), err)
 	}
 	if err := inspectSettledMetadata(guard.directory, true); err != nil {
 		return nil, err

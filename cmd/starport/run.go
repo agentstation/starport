@@ -138,17 +138,22 @@ func runInitializer(ctx context.Context, options starportcli.InitOptions) (starp
 	result, err := service.Initialize(ctx, setup.Request{
 		APIKeyName: options.APIKeyName,
 	})
-	initialized := starportcli.InitResult{
+	return localInitResult(service, result), err
+}
+
+// localInitResult carries a local setup result to the credential writer with
+// the rollback that undoes it. A result without a credential carries nothing.
+func localInitResult(service *setup.Service, result setup.Result) starportcli.InitResult {
+	if result.APIKey == "" {
+		return starportcli.InitResult{}
+	}
+	return starportcli.InitResult{
 		APIKeyName: result.APIKeyName,
 		ConfigFile: result.ConfigFile, DataDir: result.DataDir, APIKey: result.APIKey,
 		Rollback: func(rollbackCtx context.Context) error {
 			return service.Rollback(rollbackCtx, result)
 		},
 	}
-	if result.APIKey == "" {
-		initialized = starportcli.InitResult{}
-	}
-	return initialized, err
 }
 
 func startDevelopment(
@@ -256,18 +261,6 @@ func rollbackConfiguredAPIKey(
 		return fmt.Errorf("close configured storage after rollback: %w", closeErr)
 	}
 	return nil
-}
-
-func runServer(ctx context.Context, options starportcli.GatewayOptions) error {
-	cfg, err := config.LoadWithDefaults(ctx, configOverrides(options)...)
-	if err != nil {
-		return fmt.Errorf("load configuration: %w", err)
-	}
-	application, err := app.New(cfg, app.WithBuildInfo(version, gitCommit, buildTime))
-	if err != nil {
-		return fmt.Errorf("create application: %w", err)
-	}
-	return application.Run(ctx)
 }
 
 func buildInformation() starportcli.BuildInfo {

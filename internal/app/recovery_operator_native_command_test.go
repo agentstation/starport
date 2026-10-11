@@ -131,7 +131,7 @@ func operatorCommandDependencies(t *testing.T, environment map[string]string, ou
 		InspectPopulatedRecovery: func(ctx context.Context, cfg *config.Config, request cli.PopulatedRecoveryRequest) (recovery.ActivationResult, error) {
 			return InspectPopulatedRecovery(ctx, cfg, PopulatedRecoveryRequest(request))
 		},
-		RunServer: func(context.Context, cli.GatewayOptions) error {
+		RunServer: func(context.Context, cli.GatewayOptions, cli.ServerOutput) error {
 			t.Fatal("recovery started a gateway")
 			return nil
 		},

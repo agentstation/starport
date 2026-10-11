@@ -22,7 +22,7 @@ func TestRunContextNoArgumentsShowsHelp(t *testing.T) {
 		bytes.NewReader(nil),
 		stdout,
 		stderr,
-		func(context.Context, starportcli.GatewayOptions) error {
+		func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error {
 			calls++
 			return nil
 		},
@@ -48,7 +48,7 @@ func TestRunContextServeDelegatesToRunner(t *testing.T) {
 		bytes.NewReader(nil),
 		&bytes.Buffer{},
 		&bytes.Buffer{},
-		func(context.Context, starportcli.GatewayOptions) error {
+		func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error {
 			called = true
 			return nil
 		},
@@ -72,7 +72,7 @@ func TestRunContextMapsRuntimeError(t *testing.T) {
 		bytes.NewReader(nil),
 		&bytes.Buffer{},
 		stderr,
-		func(context.Context, starportcli.GatewayOptions) error { return serverErr },
+		func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return serverErr },
 		noopDevelopmentStarter,
 		noopInitializer,
 	)
@@ -92,7 +92,7 @@ func TestRunContextWritesUsageErrorOnce(t *testing.T) {
 		bytes.NewReader(nil),
 		&bytes.Buffer{},
 		stderr,
-		func(context.Context, starportcli.GatewayOptions) error { return nil },
+		func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
 		noopDevelopmentStarter,
 		noopInitializer,
 	)
@@ -111,7 +111,7 @@ func TestRunContextNormalizesMissingHelpTopic(t *testing.T) {
 		bytes.NewReader(nil),
 		&bytes.Buffer{},
 		&bytes.Buffer{},
-		func(context.Context, starportcli.GatewayOptions) error { return nil },
+		func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
 		noopDevelopmentStarter,
 		noopInitializer,
 	)
@@ -128,7 +128,7 @@ func TestRunContextWritesInvalidHelpErrorOnce(t *testing.T) {
 		bytes.NewReader(nil),
 		&bytes.Buffer{},
 		stderr,
-		func(context.Context, starportcli.GatewayOptions) error { return nil },
+		func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
 		noopDevelopmentStarter,
 		noopInitializer,
 	)
@@ -149,7 +149,7 @@ func TestRunContextVersionJSON(t *testing.T) {
 		bytes.NewReader(nil),
 		stdout,
 		stderr,
-		func(context.Context, starportcli.GatewayOptions) error { return nil },
+		func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
 		noopDevelopmentStarter,
 		noopInitializer,
 	)
@@ -174,7 +174,7 @@ func TestRunContextInitDelegatesToInitializer(t *testing.T) {
 		bytes.NewReader(nil),
 		stdout,
 		&bytes.Buffer{},
-		func(context.Context, starportcli.GatewayOptions) error { return nil },
+		func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
 		noopDevelopmentStarter,
 		func(_ context.Context, options starportcli.InitOptions) (starportcli.InitResult, error) {
 			got = options

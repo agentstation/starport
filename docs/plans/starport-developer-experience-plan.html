@@ -170,10 +170,10 @@
     <table>
       <thead><tr><th>Field</th><th>Current state</th></tr></thead>
       <tbody>
-        <tr><td>In progress</td><td>DX1 complete on <code>codex/dx-DX1</code>; its pull request carries this ledger update. DX2 in progress on <code>codex/dx-DX2</code> in <code>/private/tmp/starport-dx-DX2</code>, one implementer.</td></tr>
-        <tr><td>Next action</td><td>Merge the DX1 pull request at its exact head. Review DX2 when its implementer reports, then open and merge its pull request. DX3 starts after DX2 merges. DX4 starts after DX1 and DX3 merge.</td></tr>
-        <tr><td>Worktree</td><td><code>codex/dx-DX1</code> in <code>/private/tmp/starport-dx-DX1</code> and <code>codex/dx-DX2</code> in <code>/private/tmp/starport-dx-DX2</code>. DX0 merged as <code>c027e2b3</code>.</td></tr>
-        <tr><td>Verification</td><td>DX1: 1,236 tests passed and 7 skipped in <code>internal/config</code>, <code>internal/server</code>, and <code>internal/cli</code>; <code>make docs-generate</code> clean; compose config, console build, lint, and the verifier scripts pass. See <code>DX1.md</code>.</td></tr>
+        <tr><td>In progress</td><td>DX2 complete on <code>codex/dx-DX2</code> (pull request #444). Its pull request carries this ledger update. DX1 merged.</td></tr>
+        <tr><td>Next action</td><td>Merge the DX2 pull request at its exact head. Then start DX3 in <code>/private/tmp/starport-dx-DX3</code> on <code>codex/dx-DX3</code> and DX6 in <code>/private/tmp/starport-dx-DX6</code> on <code>codex/dx-DX6</code> at the same time. Both branch from <code>origin/main</code> after DX2 merges. DX4 starts after DX3 merges. One implementer owns each task. The orchestrator reviews each before merge.</td></tr>
+        <tr><td>Worktree</td><td><code>codex/dx-DX2</code> in <code>/private/tmp/starport-dx-DX2</code>. Plan pull request #441 merged as <code>ee6c9ce6</code>. DX0 pull request #442 merged as <code>c027e2b3</code>. DX1 pull request #443 merged as <code>8fd34ab6</code>.</td></tr>
+        <tr><td>Verification</td><td>DX2: the full suite passes with <code>-timeout 30m</code>. The smoke script passes. Autoreview pre-pr is clean (Sol, 0.98). The <code>internal/app</code> package takes 865 to 1,275 s, so the default 10-minute timeout stops it. <code>setup.FirstRun</code> also requires a loopback listener host, so the one-time key never prints into a container log. This narrows the DX2 contract and keeps invariant 2. The first-run test waits up to 5 minutes for readiness, because the first start under the race detector took 30 to 61 s on the CI runners.</td></tr>
         <tr><td>Running processes</td><td>None.</td></tr>
         <tr><td>Required reads</td><td><a href="#findings">Findings</a>, <a href="#decisions">Decisions</a>, <a href="#invariants">Invariants</a>, and the DX0 task contract.</td></tr>
         <tr><td>Unresolved</td><td>None. D1 through D4 are decided. The Sol findings are applied. The owner activated the plan.</td></tr>
@@ -422,8 +422,8 @@
       </thead>
       <tbody>
         <tr id="DX0" data-status="done"><td>DX0</td><td>Baseline: pin the baseline commit, create the proof root, capture fail-before evidence for F1, F2, F4, F5, and F9. No production behavior changes.</td><td><code>done</code></td><td>Baseline <code>40d7285f</code>. <code>proof/starport-developer-experience/DX0.md</code> holds five observations. 177 lines in 59 files carry 8080. <code>serve</code> exits 1 and leaves <code>welcomed</code> behind. Two <code>dev</code> runs print two key hashes and leave the home empty. <code>dev</code> under a pseudo-terminal opened the launch link against a foreign listener on 8080. Proof commit <code>0ee27f9f</code>.</td></tr>
-        <tr id="DX1" data-status="done"><td>DX1</td><td>Standard port: one owning constant replaces 8080 in code, container files, the Vite proxy, scripts, documents, and generated references. Includes the compatibility note.</td><td><code>done</code></td><td><code>internal/config.DefaultPort = 7827</code> with two tag-agreement tests. Grep count 177 lines in 59 files down to 9 lines in 4 files: six compatibility-note lines, one recorded transcript line, and two lines on the Starmap central-server page that name Starmap's own default. Commits <code>5b2ed61b</code>, <code>58504514</code>, <code>d59d4184</code>. Proof <code>DX1.md</code>.</td></tr>
-        <tr id="DX2" data-status="todo"><td>DX2</td><td>First-run initialization inside <code>serve</code> on an empty platform storage root. Greets after initialization, reloads the configuration, and writes the machine token. Includes its document and script changes.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="DX1" data-status="done"><td>DX1</td><td>Standard port: one owning constant replaces 8080 in code, container files, the Vite proxy, scripts, documents, and generated references. Includes the compatibility note.</td><td><code>done</code></td><td><code>internal/config.DefaultPort = 7827</code> with two tag-agreement tests. Grep count 177 lines in 59 files down to 9 lines in 4 files: six compatibility-note lines, one recorded transcript line, and two lines on the Starmap central-server page that name Starmap's own default. Commits <code>5b2ed61b</code>, <code>58504514</code>, <code>d59d4184</code>. Proof <code>DX1.md</code>. Merged as <code>8fd34ab6</code> (#443).</td></tr>
+        <tr id="DX2" data-status="done"><td>DX2</td><td>First-run initialization inside <code>serve</code> on an empty platform storage root. Greets after initialization, reloads the configuration, and writes the machine token. Includes its document and script changes.</td><td><code>done</code></td><td>Commits <code>9ae40616</code>, <code>b5828b82</code>, <code>6aff616f</code>, <code>f2a768fc</code>, <code>4579bccd</code> on <code>codex/dx-DX2</code>. <code>setup.FirstRun</code> qualifies a root: no master key, local management, loopback host, platform storage. <code>cmd/starport/serve.go</code> composes load, initialize, reload, machine token, open, greet, run. The seven named tests, three <code>internal/cli</code> output tests, and <code>TestInitializeConcurrentSingleWinner</code> pass. Full suite: 69 packages pass, 7,878 tests pass, 718 skip, 0 fail. Smoke script passes without <code>init</code>. Real binary: run 1 prints the key before the welcome, run 2 prints neither. <code>proof/starport-developer-experience/DX2.md</code>.</td></tr>
         <tr id="DX3" data-status="todo"><td>DX3</td><td>Persistent <code>dev</code> on the platform storage root as a separate persistent profile with eligibility checks. <code>--ephemeral</code> keeps the scratch profile. Carries its own document and capture-script changes.</td><td><code>todo</code></td><td></td></tr>
         <tr id="DX4" data-status="todo"><td>DX4</td><td>Listener bind, serve, and close contract. Developer port fallback with an endpoint record. Operator busy-port error.</td><td><code>todo</code></td><td></td></tr>
         <tr id="DX6" data-status="todo"><td>DX6</td><td>Remove the top-level <code>init</code> command. Add <code>starport auth bootstrap</code> for the shared first key and local recovery. Includes every README, verifier, smoke, diagnosis, skill, and splash line that names <code>init</code>.</td><td><code>todo</code></td><td></td></tr>
@@ -616,8 +616,9 @@ same places.</code></pre>
           foreign listener.</td></tr>
         <tr><td>2026-10-10</td><td>meta</td><td>merged</td><td>DX0 pull
           request #442 merged at head <code>e67fff71</code> as
-          <code>c027e2b3</code>. DX1 and DX2 started together from that
-          commit, one implementer each.</td></tr>
+          <code>c027e2b3</code>. Remote branch and worktree removed. DX1 and
+          DX2 started together from that commit, one implementer
+          each.</td></tr>
         <tr><td>2026-10-10</td><td>DX1</td><td>done</td><td>Implementer
           commits <code>5b2ed61b</code>, <code>58504514</code>,
           <code>d59d4184</code>, reviewed by the orchestrator. One accepted
@@ -625,6 +626,18 @@ same places.</code></pre>
           Starmap owns that default. The acceptance text now names it.
           Console README strict lint went from 3 diagnostics to 0; README,
           SKILL.md, and the proof lint at 0.</td></tr>
+        <tr><td>2026-10-10</td><td>DX2</td><td>done</td><td>Five commits on
+          <code>codex/dx-DX2</code>, head <code>4579bccd</code>. One
+          qualification added: <code>setup.FirstRun</code> requires a loopback
+          listener host. The welcome text still names <code>init</code>. DX6
+          owns that text. A sixth commit raised the first-run readiness
+          deadline to 5 minutes after the macOS runner failed at 60 s.</td></tr>
+        <tr><td>2026-10-10</td><td>meta</td><td>merged</td><td>DX1 pull
+          request #443 merged at head <code>8bac6ab7</code> as
+          <code>8fd34ab6</code>. Remote branch and worktree removed. One
+          <code>Test (ubuntu-24.04-arm)</code> flake,
+          <code>TestProductionSemanticEmbeddingSharesBudget</code>, passed on
+          rerun.</td></tr>
       </tbody>
     </table>
   </section>

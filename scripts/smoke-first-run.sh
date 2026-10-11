@@ -34,6 +34,7 @@ development_home="$smoke_root/development-home"
 persistent_home="$smoke_root/persistent-home"
 development_log="$smoke_root/development.log"
 server_log="$smoke_root/server.log"
+restart_log="$smoke_root/restart.log"
 setup_log="$smoke_root/setup.log"
 server_port="${STARPORT_SMOKE_PORT:-18080}"
 
@@ -109,19 +110,61 @@ starport_environment=(
 	"STARPORT_SERVER_PORT=$server_port"
 )
 
-if ! initialization="$("${starport_environment[@]}" "$binary" init --name smoke-admin --json 2>"$setup_log")"; then
-	printf 'first-run initialization failed\n' >&2
-	sed -n '1,120p' "$setup_log" >&2
+# wait_for_ready waits for the gateway readiness route. It fails when the
+# server process exits first.
+wait_for_ready() {
+	for _ in {1..60}; do
+		if curl --connect-timeout 1 --max-time 2 --fail --silent \
+				"http://127.0.0.1:$server_port/health/ready" >/dev/null; then
+			return 0
+		fi
+		if ! kill -0 "$server_pid" 2>/dev/null; then
+			return 1
+		fi
+		sleep 0.25
+	done
+	return 1
+}
+
+stop_server() {
+	kill -INT "$server_pid"
+	wait "$server_pid"
+	server_pid=""
+}
+
+# The first serve on the clean root initializes it and prints the key once.
+"${starport_environment[@]}" "$binary" serve >"$server_log" 2>&1 &
+server_pid=$!
+if ! wait_for_ready; then
+	printf 'first-run server did not become ready\n' >&2
+	sed -n '1,120p' "$server_log" >&2
 	exit 1
 fi
-gateway_key="$(jq -er '.api_key | select(length > 0)' <<<"$initialization")"
-test "$(jq -r .api_key_name <<<"$initialization")" = smoke-admin
-test "$(jq -r .config_file <<<"$initialization")" = "$config_directory/config.env"
+gateway_key="$(sed -n 's/^Gateway API key (shown once): //p' "$server_log" | head -n 1)"
+if [[ -z "$gateway_key" ]] || [[ "$(grep -cF -- "$gateway_key" "$server_log")" -ne 1 ]]; then
+	printf 'first-run server did not print one gateway API key\n' >&2
+	exit 1
+fi
+if [[ ! -s "$config_directory/config.env" ]]; then
+	printf 'first-run server did not write the configuration\n' >&2
+	exit 1
+fi
 if grep -q '^OPENAI_API_KEY=' "$config_directory/config.env"; then
 	printf 'first-run initialization persisted a provider credential\n' >&2
 	exit 1
 fi
+if [[ ! -s "$persistent_home/data/local-admin-token.json" ]]; then
+	printf 'first-run server did not write the local admin token\n' >&2
+	exit 1
+fi
 
+curl --connect-timeout 2 --max-time 10 --fail --silent \
+	-H "Authorization: Bearer $gateway_key" \
+	"http://127.0.0.1:$server_port/api/v1/models" |
+	jq -e '.data | type == "array"' >/dev/null
+stop_server
+
+# The probe opens the stores, so it runs after a clean stop.
 if ! "${starport_environment[@]}" "$binary" config validate >>"$setup_log" 2>&1; then
 	printf 'first-run configuration validation failed\n' >&2
 	sed -n '1,120p' "$setup_log" >&2
@@ -133,31 +176,21 @@ if ! "${starport_environment[@]}" "$binary" doctor --probe >>"$setup_log" 2>&1; 
 	exit 1
 fi
 
-"${starport_environment[@]}" "$binary" serve >"$server_log" 2>&1 &
+# A restart keeps the state, prints no key, and accepts the first key.
+"${starport_environment[@]}" "$binary" serve >"$restart_log" 2>&1 &
 server_pid=$!
-
-ready=false
-for _ in {1..60}; do
-	if curl --connect-timeout 1 --max-time 2 --fail --silent \
-			"http://127.0.0.1:$server_port/health/ready" >/dev/null; then
-		ready=true
-		break
-	fi
-	if ! kill -0 "$server_pid" 2>/dev/null; then
-		break
-	fi
-	sleep 0.25
-done
-
-if [[ "$ready" != true ]]; then
-	printf 'first-run server did not become ready\n' >&2
-	sed -n '1,120p' "$server_log" >&2
+if ! wait_for_ready; then
+	printf 'restarted server did not become ready\n' >&2
+	sed -n '1,120p' "$restart_log" >&2
 	exit 1
 fi
-
+if grep -q '^Gateway API key (shown once):' "$restart_log"; then
+	printf 'restarted server printed a new gateway API key\n' >&2
+	exit 1
+fi
 curl --connect-timeout 2 --max-time 10 --fail --silent \
 	-H "Authorization: Bearer $gateway_key" \
 	"http://127.0.0.1:$server_port/api/v1/models" |
 	jq -e '.data | type == "array"' >/dev/null
 
-printf 'PASS ephemeral dev, isolated init, validation, diagnosis, readiness, and authenticated model discovery\n'
+printf 'PASS ephemeral dev, first-run serve, validation, diagnosis, restart, readiness, and authenticated model discovery\n'

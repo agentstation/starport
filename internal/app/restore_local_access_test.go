@@ -61,7 +61,7 @@ func TestRestoreLocalAccessRenewsCredentialWithoutOpeningAdmission(t *testing.T)
 	deps := starportcli.Dependencies{
 		Stdin: strings.NewReader(""), Stdout: &output, Stderr: &stderr,
 		ResolvePaths: func() (config.Paths, error) { return cfg.EffectivePaths(), nil },
-		RunServer: func(context.Context, starportcli.GatewayOptions) error {
+		RunServer: func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error {
 			t.Fatal("rotation started gateway")
 			return nil
 		},

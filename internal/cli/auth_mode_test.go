@@ -34,7 +34,7 @@ func TestNoAuthFlagsReachTheServerRunner(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			deps, _, _ := testDependencies()
 			var received GatewayOptions
-			deps.RunServer = func(_ context.Context, options GatewayOptions) error {
+			deps.RunServer = func(_ context.Context, options GatewayOptions, _ ServerOutput) error {
 				received = options
 				return nil
 			}

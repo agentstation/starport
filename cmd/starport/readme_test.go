@@ -184,6 +184,9 @@ func TestReadmeTemporaryPathPrecedesPersistentPath(t *testing.T) {
 	requireContains(t, fullText(quickStart), "`starport dev`, a temporary gateway", "It keeps no state after it stops.")
 	requireLink(t, fullText(quickStart), "docs/site/start/temporary-development.md")
 	requireLink(t, persistent.Text(), "docs/site/start/local-persistent.md")
+	// The persistent path starts with serve, which initializes an empty root.
+	requireContains(t, persistent.Text(), "For persistent local state, run `starport serve`.",
+		"The first identity has the name `"+starportcli.DefaultAPIKeyName+"`.")
 	requireOrdered(t, "temporary and persistent links", []int{
 		strings.Index(document.text, "(docs/site/start/temporary-development.md)"),
 		strings.Index(document.text, "(docs/site/start/local-persistent.md)"),
@@ -423,7 +426,7 @@ func runReadmeCommand(t *testing.T, paths config.Paths, args ...string) []string
 	stdout := &bytes.Buffer{}
 	err := starportcli.Run(context.Background(), append([]string{"starport"}, args...), starportcli.Dependencies{
 		Stdin: bytes.NewReader(nil), Stdout: stdout, Stderr: &bytes.Buffer{},
-		RunServer:        func(context.Context, starportcli.GatewayOptions) error { return nil },
+		RunServer:        func(context.Context, starportcli.GatewayOptions, starportcli.ServerOutput) error { return nil },
 		StartDevelopment: noopDevelopmentStarter,
 		Initialize: func(context.Context, starportcli.InitOptions) (starportcli.InitResult, error) {
 			return starportcli.InitResult{ConfigFile: paths.ConfigFile, DataDir: paths.DataDir, APIKey: "readme-gateway-key"}, nil

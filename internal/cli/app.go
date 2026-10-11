@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	urfavecli "github.com/urfave/cli/v3"
 
@@ -19,8 +18,7 @@ const (
 	// ExitCodeRuntime reports an application or dependency failure.
 	ExitCodeRuntime = 1
 	// ExitCodeUsage reports invalid command syntax or arguments.
-	ExitCodeUsage                 = 2
-	initializationRollbackTimeout = 5 * time.Second
+	ExitCodeUsage = 2
 )
 
 var (
@@ -67,8 +65,20 @@ type GatewayOptions struct {
 	AllowRemoteNoAuth bool
 }
 
-// ServerRunner starts the gateway and blocks until it stops.
-type ServerRunner func(context.Context, GatewayOptions) error
+// ServerRunner starts the gateway and blocks until it stops. It calls the
+// output steps at their place in the startup sequence.
+type ServerRunner func(context.Context, GatewayOptions, ServerOutput) error
+
+// ServerOutput carries the terminal steps of serve to the runner, which
+// alone knows when initialization and startup succeed.
+type ServerOutput struct {
+	// DeliverCredential prints the one-time gateway credential of a first
+	// run. When the write fails, it rolls back the initialization.
+	DeliverCredential func(context.Context, InitResult) error
+	// Greet prints the welcome once per machine. The runner calls it only
+	// after the local root is ready, so a failed first run leaves no stamp.
+	Greet func()
+}
 
 // Initializer creates local state and returns the new gateway credential once.
 type Initializer func(context.Context, InitOptions) (InitResult, error)
@@ -176,8 +186,13 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 				DisableAuth:       cmd.Bool(flagNoAuth),
 				AllowRemoteNoAuth: cmd.Bool(flagAllowRemoteNoAuth),
 			}
-			greetOnce(cmd.Writer, deps)
-			if err := deps.RunServer(ctx, options); err != nil {
+			output := ServerOutput{
+				DeliverCredential: func(ctx context.Context, result InitResult) error {
+					return deliverCredential(ctx, cmd.Writer, result, false, "")
+				},
+				Greet: func() { greetOnce(cmd.Writer, deps) },
+			}
+			if err := deps.RunServer(ctx, options, output); err != nil {
 				return runtimeFailure{cause: err}
 			}
 			return nil
@@ -247,7 +262,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			&urfavecli.StringFlag{
 				Name:  "name",
 				Usage: "Name for the first gateway API key",
-				Value: "local-admin",
+				Value: DefaultAPIKeyName,
 			},
 			&urfavecli.BoolFlag{
 				Name:  initFormatJSON,
@@ -270,10 +285,8 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			result, initializeErr := deps.Initialize(ctx, InitOptions{
 				APIKeyName: apiKeyName, ConfiguredStorage: configuredStorage,
 			})
-			if result.APIKey != "" {
-				if err := writeInitResult(cmd.Writer, result, cmd.Bool(initFormatJSON)); err != nil {
-					return runtimeFailure{cause: rollbackInitialization(ctx, result, err)}
-				}
+			if err := deliverCredential(ctx, cmd.Writer, result, cmd.Bool(initFormatJSON), "Run: starport serve"); err != nil {
+				return runtimeFailure{cause: err}
 			}
 			if initializeErr != nil {
 				return runtimeFailure{cause: initializeErr}
@@ -458,17 +471,4 @@ func rejectArguments(cmd *urfavecli.Command) error {
 		fmt.Sprintf("%s does not accept arguments", cmd.FullName()),
 		ExitCodeUsage,
 	)
-}
-
-func rollbackInitialization(ctx context.Context, result InitResult, outputErr error) error {
-	resultErr := fmt.Errorf("write initialization result: %w", outputErr)
-	if result.Rollback == nil {
-		return resultErr
-	}
-	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), initializationRollbackTimeout)
-	defer cancel()
-	if err := result.Rollback(rollbackCtx); err != nil {
-		return errors.Join(resultErr, fmt.Errorf("rollback initialization: %w", err))
-	}
-	return resultErr
 }

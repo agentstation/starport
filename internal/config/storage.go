@@ -31,6 +31,16 @@ func (c StorageConfig) Distributed() bool {
 	return c.Mode == storageModeValkey
 }
 
+// UsesPlatformStorage reports whether every store is process-local and sits
+// at its default location below the supplied platform paths.
+func (c *Config) UsesPlatformStorage(paths Paths) bool {
+	return c.Storage.Mode == storageModeBadger && !c.Storage.Badger.inMemory &&
+		c.Storage.Badger.Path == paths.BadgerDir &&
+		c.Storage.SQL.Mode == sqlModeSQLite && c.Storage.SQL.SQLite.Path == paths.SQLiteFile &&
+		c.Files.SelectedBackend() == BlobBackendFilesystem && c.Files.Path == paths.FilesDir &&
+		(c.Cache.Backend == "" || c.Cache.Backend == cacheBackendLocal)
+}
+
 // RuntimeStorage projects external storage settings into the storage adapter contract.
 func (c *Config) RuntimeStorage() storage.Config {
 	selected := c.Storage

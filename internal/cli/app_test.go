@@ -99,7 +99,7 @@ func TestVersionFlagUsesInjectedOutput(t *testing.T) {
 func TestServeUsesInjectedRunner(t *testing.T) {
 	deps, _, _ := testDependencies()
 	called := false
-	deps.RunServer = func(context.Context, GatewayOptions) error {
+	deps.RunServer = func(context.Context, GatewayOptions, ServerOutput) error {
 		called = true
 		return nil
 	}
@@ -520,7 +520,7 @@ func TestDoctorPassesProbeOptionAndWritesJSON(t *testing.T) {
 func TestRunReturnsServerFailure(t *testing.T) {
 	serverErr := errors.New("server failed")
 	deps, _, _ := testDependencies()
-	deps.RunServer = func(context.Context, GatewayOptions) error { return serverErr }
+	deps.RunServer = func(context.Context, GatewayOptions, ServerOutput) error { return serverErr }
 	err := Run(context.Background(), []string{"starport", "serve"}, deps)
 	if !errors.Is(err, serverErr) {
 		t.Fatalf("run error = %v, want %v", err, serverErr)
@@ -532,7 +532,7 @@ func TestRunReturnsServerFailure(t *testing.T) {
 
 func TestServerExitCoderRemainsRuntimeFailure(t *testing.T) {
 	deps, _, _ := testDependencies()
-	deps.RunServer = func(context.Context, GatewayOptions) error {
+	deps.RunServer = func(context.Context, GatewayOptions, ServerOutput) error {
 		return urfavecli.Exit("server dependency failed", 42)
 	}
 	err := Run(context.Background(), []string{"starport", "serve"}, deps)
@@ -582,7 +582,7 @@ func testDependencies() (Dependencies, *bytes.Buffer, *bytes.Buffer) {
 			GitCommit: "abc123", GitBranch: "test", GoVersion: "go1.26.5",
 			OS: "testos", Arch: "testarch",
 		},
-		RunServer: func(context.Context, GatewayOptions) error { return nil },
+		RunServer: func(context.Context, GatewayOptions, ServerOutput) error { return nil },
 		StartDevelopment: func(context.Context, GatewayOptions) (DevelopmentSession, error) {
 			return DevelopmentSession{
 				URL: "http://127.0.0.1:7827", APIKey: "development-key",
