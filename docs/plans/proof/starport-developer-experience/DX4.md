@@ -172,20 +172,42 @@ HTTP server: port 18473 is busy; stop the process that holds it or set STARPORT_
 
 No record exists after the busy runs.
 
-I did not observe the fallback line with the real binary. The fallback
-applies only when no setting names the port. Thus it starts at port 7827 and
-then tries port 7373. The task allows real-binary runs only on ports above
-18000. Thus these in-process tests cover the line instead:
+Run 3: the developer port fallback. The fallback applies only when no setting
+names the port, so this run uses the standard ports below 18000. The team lead
+approved this run. Before the run, no process listened on 7827, 7373, or 7678.
+The driver `fallback.py` in the scratch root holds `127.0.0.1:7827` with a
+60 s limit. It runs `dev --no-open` through `tools/run_for.py` for 30 s with an
+empty `STARPORT_HOME` and no `STARPORT_SERVER_PORT`. The environment is the
+same as in run 1.
 
-- `TestDevOpensTheBoundAddress/fallback_port` runs the composed `dev` command
-  with no explicit port and an injected order of a held port, then a free
-  port. It checks the `Port N is busy. Bound port M.` line before the URL
-  line. It also checks that every link names the bound port and that the
-  console link answers 303 from this gateway.
-- `TestDevReportsTheBusyPort` checks the text
-  `Port 7827 is busy. Bound port 7373.` before the URL line.
-- `TestDevWritesEndpointRecord` uses the same injected order. It checks that
-  the record names the bound port during the run and is absent after exit.
+```sh
+python3 <scratch>/dx4-fallback/fallback.py
+```
+
+| Check | Result |
+| --- | --- |
+| Exit after SIGINT | 0 |
+| Listeners while the run is ready | 7827 (the hold) and 7373 (`dev`) |
+| Record during the run | mode `0600`, `{"host": "127.0.0.1", "pid": 61784, "port": 7373, "schema_version": 1, "scheme": "http", "started_at": "2026-10-11T17:07:29.226571Z"}` |
+| `ui --no-open` during the run, no port setting | exit 0, `http://127.0.0.1:7373/launch?lt=<redacted>` |
+| Record after exit | absent |
+| Hold time | 30.1 s |
+| Listeners on 7827, 7373, and 7678 after the run | none |
+
+Run 3, human lines only (Badger and JSON log lines removed):
+
+```text
+Initialized Starport.
+Configuration: <scratch>/home/config/config.env
+Data: <scratch>/home/data
+Gateway API key (shown once): <redacted sha256 e9fbaf92f19f>
+Starport development gateway
+Port 7827 is busy. Bound port 7373.
+URL: http://127.0.0.1:7373
+Authentication: required
+Console (one-time launch link): http://127.0.0.1:7373/launch?lt=<redacted>
+[run_for] exited_early=False exit=0
+```
 
 ## Commands and results
 
