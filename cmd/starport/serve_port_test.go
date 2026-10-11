@@ -34,11 +34,17 @@ func TestServeFailsWhenPortIsBusy(t *testing.T) {
 // returns the exit code, the standard output, and the standard error.
 func runUntilExit(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
+	return developmentUntilExit(t, startDevelopment, args...)
+}
+
+// developmentUntilExit runs runUntilExit with a chosen development starter.
+func developmentUntilExit(t *testing.T, development starportcli.DevelopmentStarter, args ...string) (int, string, string) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	stdout, stderr := &firstRunOutput{}, &firstRunOutput{}
 	code := runContext(ctx, append([]string{"starport"}, args...), bytes.NewReader(nil), stdout, stderr,
-		runServer, startDevelopment, runInitializer)
+		runServer, development, runInitializer)
 	if ctx.Err() != nil {
 		t.Fatalf("starport %s did not exit within a minute", strings.Join(args, " "))
 	}

@@ -50,8 +50,12 @@ type DevelopmentSession struct {
 	// AuthDisabled reports that the session serves requests without a gateway
 	// API key.
 	AuthDisabled bool
-	Run          func(context.Context) error
-	Close        func(context.Context) error
+	// BusyPort is the standard port that another process held when this
+	// session fell back to the port in URL. It is 0 when the session bound the
+	// standard port or an explicit port.
+	BusyPort int
+	Run      func(context.Context) error
+	Close    func(context.Context) error
 }
 
 // validate rejects a session no one could use.
@@ -74,17 +78,20 @@ func (session DevelopmentSession) validate() error {
 // console link on every run, and the key line only for a key that the session
 // minted.
 func writeDevelopmentResult(writer io.Writer, session DevelopmentSession) error {
+	if _, err := fmt.Fprintf(writer, "Starport development gateway\n%s", developmentFallback(session)); err != nil {
+		return err
+	}
 	if session.AuthDisabled {
 		_, err := fmt.Fprintf(
 			writer,
-			"Starport development gateway\nURL: %s\nAuthentication: disabled (no gateway API key required)\n",
+			"URL: %s\nAuthentication: disabled (no gateway API key required)\n",
 			session.URL,
 		)
 		return err
 	}
 	if _, err := fmt.Fprintf(
 		writer,
-		"Starport development gateway\nURL: %s\nAuthentication: required\n",
+		"URL: %s\nAuthentication: required\n",
 		session.URL,
 	); err != nil {
 		return err
@@ -95,6 +102,19 @@ func writeDevelopmentResult(writer io.Writer, session DevelopmentSession) error 
 		}
 	}
 	return writeDevelopmentConsole(writer, session)
+}
+
+// developmentFallback names the busy standard port and the port that the
+// session bound in its place, or returns "" when the session did not fall back.
+func developmentFallback(session DevelopmentSession) string {
+	if session.BusyPort == 0 {
+		return ""
+	}
+	parsed, err := url.Parse(session.URL)
+	if err != nil || parsed.Port() == "" {
+		return ""
+	}
+	return fmt.Sprintf("Port %d is busy. Bound port %s.\n", session.BusyPort, parsed.Port())
 }
 
 // writeDevelopmentConsole names the console link when there is one.
@@ -123,10 +143,11 @@ const (
 
 // openConsoleWhenReady follows the console link once the gateway answers.
 //
-// The wait is a TCP dial rather than a fixed delay because the race is real and
-// short: the banner is printed before the listener is up, and a browser that
-// arrives first shows a connection error. A dial asks the smallest question
-// that settles it — no route, no protocol, and no credential.
+// The wait is a TCP dial rather than a fixed delay. A gateway that binds before
+// it prints the banner answers the dial at once, and the browser request waits
+// in the listen queue until Run serves. A session that binds later would show
+// the browser a connection error without the wait. A dial asks the smallest
+// question that settles it — no route, no protocol, and no credential.
 //
 // Nothing is printed here. This runs beside a gateway that owns the terminal,
 // and the link is already in the banner, so a browser that will not start

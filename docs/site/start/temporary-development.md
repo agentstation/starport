@@ -43,6 +43,8 @@ Gateway API key (shown once): <generated-gateway-api-key>
 Console (one-time launch link): http://127.0.0.1:7827/launch?lt=<ticket>
 ```
 
+The URL uses port 7827, or the next free port, which `dev` prints. When port 7827 is busy, the line `Port 7827 is busy. Bound port 7373.` comes before the URL line. Use the printed URL in the commands on this page.
+
 The console opens in a browser. The launch link is not a key. The gateway accepts the link one time and gives the browser a session. Add `--no-open` to print the link and keep the browser closed.
 
 **Verification:**

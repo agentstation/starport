@@ -66,10 +66,22 @@ type runtimeFactories struct {
 type buildOptions struct {
 	factories runtimeFactories
 	build     controllers.BuildInfo
+	listener  net.Listener
 }
 
 // Option changes runtime factories for explicit test composition.
 type Option func(*buildOptions)
+
+// WithListener serves a listener that the caller bound already, in place of
+// the configured host and port. The caller sets the configured port to the
+// bound port first, so every URL that the gateway derives names the bound
+// port. The application owns the listener after New succeeds. The caller
+// closes it when New fails.
+func WithListener(listener net.Listener) Option {
+	return func(options *buildOptions) {
+		options.listener = listener
+	}
+}
 
 // WithBuildInfo states the version, commit, and build time the linker
 // stamped into this binary, so the health and admin surfaces report the

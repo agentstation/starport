@@ -170,7 +170,7 @@ func New(cfg *config.Config, options ...Option) (*App, error) {
 		build:            build.build,
 		lifecycle:        make([]lifecycleEntry, 0, 5),
 	}
-	builder := runtimeBuilder{application: application, config: cfg, factories: build.factories, serverCertificate: certificate}
+	builder := runtimeBuilder{application: application, config: cfg, factories: build.factories, serverCertificate: certificate, listener: build.listener}
 	if err := builder.compose(); err != nil {
 		rollbackErr := application.closeLifecycle(context.Background())
 		if rollbackErr != nil {
@@ -207,6 +207,7 @@ func prepareComposition(cfg *config.Config, options []Option) (buildOptions, err
 
 type runtimeBuilder struct {
 	serverCertificate *tls.Certificate
+	listener          net.Listener
 	application       *App
 	config            *config.Config
 	factories         runtimeFactories
@@ -1021,6 +1022,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	serverCfg := serverConfig(b.config, b.auth)
 	serverCfg.TLSCertificate = b.serverCertificate
 	serverCfg.Build = b.application.build
+	serverCfg.Listener = b.listener
 	configuration, err := b.configurationOperations()
 	if err != nil {
 		return fmt.Errorf("open configuration operations: %w", err)
@@ -1356,13 +1358,19 @@ func (a *App) Run(ctx context.Context) error {
 // the port.
 func (a *App) Bind() (net.Addr, error) {
 	address, err := a.httpServer.Bind()
-	if _, busy := errors.AsType[*endpoint.BusyError](err); busy {
-		return nil, fmt.Errorf("HTTP server: %w; stop the process that holds it or set STARPORT_SERVER_PORT to a free port", err)
-	}
 	if err != nil {
-		return nil, fmt.Errorf("HTTP server: %w", err)
+		return nil, BindFailure(err)
 	}
 	return address, nil
+}
+
+// BindFailure states a failed HTTP bind for the operator. A busy port names
+// the port and the remedy.
+func BindFailure(err error) error {
+	if _, busy := errors.AsType[*endpoint.BusyError](err); busy {
+		return fmt.Errorf("HTTP server: %w; stop the process that holds it or set STARPORT_SERVER_PORT to a free port", err)
+	}
+	return fmt.Errorf("HTTP server: %w", err)
 }
 
 // Close stops owned dependencies in reverse construction order.

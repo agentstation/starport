@@ -39,3 +39,34 @@ func TestDevSecondRunPrintsNoKey(t *testing.T) {
 		}
 	}
 }
+
+// TestDevReportsTheBusyPort names the busy standard port and the bound port
+// after the heading and before the URL line. A session that did not fall back
+// prints no such line.
+func TestDevReportsTheBusyPort(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		busyPort int
+		want     string
+	}{
+		{name: "fallback", busyPort: 7827, want: "Starport development gateway\nPort 7827 is busy. Bound port 7373.\nURL: http://127.0.0.1:7373\n"},
+		{name: "standard port", want: "Starport development gateway\nURL: http://127.0.0.1:7373\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			deps, stdout, _ := testDependencies()
+			deps.StartDevelopment = func(context.Context, DevelopmentOptions, CredentialDelivery) (DevelopmentSession, error) {
+				return DevelopmentSession{
+					URL: "http://127.0.0.1:7373", BusyPort: test.busyPort,
+					Run:   func(context.Context) error { return nil },
+					Close: func(context.Context) error { return nil },
+				}, nil
+			}
+			if err := Run(context.Background(), []string{"starport", "dev", "--no-open"}, deps); err != nil {
+				t.Fatalf("run dev: %v", err)
+			}
+			if output := stdout.String(); !strings.HasPrefix(output, test.want) {
+				t.Errorf("output = %q, want the prefix %q", output, test.want)
+			}
+		})
+	}
+}

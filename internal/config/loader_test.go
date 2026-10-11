@@ -132,6 +132,36 @@ func TestPortDefaultMatchesItsConstant(t *testing.T) {
 	}
 }
 
+// TestServerPortExplicit separates a port that a setting names from the
+// default, so a development gateway falls back only from the default.
+func TestServerPortExplicit(t *testing.T) {
+	dir := t.TempDir()
+	for _, test := range []struct {
+		name        string
+		environment map[string]string
+		files       []string
+		want        bool
+	}{
+		{name: "default"},
+		{name: "environment", environment: map[string]string{"STARPORT_SERVER_PORT": "7827"}, want: true},
+		{name: "configuration file", files: []string{writeEnvFile(t, dir, "port.env", `STARPORT_SERVER_PORT=7373`)}, want: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg, err := NewLoader().
+				WithPaths(PathsForConfigDir(dir)).
+				WithEnvironment(test.environment).
+				WithEnvFiles(test.files...).
+				Load(context.Background())
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			if got := cfg.ServerPortExplicit(); got != test.want {
+				t.Errorf("ServerPortExplicit() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
 func TestLoaderEnvironmentOverridesFiles(t *testing.T) {
 	dir := t.TempDir()
 	highPriorityFile := writeEnvFile(t, dir, "local.env", `STARPORT_SERVER_PORT=7777`)
