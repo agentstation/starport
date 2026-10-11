@@ -26,7 +26,7 @@ An operator who must capture the state of a deployment before a change, or on a 
 
 ### Before you start
 
-- Make sure that the deployment uses persistent storage. `starport dev` has no backup.
+- Make sure that the deployment uses persistent storage. `starport dev --ephemeral` has no backup.
 - Use the same configuration as the gateway. The command reads the stores from the configuration.
 - Keep the master key in a secret source. Write down its reference, such as `aws-secrets-manager:<secret-name>`.
 - Create a private parent directory. The destination must be a new absolute directory under it.

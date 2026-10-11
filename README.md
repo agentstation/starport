@@ -18,8 +18,8 @@ The static preview does not autoplay.
 
 Starport serves individual developers, startups, and enterprises:
 
-- An individual developer runs one command and gets an isolated gateway, a
-  console, and one temporary gateway API key.
+- An individual developer runs one command and gets a local gateway, a
+  console, and one gateway API key.
 - A startup keeps its OpenAI and OpenRouter clients and changes one base URL.
 - An enterprise adds shared provider inference credentials, BYOK policy,
   budgets, rate limits, encrypted credential storage, and secret references.
@@ -102,8 +102,8 @@ make build
 
 ## Quick start
 
-The quick start uses `starport dev`, a temporary gateway. It keeps no state
-after it stops. [Keep the gateway](#keep-the-gateway) gives the persistent path.
+The quick start uses `starport dev --ephemeral`, a temporary gateway. It keeps
+no state after it stops. [Keep the gateway](#keep-the-gateway) gives the persistent path.
 
 ### Inspect the catalog without credentials
 
@@ -142,7 +142,7 @@ Set one conventional provider inference credential. This example uses OpenAI:
 ```bash
 unset STARPORT_CATALOG_STATE_DIR STARPORT_FILES_BACKEND
 export OPENAI_API_KEY="replace-with-provider-inference-key"
-starport dev
+starport dev --ephemeral
 ```
 
 The command starts a temporary development gateway at `http://127.0.0.1:7827`.
@@ -167,7 +167,7 @@ A browser on the gateway machine can also present its local admin token.
 machine. Both paths prove presence at that machine and end in the same console
 session.
 
-Development mode reads the process environment but not `config.env`.
+Ephemeral development mode reads the process environment but not `config.env`.
 It refuses persistent storage selectors before it opens storage.
 The refused selectors are the KV, SQL, file, and cache backend settings, and `STARPORT_CATALOG_STATE_DIR`.
 The `unset` command above removes two common selectors.
@@ -215,7 +215,7 @@ failures in its scoped provider state.
 
 ### Stop the temporary gateway
 
-Press Ctrl+C in Terminal 1. At shutdown, `starport dev` removes these items:
+Press Ctrl+C in Terminal 1. At shutdown, `starport dev --ephemeral` removes these items:
 
 - The gateway API keys, accounts, and console sessions.
 - The usage records, request activity, and budgets.
@@ -226,7 +226,7 @@ Provider inference credentials stay in the process environment. A later
 development run removes abandoned scratch directories after it verifies their
 owner. See [development scratch recovery](docs/OPERATOR-GUIDE.md#development-scratch-recovery).
 
-A development gateway has no upgrade path to persistent state. To keep data,
+An ephemeral gateway has no upgrade path to persistent state. To keep data,
 follow [Run a persistent local gateway](docs/site/start/local-persistent.md).
 
 ## Connect a client

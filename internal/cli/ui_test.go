@@ -179,7 +179,7 @@ func TestDevelopmentOpensTheConsoleOnceItIsListening(t *testing.T) {
 	defer listener.Close()
 
 	consoleURL := "http://" + listener.Addr().String() + localauth.LaunchPath + "?lt=ticket"
-	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
+	deps.StartDevelopment = func(context.Context, DevelopmentOptions, CredentialDelivery) (DevelopmentSession, error) {
 		return DevelopmentSession{
 			URL: "http://" + listener.Addr().String(), APIKey: "development-key",
 			ConsoleURL: consoleURL,
@@ -208,7 +208,7 @@ func TestDevelopmentOpensNoBrowserInAutomation(t *testing.T) {
 	deps, output, _ := uiDependencies(t)
 	t.Setenv("CI", "1")
 	consoleURL := "http://127.0.0.1:7827" + localauth.LaunchPath + "?lt=ticket"
-	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
+	deps.StartDevelopment = func(context.Context, DevelopmentOptions, CredentialDelivery) (DevelopmentSession, error) {
 		return DevelopmentSession{
 			URL: "http://127.0.0.1:7827", APIKey: "development-key",
 			ConsoleURL: consoleURL,
@@ -235,7 +235,7 @@ func TestDevelopmentHonoursNoOpen(t *testing.T) {
 	t.Setenv("CI", "")
 	t.Setenv("NO_BROWSER", "")
 	consoleURL := "http://127.0.0.1:7827" + localauth.LaunchPath + "?lt=ticket"
-	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
+	deps.StartDevelopment = func(context.Context, DevelopmentOptions, CredentialDelivery) (DevelopmentSession, error) {
 		return DevelopmentSession{
 			URL: "http://127.0.0.1:7827", APIKey: "development-key",
 			ConsoleURL: consoleURL,
@@ -253,13 +253,13 @@ func TestDevelopmentHonoursNoOpen(t *testing.T) {
 	assert.Contains(t, output.String(), consoleURL)
 }
 
-// TestDevDoesNotGreetOrStamp keeps the development mode stateless. The session
+// TestDevDoesNotGreetOrStamp keeps the greeting with serve. The session
 // output already carries the console link, and the welcome's stamp would be
-// the one file a mode that promises to create none leaves behind.
+// the one file that an ephemeral run leaves behind.
 func TestDevDoesNotGreetOrStamp(t *testing.T) {
 	deps, output, paths := uiDependencies(t)
 	t.Setenv("CI", "1")
-	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
+	deps.StartDevelopment = func(context.Context, DevelopmentOptions, CredentialDelivery) (DevelopmentSession, error) {
 		return DevelopmentSession{
 			URL: "http://127.0.0.1:7827", APIKey: "development-key",
 			Run:   func(context.Context) error { return nil },

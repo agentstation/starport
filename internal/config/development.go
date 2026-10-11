@@ -13,10 +13,20 @@ import (
 )
 
 const (
-	badgerPathEnvironment = "STARPORT_STORAGE_BADGER_PATH"
-	sqlitePathEnvironment = "STARPORT_STORAGE_SQL_SQLITE_PATH"
-	filesPathEnvironment  = "STARPORT_FILES_PATH"
+	storageModeEnvironment  = "STARPORT_STORAGE_MODE"
+	badgerPathEnvironment   = "STARPORT_STORAGE_BADGER_PATH"
+	sqlModeEnvironment      = "STARPORT_STORAGE_SQL_MODE"
+	sqlitePathEnvironment   = "STARPORT_STORAGE_SQL_SQLITE_PATH"
+	filesBackendEnvironment = "STARPORT_FILES_BACKEND"
+	filesPathEnvironment    = "STARPORT_FILES_PATH"
+	cacheBackendEnvironment = "STARPORT_CACHE_BACKEND"
 )
+
+// loopbackHost is the bind host of every development profile.
+const loopbackHost = "127.0.0.1"
+
+// logOutputStdout is the log output of every development profile.
+const logOutputStdout = "stdout"
 
 // ErrDevelopmentStorage rejects persistent storage before development access.
 var ErrDevelopmentStorage = errors.New("development requires isolated storage")
@@ -32,12 +42,12 @@ func developmentStorageError(names []string) error {
 func rejectDevelopmentEnvironment(source envconfig.Lookuper) error {
 	var conflicts []string
 	for _, key := range []string{
-		"STARPORT_STORAGE_MODE", badgerPathEnvironment,
+		storageModeEnvironment, badgerPathEnvironment,
 		"STARPORT_STORAGE_VALKEY_URL", "STARPORT_STORAGE_VALKEY_PASSWORD", "STARPORT_STORAGE_VALKEY_CLUSTER_MODE",
-		"STARPORT_CACHE_BACKEND", "STARPORT_CACHE_URL", "STARPORT_CACHE_ALLOW_INSECURE", cacheCAFileEnvironment,
-		"STARPORT_STORAGE_SQL_MODE", sqlitePathEnvironment,
+		cacheBackendEnvironment, "STARPORT_CACHE_URL", "STARPORT_CACHE_ALLOW_INSECURE", cacheCAFileEnvironment,
+		sqlModeEnvironment, sqlitePathEnvironment,
 		"STARPORT_STORAGE_SQL_POSTGRES_URL", "STARPORT_STORAGE_SQL_MYSQL_DSN",
-		"STARPORT_FILES_BACKEND", filesPathEnvironment,
+		filesBackendEnvironment, filesPathEnvironment,
 		"STARPORT_FILES_OBJECT_STORE_BUCKET", "STARPORT_FILES_OBJECT_STORE_REGION",
 		"STARPORT_FILES_OBJECT_STORE_ENDPOINT", "STARPORT_FILES_OBJECT_STORE_PREFIX",
 		"STARPORT_FILES_OBJECT_STORE_ACCESS_KEY_ID", "STARPORT_FILES_OBJECT_STORE_SECRET_ACCESS_KEY",
@@ -56,20 +66,20 @@ func (c *Config) validateDevelopmentStorage() error {
 		name     string
 		selected bool
 	}{
-		{"STARPORT_CACHE_BACKEND", c.Cache.Backend != "" && c.Cache.Backend != cacheBackendLocal},
+		{cacheBackendEnvironment, c.Cache.Backend != "" && c.Cache.Backend != cacheBackendLocal},
 		{cacheCAFileEnvironment, c.Cache.CAFile != ""},
 		{"STARPORT_CACHE_URL", c.Cache.URL != ""},
 		{"STARPORT_CACHE_ALLOW_INSECURE", c.Cache.AllowInsecure},
-		{"STARPORT_STORAGE_MODE", c.Storage.Mode != "" && c.Storage.Mode != storageModeBadger},
+		{storageModeEnvironment, c.Storage.Mode != "" && c.Storage.Mode != storageModeBadger},
 		{badgerPathEnvironment, c.Storage.Badger.Path != ""},
 		{"STARPORT_STORAGE_VALKEY_URL", c.Storage.Valkey.URL != ""},
 		{"STARPORT_STORAGE_VALKEY_PASSWORD", c.Storage.Valkey.Password != ""},
 		{"STARPORT_STORAGE_VALKEY_CLUSTER_MODE", c.Storage.Valkey.ClusterMode},
-		{"STARPORT_STORAGE_SQL_MODE", c.Storage.SQL.Mode != "" && c.Storage.SQL.Mode != sqlModeSQLite},
+		{sqlModeEnvironment, c.Storage.SQL.Mode != "" && c.Storage.SQL.Mode != sqlModeSQLite},
 		{sqlitePathEnvironment, c.Storage.SQL.SQLite.Path != ""},
 		{"STARPORT_STORAGE_SQL_POSTGRES_URL", c.Storage.SQL.Postgres.URL != ""},
 		{"STARPORT_STORAGE_SQL_MYSQL_DSN", c.Storage.SQL.MySQL.DSN != ""},
-		{"STARPORT_FILES_BACKEND", c.Files.SelectedBackend() != BlobBackendFilesystem},
+		{filesBackendEnvironment, c.Files.SelectedBackend() != BlobBackendFilesystem},
 		{filesPathEnvironment, c.Files.Path != ""},
 		{"STARPORT_FILES_OBJECT_STORE_BUCKET", c.Files.ObjectStore.Bucket != ""},
 		{"STARPORT_FILES_OBJECT_STORE_REGION", c.Files.ObjectStore.Region != ""},

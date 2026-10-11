@@ -10,7 +10,10 @@ import (
 	"time"
 )
 
-const developmentCloseTimeout = 5 * time.Second
+const (
+	developmentCloseTimeout = 5 * time.Second
+	flagEphemeral           = "ephemeral"
+)
 
 var (
 	// ErrDevelopmentStarterRequired reports a missing development boundary.
@@ -19,12 +22,25 @@ var (
 	ErrDevelopmentSessionInvalid = errors.New("development session is invalid")
 )
 
-// DevelopmentStarter creates one isolated local gateway session.
-type DevelopmentStarter func(context.Context, GatewayOptions) (DevelopmentSession, error)
+// DevelopmentStarter creates one local gateway session. A persistent start
+// that initializes a clean root prints the new key through the delivery, the
+// way serve does, so a failed write rolls the initialization back.
+type DevelopmentStarter func(context.Context, DevelopmentOptions, CredentialDelivery) (DevelopmentSession, error)
 
-// DevelopmentSession contains one ephemeral gateway and its one-time key.
+// DevelopmentOptions carries the dev choices for one command run.
+type DevelopmentOptions struct {
+	GatewayOptions
+	// Ephemeral keeps every store in memory or in a scratch directory that the
+	// session removes on exit. Otherwise the session uses the platform roots.
+	Ephemeral bool
+}
+
+// DevelopmentSession contains one local gateway and the key it minted, if any.
 type DevelopmentSession struct {
-	URL    string
+	URL string
+	// APIKey is a gateway key that this session minted and has not printed.
+	// An ephemeral session mints one on every run. A persistent session
+	// delivers its first-run key before it returns and sets none.
 	APIKey string
 	// ConsoleURL signs one browser in to this session. It is a separate value
 	// from URL and from APIKey because it is a separate credential: it opens a
@@ -32,7 +48,7 @@ type DevelopmentSession struct {
 	// time it is followed.
 	ConsoleURL string
 	// AuthDisabled reports that the session serves requests without a gateway
-	// API key. It is what makes an empty APIKey legitimate rather than a bug.
+	// API key.
 	AuthDisabled bool
 	Run          func(context.Context) error
 	Close        func(context.Context) error
@@ -40,21 +56,23 @@ type DevelopmentSession struct {
 
 // validate rejects a session no one could use.
 //
-// The key rule is an equivalence, not two independent checks: a session that
-// requires a key must carry one to print, and a session that requires none
-// must not have minted one. Either mismatch means the runtime and the mode
-// disagree, and printing a key the gateway ignores — or printing none when one
-// is needed — leaves the operator with no way to make the first request.
+// A session that requires a key can carry none: a persistent second run
+// accepts the key that the first run printed. A session that requires no key
+// must not have minted one, because a printed key that the gateway ignores
+// tells the operator that the gateway checks keys.
 func (session DevelopmentSession) validate() error {
 	if session.URL == "" || session.Run == nil || session.Close == nil {
 		return ErrDevelopmentSessionInvalid
 	}
-	if session.AuthDisabled != (session.APIKey == "") {
+	if session.AuthDisabled && session.APIKey != "" {
 		return ErrDevelopmentSessionInvalid
 	}
 	return nil
 }
 
+// writeDevelopmentResult prints the URL, the authentication state, and the
+// console link on every run, and the key line only for a key that the session
+// minted.
 func writeDevelopmentResult(writer io.Writer, session DevelopmentSession) error {
 	if session.AuthDisabled {
 		_, err := fmt.Fprintf(
@@ -66,11 +84,15 @@ func writeDevelopmentResult(writer io.Writer, session DevelopmentSession) error 
 	}
 	if _, err := fmt.Fprintf(
 		writer,
-		"Starport development gateway\nURL: %s\nAuthentication: required\nGateway API key (shown once): %s\n",
+		"Starport development gateway\nURL: %s\nAuthentication: required\n",
 		session.URL,
-		session.APIKey,
 	); err != nil {
 		return err
+	}
+	if session.APIKey != "" {
+		if _, err := fmt.Fprintf(writer, "Gateway API key (shown once): %s\n", session.APIKey); err != nil {
+			return err
+		}
 	}
 	return writeDevelopmentConsole(writer, session)
 }

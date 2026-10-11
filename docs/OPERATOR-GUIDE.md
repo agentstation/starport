@@ -27,7 +27,7 @@ Then start an isolated development gateway:
 
 ```bash
 export OPENAI_API_KEY="replace-with-provider-inference-key"
-starport dev
+starport dev --ephemeral
 ```
 
 The command binds to `127.0.0.1`, uses in-memory storage, creates no
@@ -69,7 +69,7 @@ Keep all writers fenced through fresh gateway readiness. Production qualificatio
 
 ## Development scratch recovery
 
-`starport dev` keeps Badger and SQLite in memory. Its catalog state and uploaded files use a private `starport-dev-` directory under the operating system temporary directory.
+`starport dev --ephemeral` keeps Badger and SQLite in memory. Its catalog state and uploaded files use a private `starport-dev-` directory under the operating system temporary directory.
 The directory contains `files/`, `catalog/`, and `cache/`.
 After application construction succeeds, the private `.starport-development/session.json` record binds these directories to their native filesystem identities.
 The session holds `.starport-development/session.lock` until its resources close.
@@ -1343,8 +1343,9 @@ export STARPORT_CATALOG_STATE_DIR=/var/lib/starport/catalog-state
 An empty `STARPORT_CATALOG_STATE_DIR` resolves to `starport/catalog` under the
 user state root. That root is `XDG_STATE_HOME`, or `~/.local/state` when the
 variable is empty. A process with no home directory and no state root refuses
-to start, and the error names both settings. A development gateway keeps its
-default catalog state in the session scratch directory and removes it on exit.
+to start, and the error names both settings. An ephemeral development gateway
+keeps its default catalog state in the session scratch directory and removes it
+on exit.
 It leaves nothing under the user state root.
 
 ### Generation procedures
@@ -1631,7 +1632,7 @@ the directory on persistent storage.
 Persistent configuration now defaults `SYNC_WRITES` to `true`.
 An explicit `false` remains effective and produces a startup warning about acknowledged-write loss after a host failure.
 Check this setting when upgrading an installation that relied on the previous asynchronous default.
-Development mode uses memory and reports synchronous disk writes disabled.
+Ephemeral development mode uses memory and reports synchronous disk writes disabled.
 
 `STARPORT_STORAGE_BADGER_COMPRESSION` selects `none`, `snappy`, or `zstd`. The default is `snappy`.
 `STARPORT_STORAGE_BADGER_GC_INTERVAL` defaults to `5m` and controls value-log collection attempts.

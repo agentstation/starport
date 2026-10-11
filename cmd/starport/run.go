@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	urfavecli "github.com/urfave/cli/v3"
 
 	"github.com/agentstation/starport/internal/apikey"
@@ -166,31 +165,6 @@ func localInitResult(service *setup.Service, result setup.Result) starportcli.In
 			return service.Rollback(rollbackCtx, result)
 		},
 	}
-}
-
-func startDevelopment(
-	ctx context.Context,
-	options starportcli.GatewayOptions,
-) (starportcli.DevelopmentSession, error) {
-	cfg, err := config.LoadDevelopment(ctx, configOverrides(options)...)
-	if err != nil {
-		return starportcli.DevelopmentSession{}, fmt.Errorf("load development configuration: %w", err)
-	}
-	runtime, err := app.NewDevelopment(ctx, cfg, app.WithBuildInfo(version, gitCommit, buildTime))
-	if err != nil {
-		return starportcli.DevelopmentSession{}, err
-	}
-	// A console-link failure does not stop the gateway.
-	// The session still runs and prints its URL. The operator uses the normal console access procedure.
-	consoleURL, err := runtime.ConsoleURL()
-	if err != nil {
-		log.Warn().Err(err).Msg("Could not mint a console launch link for this development gateway")
-	}
-	return starportcli.DevelopmentSession{
-		URL: runtime.URL(), APIKey: runtime.APIKey(), ConsoleURL: consoleURL,
-		AuthDisabled: cfg.Security.AuthMode.Effective() == config.AuthModeDisabled,
-		Run:          runtime.Run, Close: runtime.Close,
-	}, nil
 }
 
 // configOverrides translates command line decisions into configuration

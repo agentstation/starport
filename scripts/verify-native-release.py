@@ -180,9 +180,18 @@ def catalog_generation(base, key):
     return generation
 
 
-def verify_development(binary, environment, home, port, report, record_generation=False):
+def development_arguments(binary, environment, home):
+    # A release before persistent dev has no --ephemeral flag, and its dev is
+    # already ephemeral. Both forms must leave no user files behind.
+    if '--ephemeral' in run_binary(binary, ['dev', '--help'], environment, home):
+        return ['dev', '--ephemeral', '--no-open']
+    return ['dev', '--no-open']
+
+
+def verify_development(binary, environment, home, port, report, record_generation=False, arguments=('dev', '--no-open')):
     options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {}
-    process = subprocess.Popen([str(binary), 'dev', '--no-open'], env=environment, cwd=home,
+    report['development_arguments'] = list(arguments)
+    process = subprocess.Popen([str(binary), *arguments], env=environment, cwd=home,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, **options)
     lines = []
     def collect():
@@ -281,7 +290,8 @@ def verify_archive(archive, checksums, version, operating_system, root, report, 
     report['keyless_catalog_commands'] = 2
     if any(home.rglob('*')):
         raise ValueError('A passive catalog command created persistent user files.')
-    verify_development(binary, environment, home, port, report, record_generation=release is None)
+    verify_development(binary, environment, home, port, report, record_generation=release is None,
+                       arguments=development_arguments(binary, environment, home))
     report['user_files_after_shutdown'] = [str(path.relative_to(home)) for path in home.rglob('*') if path.is_file()]
     if report['user_files_after_shutdown']:
         raise ValueError('Development mode left persistent user files.')

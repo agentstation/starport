@@ -14,6 +14,7 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/diagnosis"
+	"github.com/agentstation/starport/internal/setup"
 )
 
 func TestNoArgumentsShowHelp(t *testing.T) {
@@ -122,35 +123,72 @@ func TestServeUsesInjectedRunner(t *testing.T) {
 	}
 }
 
+// TestDevPrintsGatewayKeyOnce covers both sources of a new key. A persistent
+// first run delivers its key through the credential delivery, and an
+// ephemeral run returns the key it minted. Each prints the key exactly once.
 func TestDevPrintsGatewayKeyOnce(t *testing.T) {
-	deps, stdout, _ := testDependencies()
-	runs := 0
-	closes := 0
-	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
-		return DevelopmentSession{
-			URL: "http://127.0.0.1:7827", APIKey: "development-key",
-			Run: func(context.Context) error {
-				runs++
-				return nil
+	tests := []struct {
+		name      string
+		args      []string
+		ephemeral bool
+		start     func(context.Context, CredentialDelivery) (string, error)
+	}{
+		{
+			name: "persistent first run",
+			args: []string{"starport", "dev"},
+			start: func(ctx context.Context, deliver CredentialDelivery) (string, error) {
+				return "", deliver(ctx, InitResult{
+					APIKeyName: setup.DefaultAPIKeyName, APIKey: "development-key",
+					ConfigFile: "/home/config/config.env", DataDir: "/home/data",
+				})
 			},
-			Close: func(context.Context) error {
-				closes++
-				return nil
+		},
+		{
+			name: "ephemeral", args: []string{"starport", "dev", "--ephemeral"}, ephemeral: true,
+			start: func(context.Context, CredentialDelivery) (string, error) {
+				return "development-key", nil
 			},
-		}, nil
+		},
 	}
-	if err := Run(context.Background(), []string{"starport", "dev"}, deps); err != nil {
-		t.Fatalf("run dev: %v", err)
-	}
-	if runs != 1 {
-		t.Fatalf("development runs = %d, want 1", runs)
-	}
-	if closes != 1 {
-		t.Fatalf("development closes = %d, want 1", closes)
-	}
-	if strings.Count(stdout.String(), "development-key") != 1 ||
-		!strings.Contains(stdout.String(), "http://127.0.0.1:7827") {
-		t.Fatalf("development output = %q", stdout.String())
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			deps, stdout, _ := testDependencies()
+			runs := 0
+			closes := 0
+			deps.StartDevelopment = func(ctx context.Context, options DevelopmentOptions, deliver CredentialDelivery) (DevelopmentSession, error) {
+				if options.Ephemeral != test.ephemeral {
+					t.Errorf("ephemeral = %t, want %t", options.Ephemeral, test.ephemeral)
+				}
+				key, err := test.start(ctx, deliver)
+				if err != nil {
+					return DevelopmentSession{}, err
+				}
+				return DevelopmentSession{
+					URL: "http://127.0.0.1:7827", APIKey: key,
+					Run: func(context.Context) error {
+						runs++
+						return nil
+					},
+					Close: func(context.Context) error {
+						closes++
+						return nil
+					},
+				}, nil
+			}
+			if err := Run(context.Background(), test.args, deps); err != nil {
+				t.Fatalf("run dev: %v", err)
+			}
+			if runs != 1 {
+				t.Fatalf("development runs = %d, want 1", runs)
+			}
+			if closes != 1 {
+				t.Fatalf("development closes = %d, want 1", closes)
+			}
+			if strings.Count(stdout.String(), "development-key") != 1 ||
+				!strings.Contains(stdout.String(), "http://127.0.0.1:7827") {
+				t.Fatalf("development output = %q", stdout.String())
+			}
+		})
 	}
 }
 
@@ -160,7 +198,7 @@ func TestDevClosesSessionWhenCredentialOutputFails(t *testing.T) {
 	deps.Stdout = failingWriter{err: outputErr}
 	closeCalls := 0
 	runCalls := 0
-	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
+	deps.StartDevelopment = func(context.Context, DevelopmentOptions, CredentialDelivery) (DevelopmentSession, error) {
 		return DevelopmentSession{
 			URL: "http://127.0.0.1:7827", APIKey: "development-key",
 			Run: func(context.Context) error {
@@ -471,7 +509,7 @@ func testDependencies() (Dependencies, *bytes.Buffer, *bytes.Buffer) {
 			OS: "testos", Arch: "testarch",
 		},
 		RunServer: func(context.Context, GatewayOptions, ServerOutput) error { return nil },
-		StartDevelopment: func(context.Context, GatewayOptions) (DevelopmentSession, error) {
+		StartDevelopment: func(context.Context, DevelopmentOptions, CredentialDelivery) (DevelopmentSession, error) {
 			return DevelopmentSession{
 				URL: "http://127.0.0.1:7827", APIKey: "development-key",
 				Run:   func(context.Context) error { return nil },

@@ -212,7 +212,8 @@ func noopInitializer(context.Context, starportcli.InitOptions) (starportcli.Init
 
 func noopDevelopmentStarter(
 	context.Context,
-	starportcli.GatewayOptions,
+	starportcli.DevelopmentOptions,
+	starportcli.CredentialDelivery,
 ) (starportcli.DevelopmentSession, error) {
 	return starportcli.DevelopmentSession{
 		URL: "http://127.0.0.1:7827", APIKey: "development-key",

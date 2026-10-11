@@ -85,7 +85,7 @@ The cache root also holds source caches, such as `<cache>/models.dev` and `<cach
 
 ## Cache settings in development mode
 
-`starport dev` uses isolated scratch storage. It refuses each setting that selects a shared service or a persistent path, which includes these cache settings:
+`starport dev --ephemeral` uses isolated scratch storage. It refuses each setting that selects a shared service or a persistent path, which includes these cache settings:
 
 - `STARPORT_CACHE_BACKEND` with a value other than `local`
 - `STARPORT_CACHE_URL`
@@ -98,4 +98,4 @@ The error contains `development requires isolated storage` and names each confli
 development requires isolated storage: remove STARPORT_CACHE_URL or use starport serve for persistent storage. See docs/OPERATOR-GUIDE.md#initialize-persistent-state
 ```
 
-**Correction.** Remove the named settings from the shell that starts `starport dev`. To use a shared cache, run `starport serve` with persistent settings. Refer to [Temporary development](../start/temporary-development.md#settings-that-development-mode-refuses).
+**Correction.** Remove the named settings from the shell that starts `starport dev --ephemeral`. To use a shared cache, run `starport serve` with persistent settings. Refer to [Temporary development](../start/temporary-development.md#settings-that-development-mode-refuses).

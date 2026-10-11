@@ -68,7 +68,7 @@ func (c *Config) ConfigureDevelopmentRuntime() error {
 	if err := c.validateDevelopmentStorage(); err != nil {
 		return err
 	}
-	c.Server.Host = "127.0.0.1"
+	c.Server.Host = loopbackHost
 	c.Server.EnableProfiling = false
 	// Catalog acquisition stays on. A development gateway that reads no
 	// catalog routes nothing, and an operator who wants a quiet gateway
@@ -92,7 +92,7 @@ func (c *Config) ConfigureDevelopmentRuntime() error {
 	c.Security.EnableCORS = false
 	c.Security.AllowedOrigins = ""
 	c.Security.JWTSecret = ""
-	c.Logging.Output = "stdout"
+	c.Logging.Output = logOutputStdout
 	c.Logging.FilePath = ""
 	return nil
 }

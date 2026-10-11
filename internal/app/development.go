@@ -105,11 +105,29 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 
 	return &Development{
 		application: application,
-		url:         "http://" + net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port)),
+		url:         developmentURL(cfg),
 		apiKey:      apiKey,
 		scratchRoot: scratch.path,
 		scratch:     scratch,
 	}, nil
+}
+
+// NewPersistentDevelopment opens the gateway over the loaded platform storage.
+// The caller has already loaded the persistent profile and initialized a clean
+// root, so the session mints no key and owns no scratch directory.
+func NewPersistentDevelopment(cfg *config.Config, options ...Option) (*Development, error) {
+	if cfg == nil {
+		return nil, ErrConfigRequired
+	}
+	application, err := New(cfg, options...)
+	if err != nil {
+		return nil, err
+	}
+	return &Development{application: application, url: developmentURL(cfg)}, nil
+}
+
+func developmentURL(cfg *config.Config) string {
+	return "http://" + net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port))
 }
 
 // URL returns the loopback gateway URL.
@@ -136,7 +154,8 @@ func (runtime *Development) ConsoleURL() (string, error) {
 	return localauth.LaunchURL(runtime.url, ticket)
 }
 
-// APIKey returns the one-time ephemeral gateway credential.
+// APIKey returns the gateway credential that this session minted. A
+// persistent session mints none and returns "".
 func (runtime *Development) APIKey() string {
 	if runtime == nil {
 		return ""
@@ -152,8 +171,8 @@ func (runtime *Development) Run(ctx context.Context) error {
 	return runtime.application.Run(ctx)
 }
 
-// Close releases the development gateway and removes its scratch directory.
-// The CLI calls it on every exit path, started or not.
+// Close releases the development gateway and removes its scratch directory,
+// if it owns one. The CLI calls it on every exit path, started or not.
 func (runtime *Development) Close(ctx context.Context) error {
 	if runtime == nil || runtime.application == nil {
 		return nil

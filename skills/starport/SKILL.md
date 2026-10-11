@@ -36,7 +36,7 @@ Export one provider credential, then start an isolated gateway:
 
 ```bash
 export OPENAI_API_KEY="replace-with-provider-inference-key"
-starport dev --no-open
+starport dev --ephemeral --no-open
 ```
 
 The command starts a loopback gateway on port 7827 with in-memory state.

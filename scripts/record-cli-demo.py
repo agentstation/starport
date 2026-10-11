@@ -23,7 +23,7 @@ OPENING = "Goal / Choose a chat model and check a local gateway"
 CLOSING = "Result / Model chosen and gateway checked"
 CHAPTERS = (
     ("1 / Select a chat model", "starport models search gpt-6.1-sol"),
-    ("2 / Start an authenticated gateway", "starport dev --no-open >gateway.log 2>&1 &"),
+    ("2 / Start an authenticated gateway", "starport dev --ephemeral --no-open >gateway.log 2>&1 &"),
     ("3 / Check the selected model", 'curl -fsS --max-time 5 -H "Authorization: Bearer $STARPORT_API_KEY"'),
 )
 PAUSES = (
@@ -98,7 +98,7 @@ def verify_typing(svg):
              for element in tree.iter("{http://www.w3.org/2000/svg}text")}
     counts = {}
     for command in ("starport models search gpt-6.1-sol", "starport models show openai/gpt-6.1-sol",
-                    "starport dev --no-open >gateway.log 2>&1 &"):
+                    "starport dev --ephemeral --no-open >gateway.log 2>&1 &"):
         line = "$ " + command
         stem = "$ " + " ".join(command.split()[:3 if " models " in command else 2])
         partial = {value for value in lines if value.startswith(stem) and len(value) > len(stem)
