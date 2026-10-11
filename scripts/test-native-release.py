@@ -46,6 +46,12 @@ class NativeReleaseTests(unittest.TestCase):
         self.assertNotIn('private-ticket', json.dumps(report))
         self.assertEqual(report['shutdown_exit_code'], 23)
 
+    def test_development_uses_ephemeral_when_the_release_offers_it(self):
+        for help_text, expected in [('--ephemeral  Run in memory', ['dev', '--ephemeral', '--no-open']),
+                                    ('--no-open  Print the console link', ['dev', '--no-open'])]:
+            with self.subTest(expected=expected), patch.object(verifier, 'run_binary', return_value=help_text):
+                self.assertEqual(verifier.development_arguments(Path(sys.executable), {}, self.root), expected)
+
     def test_native_targets(self):
         for system, machine, expected in [('Windows', 'AMD64', ('windows', 'x86_64')),
                                           ('Windows', 'ARM64', ('windows', 'arm64')),
@@ -200,10 +206,13 @@ class NativeReleaseTests(unittest.TestCase):
         output = self.root / 'result.json'
         detail = {'id': 'openai/gpt-4o-mini', 'object': 'model', 'name': 'GPT-4o mini'}
         def binary(_binary, arguments, _environment, _home):
+            if arguments == ['dev', '--help']:
+                return '--ephemeral  Run in memory and a scratch directory\n'
             return {'--version': version + '\n', 'search': json.dumps({'data': [detail]}), 'show': json.dumps(detail)}[
                 arguments[0] if arguments[0] == '--version' else arguments[1]]
-        def development(_binary, _environment, _home, _port, report, record_generation=False):
+        def development(_binary, _environment, _home, _port, report, record_generation=False, arguments=()):
             self.assertTrue(record_generation)
+            self.assertEqual(arguments, ['dev', '--ephemeral', '--no-open'])
             report['catalog_generation'] = 'gen-1'
         arguments = ['verify', '--archive', str(candidate), '--checksums', str(checksums), '--expected-version', '1.2.2-next',
                      '--expected-os', 'windows', '--expected-arch', 'x86_64', '--output', str(output), *extra]

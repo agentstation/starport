@@ -118,7 +118,7 @@ class CatalogBindingTests(unittest.TestCase):
 class TapeTypingTests(unittest.TestCase):
     def test_svg_with_only_complete_commands_fails(self):
         commands = ["starport models search gpt-6.1-sol", "starport models show openai/gpt-6.1-sol",
-                    "starport dev --no-open >gateway.log 2>&1 &"]
+                    "starport dev --ephemeral --no-open >gateway.log 2>&1 &"]
         svg = '<svg xmlns="http://www.w3.org/2000/svg">' + ''.join(
             '<text>$ ' + command.replace('&', '&amp;') + '</text>' for command in commands) + '</svg>'
         with self.assertRaisesRegex(RuntimeError, "too few typing frames"):
@@ -126,7 +126,7 @@ class TapeTypingTests(unittest.TestCase):
 
     def test_svg_needs_intermediate_prefixes_for_each_command(self):
         commands = ["starport models search gpt-6.1-sol", "starport models show openai/gpt-6.1-sol",
-                    "starport dev --no-open >gateway.log 2>&1 &"]
+                    "starport dev --ephemeral --no-open >gateway.log 2>&1 &"]
         rows = []
         for command in commands:
             for length in range(len(command) - 8, len(command)):

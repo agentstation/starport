@@ -45,7 +45,7 @@ Show
 Set TypingSpeed 35ms
 Sleep 2s
 
-Type `starport dev --no-open >gateway.log 2>&1 &`
+Type `starport dev --ephemeral --no-open >gateway.log 2>&1 &`
 Enter
 Wait+Line@10s /^[$]$/
 Sleep 1s
