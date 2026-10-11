@@ -36,7 +36,7 @@ func TestStartServesTLSWithoutPlaintextFallback(t *testing.T) {
 
 	gateway := newTestServer(t, &Config{Host: "127.0.0.1", Port: portNumber, ShutdownTimeout: time.Second, TLSCertificate: &certificate})
 	completed := make(chan error, 1)
-	go func() { completed <- gateway.Start() }()
+	go func() { completed <- gateway.Serve() }()
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()

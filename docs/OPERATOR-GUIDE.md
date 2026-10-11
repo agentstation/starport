@@ -380,6 +380,14 @@ container. Set `STARPORT_PORT=8080` to keep the old host port with Compose.
 Change the port of each client base URL, health probe, and scrape target that
 names port 8080.
 
+`starport serve` binds only its configured port. When another process holds
+that port, serve exits with status 1 before it starts background work. The
+error names the port:
+
+```text
+HTTP server: port 7827 is busy; stop the process that holds it or set STARPORT_SERVER_PORT to a free port
+```
+
 Check process health:
 
 ```bash

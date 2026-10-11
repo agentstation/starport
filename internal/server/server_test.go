@@ -145,7 +145,7 @@ func TestShutdown(t *testing.T) {
 
 	// Start server in background
 	go func() {
-		server.Start()
+		_ = server.Serve()
 	}()
 
 	// Give server time to start

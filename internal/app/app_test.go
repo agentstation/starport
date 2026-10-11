@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -469,7 +470,11 @@ func newBlockingHTTPRuntime() *blockingHTTPRuntime {
 	return &blockingHTTPRuntime{started: make(chan struct{}), stopped: make(chan struct{})}
 }
 
-func (runtime *blockingHTTPRuntime) Start() error {
+func (runtime *blockingHTTPRuntime) Bind() (net.Addr, error) {
+	return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: config.DefaultPort}, nil
+}
+
+func (runtime *blockingHTTPRuntime) Serve() error {
 	close(runtime.started)
 	<-runtime.stopped
 	return nil
@@ -479,6 +484,8 @@ func (runtime *blockingHTTPRuntime) Shutdown(context.Context) error {
 	runtime.once.Do(func() { close(runtime.stopped) })
 	return nil
 }
+
+func (runtime *blockingHTTPRuntime) Close() error { return nil }
 
 func (runtime *blockingHTTPRuntime) wasStopped() bool {
 	select {

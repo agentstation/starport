@@ -109,7 +109,7 @@ func TestShutdownTimeout(t *testing.T) {
 
 	// Start server
 	go func() {
-		_ = server.Start()
+		_ = server.Serve()
 	}()
 
 	// Wait for server to be ready

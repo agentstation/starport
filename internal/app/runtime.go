@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"net"
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -19,9 +20,13 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
+// httpRuntime binds before it serves, so a caller learns the bound address
+// before any traffic. Close releases a listener that never served.
 type httpRuntime interface {
-	Start() error
+	Bind() (net.Addr, error)
+	Serve() error
 	Shutdown(context.Context) error
+	Close() error
 }
 
 // catalogRuntime is the one connected catalog runtime this gateway composes.

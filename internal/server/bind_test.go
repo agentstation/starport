@@ -2,12 +2,16 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/agentstation/starport/internal/endpoint"
 )
 
 // TestServerBindServeClose pins the listener contract. Bind returns the
@@ -54,5 +58,31 @@ func TestServerBindServeClose(t *testing.T) {
 		require.NoError(t, err, "close left the port bound")
 		require.NoError(t, reclaimed.Close())
 		require.Error(t, gateway.Serve(), "a closed gateway does not bind again")
+	})
+
+	t.Run("busy port names the port", func(t *testing.T) {
+		held, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = held.Close() })
+		port := held.Addr().(*net.TCPAddr).Port
+
+		gateway := newTestServer(t, &Config{Host: "127.0.0.1", Port: port, ShutdownTimeout: time.Second})
+		_, err = gateway.Bind()
+		busy, ok := errors.AsType[*endpoint.BusyError](err)
+		require.True(t, ok, "bind error = %v, want a busy port", err)
+		require.Equal(t, port, busy.Port)
+		require.EqualError(t, gateway.Serve(), "port "+strconv.Itoa(port)+" is busy")
+	})
+
+	t.Run("serve the caller listener", func(t *testing.T) {
+		bound, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		gateway := newTestServer(t, &Config{Host: "127.0.0.1", Port: 7827, Listener: bound, ShutdownTimeout: time.Second})
+		address, err := gateway.Bind()
+		require.NoError(t, err)
+		require.Equal(t, bound.Addr().String(), address.String(), "bind keeps the caller listener, not the configured port")
+		require.NoError(t, gateway.Close())
+		_, err = bound.Accept()
+		require.ErrorIs(t, err, net.ErrClosed, "close releases the caller listener")
 	})
 }
