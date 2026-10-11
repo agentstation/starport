@@ -112,8 +112,8 @@ T2 uses the `local` profile in [Latency profiles](#latency-profiles). The profil
 ```bash
 starport config paths --files
 starport doctor --probe --json
-curl --fail http://127.0.0.1:8080/health/live
-curl --fail http://127.0.0.1:8080/health/ready
+curl --fail http://127.0.0.1:7827/health/live
+curl --fail http://127.0.0.1:7827/health/ready
 ```
 
 ### Recovery
@@ -327,7 +327,7 @@ T7 has no latency profile. The UNVERIFIED engineering targets in [Latency profil
 
 ```bash
 starport dev
-curl --fail http://127.0.0.1:8080/health/ready
+curl --fail http://127.0.0.1:7827/health/ready
 ```
 
 Persistent storage selectors fail before storage access.

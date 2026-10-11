@@ -47,7 +47,7 @@ func main() {
 	fmt.Println("4. Show cache pricing in X-Cache-Write-Cost and X-Cache-Read-Cost headers")
 
 	// To make the actual request, you would use:
-	// resp, err := http.Post("http://localhost:8080/v1/chat/completions",
+	// resp, err := http.Post("http://localhost:7827/v1/chat/completions",
 	//     "application/json", bytes.NewBuffer(jsonData))
 	//
 	// Then check the cache headers:

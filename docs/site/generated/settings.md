@@ -58,7 +58,7 @@ The `env` tags of the Starport configuration define these settings. The `starpor
 
 | Variable | Type | Default | Secret |
 | --- | --- | --- | --- |
-| `STARPORT_SERVER_PORT` | `int` | `8080` | No |
+| `STARPORT_SERVER_PORT` | `int` | `7827` | No |
 | `STARPORT_SERVER_HOST` | `string` | `127.0.0.1` | No |
 | `STARPORT_SERVER_READ_TIMEOUT` | `time.Duration` | `30s` | No |
 | `STARPORT_SERVER_WRITE_TIMEOUT` | `time.Duration` | `30s` | No |

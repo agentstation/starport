@@ -24,7 +24,7 @@ func TestConfiguredPermissionClockLifecycle(t *testing.T) {
 		t.Run(shutdown, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			settings := identityTestSettings(filepath.Join(t.TempDir(), "state"), "", "127.0.0.1:8080")
+			settings := identityTestSettings(filepath.Join(t.TempDir(), "state"), "", "127.0.0.1:7827")
 			settings.PermissionClock = nativeClockProfile()
 			connected, err := OpenRuntime(ctx, storage.NewMockStore(), settings, nil)
 			require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestConfiguredPermissionClockLifecycle(t *testing.T) {
 }
 
 func TestConfiguredPermissionClockDisabledStartsNoMonitor(t *testing.T) {
-	settings := identityTestSettings(filepath.Join(t.TempDir(), "state"), "", "127.0.0.1:8080")
+	settings := identityTestSettings(filepath.Join(t.TempDir(), "state"), "", "127.0.0.1:7827")
 	settings.PermissionClock.Source = profile.Disabled
 	connected, err := OpenRuntime(t.Context(), storage.NewMockStore(), settings, nil)
 	require.NoError(t, err)

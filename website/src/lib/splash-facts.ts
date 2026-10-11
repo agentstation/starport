@@ -307,7 +307,7 @@ export const CHAPTERS: Chapter[] = [
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://127.0.0.1:8080/v1",
+    base_url="http://127.0.0.1:7827/v1",
     api_key=os.environ["STARPORT_API_KEY"],
 )
 
@@ -330,8 +330,8 @@ response = client.chat.completions.create(
         source: README,
         head: ['Client contract', 'Base URL'],
         rows: [
-          ['OpenAI', 'http://127.0.0.1:8080/v1'],
-          ['OpenRouter', 'http://127.0.0.1:8080/api/v1'],
+          ['OpenAI', 'http://127.0.0.1:7827/v1'],
+          ['OpenRouter', 'http://127.0.0.1:7827/api/v1'],
         ],
         mono: [1],
       },
@@ -388,7 +388,7 @@ starport models show openai/gpt-4o-mini --json`,
   -H "Authorization: Bearer $STARPORT_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"model":"openai/gpt-4o-mini","max_tokens":32,"stream":true,"messages":[{"role":"user","content":"Hello"}]}' \\
-  http://127.0.0.1:8080/api/v1/chat/completions`,
+  http://127.0.0.1:7827/api/v1/chat/completions`,
       },
     ],
     demo: true,
@@ -406,10 +406,10 @@ starport models show openai/gpt-4o-mini --json`,
         source: README,
         verbatim: 'block',
         text: `Starport development gateway
-URL: http://127.0.0.1:8080
+URL: http://127.0.0.1:7827
 Authentication: required
 Gateway API key (shown once): replace-with-generated-gateway-key
-Console (one-time launch link): http://127.0.0.1:8080/launch?lt=replace-with-ticket`,
+Console (one-time launch link): http://127.0.0.1:7827/launch?lt=replace-with-ticket`,
       },
     ],
   },

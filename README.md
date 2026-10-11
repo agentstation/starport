@@ -145,16 +145,16 @@ export OPENAI_API_KEY="replace-with-provider-inference-key"
 starport dev
 ```
 
-The command starts a temporary development gateway at `http://127.0.0.1:8080`.
+The command starts a temporary development gateway at `http://127.0.0.1:7827`.
 It uses in-memory state for Badger and SQLite and creates no configuration files.
 It prints one temporary Starport gateway API key and opens the console:
 
 ```text
 Starport development gateway
-URL: http://127.0.0.1:8080
+URL: http://127.0.0.1:7827
 Authentication: required
 Gateway API key (shown once): replace-with-generated-gateway-key
-Console (one-time launch link): http://127.0.0.1:8080/launch?lt=replace-with-ticket
+Console (one-time launch link): http://127.0.0.1:7827/launch?lt=replace-with-ticket
 ```
 
 The console link is not a key. The gateway spends the link on first use and
@@ -189,10 +189,10 @@ the gateway can accept requests. The authenticated model response contains the
 current Starmap catalog view.
 
 ```bash
-curl --fail http://127.0.0.1:8080/health/ready
+curl --fail http://127.0.0.1:7827/health/ready
 curl --fail-with-body \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
-  http://127.0.0.1:8080/api/v1/models
+  http://127.0.0.1:7827/api/v1/models
 ```
 
 Send an OpenRouter-style chat request:
@@ -202,7 +202,7 @@ curl --no-buffer --fail-with-body \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"openai/gpt-4o-mini","max_tokens":32,"stream":true,"messages":[{"role":"user","content":"Hello"}]}' \
-  http://127.0.0.1:8080/api/v1/chat/completions
+  http://127.0.0.1:7827/api/v1/chat/completions
 ```
 
 Starport streams the answer as server-sent events. Each `data:` line carries a
@@ -236,8 +236,8 @@ as its API key.
 
 | Client contract | Base URL |
 | --- | --- |
-| OpenAI | `http://127.0.0.1:8080/v1` |
-| OpenRouter | `http://127.0.0.1:8080/api/v1` |
+| OpenAI | `http://127.0.0.1:7827/v1` |
+| OpenRouter | `http://127.0.0.1:7827/api/v1` |
 
 OpenAI Python example:
 
@@ -247,7 +247,7 @@ import os
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://127.0.0.1:8080/v1",
+    base_url="http://127.0.0.1:7827/v1",
     api_key=os.environ["STARPORT_API_KEY"],
 )
 
@@ -258,7 +258,7 @@ response = client.chat.completions.create(
 ```
 
 For an OpenRouter client, replace its default base URL with
-`http://127.0.0.1:8080/api/v1`. Keep the client request and response types.
+`http://127.0.0.1:7827/api/v1`. Keep the client request and response types.
 
 The compatibility boundary is the tested routes and SDK versions.
 [Connect an SDK](docs/site/api-compatibility/sdks.md) lists the SDK versions
@@ -369,7 +369,7 @@ docker compose up -d starport
 
 Save the gateway key from initialization and the local admin token from rotation.
 Keep both values private. Do not initialize the same identity repository again.
-The API is available at `http://127.0.0.1:8080`. The three named volumes retain
+The API is available at `http://127.0.0.1:7827`. The three named volumes retain
 configuration, application data, and catalog state through container replacement.
 Back up all three volumes and the master key.
 
@@ -393,6 +393,11 @@ for the complete persistent and production procedures.
 Starport reads `config.env` from the configuration root. Process environment
 variables override the file. `starport config paths` prints the resolved paths.
 
+Starport listens on port 7827 by default. Earlier releases used port 8080. Set
+`STARPORT_SERVER_PORT=8080` to keep the old port. With Docker Compose, set
+`STARPORT_PORT=8080` instead. That value changes the host port, and the
+container keeps port 7827.
+
 `starport config show` prints the effective schema and hides secret values.
 `starport doctor` runs passive checks. Add `--probe` for read-only storage and
 identity checks.
@@ -411,7 +416,7 @@ change that interval. An administrator can also trigger the same shared work:
 curl --fail-with-body \
   -X POST \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
-  http://127.0.0.1:8080/api/v1/admin/providers/refresh
+  http://127.0.0.1:7827/api/v1/admin/providers/refresh
 ```
 
 Another process cannot change Starport's process environment. Restart Starport

@@ -39,7 +39,7 @@ func newTestWorkOS(t *testing.T, profile map[string]any, status int) *Authentica
 	stub := stubWorkOS(t, profile, status)
 	repositories := newTestRepositories(t)
 	path, err := NewAuthenticator(AcquisitionConfig{
-		CallbackBaseURL: "http://localhost:8080",
+		CallbackBaseURL: "http://localhost:7827",
 		WorkOS: WorkOSConfig{
 			APIKey:       "sk_test",
 			ClientID:     "client_01",
@@ -93,7 +93,7 @@ func TestWorkOSAuthorizeURLCarriesTheConfig(t *testing.T) {
 	require.Equal(t, "code", query.Get("response_type"))
 	require.Equal(t, "client_01", query.Get("client_id"))
 	require.Equal(t, "org_01H", query.Get("organization"))
-	require.Equal(t, "http://localhost:8080"+CallbackPath("workos"), query.Get("redirect_uri"))
+	require.Equal(t, "http://localhost:7827"+CallbackPath("workos"), query.Get("redirect_uri"))
 	require.NotEmpty(t, query.Get("state"))
 }
 

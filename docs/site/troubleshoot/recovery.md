@@ -110,4 +110,4 @@ curl -sS <gateway-url>/health/ready
 
 - `STARPORT_LOGGING_LEVEL` sets the log level. The default is `info`.
 - `STARPORT_LOGGING_FORMAT` sets the log format. The default is `json`.
-- `STARPORT_SERVER_HOST` and `STARPORT_SERVER_PORT` set the listener. The defaults are `127.0.0.1` and `8080`.
+- `STARPORT_SERVER_HOST` and `STARPORT_SERVER_PORT` set the listener. The defaults are `127.0.0.1` and `7827`.

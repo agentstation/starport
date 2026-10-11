@@ -48,7 +48,7 @@ curl --fail-with-body \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"Hello"}]}' \
-  http://127.0.0.1:8080/api/v1/chat/completions
+  http://127.0.0.1:7827/api/v1/chat/completions
 ```
 
 A model in the catalog is not always a callable offering. The request succeeds only when the gateway can call a provider with a usable credential. Refer to [Inspect the catalog](start/first-catalog-inspection.md) for the difference.

@@ -78,7 +78,7 @@ func TestAccountAdmissionAcrossCallerModes(t *testing.T) {
 }
 
 func TestAccountAuthorityFailureKeepsLivenessAvailable(t *testing.T) {
-	server := newTestServer(t, &Config{Port: 8080})
+	server := newTestServer(t, &Config{Port: 7827})
 	server.auth.accounts = admissionAccountReader{err: storage.ErrStorageClosed}
 	response := doRequest(t, server, http.MethodGet, "/health/live")
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())

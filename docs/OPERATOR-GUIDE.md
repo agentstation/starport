@@ -37,10 +37,10 @@ launch link, and opens the console in a browser:
 
 ```text
 Starport development gateway
-URL: http://127.0.0.1:8080
+URL: http://127.0.0.1:7827
 Authentication: required
 Gateway API key (shown once): replace-with-generated-gateway-key
-Console (one-time launch link): http://127.0.0.1:8080/launch?lt=replace-with-ticket
+Console (one-time launch link): http://127.0.0.1:7827/launch?lt=replace-with-ticket
 ```
 
 Add `--no-open` to print the link without opening a browser. Add `--no-auth`
@@ -52,10 +52,10 @@ and check the gateway:
 
 ```bash
 export STARPORT_API_KEY="replace-with-generated-gateway-key"
-curl --fail http://127.0.0.1:8080/health/ready
+curl --fail http://127.0.0.1:7827/health/ready
 curl --fail-with-body \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
-  http://127.0.0.1:8080/api/v1/models
+  http://127.0.0.1:7827/api/v1/models
 ```
 
 The model response contains the active Starmap catalog view. It does not prove
@@ -102,7 +102,7 @@ switch is refused while either is set, and the refusal names the value to
 change, so an operator is never told only that they may not.
 
 ```bash
-curl --fail-with-body http://127.0.0.1:8080/api/v1/auth/mode
+curl --fail-with-body http://127.0.0.1:7827/api/v1/auth/mode
 ```
 
 That route needs no credential in either mode. It reports the mode, which of
@@ -370,15 +370,21 @@ If a setup transaction stopped before it completed, serve does not initialize
 again. The error names the configuration file to inspect and the recovery
 command, `starport auth bootstrap --recover`.
 
-The default listener is `http://127.0.0.1:8080`. The configuration package
+The default listener is `http://127.0.0.1:7827`. The configuration package
 selects the platform configuration directory. The Badger path is
 `data/badger` under that directory.
+
+The default port changed from 8080 to 7827. Set `STARPORT_SERVER_PORT=8080` to
+keep the old port. Docker Compose maps the host port to port 7827 in the
+container. Set `STARPORT_PORT=8080` to keep the old host port with Compose.
+Change the port of each client base URL, health probe, and scrape target that
+names port 8080.
 
 Check process health:
 
 ```bash
-curl --fail http://localhost:8080/health/live
-curl --fail http://localhost:8080/health/ready
+curl --fail http://localhost:7827/health/live
+curl --fail http://localhost:7827/health/ready
 ```
 
 Liveness reports whether the HTTP process responds.
@@ -731,7 +737,7 @@ A running gateway states what it is and how it runs at one admin route:
 
 ```bash
 curl -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
-  http://127.0.0.1:8080/api/v1/admin/info
+  http://127.0.0.1:7827/api/v1/admin/info
 ```
 
 The route needs the `admin` scope. Every value comes from the linker, the
@@ -766,8 +772,8 @@ Use these substitutions in existing clients:
 
 | Client contract | Base URL | API key |
 | --- | --- | --- |
-| OpenAI | `http://localhost:8080/v1` | A Starport gateway key |
-| OpenRouter | `http://localhost:8080/api/v1` | A Starport gateway key |
+| OpenAI | `http://localhost:7827/v1` | A Starport gateway key |
+| OpenRouter | `http://localhost:7827/api/v1` | A Starport gateway key |
 
 Example OpenRouter-style request:
 
@@ -776,7 +782,7 @@ curl --fail-with-body \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"openrouter/auto","messages":[{"role":"user","content":"Hello"}]}' \
-  http://localhost:8080/api/v1/chat/completions
+  http://localhost:7827/api/v1/chat/completions
 ```
 
 Each route reads its own scope:
@@ -878,12 +884,12 @@ reconciliation work:
 ```bash
 curl --fail-with-body \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
-  http://127.0.0.1:8080/api/v1/admin/providers
+  http://127.0.0.1:7827/api/v1/admin/providers
 
 curl --fail-with-body \
   -X POST \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
-  http://127.0.0.1:8080/api/v1/admin/providers/refresh
+  http://127.0.0.1:7827/api/v1/admin/providers/refresh
 ```
 
 The status response separates compiled adapter support, operator credential
@@ -1349,7 +1355,7 @@ Read the accepted head and the validation state:
 ```bash
 curl --fail-with-body \
   -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
-  http://127.0.0.1:8080/api/v1/admin/catalog/status
+  http://127.0.0.1:7827/api/v1/admin/catalog/status
 ```
 
 `provenance.effective` names the accepted head this gateway routes on.
@@ -1363,7 +1369,7 @@ and a second caller joins the run in flight:
 ```bash
 curl --fail-with-body -X POST \
   -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
-  http://127.0.0.1:8080/api/v1/admin/catalog/refresh
+  http://127.0.0.1:7827/api/v1/admin/catalog/refresh
 ```
 
 Read the run through the `Location` header, and cancel a run that no longer
@@ -1372,11 +1378,11 @@ serves the deployment:
 ```bash
 curl --fail-with-body \
   -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
-  http://127.0.0.1:8080/api/v1/admin/catalog/refreshes/<run_id>
+  http://127.0.0.1:7827/api/v1/admin/catalog/refreshes/<run_id>
 
 curl --fail-with-body -X DELETE \
   -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
-  http://127.0.0.1:8080/api/v1/admin/catalog/refreshes/<run_id>
+  http://127.0.0.1:7827/api/v1/admin/catalog/refreshes/<run_id>
 ```
 
 To pin a generation, set `STARPORT_CATALOG_SOURCE=embedded` and restart. The
@@ -2354,7 +2360,7 @@ Save the gateway key from initialization. Do not initialize the same identity
 repository again. Rotation prepares the local admin token for the container's
 network bind. Keep its printed value private.
 
-The host publishes the API on `127.0.0.1:8080`. Set `STARPORT_PORT` to change the
+The host publishes the API on `127.0.0.1:7827`. Set `STARPORT_PORT` to change the
 host port. Add an authenticated TLS ingress before exposing the service remotely.
 The container binds `0.0.0.0` inside its own network namespace.
 
@@ -2428,7 +2434,7 @@ Point a Prometheus scrape job at the gateway:
 scrape_configs:
   - job_name: starport
     static_configs:
-      - targets: ["127.0.0.1:8080"]
+      - targets: ["127.0.0.1:7827"]
 ```
 
 For `admin` mode, add the gateway key as a bearer credential:
@@ -2508,7 +2514,7 @@ CSV with `format=csv`:
 
 ```bash
 curl -H "Authorization: Bearer $STARPORT_API_KEY" \
-  "http://127.0.0.1:8080/api/v1/activity/export?format=csv" > activity.csv
+  "http://127.0.0.1:7827/api/v1/activity/export?format=csv" > activity.csv
 ```
 
 `GET /api/v1/admin/activity/export` streams the records of every key under
@@ -2552,7 +2558,7 @@ listing serves the newest records first and takes `action`, `actor`, `since`,
 
 ```bash
 curl -H "Authorization: Bearer $STARPORT_API_KEY" \
-  "http://127.0.0.1:8080/api/v1/admin/audit?action=key.create&limit=50"
+  "http://127.0.0.1:7827/api/v1/admin/audit?action=key.create&limit=50"
 ```
 
 The console renders the same trail on its Audit Log page.
@@ -2621,7 +2627,7 @@ Read the same state without a scrape:
 
 ```bash
 curl -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
-  http://127.0.0.1:8080/api/v1/admin/webhooks
+  http://127.0.0.1:7827/api/v1/admin/webhooks
 ```
 
 The answer names each receiver with its credential and query string

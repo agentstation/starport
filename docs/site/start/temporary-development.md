@@ -37,10 +37,10 @@ summary: Start a gateway that keeps no data, and learn what it loses at shutdown
 
 ```text
 Starport development gateway
-URL: http://127.0.0.1:8080
+URL: http://127.0.0.1:7827
 Authentication: required
 Gateway API key (shown once): <generated-gateway-api-key>
-Console (one-time launch link): http://127.0.0.1:8080/launch?lt=<ticket>
+Console (one-time launch link): http://127.0.0.1:7827/launch?lt=<ticket>
 ```
 
 The console opens in a browser. The launch link is not a key. The gateway accepts the link one time and gives the browser a session. Add `--no-open` to print the link and keep the browser closed.
@@ -48,7 +48,7 @@ The console opens in a browser. The launch link is not a key. The gateway accept
 **Verification:**
 
 ```bash
-curl --fail http://127.0.0.1:8080/health/ready
+curl --fail http://127.0.0.1:7827/health/ready
 ```
 
 The command exits with status 0.

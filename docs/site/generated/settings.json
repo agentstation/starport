@@ -606,7 +606,7 @@
       "section": "server",
       "field": "Server.Port",
       "type": "int",
-      "default": "8080",
+      "default": "7827",
       "default_source": "tag",
       "secret": false
     },

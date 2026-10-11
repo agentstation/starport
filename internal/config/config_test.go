@@ -21,7 +21,7 @@ func TestConfig_Validate(t *testing.T) {
 			name: "valid config",
 			config: &Config{
 				Server: ServerConfig{
-					Port:            8080,
+					Port:            7827,
 					Host:            "0.0.0.0",
 					ReadTimeout:     30 * time.Second,
 					WriteTimeout:    30 * time.Second,
@@ -106,7 +106,7 @@ func TestConfig_Validate(t *testing.T) {
 			name: "invalid storage mode",
 			config: &Config{
 				Server: ServerConfig{
-					Port:            8080,
+					Port:            7827,
 					Host:            "0.0.0.0",
 					ReadTimeout:     30 * time.Second,
 					WriteTimeout:    30 * time.Second,
@@ -143,7 +143,7 @@ func TestConfig_Validate(t *testing.T) {
 			name: "invalid log level",
 			config: &Config{
 				Server: ServerConfig{
-					Port:            8080,
+					Port:            7827,
 					Host:            "0.0.0.0",
 					ReadTimeout:     30 * time.Second,
 					WriteTimeout:    30 * time.Second,

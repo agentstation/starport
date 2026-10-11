@@ -11,8 +11,8 @@ This area is for a developer who connects a client or an SDK to a Starport gatew
 
 | Family | Base URL | Error body |
 | --- | --- | --- |
-| OpenAI | `http://<gateway-host>:8080/v1` | OpenAI error object |
-| OpenRouter | `http://<gateway-host>:8080/api/v1` | OpenRouter error object |
+| OpenAI | `http://<gateway-host>:7827/v1` | OpenAI error object |
+| OpenRouter | `http://<gateway-host>:7827/api/v1` | OpenRouter error object |
 
 Each request needs a gateway API key in the `Authorization: Bearer` header. A provider key does not work as a gateway key.
 

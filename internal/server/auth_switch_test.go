@@ -21,7 +21,7 @@ import (
 func switchServer(t *testing.T, store storage.KVStore) *Server {
 	t.Helper()
 	return newTestServer(t, &Config{
-		Port: 8080, Host: "127.0.0.1", MaxRequestSize: 1 << 20,
+		Port: 7827, Host: "127.0.0.1", MaxRequestSize: 1 << 20,
 	}, withTestStore(store))
 }
 
@@ -32,7 +32,7 @@ func setMode(t *testing.T, server *Server, secret, mode string, options ...func(
 	request := httptest.NewRequest(http.MethodPut, "/api/v1/admin/auth/mode",
 		strings.NewReader(`{"mode":"`+mode+`"}`))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	request.Header.Set("Origin", "http://127.0.0.1:7827")
 	request.RemoteAddr = "127.0.0.1:54321"
 	if secret != "" {
 		request.Header.Set("Authorization", "Bearer "+secret)
@@ -89,7 +89,7 @@ func TestSwitchChangesInferenceWithoutARestart(t *testing.T) {
 // request has to come from the machine that runs the gateway.
 func TestSwitchClosesAnOpenGatewayWithoutAKey(t *testing.T) {
 	server := newTestServer(t, &Config{
-		Port: 8080, Host: "127.0.0.1", MaxRequestSize: 1 << 20,
+		Port: 7827, Host: "127.0.0.1", MaxRequestSize: 1 << 20,
 		AuthMode: authmode.Disabled,
 	})
 	require.Equal(t, http.StatusOK, keylessInference(t, server))
@@ -129,7 +129,7 @@ func TestSwitchSurvivesARestart(t *testing.T) {
 	require.Equal(t, authmode.Disabled, resolved.Mode)
 
 	second := newTestServer(t, &Config{
-		Port: 8080, Host: "127.0.0.1", MaxRequestSize: 1 << 20,
+		Port: 7827, Host: "127.0.0.1", MaxRequestSize: 1 << 20,
 		AuthMode: resolved.Mode, AuthModeSource: resolved.Source,
 	}, withTestStore(store))
 
@@ -174,7 +174,7 @@ func TestSwitchRefusesARemoteOrigin(t *testing.T) {
 // same one or the runtime path is a way around the startup check.
 func TestSwitchRefusesToOpenAReachableGateway(t *testing.T) {
 	server := newTestServer(t, &Config{
-		Port: 8080, Host: "0.0.0.0", MaxRequestSize: 1 << 20,
+		Port: 7827, Host: "0.0.0.0", MaxRequestSize: 1 << 20,
 	})
 	secret := createServerAPIKey(t, server, "switch-admin", []string{"admin"})
 
@@ -203,7 +203,7 @@ func TestSwitchRefusesAModeStatedForThisProcess(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			server := newTestServer(t, &Config{
-				Port: 8080, Host: "127.0.0.1", MaxRequestSize: 1 << 20,
+				Port: 7827, Host: "127.0.0.1", MaxRequestSize: 1 << 20,
 				AuthMode: authmode.Required, AuthModeSource: test.source,
 			})
 			secret := createServerAPIKey(t, server, "switch-admin", []string{"admin"})
@@ -238,7 +238,7 @@ func TestModeReadAnswersTheConsoleQuestion(t *testing.T) {
 
 	local := httptest.NewRequest(http.MethodGet, "/api/v1/auth/mode", nil)
 	local.RemoteAddr = "127.0.0.1:54321"
-	local.Header.Set("Origin", "http://127.0.0.1:8080")
+	local.Header.Set("Origin", "http://127.0.0.1:7827")
 	recorder := httptest.NewRecorder()
 	server.Router().ServeHTTP(recorder, local)
 

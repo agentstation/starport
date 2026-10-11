@@ -50,13 +50,13 @@ Release archives for macOS, Linux, and Windows are on the release page. The [rep
    starport ui
    ```
 
-**Expected result:** The gateway listens on `http://127.0.0.1:8080`. The console opens in a browser with a session that this machine issued.
+**Expected result:** The gateway listens on `http://127.0.0.1:7827`. The console opens in a browser with a session that this machine issued.
 
 **Verification:**
 
 ```bash
-curl --fail http://127.0.0.1:8080/health/live
-curl --fail http://127.0.0.1:8080/health/ready
+curl --fail http://127.0.0.1:7827/health/live
+curl --fail http://127.0.0.1:7827/health/ready
 ```
 
 Both commands exit with status 0. `/health/live` answers when the process responds. `/health/ready` answers when the gateway can accept requests. Neither route needs a credential.

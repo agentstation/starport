@@ -79,6 +79,6 @@ func TestNewRejectsIncompleteTLSCertificate(t *testing.T) {
 }
 
 func TestServerAddressUsesIPv6Brackets(t *testing.T) {
-	gateway := newTestServer(t, &Config{Host: "::1", Port: 8080})
-	require.Equal(t, "[::1]:8080", gateway.httpServer.Addr)
+	gateway := newTestServer(t, &Config{Host: "::1", Port: 7827})
+	require.Equal(t, "[::1]:7827", gateway.httpServer.Addr)
 }

@@ -138,9 +138,18 @@ func (c TelemetryConfig) Validate() error {
 // literal. TestBodyLimitDefaultMatchesItsConstant proves the two agree.
 const DefaultMaxRequestSize int64 = 33554432
 
+// DefaultPort is the standard gateway port. It spells STAR on a phone keypad,
+// and no common development server claims it. STARPORT_SERVER_PORT overrides
+// it.
+//
+// The tags on ServerConfig.Port and server.Config.Port repeat the number
+// because a struct tag holds a literal. TestPortDefaultMatchesItsConstant and
+// TestConfigPortDefaultMatchesTheStandardPort prove the three agree.
+const DefaultPort = 7827
+
 // ServerConfig defines HTTP server settings
 type ServerConfig struct {
-	Port              int           `env:"PORT,default=8080"`
+	Port              int           `env:"PORT,default=7827"`
 	Host              string        `env:"HOST,default=127.0.0.1"`
 	ReadTimeout       time.Duration `env:"READ_TIMEOUT,default=30s"`
 	WriteTimeout      time.Duration `env:"WRITE_TIMEOUT,default=30s"`

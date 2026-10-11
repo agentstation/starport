@@ -11,8 +11,8 @@ An SDK connects to Starport when you change two values: the base URL and the API
 
 | SDK family | Base URL |
 | --- | --- |
-| OpenAI SDKs | `http://<gateway-host>:8080/v1` |
-| OpenRouter SDKs | `http://<gateway-host>:8080/api/v1` |
+| OpenAI SDKs | `http://<gateway-host>:7827/v1` |
+| OpenRouter SDKs | `http://<gateway-host>:7827/api/v1` |
 
 The API key is a Starport gateway key. The examples read it from `STARPORT_API_KEY`. Do not write a key into source code.
 
@@ -40,7 +40,7 @@ A model in the catalog is not always callable. Before you write a client, list t
 ```bash
 curl --fail-with-body \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
-  http://<gateway-host>:8080/v1/models
+  http://<gateway-host>:7827/v1/models
 ```
 
 Use an `id` from the response in place of `<provider>/<model>` in the examples. A model that is in the catalog but not in this list fails.
@@ -53,7 +53,7 @@ import os
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://<gateway-host>:8080/v1",
+    base_url="http://<gateway-host>:7827/v1",
     api_key=os.environ["STARPORT_API_KEY"],
 )
 
@@ -73,7 +73,7 @@ print(result.output_text)
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  baseURL: "http://<gateway-host>:8080/v1",
+  baseURL: "http://<gateway-host>:7827/v1",
   apiKey: process.env.STARPORT_API_KEY,
 });
 
@@ -91,7 +91,7 @@ import { OpenRouter } from "@openrouter/sdk";
 
 const client = new OpenRouter({
   apiKey: process.env.STARPORT_API_KEY,
-  serverURL: "http://<gateway-host>:8080/api/v1",
+  serverURL: "http://<gateway-host>:7827/api/v1",
 });
 
 const response = await client.chat.send({
@@ -113,7 +113,7 @@ from openrouter import OpenRouter
 
 with OpenRouter(
     api_key=os.environ["STARPORT_API_KEY"],
-    server_url="http://<gateway-host>:8080/api/v1",
+    server_url="http://<gateway-host>:7827/api/v1",
 ) as client:
     response = client.chat.send(
         model="<provider>/<model>",
