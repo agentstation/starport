@@ -34,10 +34,10 @@ func (l *Loader) LoadPersistentDevelopment(ctx context.Context, overrides ...Ove
 	// refusal takes precedence over a later validation error.
 	var refusal error
 	profile := func(cfg *Config) {
-		cfg.Server.Host = "127.0.0.1"
+		cfg.Server.Host = loopbackHost
 		cfg.Security.EnableTLS = false
 		cfg.Security.TLSCertPath, cfg.Security.TLSKeyPath = "", ""
-		cfg.Logging.Output, cfg.Logging.FilePath = "stdout", ""
+		cfg.Logging.Output, cfg.Logging.FilePath = logOutputStdout, ""
 		refusal = cfg.persistentDevelopmentConflicts(platform)
 	}
 	cfg, err := l.Load(ctx, append(slices.Clone(overrides), profile)...)
@@ -56,13 +56,13 @@ func (c *Config) persistentDevelopmentConflicts(platform Paths) error {
 		moved bool
 	}{
 		{managementEnvironment, c.ManagementMode() != ManagementLocal},
-		{"STARPORT_STORAGE_MODE", c.Storage.Mode != storageModeBadger},
+		{storageModeEnvironment, c.Storage.Mode != storageModeBadger},
 		{badgerPathEnvironment, c.Storage.Badger.Path != platform.BadgerDir},
-		{"STARPORT_STORAGE_SQL_MODE", c.Storage.SQL.Mode != sqlModeSQLite},
+		{sqlModeEnvironment, c.Storage.SQL.Mode != sqlModeSQLite},
 		{sqlitePathEnvironment, c.Storage.SQL.SQLite.Path != platform.SQLiteFile},
-		{"STARPORT_FILES_BACKEND", c.Files.SelectedBackend() != BlobBackendFilesystem},
+		{filesBackendEnvironment, c.Files.SelectedBackend() != BlobBackendFilesystem},
 		{filesPathEnvironment, c.Files.Path != platform.FilesDir},
-		{"STARPORT_CACHE_BACKEND", c.Cache.Backend != "" && c.Cache.Backend != cacheBackendLocal},
+		{cacheBackendEnvironment, c.Cache.Backend != "" && c.Cache.Backend != cacheBackendLocal},
 	} {
 		if check.moved {
 			conflicts = append(conflicts, check.name)
