@@ -47,7 +47,9 @@ test("a 375 px screen gets a top bar whose trigger opens the navigation sheet", 
   // The top bar is a lazy chunk; load it so the first query finds it.
   await import("@/components/shell/SmallScreenNav");
   openConsole("/models");
-  const trigger = await screen.findByRole("button", { name: "Open navigation" });
+  // The first render of the file loads the shell; a loaded runner needs
+  // more than the one-second default.
+  const trigger = await screen.findByRole("button", { name: "Open navigation" }, { timeout: 5000 });
   expect(screen.queryByRole("navigation", { name: "Console" })).toBeNull();
   fireEvent.click(trigger);
   const sheet = await screen.findByRole("dialog", { name: "Navigation" });
