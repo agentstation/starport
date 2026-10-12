@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -64,8 +65,8 @@ func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
 
 // newSyntheticProviderKeys builds a manager whose validator knows exactly one
 // synthetic provider, so shared-credential resolution runs the real
-// catalog-contract path.
-func newSyntheticProviderKeys(t *testing.T, provider catalogs.Provider) ProviderKeys {
+// catalog-contract path. An optional limit profile replaces the default one.
+func newSyntheticProviderKeys(t *testing.T, provider catalogs.Provider, limits ...credentials.MaterialLimits) ProviderKeys {
 	t.Helper()
 	store := storage.NewMockStore()
 	repository, err := credentials.Open(store)
@@ -76,9 +77,19 @@ func newSyntheticProviderKeys(t *testing.T, provider catalogs.Provider) Provider
 	require.NoError(t, err)
 	masterKey, err := credentials.GenerateMasterKey()
 	require.NoError(t, err)
-	manager, err := NewProviderKeys(repository, masterKey, validator)
+	manager, err := NewProviderKeys(repository, masterKey, validator, limits...)
 	require.NoError(t, err)
 	return manager
+}
+
+// unhurriedMaterialLimits widens the default load deadline for a test that
+// proves a property other than timing. A stored load derives a key with
+// Argon2, and under the race detector on a loaded runner that takes longer
+// than the one-second default.
+func unhurriedMaterialLimits() credentials.MaterialLimits {
+	limits := credentials.DefaultMaterialLimits()
+	limits.Validity, limits.LoadTimeout, limits.Idle = 5*time.Minute, time.Minute, 5*time.Minute
+	return limits
 }
 
 func syntheticCredentialProvider() catalogs.Provider {
