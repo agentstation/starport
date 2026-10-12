@@ -21,7 +21,7 @@ type InitResult struct {
 }
 
 // deliverCredential prints the one-time gateway credential of an
-// initialization. auth bootstrap and the first run of serve both deliver
+// initialization. auth bootstrap and the first run of dev or serve deliver
 // through it.
 //
 // The credential exists nowhere else in readable form, so a failed write rolls

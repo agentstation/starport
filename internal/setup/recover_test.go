@@ -61,7 +61,7 @@ func TestRecoverRefusesAnEmptyRootAndWritesNothing(t *testing.T) {
 	result, err := New(paths).Recover(t.Context(), Request{APIKeyName: DefaultAPIKeyName})
 
 	require.ErrorIs(t, err, ErrNoPendingSetup)
-	require.ErrorContains(t, err, "starport serve")
+	require.ErrorContains(t, err, `run "starport dev" or "starport serve" to initialize it`)
 	require.Empty(t, result.APIKey)
 	for _, directory := range []string{paths.ConfigDir, paths.DataDir} {
 		_, err := os.Stat(directory)

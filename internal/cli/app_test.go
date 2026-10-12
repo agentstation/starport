@@ -29,7 +29,7 @@ func TestNoArgumentsShowHelp(t *testing.T) {
 			t.Errorf("help output does not contain %q:\n%s", want, stdout.String())
 		}
 	}
-	// serve initializes a clean local root and auth bootstrap claims shared
+	// dev or serve initializes a clean local root and auth bootstrap claims shared
 	// storage, so the root lists no init command.
 	for line := range strings.Lines(stdout.String()) {
 		if name, _, _ := strings.Cut(strings.TrimSpace(line), " "); strings.TrimSuffix(name, ",") == "init" {
