@@ -17,6 +17,9 @@ const (
 	authFormatJSON       = "json"
 	flagBootstrapName    = "name"
 	flagBootstrapRecover = "recover"
+	// localRootNextStep names the two commands that start a gateway on the
+	// local root.
+	localRootNextStep = "Run: starport dev or starport serve"
 )
 
 // authStatusView is what `starport auth status` reports. It never carries the
@@ -176,13 +179,13 @@ func newAuthCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.
 
 // newAuthBootstrapCommand claims the first gateway API key in configured
 // shared storage, or retries an interrupted local setup. A clean local root
-// needs neither: the first run of serve initializes it.
+// needs neither: the first run of dev or serve initializes it.
 func newAuthBootstrapCommand(deps Dependencies, usageError usageErrorHandler, jsonFlag urfavecli.Flag) *urfavecli.Command {
 	return &urfavecli.Command{
 		Name: "bootstrap", Usage: "Create the first gateway API key in shared storage, or recover an interrupted local setup",
 		Description: "--name creates the first gateway API key in configured shared storage and prints it once. " +
 			"It refuses storage that already holds a key. --recover retries the interrupted setup of this " +
-			"machine's local root. A clean local root needs neither: the first run of starport serve initializes it.",
+			"machine's local root. A clean local root needs neither: the first run of starport dev or starport serve initializes it.",
 		OnUsageError: usageError,
 		Flags: []urfavecli.Flag{
 			&urfavecli.StringFlag{Name: flagBootstrapName, Usage: "Name for the first gateway API key in configured shared storage"},
@@ -209,7 +212,7 @@ func newAuthBootstrapCommand(deps Dependencies, usageError usageErrorHandler, js
 			result, bootstrapErr := deps.Initialize(ctx, options)
 			// The key prints even when a later step fails. Storage already
 			// holds it, and this output is the only place it exists.
-			if err := deliverCredential(ctx, cmd.Writer, result, asJSON, "Run: starport serve"); err != nil {
+			if err := deliverCredential(ctx, cmd.Writer, result, asJSON, bootstrapNextStep(options)); err != nil {
 				return runtimeFailure{cause: err}
 			}
 			if bootstrapErr != nil {
@@ -225,6 +228,16 @@ func newAuthBootstrapCommand(deps Dependencies, usageError usageErrorHandler, js
 	}
 }
 
+// bootstrapNextStep names the command that starts the gateway on the storage
+// that bootstrap prepared. Persistent dev refuses configured shared storage,
+// so only a recovered local root can start with dev.
+func bootstrapNextStep(options InitOptions) string {
+	if options.Recover {
+		return localRootNextStep
+	}
+	return "Run: starport serve"
+}
+
 // writeSettledRecovery reports a recovery that found the interrupted setup
 // already complete. That setup stored its key before the run stopped, so
 // the operator needs another way to get one.
@@ -236,7 +249,7 @@ func writeSettledRecovery(writer io.Writer, asJSON bool) error {
 	}
 	_, err := fmt.Fprint(writer, "Recovered the interrupted local setup.\n"+
 		"The interrupted run stored a gateway API key that no command can show again.\n"+
-		"Run: starport serve\n"+
+		localRootNextStep+"\n"+
 		"Then create a gateway API key in the console under Keys.\n")
 	return err
 }

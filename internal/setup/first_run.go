@@ -75,7 +75,7 @@ func partialState(configFile string) error {
 // result, because no command can show that key again.
 //
 // Recover refuses a root with no pending transaction: an empty root belongs
-// to the first run of serve, and a ready root has nothing to retry. It writes
+// to the first run of dev or serve, and a ready root has nothing to retry. It writes
 // nothing to an empty root.
 func (s *Service) Recover(ctx context.Context, request Request) (Result, error) {
 	if err := s.validate(request); err != nil {
@@ -84,7 +84,7 @@ func (s *Service) Recover(ctx context.Context, request Request) (Result, error) 
 	state, err := Inspect(s.paths)
 	switch {
 	case err == nil && state == StateAbsent:
-		return Result{}, fmt.Errorf("%w: the local root is empty; run %q to initialize it", ErrNoPendingSetup, "starport serve")
+		return Result{}, fmt.Errorf("%w: the local root is empty; run %q or %q to initialize it", ErrNoPendingSetup, "starport dev", "starport serve")
 	case state == "":
 		return Result{}, err
 	}

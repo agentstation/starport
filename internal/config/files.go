@@ -35,8 +35,9 @@ type FilesConfig struct {
 	Backend string `env:"BACKEND,default=filesystem"`
 
 	// Path roots the filesystem backend. An absent value puts the objects in
-	// the platform data directory, beside the record store.
-	Path string `env:"PATH"`
+	// the platform data directory, beside the record store. The loader sets
+	// that default before it reads the environment, so the tag overwrites it.
+	Path string `env:"PATH,overwrite"`
 
 	// MaxUploadBytes bounds one upload. It is a deployment decision rather
 	// than a wire-format one: the same request that a shared object store
