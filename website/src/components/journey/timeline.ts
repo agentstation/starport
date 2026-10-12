@@ -91,7 +91,7 @@ export function actSpans() {
 // The request's narrative state, read out in the status bar and drawn beside
 // the travelling token. Each entry starts at `at` and holds until the next.
 // The first request chapter plans, streams, and finishes inside its window,
-// so it holds three entries. The laptop chapter last restates the temporary
+// so it holds three entries. The laptop chapter last restates the persistent
 // gateway that the quick start runs.
 function at(id: string, offset = 0) {
   const chapter = chapters.find((entry) => entry.id === id);
@@ -112,7 +112,7 @@ export const requestStates: { at: number; label: string }[] = [
   { at: at('storage'), label: REQUEST_STATES.stored },
   { at: at('server'), label: REQUEST_STATES.served },
   { at: at('scale-out'), label: REQUEST_STATES.balanced },
-  { at: at('laptop'), label: REQUEST_STATES.temporary },
+  { at: at('laptop'), label: REQUEST_STATES.persisted },
 ];
 
 export function requestStateFor(progress: number) {

@@ -23,29 +23,56 @@ key. Starport stores only the SHA-256 hash of each gateway key.
 ## Local Development
 
 Set any conventional provider credentials that you want Starport to discover.
-Then start an isolated development gateway:
+Then start a persistent development gateway:
 
 ```bash
 export OPENAI_API_KEY="replace-with-provider-inference-key"
-starport dev --ephemeral
+starport dev
 ```
 
-The command binds to `127.0.0.1` on port 7827, or the next free port, which
-`dev` prints. It uses in-memory storage, creates no configuration file, and
-keeps its catalog state in a scratch directory that it removes on exit. It prints one temporary gateway API key and one console
-launch link, and opens the console in a browser:
+The command binds to `127.0.0.1` on port 7827. It reads `config.env` and the
+process environment through the same loader as `starport serve`. It forces
+loopback, standard output logs, and plain HTTP. On an empty local root, the
+first run initializes the root. See
+[Initialize Persistent State](#initialize-persistent-state). The first run
+prints the new gateway API key once, then the banner, and opens the console in
+a browser:
 
 ```text
+Initialized Starport.
+Configuration: /Users/<user>/Library/Application Support/starport/config/config.env
+Data: /Users/<user>/Library/Application Support/starport/data
+Gateway API key (shown once): replace-with-generated-gateway-key
 Starport development gateway
 URL: http://127.0.0.1:7827
 Authentication: required
-Gateway API key (shown once): replace-with-generated-gateway-key
 Console (one-time launch link): http://127.0.0.1:7827/launch?lt=replace-with-ticket
 ```
 
+A later run reads the same root and prints only the banner. The key from the
+first run still works. `starport dev` and `starport serve` share one root and
+one key set.
+
+When another process holds port 7827, `dev` tries other ports in this order:
+
+1. Port 7373.
+2. Port 7678.
+3. Twenty random ports from 7000 through 7999.
+4. Any free port.
+
+It prints `Port 7827 is busy. Bound port 7373.` before
+the `URL:` line. A port from `STARPORT_SERVER_PORT` or the configuration file
+turns off the fallback. `starport ui` and `starport auth url` read the bound
+port from `gateway-endpoint.json` in the state directory.
+
 Add `--no-open` to print the link without opening a browser. Add `--no-auth`
-to serve without a gateway API key; the banner then reports
+to serve without a gateway API key. The banner then reports
 `Authentication: disabled` and prints no key.
+
+Persistent development refuses a configuration that it cannot own. It refuses
+shared or external management. It also refuses KV, SQL, file, and cache
+settings that move storage away from the platform roots. The error names each
+setting and offers `starport serve` or `starport dev --ephemeral`.
 
 Keep the development process open. In a second terminal, set the printed key
 and check the gateway:
@@ -61,6 +88,11 @@ curl --fail-with-body \
 The model response contains the active Starmap catalog view. It does not prove
 that a provider accepts its resolved credential. The first inference attempt
 provides that evidence.
+
+`starport dev --ephemeral` starts a scratch gateway. It uses in-memory
+storage, creates no configuration file, and keeps its catalog state in a
+scratch directory that it removes on exit. It prints a new gateway API key on
+each run. See [Development scratch recovery](#development-scratch-recovery).
 
 ## Deployment recovery
 
@@ -330,6 +362,7 @@ start the gateway:
 starport serve
 ```
 
+`starport dev` without `--ephemeral` initializes the same root in the same way.
 `starport serve` initializes the local root on the first run when all of these
 conditions are true:
 
@@ -2669,14 +2702,14 @@ Run `starport doctor --probe` before you start the server. The output names
 each failed check and keeps all secret values redacted.
 
 - `provider credential master key is required`: set
-  `STARPORT_SECURITY_MASTER_KEY`. On an empty local root, `starport serve`
-  creates the master key. See
+  `STARPORT_SECURITY_MASTER_KEY`. On an empty local root, `starport dev` or
+  `starport serve` creates the master key. See
   [Initialize Persistent State](#initialize-persistent-state).
 - `starport setup state is incomplete`: inspect the named configuration file,
   then run the named recovery command.
 - `a gateway API key is required; run "starport auth bootstrap --name <name>"`:
   create the first named identity in configured storage. On an empty local
-  root, `starport serve` creates it.
+  root, `starport dev` or `starport serve` creates it.
 - Provider credential state is `not_configured`: set one of the conventional,
   derived, cloud, or secret-reference values that its Starmap profile declares.
 - HTTP 401: the bearer value does not match an active stored identity.

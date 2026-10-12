@@ -5,8 +5,8 @@ Review these limits before using multiple replicas or enforcing strict spend bud
 
 | Deployment | Current storage roles | Qualification limit |
 | --- | --- | --- |
-| `starport dev` | In-memory Badger and SQLite. Temporary catalog and upload files by default. | Explicit catalog-state and object-store settings can retain data. |
-| One persistent process | Badger for KV records, SQLite for relational records, and local catalog and upload files. | Back up each required store. A KV backup alone does not restore the deployment. |
+| `starport dev --ephemeral` | In-memory Badger and SQLite. Scratch catalog and upload files that the process removes at exit. | No data survives a shutdown. Persistent storage settings stop startup. |
+| One persistent process (`starport dev` or `starport serve`) | Badger for KV records, SQLite for relational records, and local catalog and upload files. | Back up each required store. A KV backup alone does not restore the deployment. |
 | Multiple replicas | Shared Valkey for KV records, shared PostgreSQL for relational records, and shared object storage for uploads. The fleet refuses MySQL. | Valkey alone does not share relational identity, audit records, or file bytes. A Valkey promotion can lose writes that only the old primary acknowledged. |
 
 The fleet qualification covers Valkey 7.2.14 with PostgreSQL 16.15 as the replicated recipe.

@@ -15,6 +15,7 @@ import (
 	starportcli "github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/diagnosis"
+	"github.com/agentstation/starport/internal/endpoint"
 	"github.com/agentstation/starport/internal/markdowntest"
 	"github.com/agentstation/starport/internal/setup"
 )
@@ -155,7 +156,7 @@ func TestReadmeFollowsTheFirstUseSequence(t *testing.T) {
 		headingIndex(headings, "Install"),
 		headingIndex(headings, "Quick start"),
 		headingIndex(headings, "Connect a client"),
-		headingIndex(headings, "Keep the gateway"),
+		headingIndex(headings, "Serve and deploy"),
 		headingIndex(headings, "Configuration"),
 		headingIndex(headings, "Performance"),
 	})
@@ -173,31 +174,81 @@ func TestReadmeFollowsTheFirstUseSequence(t *testing.T) {
 		prefixIndex("Credential roles"),
 		prefixIndex("Terminal 1:"),
 		prefixIndex("Terminal 2:"),
-		prefixIndex("Stop the temporary gateway"),
+		prefixIndex("Stop and restart the gateway"),
+		prefixIndex("Run a scratch gateway"),
 	})
 }
 
-func TestReadmeTemporaryPathPrecedesPersistentPath(t *testing.T) {
+// TestReadmePersistentDevIsTheFirstPath proves that the quick start runs the
+// persistent development gateway, restarts it with the same key, and leaves
+// the scratch gateway and the team bootstrap for later sections.
+func TestReadmePersistentDevIsTheFirstPath(t *testing.T) {
 	document := readReadme(t)
 	quickStart := document.section(t, "Quick start")
-	persistent := subsection(t, document.section(t, "Keep the gateway"), "Persistent local gateway")
+	requireContains(t, quickStart.Text(), "The quick start runs `starport dev`, a local gateway that keeps its keys and data between runs.")
 
-	requireContains(t, fullText(quickStart), "`starport dev --ephemeral`, a temporary gateway", "It keeps no state after it stops.")
-	requireLink(t, fullText(quickStart), "docs/site/start/temporary-development.md")
-	requireLink(t, persistent.Text(), "docs/site/start/local-persistent.md")
-	// The persistent path starts with serve, which initializes an empty root.
-	requireContains(t, persistent.Text(), "For persistent local state, run `starport serve`.",
-		"The first identity has the name `"+setup.DefaultAPIKeyName+"`.")
-	requireOrdered(t, "temporary and persistent links", []int{
-		strings.Index(document.text, "(docs/site/start/temporary-development.md)"),
-		strings.Index(document.text, "(docs/site/start/local-persistent.md)"),
+	// Terminal 1 starts the persistent gateway, and only the scratch section
+	// adds --ephemeral.
+	terminalOne := subsection(t, quickStart, "Terminal 1:")
+	if commands := readmeStarportCommands(terminalOne); !slices.Equal(commands, []string{"starport dev"}) {
+		t.Errorf("Terminal 1 commands = %q, want the persistent starport dev", commands)
+	}
+	requireContains(t, terminalOne.Text(),
+		"The first run prints the gateway API key once.",
+		"The first identity has the name `"+setup.DefaultAPIKeyName+"`.",
+		"Keep this terminal open.")
+
+	// The fallback order and the fallback line are the ones that dev uses.
+	ports := endpoint.DeveloperPorts(7827, func(int) int { return 0 })
+	requireContains(t, terminalOne.Text(),
+		"When another process holds port "+strconv.Itoa(ports[0])+", `dev` tries other ports in this order:",
+		"1. Port "+strconv.Itoa(ports[1])+".", "2. Port "+strconv.Itoa(ports[2])+".",
+		"3. A random free port from 7000 through 7999.", "4. Any free port.",
+		"for example `Port 7827 is busy. Bound port 7373.`")
+	fallback := runReadmeDevelopment(t, config.Paths{}, starportcli.DevelopmentSession{BusyPort: 7827, URL: "http://127.0.0.1:7373"}, false)
+	if !slices.Contains(fallback, "Port 7827 is busy. Bound port 7373.") {
+		t.Errorf("starport dev fallback output = %q", fallback)
+	}
+
+	// The restart prints the banner without a key.
+	restart := subsection(t, quickStart, "Stop and restart the gateway")
+	if commands := readmeStarportCommands(restart); !slices.Equal(commands, []string{"starport dev"}) {
+		t.Errorf("restart commands = %q, want the persistent starport dev", commands)
+	}
+	requireContains(t, restart.Text(),
+		"It prints no gateway API key, and the key from the first run still works.",
+		"The error names `"+setup.RecoverCommand+"`, which retries the interrupted setup.",
+		"`starport serve` uses the same root, configuration, and keys.")
+	requireLink(t, restart.Text(), "docs/site/start/local-persistent.md")
+	var restartSample []string
+	for _, fence := range markdowntest.Fences(restart.Body) {
+		if fence.Info == "text" {
+			restartSample = fence.Lines
+		}
+	}
+	second := runReadmeDevelopment(t, config.Paths{}, readmeDevelopmentSession(), false)
+	if len(restartSample) != len(second) {
+		t.Fatalf("restart sample = %q, starport dev prints %q", restartSample, second)
+	}
+	requireSampleLabels(t, "starport dev (second run)", restartSample, second)
+
+	// The scratch gateway is the opt-in path, and it keeps nothing.
+	scratch := subsection(t, quickStart, "Run a scratch gateway")
+	if commands := readmeStarportCommands(scratch); !slices.Equal(commands, []string{"starport dev --ephemeral"}) {
+		t.Errorf("scratch commands = %q, want starport dev --ephemeral", commands)
+	}
+	requireContains(t, scratch.Text(),
+		"A scratch gateway uses in-memory state for Badger and SQLite.", "It creates no configuration files.",
+		"It prints a new gateway API key on each run.",
+		"refuses persistent storage selectors before it opens storage.",
+		"It has no upgrade path to persistent state.")
+	requireLink(t, scratch.Text(), "docs/site/start/temporary-development.md")
+	requireOrdered(t, "persistent and scratch commands", []int{
+		strings.Index(document.text, "\nstarport dev\n"),
+		strings.Index(document.text, "\nstarport dev --ephemeral\n"),
 	})
 
-	// The refused selector families are the ones that the development page lists.
-	terminalOne := subsection(t, quickStart, "Terminal 1:")
-	requireContains(t, terminalOne.Text(),
-		"It refuses persistent storage selectors before it opens storage.",
-		"The refused selectors are the KV, SQL, file, and cache backend settings, and `STARPORT_CATALOG_STATE_DIR`.")
+	// The scratch page lists the refused selector families and the losses.
 	_, development := markdowntest.Parse(markdowntest.ReadFile(t, "docs/site/start/temporary-development.md"))
 	var families []string
 	var losses []string
@@ -220,19 +271,39 @@ func TestReadmeTemporaryPathPrecedesPersistentPath(t *testing.T) {
 		t.Errorf("development page selector families = %q, want %q", families, want)
 	}
 	if !strings.Contains(markdowntest.ReadFile(t, "docs/site/start/temporary-development.md"), "- Catalog selector: `STARPORT_CATALOG_STATE_DIR`.") {
-		t.Error("the development page does not name the catalog selector that the README names")
+		t.Error("the development page does not name the catalog selector")
+	}
+	if len(losses) == 0 {
+		t.Error("the development page lists no shutdown losses")
 	}
 
-	// The README lists the same shutdown losses as the development page.
-	var stated []string
-	for _, line := range subsection(t, quickStart, "Stop the temporary gateway").Body {
-		if item, isItem := strings.CutPrefix(line, "- "); isItem {
-			stated = append(stated, item)
+	// Configured storage starts with auth bootstrap in the team section, not in
+	// the quick start.
+	if strings.Contains(fullText(quickStart), "auth bootstrap --name") {
+		t.Error("the quick start bootstraps configured storage")
+	}
+	deployment := subsection(t, document.section(t, "Serve and deploy"), "Team and enterprise deployment")
+	requireContains(t, deployment.Text(),
+		"Configured storage does not initialize itself.",
+		"`starport auth bootstrap --name <name>` creates the first named identity.",
+		"docker compose run --rm starport auth bootstrap --name primary-admin")
+}
+
+// readmeStarportCommands returns the starport lines of the bash blocks of a
+// section.
+func readmeStarportCommands(section markdowntest.Section) []string {
+	var commands []string
+	for _, fence := range markdowntest.Fences(section.Body) {
+		if fence.Info != "bash" {
+			continue
+		}
+		for _, line := range fence.Lines {
+			if strings.HasPrefix(line, "starport ") {
+				commands = append(commands, line)
+			}
 		}
 	}
-	if len(losses) == 0 || !slices.Equal(stated, losses) {
-		t.Errorf("README shutdown losses = %q, development page = %q", stated, losses)
-	}
+	return commands
 }
 
 func TestReadmeInspectsTheCatalogBeforeAnyCredential(t *testing.T) {
@@ -331,9 +402,8 @@ func credentialRole(variable string) string {
 
 func TestReadmeLinksTheStorageAndRecipePages(t *testing.T) {
 	document := readReadme(t)
-	keep := document.section(t, "Keep the gateway")
-	persistent := subsection(t, keep, "Persistent local gateway")
-	deployment := subsection(t, keep, "Team and enterprise deployment")
+	persistent := subsection(t, document.section(t, "Quick start"), "Where the gateway keeps its data")
+	deployment := subsection(t, document.section(t, "Serve and deploy"), "Team and enterprise deployment")
 
 	labels := requireLink(t, deployment.Text(), "docs/site/architecture/recipes.md#t4-replicated-starport")
 	if len(labels) != 1 {
@@ -363,7 +433,8 @@ func TestReadmeLinksTheStorageAndRecipePages(t *testing.T) {
 // binds them, and the sample output, to the loader and the CLI.
 func TestReadmeStatesThePathAnchors(t *testing.T) {
 	document := readReadme(t)
-	persistent := subsection(t, document.section(t, "Keep the gateway"), "Persistent local gateway")
+	quickStart := document.section(t, "Quick start")
+	persistent := subsection(t, quickStart, "Where the gateway keeps its data")
 	requireContains(t, persistent.Text(),
 		"`STARPORT_HOME` is the shared path anchor.",
 		"It puts the configuration, data, state, and cache roots under one directory.",
@@ -394,19 +465,25 @@ func TestReadmeStatesThePathAnchors(t *testing.T) {
 
 	// Each sample line in the README carries a label of the real output, in order.
 	samples := map[string][]string{}
-	for _, fence := range markdowntest.Fences(persistent.Body) {
-		if fence.Info == "text" && len(fence.Lines) > 0 {
-			samples[fence.Lines[0]] = fence.Lines
+	for _, section := range []markdowntest.Section{subsection(t, quickStart, "Terminal 1:"), persistent} {
+		for _, fence := range markdowntest.Fences(section.Body) {
+			if fence.Info == "text" && len(fence.Lines) > 0 {
+				samples[fence.Lines[0]] = fence.Lines
+			}
 		}
 	}
 	initSample, pathsSample := samples["Initialized Starport."], samples["Configuration directory: "+readmeSampleRoot+"/config"]
 	if initSample == nil || pathsSample == nil {
 		t.Fatalf("README persistent samples = %q", samples)
 	}
-	initialized := runReadmeCommand(t, anchored, "serve")
-	requireSampleLabels(t, "starport serve", initSample, initialized)
+	// The first run of dev prints the initialization block and then the banner.
+	initialized := runReadmeDevelopment(t, anchored, readmeDevelopmentSession(), true)
+	if len(initSample) != len(initialized) {
+		t.Fatalf("first-run sample = %q, starport dev prints %q", initSample, initialized)
+	}
+	requireSampleLabels(t, "starport dev (first run)", initSample, initialized)
 	if !slices.Contains(initialized, "Configuration: "+anchored.ConfigFile) || !slices.Contains(initialized, "Data: "+anchored.DataDir) {
-		t.Errorf("starport serve output = %q", initialized)
+		t.Errorf("starport dev output = %q", initialized)
 	}
 	requireSampleLabels(t, "starport config paths", pathsSample, runReadmeCommand(t, anchored, "config", "paths"))
 }
@@ -422,7 +499,38 @@ func loadPaths(t *testing.T, environment map[string]string) config.Paths {
 	return loaded.EffectivePaths()
 }
 
+// readmeDevelopmentSession is a persistent session on the standard port that
+// binds nothing.
+func readmeDevelopmentSession() starportcli.DevelopmentSession {
+	return starportcli.DevelopmentSession{URL: "http://127.0.0.1:7827"}
+}
+
+// runReadmeDevelopment runs starport dev --no-open against a session that
+// serves nothing. A first run delivers the key that a clean root mints.
+func runReadmeDevelopment(t *testing.T, paths config.Paths, session starportcli.DevelopmentSession, firstRun bool) []string {
+	t.Helper()
+	session.ConsoleURL = session.URL + "/launch?lt=readme-ticket"
+	session.Run = func(context.Context) error { return nil }
+	session.Close = func(context.Context) error { return nil }
+	start := func(ctx context.Context, _ starportcli.DevelopmentOptions, deliver starportcli.CredentialDelivery) (starportcli.DevelopmentSession, error) {
+		if firstRun {
+			if err := deliver(ctx, starportcli.InitResult{
+				APIKeyName: setup.DefaultAPIKeyName, ConfigFile: paths.ConfigFile, DataDir: paths.DataDir, APIKey: "readme-gateway-key",
+			}); err != nil {
+				return starportcli.DevelopmentSession{}, err
+			}
+		}
+		return session, nil
+	}
+	return runReadmeCommandWith(t, paths, start, "dev", "--no-open")
+}
+
 func runReadmeCommand(t *testing.T, paths config.Paths, args ...string) []string {
+	t.Helper()
+	return runReadmeCommandWith(t, paths, noopDevelopmentStarter, args...)
+}
+
+func runReadmeCommandWith(t *testing.T, paths config.Paths, startDevelopment starportcli.DevelopmentStarter, args ...string) []string {
 	t.Helper()
 	stdout := &bytes.Buffer{}
 	err := starportcli.Run(context.Background(), append([]string{"starport"}, args...), starportcli.Dependencies{
@@ -433,7 +541,7 @@ func runReadmeCommand(t *testing.T, paths config.Paths, args ...string) []string
 				APIKeyName: setup.DefaultAPIKeyName, ConfigFile: paths.ConfigFile, DataDir: paths.DataDir, APIKey: "readme-gateway-key",
 			})
 		},
-		StartDevelopment: noopDevelopmentStarter,
+		StartDevelopment: startDevelopment,
 		Initialize: func(context.Context, starportcli.InitOptions) (starportcli.InitResult, error) {
 			return starportcli.InitResult{}, nil
 		},

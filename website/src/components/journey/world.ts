@@ -820,7 +820,8 @@ function drawFleet(world: World) {
 }
 
 // The laptop: one Starport process on a night screen. `starport dev` runs it
-// with in-memory stores, outlined in dashes, and its state goes at shutdown.
+// with stores that persist on disk under the platform storage root, so the
+// outlines are solid.
 // The screen keeps the night palette whatever the ground.
 function drawLaptop(world: World) {
   const { scene } = world;
@@ -865,11 +866,9 @@ function drawLaptop(world: World) {
   const titleY = top(PROCESS) + Math.max(30, scene.fontSize(13) * 0.6 + 14);
   if (titleFits(scene, WORLD_LABELS.process, PROCESS.w - 40)) scene.text(WORLD_LABELS.process, left(PROCESS) + 20, titleY, palette.ink, alpha * scene.far);
   const storeY = PROCESS.y + 30;
-  WORLD_LABELS.memory.forEach((name, index) => {
+  WORLD_LABELS.laptopStores.forEach((name, index) => {
     const x = PROCESS.x + (index === 0 ? -120 : 120);
-    ctx.setLineDash([scene.px(5), scene.px(4)]);
     scene.cylinder(x, storeY, 190, 120, alpha * 0.85, 0.1);
-    ctx.setLineDash([]);
     if (titleFits(scene, name, 174)) scene.text(name, x, scene.cylinderBodyTop(storeY, 190, 120) + 24, palette.ink, alpha * scene.far, 'center');
   });
   scene.chip(laptopChips[1], PROCESS.x, bottom(PROCESS) + Math.max(30, scene.px(22)), alpha * scene.far, 0.3, palette.ink, 'center');
