@@ -334,7 +334,9 @@ def main():
         if candidate:
             if args.archive.name != candidate_archive_name(args.expected_version, operating_system, architecture):
                 raise ValueError('The candidate archive does not match the native platform and snapshot version.')
-            with tempfile.TemporaryDirectory(prefix='starport-native-archive-') as directory:
+            # Windows can still hold the stopped gateway's executable open at cleanup time (WinError 32).
+            # A leftover runner temporary directory must not fail a verification that passed.
+            with tempfile.TemporaryDirectory(prefix='starport-native-archive-', ignore_cleanup_errors=True) as directory:
                 verify_archive(args.archive, args.checksums, args.expected_version, operating_system, Path(directory), report)
         else:
             name = archive_name(args.tag, operating_system, architecture)
@@ -345,7 +347,7 @@ def main():
                 raise ValueError('The selected release is not a published exact tag.')
             report['release_url'] = release['html_url']
             report['published_at'] = release['published_at']
-            with tempfile.TemporaryDirectory(prefix='starport-native-archive-') as directory:
+            with tempfile.TemporaryDirectory(prefix='starport-native-archive-', ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
                 subprocess.run(['gh', 'release', 'download', args.tag, '--repo', REPOSITORY,
                                 '--pattern', name, '--pattern', 'checksums.txt', '--dir', directory],

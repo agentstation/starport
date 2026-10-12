@@ -69,8 +69,9 @@ const catalogServerExit = new Promise((resolve) => {
   catalogServer.once('exit', resolve);
   catalogServer.once('error', () => resolve(-1));
 });
+// --ephemeral keeps no state. Its scratch directory goes below TMPDIR, inside work.
 const environment = {
-  PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: work,
+  PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: work, TMPDIR: work,
   XDG_CONFIG_HOME: path.join(work, 'config'), XDG_DATA_HOME: path.join(work, 'data'),
   XDG_STATE_HOME: path.join(work, 'state'), STARPORT_SERVER_PORT: String(port),
   STARPORT_CATALOG_SOURCE: 'starmap', STARPORT_CATALOG_SOURCE_URL: `${catalogOrigin}/api/v1`,
@@ -111,7 +112,7 @@ try {
   const sourceManifestResponse = await fetch(`${catalogOrigin}/api/v1/catalog/manifest`, { signal: AbortSignal.timeout(10000) });
   if (!sourceManifestResponse.ok) throw new Error('The local catalog manifest request failed');
   const sourceManifest = await sourceManifestResponse.json();
-  gateway = spawn('/usr/bin/sandbox-exec', ['-p', profile, capturedBinary, 'dev', '--no-open'], {
+  gateway = spawn('/usr/bin/sandbox-exec', ['-p', profile, capturedBinary, 'dev', '--ephemeral', '--no-open'], {
     cwd: work, env: environment, stdio: ['ignore', 'pipe', 'pipe'],
   });
   gateway.stdout.on('data', (data) => { banner += data; });

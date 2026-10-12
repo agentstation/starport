@@ -58,14 +58,14 @@ func TestAuthBootstrapRefusesASecondKey(t *testing.T) {
 }
 
 // TestAuthBootstrapNameRefusesAFirstRunRoot keeps --name off a root that
-// serve initializes. A key there without the setup transaction would leave a
+// dev or serve initializes. A key there without the setup transaction would leave a
 // partial root.
 func TestAuthBootstrapNameRefusesAFirstRunRoot(t *testing.T) {
 	home, _ := firstRunEnvironment(t)
 
 	code, stdout, stderr := runAuthBootstrap(t, "--name", "primary-admin")
 
-	if code != 1 || !strings.Contains(stderr, `"starport serve"`) {
+	if code != 1 || !strings.Contains(stderr, `"starport dev" or "starport serve"`) {
 		t.Fatalf("exit code = %d, stderr = %q", code, stderr)
 	}
 	if strings.Contains(stdout, gatewayKeyLine) {
@@ -79,7 +79,7 @@ func TestAuthBootstrapRecoverRefusesCleanRoot(t *testing.T) {
 
 	code, stdout, stderr := runAuthBootstrap(t, "--recover")
 
-	if code != 1 || !strings.Contains(stderr, setup.ErrNoPendingSetup.Error()) || !strings.Contains(stderr, `"starport serve"`) {
+	if code != 1 || !strings.Contains(stderr, setup.ErrNoPendingSetup.Error()) || !strings.Contains(stderr, `"starport dev" or "starport serve"`) {
 		t.Fatalf("exit code = %d, stderr = %q", code, stderr)
 	}
 	if stdout != "" {

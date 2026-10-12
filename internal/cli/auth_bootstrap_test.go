@@ -46,6 +46,22 @@ func TestAuthBootstrapTextOutputNamesServe(t *testing.T) {
 	if strings.Contains(stdout.String(), "Configuration:") {
 		t.Errorf("shared storage bootstrap names a configuration file: %q", stdout.String())
 	}
+	// Persistent dev refuses configured shared storage.
+	if strings.Contains(stdout.String(), "starport dev") {
+		t.Errorf("shared storage bootstrap names starport dev: %q", stdout.String())
+	}
+}
+
+// TestAuthBootstrapHelpNamesDevAndServe keeps the help on both commands that
+// initialize a clean local root.
+func TestAuthBootstrapHelpNamesDevAndServe(t *testing.T) {
+	deps, stdout, _ := testDependencies()
+	if err := runAuth(t, deps, "bootstrap", "--help"); err != nil {
+		t.Fatalf("run auth bootstrap --help: %v", err)
+	}
+	if want := "the first run of starport dev or starport serve initializes it"; !strings.Contains(stdout.String(), want) {
+		t.Errorf("bootstrap help does not contain %q: %q", want, stdout.String())
+	}
 }
 
 func TestAuthBootstrapUsageErrors(t *testing.T) {
@@ -140,6 +156,10 @@ func TestAuthBootstrapRecoverPrintsTheRetriedKey(t *testing.T) {
 	if strings.Count(stdout.String(), "gateway-key") != 1 || !strings.Contains(stdout.String(), "Configuration: /config/config.env") {
 		t.Errorf("recover output = %q", stdout.String())
 	}
+	// Persistent dev starts on the recovered local root as serve does.
+	if !strings.Contains(stdout.String(), "Run: starport dev or starport serve") {
+		t.Errorf("recover output does not name dev and serve: %q", stdout.String())
+	}
 }
 
 func TestAuthBootstrapRecoverReportsASettledSetup(t *testing.T) {
@@ -148,7 +168,9 @@ func TestAuthBootstrapRecoverReportsASettledSetup(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "text", args: nil, want: "Recovered the interrupted local setup."},
+		{name: "text", args: nil, want: "Recovered the interrupted local setup.\n" +
+			"The interrupted run stored a gateway API key that no command can show again.\n" +
+			"Run: starport dev or starport serve\n"},
 		{name: "json", args: []string{"--json"}, want: `"recovered": true`},
 	} {
 		t.Run(test.name, func(t *testing.T) {

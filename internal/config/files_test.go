@@ -2,6 +2,8 @@ package config
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -130,6 +132,49 @@ func TestObjectStoreCredentialsAreRedacted(t *testing.T) {
 	// The bucket is not a secret, and an operator needs it to tell one
 	// deployment from another.
 	require.Contains(t, rendered, "starport-files")
+}
+
+// TestFilesPathSelectsTheFilesystemRoot keeps STARPORT_FILES_PATH in effect.
+// The loader sets the platform default before it reads the sources, so a
+// setting that did not overwrite the default would leave the bytes in the
+// platform directory while the operator backs up the selected one.
+func TestFilesPathSelectsTheFilesystemRoot(t *testing.T) {
+	for name, fromFile := range map[string]bool{"environment": false, "configuration file": true} {
+		t.Run(name, func(t *testing.T) {
+			paths := PathsForConfigDir(t.TempDir())
+			selected := filepath.Join(t.TempDir(), "files")
+			environment := map[string]string{filesPathEnvironment: selected}
+			origin := "environment"
+			if fromFile {
+				require.NoError(t, os.WriteFile(paths.ConfigFile, []byte(filesPathEnvironment+"="+selected+"\n"), 0o600))
+				environment, origin = nil, "file:"+paths.ConfigFile
+			}
+			cfg, err := NewLoader().WithPaths(paths).WithEnvironment(environment).Load(t.Context())
+			require.NoError(t, err)
+
+			require.Equal(t, selected, cfg.Files.Path)
+			require.Equal(t, selected, cfg.EffectivePaths().FilesDir)
+			require.Equal(t, origin, cfg.EffectivePaths().Origins[pathRoleFiles].Origin)
+			report, err := cfg.FileManifest("test")
+			require.NoError(t, err)
+			require.Equal(t, selected, manifestEntry(t, report, pathRoleFiles).Location.Path)
+		})
+	}
+}
+
+// TestAbsentFilesPathKeepsThePlatformRoot holds the inverse: without the
+// setting, the bytes stay in the platform data directory.
+func TestAbsentFilesPathKeepsThePlatformRoot(t *testing.T) {
+	paths := PathsForConfigDir(t.TempDir())
+	cfg, err := NewLoader().WithPaths(paths).WithEnvironment(nil).Load(t.Context())
+	require.NoError(t, err)
+
+	require.Equal(t, paths.FilesDir, cfg.Files.Path)
+	require.Equal(t, paths.FilesDir, cfg.EffectivePaths().FilesDir)
+	require.Equal(t, "derived:data", cfg.EffectivePaths().Origins[pathRoleFiles].Origin)
+	report, err := cfg.FileManifest("test")
+	require.NoError(t, err)
+	require.Equal(t, paths.FilesDir, manifestEntry(t, report, pathRoleFiles).Location.Path)
 }
 
 // renderInspection encodes a redacted tree, so a test asserts on every leaf

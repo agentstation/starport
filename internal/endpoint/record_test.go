@@ -1,6 +1,7 @@
 package endpoint
 
 import (
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,9 +19,31 @@ func testRecord(pid int) Record {
 	}
 }
 
+// listeningRecord returns a record of this process at a loopback port that
+// the test holds, as a running gateway would.
+func listeningRecord(t *testing.T) Record {
+	t.Helper()
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+	record := testRecord(os.Getpid())
+	record.Port = Port(listener.Addr())
+	return record
+}
+
+// closedPort returns a loopback port that nothing listens on.
+func closedPort(t *testing.T) int {
+	t.Helper()
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := Port(listener.Addr())
+	require.NoError(t, listener.Close())
+	return port
+}
+
 func TestRecordRoundTripsForALiveProcess(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state", "gateway-endpoint.json")
-	want := testRecord(os.Getpid())
+	want := listeningRecord(t)
 	require.NoError(t, WriteRecord(path, want))
 
 	got, found, err := ReadRecord(path)
@@ -47,6 +70,35 @@ func TestReadRecordIgnoresAMissingOrExitedRecord(t *testing.T) {
 	_, found, err = ReadRecord(path)
 	require.NoError(t, err)
 	require.False(t, found, "a record of an exited process does not name a running gateway")
+}
+
+// TestReadRecordIgnoresALiveProcessThatDoesNotListen covers a recorded
+// process ID that the operating system gave to an unrelated process after the
+// gateway exited. The process is alive, and nothing answers at the address.
+func TestReadRecordIgnoresALiveProcessThatDoesNotListen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "gateway-endpoint.json")
+	record := testRecord(os.Getpid())
+	record.Port = closedPort(t)
+	require.NoError(t, WriteRecord(path, record))
+	_, found, err := ReadRecord(path)
+	require.NoError(t, err)
+	require.False(t, found, "a live process ID without a listener does not name a running gateway")
+}
+
+// TestReadRecordReachesAGatewayOnEveryAddress dials loopback for a gateway
+// that binds the unspecified address.
+func TestReadRecordReachesAGatewayOnEveryAddress(t *testing.T) {
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "0.0.0.0:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+	path := filepath.Join(t.TempDir(), "gateway-endpoint.json")
+	record := testRecord(os.Getpid())
+	record.Host, record.Port = "0.0.0.0", Port(listener.Addr())
+	require.NoError(t, WriteRecord(path, record))
+	got, found, err := ReadRecord(path)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, record, got)
 }
 
 func TestReadRecordRefusesAnUnknownSchema(t *testing.T) {
