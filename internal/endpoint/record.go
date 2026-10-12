@@ -25,9 +25,9 @@ const (
 )
 
 // Record states where a running gateway listens. The gateway that binds
-// writes it under the state root and removes it on close, so a sibling
-// command such as starport ui reaches that gateway and not the configured
-// port. It holds no credential.
+// writes it under the state root, beside the RecordLock it holds, and removes
+// it on close, so a sibling command such as starport ui reaches that gateway
+// and not the configured port. It holds no credential.
 type Record struct {
 	SchemaVersion int       `json:"schema_version"`
 	Scheme        string    `json:"scheme"`
@@ -70,10 +70,12 @@ func WriteRecord(path string, record Record) error {
 	return nil
 }
 
-// ReadRecord returns the record at path when the process that wrote it is
-// alive and the recorded address accepts a connection. A missing record, a
-// record whose process exited, or a record whose address does not answer
-// reports false.
+// ReadRecord returns the record at path when a gateway holds the lock beside
+// it and the recorded address accepts a connection. A missing record, a
+// record whose gateway exited, or a record whose address does not answer
+// reports false. The lock, not the process ID, proves the gateway: after a
+// crash the operating system can give the recorded process ID to an unrelated
+// process, and that process can even listen on the recorded port.
 func ReadRecord(path string) (Record, bool, error) {
 	record, err := readRecord(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -82,16 +84,14 @@ func ReadRecord(path string) (Record, bool, error) {
 	if err != nil {
 		return Record{}, false, err
 	}
-	if !alive(record.PID) || !listening(record) {
+	if !held(path) || !listening(record) {
 		return Record{}, false, nil
 	}
 	return record, true, nil
 }
 
 // listening reports whether the recorded address accepts a TCP connection.
-// After a crash the operating system can give the recorded process ID to an
-// unrelated process, so a live process ID alone does not name a gateway. The
-// gateway binds before it writes the record, so a live gateway answers.
+// The gateway binds before it writes the record, so a live gateway answers.
 func listening(record Record) bool {
 	if record.Port <= 0 {
 		return false

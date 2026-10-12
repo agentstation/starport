@@ -46,10 +46,10 @@ func (c *Config) CollectBackupInventory(ctx context.Context, build string, limit
 	selected := productpaths.FileManifest{SchemaVersion: report.SchemaVersion, Product: report.Product}
 	indexes := make(map[string]int, len(report.Files))
 	for _, entry := range report.Files {
-		if entry.ID == fileRoleEndpoint {
-			// The record names a running process and has no place in a backup.
-			// A release before the record refuses a backup that lists a role
-			// it does not know, so the inventory omits the role.
+		if entry.ID == fileRoleEndpoint || entry.ID == fileRoleEndpointLock {
+			// The record and its lock name a running process and have no
+			// place in a backup. A release before the record refuses a backup
+			// that lists a role it does not know, so the inventory omits them.
 			continue
 		}
 		capture, err := backupRoleCapture(entry)
@@ -108,10 +108,11 @@ func backupRoleCapture(entry productpaths.FileEntry) (string, error) {
 		return "not-selected", nil
 	}
 	switch entry.ID {
-	case fileRoleEndpoint:
-		// The record names a running process. A backup runs with the gateway
-		// stopped, and a restored record would name a process that exited. A
-		// backup omits the role. An earlier build listed it as not selected.
+	case fileRoleEndpoint, fileRoleEndpointLock:
+		// The record and its lock name a running process. A backup runs with
+		// the gateway stopped, and a restored record would name a process
+		// that exited. A backup omits the roles. An earlier build listed the
+		// record as not selected.
 		return "not-selected", nil
 	case pathRoleBadger:
 		return "kv-snapshot", nil

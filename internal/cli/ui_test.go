@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -153,8 +152,8 @@ func TestUISuppressesTheBrowserWhereThereIsNobodyToSeeIt(t *testing.T) {
 }
 
 // TestUIReadsEndpointRecord sends the launch link to the port that the running
-// gateway recorded. A record from a process that exited, a record whose port
-// does not answer, or no record leaves the link on the configured port.
+// gateway recorded. A record whose gateway released its seat, a record whose
+// port does not answer, or no record leaves the link on the configured port.
 func TestUIReadsEndpointRecord(t *testing.T) {
 	deps, output, paths := uiDependencies(t)
 	t.Setenv("NO_BROWSER", "1")
@@ -184,17 +183,21 @@ func TestUIReadsEndpointRecord(t *testing.T) {
 	}
 
 	assert.Equal(t, "7827", printedPort("ui", "--no-open"), "no record leaves the configured port")
+	// The running gateway holds the seat beside its record.
+	seat, err := endpoint.LockRecord(record)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = seat.Close() })
 	write(os.Getpid(), gatewayPort)
 	assert.Equal(t, strconv.Itoa(gatewayPort), printedPort("ui", "--no-open"), "ui follows the live record")
 	assert.Equal(t, strconv.Itoa(gatewayPort), printedPort("auth", "url"), "auth url follows the live record")
 
-	executable, err := os.Executable()
-	require.NoError(t, err)
-	exited := exec.CommandContext(t.Context(), executable, "-test.run=^$")
-	require.NoError(t, exited.Run())
-	write(exited.Process.Pid, gatewayPort)
-	assert.Equal(t, "7827", printedPort("ui", "--no-open"), "a record from an exited process leaves the configured port")
+	// A gateway that exited released its seat, even when another process
+	// took its process ID and listens on its port.
+	require.NoError(t, seat.Close())
+	assert.Equal(t, "7827", printedPort("ui", "--no-open"), "a record whose gateway released the seat leaves the configured port")
 
+	seat, err = endpoint.LockRecord(record)
+	require.NoError(t, err)
 	require.NoError(t, gateway.Close())
 	write(os.Getpid(), gatewayPort)
 	assert.Equal(t, "7827", printedPort("ui", "--no-open"), "a record whose port does not answer leaves the configured port")

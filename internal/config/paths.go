@@ -7,6 +7,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/productpaths"
 	"github.com/agentstation/starport/internal/deployment"
+	"github.com/agentstation/starport/internal/endpoint"
 	"github.com/sethvargo/go-envconfig"
 )
 
@@ -231,6 +232,16 @@ func (c *Config) EndpointRecordFile() string {
 		return ""
 	}
 	return filepath.Join(c.paths.StateDir, "gateway-endpoint.json")
+}
+
+// EndpointLockFile selects the seat lock that a running gateway holds beside
+// its endpoint record. A state root without a record has no lock.
+func (c *Config) EndpointLockFile() string {
+	record := c.EndpointRecordFile()
+	if record == "" {
+		return ""
+	}
+	return endpoint.LockPath(record)
 }
 
 // InferenceCredentialPolicyDirectory selects private inference selection history.

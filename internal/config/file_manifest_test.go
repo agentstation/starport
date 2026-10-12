@@ -134,7 +134,7 @@ func TestFileManifestDevelopmentDisablesPersistentStores(t *testing.T) {
 	require.NoError(t, err)
 	report, err := cfg.FileManifest("test")
 	require.NoError(t, err)
-	for _, role := range []string{"configuration", "badger", "sqlite", "baseline", "runtime-evidence", "welcome-stamp", "gateway-endpoint", "setup-transaction", "setup-storage-guard", "setup-database-stage", "setup-config-publications", "local-token-lock"} {
+	for _, role := range []string{"configuration", "badger", "sqlite", "baseline", "runtime-evidence", "welcome-stamp", "gateway-endpoint", "gateway-endpoint-lock", "setup-transaction", "setup-storage-guard", "setup-database-stage", "setup-config-publications", "local-token-lock"} {
 		require.Equal(t, fileDisabled, manifestEntry(t, report, role).Availability)
 	}
 	for _, entry := range report.External {
@@ -193,6 +193,7 @@ func TestFileManifestIncludesSetupArtifactsAtSelectedLeaves(t *testing.T) {
 		"setup-config-publications": filepath.Join(filepath.Dir(configuration), ".record-publications"),
 		"config-operation-journal":  filepath.Join(filepath.Dir(configuration), localJournalName),
 		"local-token-lock":          cfg.EffectivePaths().LocalTokenFile + ".lock",
+		"gateway-endpoint-lock":     cfg.EndpointLockFile(),
 	} {
 		entry := manifestEntry(t, report, id)
 		require.Equal(t, path, entry.Location.Path)
