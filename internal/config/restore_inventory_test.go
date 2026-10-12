@@ -77,6 +77,28 @@ func TestRestoreInventoryDoesNotCloneReplicaIdentity(t *testing.T) {
 	require.Equal(t, 2, found)
 }
 
+// TestRestoreInventoryAcceptsABackupWithoutTheEndpointRole restores a backup
+// that a release before the endpoint record wrote. Every other canonical role
+// stays required.
+func TestRestoreInventoryAcceptsABackupWithoutTheEndpointRole(t *testing.T) {
+	target, inventory, hashes := restoreInventoryFixture(t)
+	without := func(id string) BackupInventory {
+		older := inventory
+		older.Roles = nil
+		for _, role := range inventory.Roles {
+			if role.Entry.ID != id {
+				older.Roles = append(older.Roles, role)
+			}
+		}
+		require.Len(t, older.Roles, len(inventory.Roles)-1, "the fixture records the role %s", id)
+		return older
+	}
+	_, err := target.PlanRestoreFiles(without(fileRoleEndpoint), hashes)
+	require.NoError(t, err)
+	_, err = target.PlanRestoreFiles(without(fileRoleWelcome), hashes)
+	require.ErrorContains(t, err, "omits canonical role "+fileRoleWelcome)
+}
+
 func TestRestoreInventoryKeepsUnselectedAndConfigurationInputsInactive(t *testing.T) {
 	target, inventory, hashes := restoreInventoryFixture(t)
 	target.Catalog.WorkspacePath = ""

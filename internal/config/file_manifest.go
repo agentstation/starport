@@ -38,6 +38,7 @@ const (
 	fileRoleSourceFile      = "source-file"
 	fileRoleLocalToken      = "local-token"
 	fileRoleWelcome         = "welcome-stamp"
+	fileRoleEndpoint        = "gateway-endpoint"
 	fileRoleRuntimeEvidence = "runtime-evidence"
 	fileRoleTLSCertificate  = "tls-certificate"
 	fileRoleTLSKey          = "tls-key"
@@ -181,6 +182,9 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 	inferencePolicyDirectory := c.InferenceCredentialPolicyDirectory()
 	add(fileRoleInferencePolicy, inferencePolicyDirectory, fileKindTree, selectedAvailability(inferencePolicyDirectory != ""), policy.OwnerOnly,
 		"Gateway startup records inference selection policy before provider activation.", "Preserve accepted policy records. Resolve conflicts with explicit inference references.", "STARPORT_STATE_ROOT", "STARPORT_INSTANCE_ID")
+	endpointRecord := c.EndpointRecordFile()
+	add(fileRoleEndpoint, endpointRecord, fileKindRegular, selectedAvailability(endpointRecord != ""), policy.OwnerOnly,
+		"A running gateway records its bound address and removes the record on close.", "Do not restore this record. The next gateway writes its own record.", "STARPORT_STATE_ROOT")
 	workspaceFiles, err := productpaths.WorkspaceFiles(manifestPath(p, fileRoleWorkspace, c.Catalog.WorkspacePath), "STARPORT_CATALOG_WORKSPACE_PATH")
 	if err != nil {
 		return productpaths.FileManifest{}, err
@@ -277,7 +281,7 @@ func childPath(parent string, parts ...string) string {
 func manifestPath(paths Paths, role, path string) productpaths.Path {
 	originRole := role
 	switch role {
-	case fileRoleAcquisitionPolicy, fileRoleInferencePolicy:
+	case fileRoleAcquisitionPolicy, fileRoleInferencePolicy, fileRoleEndpoint:
 		originRole = "state"
 	case fileRoleBaselineRecovery:
 		originRole = pathRoleBaseline

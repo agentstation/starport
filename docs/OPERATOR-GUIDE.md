@@ -30,9 +30,9 @@ export OPENAI_API_KEY="replace-with-provider-inference-key"
 starport dev --ephemeral
 ```
 
-The command binds to `127.0.0.1`, uses in-memory storage, creates no
-configuration file, and keeps its catalog state in a scratch directory that it
-removes on exit. It prints one temporary gateway API key and one console
+The command binds to `127.0.0.1` on port 7827, or the next free port, which
+`dev` prints. It uses in-memory storage, creates no configuration file, and
+keeps its catalog state in a scratch directory that it removes on exit. It prints one temporary gateway API key and one console
 launch link, and opens the console in a browser:
 
 ```text
@@ -383,6 +383,14 @@ keep the old port. Docker Compose maps the host port to port 7827 in the
 container. Set `STARPORT_PORT=8080` to keep the old host port with Compose.
 Change the port of each client base URL, health probe, and scrape target that
 names port 8080.
+
+`starport serve` binds only its configured port. When another process holds
+that port, serve exits with status 1 before it starts background work. The
+error names the port:
+
+```text
+HTTP server: port 7827 is busy; stop the process that holds it or set STARPORT_SERVER_PORT to a free port
+```
 
 Check process health:
 

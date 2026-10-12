@@ -223,8 +223,10 @@ func (c *Config) restoreInventoryRoles(inventory BackupInventory, targets map[st
 		roles[role.Entry.ID] = role
 	}
 	// Version one always records static roles, including disabled selections.
+	// A backup from before the endpoint record has no endpoint role, and it
+	// still restores.
 	for id := range schema {
-		if id == fileRoleSourceFile || strings.HasPrefix(id, "dotenv-") {
+		if id == fileRoleSourceFile || id == fileRoleEndpoint || strings.HasPrefix(id, "dotenv-") {
 			continue
 		}
 		if id != fileRoleWorkspace && (strings.HasPrefix(id, "workspace-") || id == "catalog-migration-lock") && roles[fileRoleWorkspace].Entry.Availability != fileAvailable {

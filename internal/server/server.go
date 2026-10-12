@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -17,6 +18,7 @@ import (
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/console"
+	"github.com/agentstation/starport/internal/endpoint"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
@@ -47,6 +49,8 @@ var (
 	ErrRateLimitsRequired = errors.New("rate-limit repository is required")
 	// ErrProviderOperationsRequired reports an absent provider operations port.
 	ErrProviderOperationsRequired = errors.New("provider operations are required")
+
+	errServerClosed = errors.New("HTTP server is closed")
 )
 
 // Server represents the HTTP server with new handler organization
@@ -54,6 +58,13 @@ type Server struct {
 	router     *chi.Mux
 	cfg        *Config
 	httpServer *http.Server
+
+	// mu guards the listener state. Bind holds the listener, Serve hands it
+	// to httpServer, and Close releases a listener that never served.
+	mu       sync.Mutex
+	listener net.Listener
+	served   bool
+	closed   bool
 
 	// Ready application dependencies
 	service            proxy.Proxy
@@ -350,15 +361,65 @@ func (s *Server) handleMethodNotAllowed(w http.ResponseWriter, r *http.Request) 
 	writeProtocolError(w, r, http.StatusMethodNotAllowed, "invalid_request_error", "Method not allowed")
 }
 
-// Start starts the HTTP server
-func (s *Server) Start() error {
-	scheme := "http"
+// Scheme returns https when the server terminates TLS, and http otherwise.
+func (s *Server) Scheme() string {
 	if s.httpServer.TLSConfig != nil {
-		scheme = "https"
+		return "https"
 	}
+	return "http"
+}
+
+// Bind holds the listen address before anything serves and returns the bound
+// address. It serves Config.Listener when the caller bound one. A second call
+// returns the same address. A port that another process holds fails with an
+// *endpoint.BusyError.
+func (s *Server) Bind() (net.Addr, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.bindLocked()
+}
+
+func (s *Server) bindLocked() (net.Addr, error) {
+	if s.closed {
+		return nil, errServerClosed
+	}
+	if s.listener == nil {
+		if s.cfg.Listener != nil {
+			s.listener = s.cfg.Listener
+		} else {
+			// Binding does not block, so no caller context bounds it.
+			listener, err := endpoint.Listen(context.Background(), s.cfg.Host, s.cfg.Port)
+			if err != nil {
+				return nil, err
+			}
+			s.listener = listener
+		}
+	}
+	return s.listener.Addr(), nil
+}
+
+// Serve serves the bound listener until Shutdown. It binds first when no Bind
+// call came before it. Shutdown returns nil from Serve.
+func (s *Server) Serve() error {
+	s.mu.Lock()
+	address, err := s.bindLocked()
+	if err == nil && s.served {
+		err = errors.New("HTTP server is already serving")
+	}
+	listener := s.listener
+	if err == nil {
+		s.served = true
+	}
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+
+	scheme := s.Scheme()
+	port := endpoint.Port(address)
 	log.Info().
 		Str("scheme", scheme).
-		Int("port", s.cfg.Port).
+		Int("port", port).
 		Str("host", s.cfg.Host).
 		Str("auth_mode", string(s.authPolicy.Current().Mode)).
 		Str("auth_mode_source", string(s.authPolicy.Current().Source)).
@@ -370,20 +431,38 @@ func (s *Server) Start() error {
 			host = "localhost"
 		}
 		log.Info().
-			Str("url", scheme+"://"+net.JoinHostPort(host, strconv.Itoa(s.cfg.Port))).
+			Str("url", scheme+"://"+net.JoinHostPort(host, strconv.Itoa(port))).
 			Msg("console ready")
 	}
 
-	var err error
 	if s.httpServer.TLSConfig != nil {
-		err = s.httpServer.ListenAndServeTLS("", "")
+		err = s.httpServer.ServeTLS(listener, "", "")
 	} else {
-		err = s.httpServer.ListenAndServe()
+		err = s.httpServer.Serve(listener)
 	}
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("failed to start server: %w", err)
+		return fmt.Errorf("failed to serve: %w", err)
 	}
 
+	return nil
+}
+
+// Close releases a listener that Bind holds and Serve never received. After
+// Serve starts, the HTTP server owns the listener and Shutdown releases it.
+// Close is idempotent, and a closed server does not bind again.
+func (s *Server) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+	if s.listener == nil || s.served {
+		return nil
+	}
+	if err := s.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		return fmt.Errorf("release the HTTP listener: %w", err)
+	}
 	return nil
 }
 

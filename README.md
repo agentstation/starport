@@ -145,7 +145,8 @@ export OPENAI_API_KEY="replace-with-provider-inference-key"
 starport dev --ephemeral
 ```
 
-The command starts a temporary development gateway at `http://127.0.0.1:7827`.
+The command starts a temporary development gateway at `http://127.0.0.1:7827`,
+or the next free port, which `dev` prints.
 It uses in-memory state for Badger and SQLite and creates no configuration files.
 It prints one temporary Starport gateway API key and opens the console:
 

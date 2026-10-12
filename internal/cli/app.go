@@ -262,8 +262,8 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 						return runtimeFailure{cause: closeDevelopmentSession(ctx, session, err)}
 					}
 				} else {
-					// Run starts the listener. Wait for that listener before opening the browser.
-					// An earlier browser request would show a connection error.
+					// Run serves the session listener. Wait until the gateway answers before opening the browser.
+					// A session that binds late would show the browser a connection error.
 					go openConsoleWhenReady(ctx, deps, session)
 				}
 			}

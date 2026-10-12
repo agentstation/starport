@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/endpoint"
 	"github.com/agentstation/starport/internal/localauth"
 )
 
@@ -146,6 +149,45 @@ func TestUISuppressesTheBrowserWhereThereIsNobodyToSeeIt(t *testing.T) {
 			assert.Contains(t, output.String(), "Did not open a browser")
 		})
 	}
+}
+
+// TestUIReadsEndpointRecord sends the launch link to the port that the running
+// gateway recorded. A record from a process that exited, or no record, leaves
+// the link on the configured port.
+func TestUIReadsEndpointRecord(t *testing.T) {
+	deps, output, paths := uiDependencies(t)
+	t.Setenv("NO_BROWSER", "1")
+	cfg, err := config.NewLoader().WithPaths(paths).WithEnvironment(nil).WithEnvFiles().Load(t.Context())
+	require.NoError(t, err)
+	deps.LoadConfig = func(context.Context) (*config.Config, error) { return cfg, nil }
+	record := cfg.EndpointRecordFile()
+	require.NotEmpty(t, record)
+	write := func(pid int) {
+		require.NoError(t, endpoint.WriteRecord(record, endpoint.Record{
+			SchemaVersion: endpoint.RecordSchemaVersion, Scheme: "http", Host: "127.0.0.1", Port: 7373,
+			PID: pid, StartedAt: time.Now().UTC(),
+		}))
+	}
+	printedPort := func(args ...string) string {
+		t.Helper()
+		output.Reset()
+		require.NoError(t, runCLI(t, deps, args...))
+		parsed, err := url.Parse(strings.TrimSpace(strings.SplitN(output.String(), "\n", 2)[0]))
+		require.NoError(t, err)
+		return parsed.Port()
+	}
+
+	assert.Equal(t, "7827", printedPort("ui", "--no-open"), "no record leaves the configured port")
+	write(os.Getpid())
+	assert.Equal(t, "7373", printedPort("ui", "--no-open"), "ui follows the live record")
+	assert.Equal(t, "7373", printedPort("auth", "url"), "auth url follows the live record")
+
+	executable, err := os.Executable()
+	require.NoError(t, err)
+	exited := exec.CommandContext(t.Context(), executable, "-test.run=^$")
+	require.NoError(t, exited.Run())
+	write(exited.Process.Pid)
+	assert.Equal(t, "7827", printedPort("ui", "--no-open"), "a record from an exited process leaves the configured port")
 }
 
 func TestAuthURLCopiesOnRequestAndNotOtherwise(t *testing.T) {

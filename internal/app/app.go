@@ -29,6 +29,7 @@ import (
 	"github.com/agentstation/starport/internal/configrevision"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/endpoint"
 	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/guardrails"
@@ -142,6 +143,7 @@ type App struct {
 	runtimeMu    sync.Mutex
 	closeOnce    sync.Once
 	closeErr     error
+	recordOnce   sync.Once
 }
 
 // New creates the complete production runtime without starting background work.
@@ -170,7 +172,7 @@ func New(cfg *config.Config, options ...Option) (*App, error) {
 		build:            build.build,
 		lifecycle:        make([]lifecycleEntry, 0, 5),
 	}
-	builder := runtimeBuilder{application: application, config: cfg, factories: build.factories, serverCertificate: certificate}
+	builder := runtimeBuilder{application: application, config: cfg, factories: build.factories, serverCertificate: certificate, listener: build.listener}
 	if err := builder.compose(); err != nil {
 		rollbackErr := application.closeLifecycle(context.Background())
 		if rollbackErr != nil {
@@ -207,6 +209,7 @@ func prepareComposition(cfg *config.Config, options []Option) (buildOptions, err
 
 type runtimeBuilder struct {
 	serverCertificate *tls.Certificate
+	listener          net.Listener
 	application       *App
 	config            *config.Config
 	factories         runtimeFactories
@@ -1021,6 +1024,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	serverCfg := serverConfig(b.config, b.auth)
 	serverCfg.TLSCertificate = b.serverCertificate
 	serverCfg.Build = b.application.build
+	serverCfg.Listener = b.listener
 	configuration, err := b.configurationOperations()
 	if err != nil {
 		return fmt.Errorf("open configuration operations: %w", err)
@@ -1055,7 +1059,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	if err != nil {
 		if httpServer != nil {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), b.config.Server.ShutdownTimeout)
-			shutdownErr := httpServer.Shutdown(shutdownCtx)
+			shutdownErr := closeHTTPServer(shutdownCtx, httpServer)
 			cancel()
 			if shutdownErr != nil {
 				err = errors.Join(err, fmt.Errorf("close failed HTTP server: %w", shutdownErr))
@@ -1067,8 +1071,15 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		return errors.New("server factory returned no HTTP server")
 	}
 	b.application.httpServer = httpServer
-	b.application.own("HTTP server", httpServer.Shutdown)
+	b.application.own("HTTP server", func(ctx context.Context) error { return closeHTTPServer(ctx, httpServer) })
+	b.ownEndpointRecord()
 	return nil
+}
+
+// closeHTTPServer drains a serving server and releases a listener that never
+// served.
+func closeHTTPServer(ctx context.Context, httpServer httpRuntime) error {
+	return errors.Join(httpServer.Shutdown(ctx), httpServer.Close())
 }
 
 // requireAPIKey refuses to start a gateway no one can reach. A deployment
@@ -1235,6 +1246,11 @@ func (a *App) Run(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("application run context is required")
 	}
+	// The gateway holds its address before any background work starts, so a
+	// busy port fails here and names the port.
+	if _, err := a.Bind(); err != nil {
+		return errors.Join(err, a.closeWithTimeout())
+	}
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
 	if err := a.registry.Start(runCtx); err != nil {
@@ -1323,7 +1339,7 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	serverResult := make(chan error, 1)
-	go func() { serverResult <- a.httpServer.Start() }()
+	go func() { serverResult <- a.httpServer.Serve() }()
 
 	var runErr error
 	select {
@@ -1338,6 +1354,27 @@ func (a *App) Run(ctx context.Context) error {
 	cancelRun()
 	a.runtimeWG.Wait()
 	return errors.Join(runErr, a.closeWithTimeout())
+}
+
+// Bind holds the HTTP listen address, writes the endpoint record, and returns
+// the bound address. A second call returns the same address. A busy port fails
+// with an error that names the port.
+func (a *App) Bind() (net.Addr, error) {
+	address, err := a.httpServer.Bind()
+	if err != nil {
+		return nil, BindFailure(err)
+	}
+	a.recordOnce.Do(func() { a.writeEndpointRecord(address) })
+	return address, nil
+}
+
+// BindFailure states a failed HTTP bind for the operator. A busy port names
+// the port and the remedy.
+func BindFailure(err error) error {
+	if _, busy := errors.AsType[*endpoint.BusyError](err); busy {
+		return fmt.Errorf("HTTP server: %w; stop the process that holds it or set STARPORT_SERVER_PORT to a free port", err)
+	}
+	return fmt.Errorf("HTTP server: %w", err)
 }
 
 // Close stops owned dependencies in reverse construction order.

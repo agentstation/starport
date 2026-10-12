@@ -195,13 +195,27 @@ func commandUntilReady(
 	during func(ctx context.Context, base string),
 ) (int, string) {
 	t.Helper()
+	return developmentUntilReady(t, startDevelopment, args, port, stdout, during)
+}
+
+// developmentUntilReady runs commandUntilReady with a chosen development
+// starter.
+func developmentUntilReady(
+	t *testing.T,
+	development starportcli.DevelopmentStarter,
+	args []string,
+	port int,
+	stdout *firstRunOutput,
+	during func(ctx context.Context, base string),
+) (int, string) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	stderr := &firstRunOutput{}
 	exited := make(chan int, 1)
 	go func() {
 		exited <- runContext(ctx, args, bytes.NewReader(nil), stdout, stderr,
-			runServer, startDevelopment, runInitializer)
+			runServer, development, runInitializer)
 	}()
 
 	base := fmt.Sprintf("http://127.0.0.1:%d", port)

@@ -458,6 +458,26 @@
       }
     },
     {
+      "id": "gateway-endpoint",
+      "location": {
+        "path": "~/.local/state/starport/gateway-endpoint.json",
+        "origin": "platform-default"
+      },
+      "kind": "file",
+      "availability": "available",
+      "creation": "A running gateway records its bound address and removes the record on close.",
+      "recovery": "Do not restore this record. The next gateway writes its own record.",
+      "policy": {
+        "selectors": [
+          "STARPORT_STATE_ROOT"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
       "id": "workspace",
       "location": {
         "path": "",

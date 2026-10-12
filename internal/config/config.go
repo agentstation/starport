@@ -65,6 +65,17 @@ type Config struct {
 	// environment cannot set it, which is the whole point: it separates the
 	// two sources that write the same field.
 	authModeFromFlag bool
+
+	// serverPortExplicit records that the environment or the configuration
+	// file named STARPORT_SERVER_PORT. A development gateway then binds only
+	// that port and does not fall back to a free one.
+	serverPortExplicit bool
+}
+
+// ServerPortExplicit reports whether the environment or the configuration
+// file named the server port.
+func (c *Config) ServerPortExplicit() bool {
+	return c != nil && c.serverPortExplicit
 }
 
 // AuthModeSource names where the stated authentication mode came from, or

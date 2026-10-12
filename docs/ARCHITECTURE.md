@@ -146,6 +146,7 @@ starport/
 ├── internal/cli/              # command contracts and process-independent execution
 ├── internal/app/              # application lifecycle and dependency ownership
 ├── internal/server/           # HTTP server, middleware, routes, controllers, DTO helpers
+├── internal/endpoint/         # listener bind, developer port fallback, and the gateway endpoint record
 ├── internal/protocol/openai/  # OpenAI wire DTOs and codecs
 ├── internal/protocol/openrouter/ # OpenRouter wire DTOs and codecs
 ├── internal/proxy/            # gateway use cases and cache behavior contract

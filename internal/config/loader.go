@@ -177,6 +177,7 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 	}
 
 	cfg := defaultConfig(paths)
+	_, cfg.serverPortExplicit = raw.Lookup("STARPORT_SERVER_PORT")
 	if development {
 		cfg.Storage.Badger.Path, cfg.Storage.SQL.SQLite.Path, cfg.Files.Path = "", "", ""
 	}
