@@ -77,26 +77,53 @@ func TestRestoreInventoryDoesNotCloneReplicaIdentity(t *testing.T) {
 	require.Equal(t, 2, found)
 }
 
-// TestRestoreInventoryAcceptsABackupWithoutTheEndpointRole restores a backup
-// that a release before the endpoint record wrote. Every other canonical role
-// stays required.
-func TestRestoreInventoryAcceptsABackupWithoutTheEndpointRole(t *testing.T) {
-	target, inventory, hashes := restoreInventoryFixture(t)
+// TestBackupOmitsALiveEndpointRecord backs up a root while a gateway endpoint
+// record is present. The inventory lists no endpoint role and no endpoint
+// file, so a release before the endpoint record restores the backup, and this
+// release restores it too. Every other canonical role stays required.
+func TestBackupOmitsALiveEndpointRecord(t *testing.T) {
+	source := backupInventoryConfig(t, nil)
+	record := source.EndpointRecordFile()
+	require.NotEmpty(t, record)
+	writeInventoryFixture(t, record, `{"schema_version":1,"scheme":"http","host":"127.0.0.1","port":7827,"pid":1}`)
+	inventory, err := source.CollectBackupInventory(t.Context(), "test", 1000)
+	require.NoError(t, err)
+	for _, role := range inventory.Roles {
+		require.NotEqual(t, fileRoleEndpoint, role.Entry.ID, "the backup lists the endpoint role")
+	}
+	for _, file := range inventory.Files {
+		require.NotEqual(t, fileRoleEndpoint, file.Role, "the backup captures the endpoint record")
+		require.NotEqual(t, record, file.Source)
+	}
+
+	target, fixture, hashes := restoreInventoryFixture(t)
+	_, err = target.PlanRestoreFiles(fixture, hashes)
+	require.NoError(t, err)
 	without := func(id string) BackupInventory {
-		older := inventory
+		older := fixture
 		older.Roles = nil
-		for _, role := range inventory.Roles {
+		for _, role := range fixture.Roles {
 			if role.Entry.ID != id {
 				older.Roles = append(older.Roles, role)
 			}
 		}
-		require.Len(t, older.Roles, len(inventory.Roles)-1, "the fixture records the role %s", id)
+		require.Len(t, older.Roles, len(fixture.Roles)-1, "the fixture records the role %s", id)
 		return older
 	}
-	_, err := target.PlanRestoreFiles(without(fileRoleEndpoint), hashes)
-	require.NoError(t, err)
 	_, err = target.PlanRestoreFiles(without(fileRoleWelcome), hashes)
 	require.ErrorContains(t, err, "omits canonical role "+fileRoleWelcome)
+}
+
+// TestRestoreInventoryAcceptsAListedEndpointRole restores a backup from an
+// earlier build that listed the endpoint role as not selected.
+func TestRestoreInventoryAcceptsAListedEndpointRole(t *testing.T) {
+	target, inventory, hashes := restoreInventoryFixture(t)
+	inventory.Roles = append(inventory.Roles, BackupRole{
+		Entry:   productpaths.FileEntry{ID: fileRoleEndpoint, Kind: fileKindRegular, Availability: fileAvailable},
+		Capture: "not-selected",
+	})
+	_, err := target.PlanRestoreFiles(inventory, hashes)
+	require.NoError(t, err)
 }
 
 func TestRestoreInventoryKeepsUnselectedAndConfigurationInputsInactive(t *testing.T) {

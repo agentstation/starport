@@ -26,6 +26,7 @@ type BackupRole = recovery.BackupRole
 type BackupInventory = recovery.BackupInventory
 
 // CollectBackupInventory selects local files from the canonical product manifest.
+// It lists every canonical role except the transient gateway endpoint record.
 // It refuses partial scans, unsupported file types, access conflicts, and unknown active roles.
 // Writers must remain stopped and fenced until bundle capture finishes.
 func (c *Config) CollectBackupInventory(ctx context.Context, build string, limit int) (BackupInventory, error) {
@@ -45,6 +46,12 @@ func (c *Config) CollectBackupInventory(ctx context.Context, build string, limit
 	selected := productpaths.FileManifest{SchemaVersion: report.SchemaVersion, Product: report.Product}
 	indexes := make(map[string]int, len(report.Files))
 	for _, entry := range report.Files {
+		if entry.ID == fileRoleEndpoint {
+			// The record names a running process and has no place in a backup.
+			// A release before the record refuses a backup that lists a role
+			// it does not know, so the inventory omits the role.
+			continue
+		}
 		capture, err := backupRoleCapture(entry)
 		if err != nil {
 			return BackupInventory{}, err
@@ -103,7 +110,8 @@ func backupRoleCapture(entry productpaths.FileEntry) (string, error) {
 	switch entry.ID {
 	case fileRoleEndpoint:
 		// The record names a running process. A backup runs with the gateway
-		// stopped, and a restored record would name a process that exited.
+		// stopped, and a restored record would name a process that exited. A
+		// backup omits the role. An earlier build listed it as not selected.
 		return "not-selected", nil
 	case pathRoleBadger:
 		return "kv-snapshot", nil

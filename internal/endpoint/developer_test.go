@@ -40,7 +40,9 @@ func sequence(values ...int) func(int) int {
 // TestDevFallsBackInOrder pins the developer bind order: the standard port,
 // 7373, 7678, then the random range, and the first free port wins.
 func TestDevFallsBackInOrder(t *testing.T) {
-	ports := DeveloperPorts(7827, sequence(4, 999, 0))
+	// The draws pick 7004, then the last remaining port, 7999, then 7000,
+	// which the first draw moved to index 4.
+	ports := DeveloperPorts(7827, sequence(4, 998, 2))
 	require.Equal(t, []int{7827, 7373, 7678, 7004, 7999, 7000}, ports[:6])
 	require.Len(t, ports, 24)
 	require.Equal(t, 0, ports[len(ports)-1], "the last port binds any free port")
@@ -84,6 +86,22 @@ func TestDevFallsBackToAnyPortAfterTwentyRandomFailures(t *testing.T) {
 		require.LessOrEqual(t, port, 7999)
 	}
 	require.Equal(t, 0, attempts[23])
+}
+
+// TestDeveloperPortsDrawsDistinctRandomPorts keeps twenty distinct random
+// ports in the order when every draw returns the same value.
+func TestDeveloperPortsDrawsDistinctRandomPorts(t *testing.T) {
+	ports := DeveloperPorts(7827, func(int) int { return 0 })
+	require.Len(t, ports, 24)
+	require.Equal(t, []int{7827, 7373, 7678}, ports[:3])
+	require.Equal(t, 0, ports[23])
+	random := slices.Clone(ports[3:23])
+	for _, port := range random {
+		require.GreaterOrEqual(t, port, 7000)
+		require.LessOrEqual(t, port, 7999)
+	}
+	slices.Sort(random)
+	require.Len(t, slices.Compact(random), 20, "no random port repeats")
 }
 
 func TestBindFirstStopsOnAnotherError(t *testing.T) {
