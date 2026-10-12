@@ -1,12 +1,15 @@
 package endpoint
 
 import (
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -16,6 +19,9 @@ const RecordSchemaVersion = 1
 const (
 	recordFileMode      = 0o600
 	recordDirectoryMode = 0o700
+	// recordDialTimeout bounds the check that a recorded endpoint accepts a
+	// connection. A listening gateway on this machine answers at once.
+	recordDialTimeout = 500 * time.Millisecond
 )
 
 // Record states where a running gateway listens. The gateway that binds
@@ -65,7 +71,9 @@ func WriteRecord(path string, record Record) error {
 }
 
 // ReadRecord returns the record at path when the process that wrote it is
-// alive. A missing record, or a record whose process exited, reports false.
+// alive and the recorded address accepts a connection. A missing record, a
+// record whose process exited, or a record whose address does not answer
+// reports false.
 func ReadRecord(path string) (Record, bool, error) {
 	record, err := readRecord(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -74,10 +82,35 @@ func ReadRecord(path string) (Record, bool, error) {
 	if err != nil {
 		return Record{}, false, err
 	}
-	if !alive(record.PID) {
+	if !alive(record.PID) || !listening(record) {
 		return Record{}, false, nil
 	}
 	return record, true, nil
+}
+
+// listening reports whether the recorded address accepts a TCP connection.
+// After a crash the operating system can give the recorded process ID to an
+// unrelated process, so a live process ID alone does not name a gateway. The
+// gateway binds before it writes the record, so a live gateway answers.
+func listening(record Record) bool {
+	if record.Port <= 0 {
+		return false
+	}
+	host := record.Host
+	if ip := net.ParseIP(host); host == "" || ip != nil && ip.IsUnspecified() {
+		// A gateway that binds every address also answers on loopback.
+		host = "127.0.0.1"
+		if ip != nil && ip.To4() == nil {
+			host = "::1"
+		}
+	}
+	dialer := net.Dialer{Timeout: recordDialTimeout}
+	conn, err := dialer.DialContext(context.Background(), "tcp", net.JoinHostPort(host, strconv.Itoa(record.Port)))
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }
 
 // RemoveRecord removes the record at path when this process wrote it. A
