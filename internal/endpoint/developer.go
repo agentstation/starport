@@ -17,15 +17,24 @@ const (
 var fixedFallbackPorts = []int{7373, 7678}
 
 // DeveloperPorts returns the bind order of a development gateway without an
-// explicit port: the first port, 7373, 7678, twenty draws from 7000 through
-// 7999, then 0, which binds any free port. Draw returns a value in [0, n).
+// explicit port: the first port, 7373, 7678, twenty distinct ports drawn from
+// 7000 through 7999, then 0, which binds any free port. Draw returns a value
+// in [0, n).
 func DeveloperPorts(first int, draw func(n int) int) []int {
 	ports := make([]int, 0, 1+len(fixedFallbackPorts)+randomPortAttempts+1)
 	ports = append(ports, first)
 	ports = append(ports, fixedFallbackPorts...)
-	for range randomPortAttempts {
-		ports = append(ports, randomPortFirst+draw(randomPortCount))
+	// A partial Fisher-Yates shuffle draws without replacement, so no port
+	// repeats.
+	candidates := make([]int, randomPortCount)
+	for index := range candidates {
+		candidates[index] = randomPortFirst + index
 	}
+	for index := range randomPortAttempts {
+		swap := index + draw(randomPortCount-index)
+		candidates[index], candidates[swap] = candidates[swap], candidates[index]
+	}
+	ports = append(ports, candidates[:randomPortAttempts]...)
 	return append(ports, 0)
 }
 
