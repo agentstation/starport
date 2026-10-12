@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -187,14 +188,18 @@ func serveWith(t *testing.T, stdout io.Writer, open gatewayOpener) (int, string)
 	return code, stderr.String()
 }
 
-// recordingGateway stands in for the application. It records the
-// configuration it opens with and whether the machine token was on disk then.
+// recordingGateway stands in for the application. It closes the listener and
+// records the configuration it opens with and whether the machine token was on
+// disk then.
 type recordingGateway struct {
 	cfg      *config.Config
 	tokenErr error
 }
 
-func (g *recordingGateway) open(cfg *config.Config) (gatewayRuntime, error) {
+func (g *recordingGateway) open(cfg *config.Config, listener net.Listener) (gatewayRuntime, error) {
+	if err := listener.Close(); err != nil {
+		return nil, err
+	}
 	g.cfg = cfg
 	g.tokenErr = localauth.ErrPathRequired
 	if store, err := localauth.NewStore(cfg.Security.LocalTokenPath); err == nil {

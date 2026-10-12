@@ -65,7 +65,9 @@ func bindDevelopment(ctx context.Context, cfg *config.Config, ports developerPor
 }
 
 // startPersistentDevelopment runs the serve composition over the persistent
-// development profile. A clean root prints its key through deliver.
+// development profile. A clean root prints its key through deliver. The
+// listener binds first, so a busy port fails before any key exists and the
+// root stays clean.
 func startPersistentDevelopment(
 	ctx context.Context,
 	options starportcli.GatewayOptions,
@@ -73,16 +75,25 @@ func startPersistentDevelopment(
 	ports developerPorts,
 ) (starportcli.DevelopmentSession, error) {
 	overrides := configOverrides(options)
-	cfg, err := prepareGateway(ctx, func(ctx context.Context) (*config.Config, error) {
+	load := func(ctx context.Context) (*config.Config, error) {
 		return config.LoadPersistentDevelopment(ctx, overrides...)
-	}, deliver)
+	}
+	cfg, err := load(ctx)
 	if err != nil {
-		return starportcli.DevelopmentSession{}, err
+		return starportcli.DevelopmentSession{}, fmt.Errorf("load configuration: %w", err)
 	}
 	listener, busy, err := bindDevelopment(ctx, cfg, ports)
 	if err != nil {
 		return starportcli.DevelopmentSession{}, err
 	}
+	cfg, err = initializeGateway(ctx, cfg, load, deliver)
+	if err != nil {
+		_ = listener.Close()
+		return starportcli.DevelopmentSession{}, err
+	}
+	// A first run reloads the configuration, which names the configured port
+	// again and not the bound port.
+	cfg.Server.Port = endpoint.Port(listener.Addr())
 	runtime, err := app.NewPersistentDevelopment(cfg, app.WithBuildInfo(version, gitCommit, buildTime), app.WithListener(listener))
 	if err != nil {
 		// A rollback can close the listener first. A second close changes nothing.

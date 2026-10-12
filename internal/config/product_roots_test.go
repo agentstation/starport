@@ -65,7 +65,7 @@ func TestLoaderRootSpecificityAndBootstrapSelection(t *testing.T) {
 }
 
 func TestLoaderRequiresExplicitRelativePathBase(t *testing.T) {
-	for _, setting := range []string{"STARPORT_STORAGE_BADGER_PATH", "STARPORT_STORAGE_SQL_SQLITE_PATH", "STARPORT_CATALOG_STATE_DIR", "STARPORT_CATALOG_WORKSPACE_PATH"} {
+	for _, setting := range []string{"STARPORT_STORAGE_BADGER_PATH", "STARPORT_STORAGE_SQL_SQLITE_PATH", "STARPORT_CATALOG_STATE_DIR", "STARPORT_CATALOG_WORKSPACE_PATH", "STARPORT_FILES_PATH"} {
 		t.Run(setting, func(t *testing.T) {
 			paths := PathsForConfigDir(t.TempDir())
 			environment := map[string]string{setting: "relative"}

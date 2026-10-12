@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -152,8 +153,8 @@ func TestUISuppressesTheBrowserWhereThereIsNobodyToSeeIt(t *testing.T) {
 }
 
 // TestUIReadsEndpointRecord sends the launch link to the port that the running
-// gateway recorded. A record from a process that exited, or no record, leaves
-// the link on the configured port.
+// gateway recorded. A record from a process that exited, a record whose port
+// does not answer, or no record leaves the link on the configured port.
 func TestUIReadsEndpointRecord(t *testing.T) {
 	deps, output, paths := uiDependencies(t)
 	t.Setenv("NO_BROWSER", "1")
@@ -162,9 +163,14 @@ func TestUIReadsEndpointRecord(t *testing.T) {
 	deps.LoadConfig = func(context.Context) (*config.Config, error) { return cfg, nil }
 	record := cfg.EndpointRecordFile()
 	require.NotEmpty(t, record)
-	write := func(pid int) {
+	// The gateway that the record names listens on this port.
+	gateway, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = gateway.Close() })
+	gatewayPort := endpoint.Port(gateway.Addr())
+	write := func(pid, port int) {
 		require.NoError(t, endpoint.WriteRecord(record, endpoint.Record{
-			SchemaVersion: endpoint.RecordSchemaVersion, Scheme: "http", Host: "127.0.0.1", Port: 7373,
+			SchemaVersion: endpoint.RecordSchemaVersion, Scheme: "http", Host: "127.0.0.1", Port: port,
 			PID: pid, StartedAt: time.Now().UTC(),
 		}))
 	}
@@ -178,16 +184,20 @@ func TestUIReadsEndpointRecord(t *testing.T) {
 	}
 
 	assert.Equal(t, "7827", printedPort("ui", "--no-open"), "no record leaves the configured port")
-	write(os.Getpid())
-	assert.Equal(t, "7373", printedPort("ui", "--no-open"), "ui follows the live record")
-	assert.Equal(t, "7373", printedPort("auth", "url"), "auth url follows the live record")
+	write(os.Getpid(), gatewayPort)
+	assert.Equal(t, strconv.Itoa(gatewayPort), printedPort("ui", "--no-open"), "ui follows the live record")
+	assert.Equal(t, strconv.Itoa(gatewayPort), printedPort("auth", "url"), "auth url follows the live record")
 
 	executable, err := os.Executable()
 	require.NoError(t, err)
 	exited := exec.CommandContext(t.Context(), executable, "-test.run=^$")
 	require.NoError(t, exited.Run())
-	write(exited.Process.Pid)
+	write(exited.Process.Pid, gatewayPort)
 	assert.Equal(t, "7827", printedPort("ui", "--no-open"), "a record from an exited process leaves the configured port")
+
+	require.NoError(t, gateway.Close())
+	write(os.Getpid(), gatewayPort)
+	assert.Equal(t, "7827", printedPort("ui", "--no-open"), "a record whose port does not answer leaves the configured port")
 }
 
 func TestAuthURLCopiesOnRequestAndNotOtherwise(t *testing.T) {
