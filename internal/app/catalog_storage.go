@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/agentstation/starport/internal/setup"
@@ -27,6 +28,9 @@ func (b *runtimeBuilder) guardLocalSetup() error {
 	paths.BadgerDir = b.config.Storage.Badger.Path
 	guard, err := setup.GuardLocalStorage(context.Background(), paths)
 	if err != nil {
+		if running := b.runningGateway(); running != "" && errors.Is(err, setup.ErrPartialState) {
+			return fmt.Errorf("open storage: %s: %w", running, err)
+		}
 		return fmt.Errorf("open storage: guard local setup: %w", err)
 	}
 	b.application.own("local setup guard", func(context.Context) error { return guard.Close() })
