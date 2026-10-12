@@ -155,6 +155,42 @@ func TestDevKeepsExplicitPort(t *testing.T) {
 	assertDevKeepsBusyPort(t, busy, free)
 }
 
+// TestDevBindsBeforeTheFirstRunKey refuses a busy explicit port on a clean
+// root before initialization delivers a key. The root stays clean, so a later
+// run on a free port prints the first-run key.
+func TestDevBindsBeforeTheFirstRunKey(t *testing.T) {
+	home, free := firstRunEnvironment(t)
+	busy := holdLoopbackPort(t)
+	t.Setenv("STARPORT_SERVER_PORT", strconv.Itoa(busy))
+	configFile := filepath.Join(home, "config", "config.env")
+
+	code, stdout, stderr := developmentUntilExit(t, startDevelopment, "dev", "--no-open")
+	if code != starportcli.ExitCodeRuntime {
+		t.Errorf("exit code = %d, want %d; stderr = %s", code, starportcli.ExitCodeRuntime, stderr)
+	}
+	if want := "port " + strconv.Itoa(busy) + " is busy"; !strings.Contains(stderr, want) {
+		t.Errorf("stderr does not name the busy port %q; stderr = %s", want, stderr)
+	}
+	if strings.Contains(stdout, gatewayKeyLine) {
+		t.Error("dev printed a first-run key for a gateway that never bound")
+	}
+	if masterKeyDigest(t, configFile) != "" {
+		t.Error("the refused run initialized the root")
+	}
+	if _, err := os.Stat(filepath.Join(home, "data", "badger")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the refused run created the Badger store: %v", err)
+	}
+
+	t.Setenv("STARPORT_SERVER_PORT", strconv.Itoa(free))
+	output := &firstRunOutput{}
+	if code, stderr := commandUntilReady(t, []string{"starport", "dev", "--no-open"}, free, output, nil); code != 0 {
+		t.Fatalf("later run exit code = %d, want 0; stderr = %s", code, stderr)
+	}
+	if count := strings.Count(output.String(), gatewayKeyLine); count != 1 {
+		t.Errorf("later run printed %d first-run key lines, want 1", count)
+	}
+}
+
 // TestDevKeepsConfigurationFilePort binds only the port that the
 // configuration file names, the same as a port from the environment.
 func TestDevKeepsConfigurationFilePort(t *testing.T) {

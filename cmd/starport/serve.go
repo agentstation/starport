@@ -57,7 +57,8 @@ func serveGateway(
 
 // prepareGateway loads the configuration and initializes a clean local root.
 // The one-time key prints before any other file lands in the data directory.
-// serve and persistent dev share this order, and each supplies its loader.
+// Persistent dev binds its listener between the load and initializeGateway,
+// so a busy port fails before the key prints.
 func prepareGateway(
 	ctx context.Context,
 	load func(context.Context) (*config.Config, error),
@@ -67,6 +68,18 @@ func prepareGateway(
 	if err != nil {
 		return nil, fmt.Errorf("load configuration: %w", err)
 	}
+	return initializeGateway(ctx, cfg, load, deliver)
+}
+
+// initializeGateway initializes a clean local root under the loaded
+// configuration and returns the configuration that the gateway opens. A root
+// that needs no initialization returns cfg unchanged.
+func initializeGateway(
+	ctx context.Context,
+	cfg *config.Config,
+	load func(context.Context) (*config.Config, error),
+	deliver starportcli.CredentialDelivery,
+) (*config.Config, error) {
 	firstRun, err := initializeFirstRun(ctx, cfg, deliver)
 	if err != nil {
 		return nil, err
