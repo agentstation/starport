@@ -87,6 +87,7 @@ func TestDevRefusesConfiguredStorage(t *testing.T) {
 	}{
 		{name: "Badger path", key: "STARPORT_STORAGE_BADGER_PATH", value: filepath.Join(elsewhere, "badger")},
 		{name: "SQLite path", key: "STARPORT_STORAGE_SQL_SQLITE_PATH", value: filepath.Join(elsewhere, "starport.db")},
+		{name: "files path", key: "STARPORT_FILES_PATH", value: filepath.Join(elsewhere, "files")},
 		{name: "object store", key: "STARPORT_FILES_BACKEND", value: "objectstore"},
 		{name: "Valkey recipe", key: "STARPORT_STORAGE_MODE", value: "valkey"},
 		{name: "configuration file", key: "STARPORT_STORAGE_BADGER_PATH", value: filepath.Join(elsewhere, "badger"), inFile: true},

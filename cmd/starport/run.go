@@ -125,10 +125,10 @@ func processCommands() []*urfavecli.Command {
 	}
 }
 
-// errFirstRunRoot refuses auth bootstrap --name on a root that serve
+// errFirstRunRoot refuses auth bootstrap --name on a root that dev or serve
 // initializes itself. A key in that store without the setup transaction would
 // leave a partial root that the first run refuses.
-var errFirstRunRoot = errors.New(`the first run of "starport serve" initializes this local root; ` +
+var errFirstRunRoot = errors.New(`the first run of "starport dev" or "starport serve" initializes this local root; ` +
 	`"starport auth bootstrap --name" is for configured shared storage`)
 
 // runInitializer composes auth bootstrap: the first key in configured
@@ -141,7 +141,7 @@ func runInitializer(ctx context.Context, options starportcli.InitOptions) (starp
 }
 
 // recoverLocalSetup retries the interrupted setup of the local root under the
-// name that the first run of serve uses.
+// name that the first run of dev or serve uses.
 func recoverLocalSetup(ctx context.Context) (starportcli.InitResult, error) {
 	paths, err := config.PlatformPaths()
 	if err != nil {

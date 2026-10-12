@@ -508,9 +508,10 @@ starport auth bootstrap --name primary-admin
 
 The command does not write a local configuration file. It opens the configured
 Badger or Valkey service and refuses any identity repository that already
-contains an identity. It also refuses a clean local root, because
-`starport serve` initializes that root. It prints the new gateway API key once. Save the key in
-a secret manager before you start the gateway.
+contains an identity. It also refuses a clean local root, because the first
+run of `starport dev` or `starport serve` initializes that root. It prints the
+new gateway API key once. Save the key in a secret manager before you start the
+gateway.
 
 If credential output fails, the command atomically releases the initial
 identity and its setup claim. You can then run the command again.
