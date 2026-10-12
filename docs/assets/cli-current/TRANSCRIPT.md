@@ -32,15 +32,14 @@ Prompt and readiness checks wait for actual completion. Credential capture and s
 ## Catalog and build evidence
 
 This source build uses a reviewed local Starmap catalog. It is not a new public release.
-The reviewed catalog includes uncommitted local changes.
 The build joins the Starport and Starmap source trees with a temporary Go workspace. It leaves their module files unchanged.
 
-The Starmap source commit is `c3e38970db9c23d3023972b71bce132ee6efbb39`.
-The embedded generation is `bindings-a09b2fbbb3a32b1f5cbe5d745746e66bf46c520175934205b7bcef3498690915.local.72ae50b97f55`.
-Its catalog payload checksum is `sha256:ad6b71e899dd9b5e0f4ee4195cdc4b07117447479e7f6b11117245ef33a68eb9`.
+The Starmap source commit is `6885bc794d8c5b071eab6582d25ce6f0ab215945`.
+The embedded generation is `bindings-0ba143af1d7905c9dc09a34fc6b582044d87e4634783c8c0d14ccf2922e9efab.local.7a59fc08fbfe`.
+Its catalog payload checksum is `sha256:55a41f1535f9d65a579f7fe932a5f61a26031482401d0584023975a08dd1b40a`.
 
-The manifest SHA-256 is `f1051d8babd1f4c5f84747b2933f2e8cd2f50fb6bd40c2b7a40d9e347171253a`.
-The input inventory SHA-256 is `d6a6b26476a78af06f0c50bfe9f6ac2af44ec9c18fe746bad17c1669a3d8ef75`.
+The manifest SHA-256 is `744176145cbe18162ef9a8bdea41608a19f86cae7fc992ece24cd2e57037653c`.
+The input inventory SHA-256 is `4f6fb817d5d3d7bf5c25fcc5eab49fe10c6d3a676daa596c1b9b94046be041ed`.
 The record lists each catalog and source input hash. The recorder verifies the manifest and both selected model files inside the binary.
 It also rejects catalog input changes during capture.
 
@@ -99,7 +98,7 @@ $ printf '\033[2J\033[H\033[1;36m2 / Start an authenticated gateway\033[0m\nStar
 2 / Start an authenticated gateway
 Start a local session and confirm that its HTTP API is ready.
 
-$ starport dev --no-open >gateway.log 2>&1 &
+$ starport dev --ephemeral --no-open >gateway.log 2>&1 &
 $ gateway_pid=$!; printf '%s\n' "$gateway_pid" >gateway.pid
 $ demo-control ready
 $ export STARPORT_API_KEY=$(cat gateway.key)
@@ -117,7 +116,7 @@ $ url=http://127.0.0.1:19335
 $ curl -fsS --max-time 5 "$url/health/ready" | tee health.json | jq .
 {
   "status": "ok",
-  "timestamp": "2026-10-08T00:20:12Z",
+  "timestamp": "2026-10-12T05:59:49Z",
   "service": "starport",
   "version": "dev"
 }
