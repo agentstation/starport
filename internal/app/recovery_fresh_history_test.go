@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/endpoint"
 	"github.com/agentstation/starport/internal/recovery"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
@@ -17,6 +18,13 @@ import (
 // Each normal constructor runs in a fresh OS process against the retained target.
 func TestRecoveryFreshReplicaActualHistoryBarriers(t *testing.T) {
 	cfg, request := activationFleetFixture(t)
+	// The first startup on a state root creates the seat lock beside the
+	// endpoint record, refused or not. The lock is not state, so one gateway
+	// seats and leaves before the first census.
+	require.NotEmpty(t, cfg.EndpointRecordFile())
+	seat, err := endpoint.LockRecord(cfg.EndpointRecordFile())
+	require.NoError(t, err)
+	require.NoError(t, seat.Close())
 	store, err := storage.OpenValkey(cfg.RuntimeStorage().Valkey)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, store.Close()) }()
