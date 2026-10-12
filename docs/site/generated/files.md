@@ -38,6 +38,7 @@ This page lists the files and directories that Starport can use with the default
 | `credential-policy` | tree | `~/.local/state/starport/credentials/catalog/default` | available | owner-only | `STARPORT_STATE_ROOT`, `STARPORT_INSTANCE_ID` |
 | `inference-credential-policy` | tree | `~/.local/state/starport/credentials/inference/default` | available | owner-only | `STARPORT_STATE_ROOT`, `STARPORT_INSTANCE_ID` |
 | `gateway-endpoint` | file | `~/.local/state/starport/gateway-endpoint.json` | available | owner-only | `STARPORT_STATE_ROOT` |
+| `gateway-endpoint-lock` | file | `~/.local/state/starport/gateway-endpoint.json.lock` | available | owner-only | `STARPORT_STATE_ROOT` |
 | `workspace` | tree | Not selected | disabled | deployment-controlled | `STARPORT_CATALOG_WORKSPACE_PATH` |
 | `tls-certificate` | file | Not selected | disabled | deployment-controlled |  |
 | `tls-key` | file | Not selected | disabled | owner-only |  |
@@ -79,6 +80,7 @@ This page lists the files and directories that Starport can use with the default
 | `credential-policy` | tree | `~/Library/Application Support/starport/state/credentials/catalog/default` | available | owner-only | `STARPORT_STATE_ROOT`, `STARPORT_INSTANCE_ID` |
 | `inference-credential-policy` | tree | `~/Library/Application Support/starport/state/credentials/inference/default` | available | owner-only | `STARPORT_STATE_ROOT`, `STARPORT_INSTANCE_ID` |
 | `gateway-endpoint` | file | `~/Library/Application Support/starport/state/gateway-endpoint.json` | available | owner-only | `STARPORT_STATE_ROOT` |
+| `gateway-endpoint-lock` | file | `~/Library/Application Support/starport/state/gateway-endpoint.json.lock` | available | owner-only | `STARPORT_STATE_ROOT` |
 | `workspace` | tree | Not selected | disabled | deployment-controlled | `STARPORT_CATALOG_WORKSPACE_PATH` |
 | `tls-certificate` | file | Not selected | disabled | deployment-controlled |  |
 | `tls-key` | file | Not selected | disabled | owner-only |  |
@@ -120,6 +122,7 @@ This page lists the files and directories that Starport can use with the default
 | `credential-policy` | tree | `%LocalAppData%\starport\state\credentials\catalog\default` | available | owner-only | `STARPORT_STATE_ROOT`, `STARPORT_INSTANCE_ID` |
 | `inference-credential-policy` | tree | `%LocalAppData%\starport\state\credentials\inference\default` | available | owner-only | `STARPORT_STATE_ROOT`, `STARPORT_INSTANCE_ID` |
 | `gateway-endpoint` | file | `%LocalAppData%\starport\state\gateway-endpoint.json` | available | owner-only | `STARPORT_STATE_ROOT` |
+| `gateway-endpoint-lock` | file | `%LocalAppData%\starport\state\gateway-endpoint.json.lock` | available | owner-only | `STARPORT_STATE_ROOT` |
 | `workspace` | tree | Not selected | disabled | deployment-controlled | `STARPORT_CATALOG_WORKSPACE_PATH` |
 | `tls-certificate` | file | Not selected | disabled | deployment-controlled |  |
 | `tls-key` | file | Not selected | disabled | owner-only |  |

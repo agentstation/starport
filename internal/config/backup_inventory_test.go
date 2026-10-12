@@ -43,8 +43,8 @@ func TestBackupInventoryAccountsForEveryCanonicalRole(t *testing.T) {
 	require.NoError(t, err)
 	canonical, err := cfg.FileManifest("test")
 	require.NoError(t, err)
-	// Every canonical role but the transient endpoint record.
-	require.Len(t, inventory.Roles, len(canonical.Files)-1)
+	// Every canonical role but the transient endpoint record and its lock.
+	require.Len(t, inventory.Roles, len(canonical.Files)-2)
 	captures := map[string]string{}
 	for _, role := range inventory.Roles {
 		captures[role.Entry.ID] = role.Capture
@@ -56,8 +56,9 @@ func TestBackupInventoryAccountsForEveryCanonicalRole(t *testing.T) {
 	// No configuration file is selected, so no local save journal exists.
 	require.Equal(t, "not-selected", captures["config-operation-journal"])
 	require.Equal(t, "not-selected", captures["logs"])
-	// A backup never lists the record of a running gateway.
+	// A backup never lists the record of a running gateway or its lock.
 	require.NotContains(t, captures, "gateway-endpoint")
+	require.NotContains(t, captures, "gateway-endpoint-lock")
 	sourcePaths := map[string]bool{}
 	for _, file := range inventory.Files {
 		sourcePaths[file.Source] = true

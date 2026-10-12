@@ -86,14 +86,19 @@ func TestBackupOmitsALiveEndpointRecord(t *testing.T) {
 	record := source.EndpointRecordFile()
 	require.NotEmpty(t, record)
 	writeInventoryFixture(t, record, `{"schema_version":1,"scheme":"http","host":"127.0.0.1","port":7827,"pid":1}`)
+	lock := source.EndpointLockFile()
+	writeInventoryFixture(t, lock, "")
 	inventory, err := source.CollectBackupInventory(t.Context(), "test", 1000)
 	require.NoError(t, err)
 	for _, role := range inventory.Roles {
 		require.NotEqual(t, fileRoleEndpoint, role.Entry.ID, "the backup lists the endpoint role")
+		require.NotEqual(t, fileRoleEndpointLock, role.Entry.ID, "the backup lists the endpoint lock role")
 	}
 	for _, file := range inventory.Files {
 		require.NotEqual(t, fileRoleEndpoint, file.Role, "the backup captures the endpoint record")
+		require.NotEqual(t, fileRoleEndpointLock, file.Role, "the backup captures the endpoint lock")
 		require.NotEqual(t, record, file.Source)
+		require.NotEqual(t, lock, file.Source)
 	}
 
 	target, fixture, hashes := restoreInventoryFixture(t)

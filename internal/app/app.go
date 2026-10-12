@@ -253,6 +253,7 @@ func (b *runtimeBuilder) compose() error {
 	steps := []func() error{
 		b.validateCatalogStorage,
 		b.inspectRecoveryStartup,
+		b.guardStateRoot,
 		b.guardLocalSetup,
 		b.openStorage,
 		b.checkRecoveryStartup,

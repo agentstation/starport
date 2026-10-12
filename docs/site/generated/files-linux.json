@@ -478,6 +478,26 @@
       }
     },
     {
+      "id": "gateway-endpoint-lock",
+      "location": {
+        "path": "~/.local/state/starport/gateway-endpoint.json.lock",
+        "origin": "platform-default"
+      },
+      "kind": "file",
+      "availability": "available",
+      "creation": "A running gateway holds this lock from before storage opens until it removes its record, so one gateway serves the state root.",
+      "recovery": "Do not restore this lock. The operating system releases it when the gateway exits.",
+      "policy": {
+        "selectors": [
+          "STARPORT_STATE_ROOT"
+        ],
+        "applicability": "The selected backend and operation control file creation.",
+        "access": "owner-only",
+        "retention": "Preserve until the owning storage or recovery procedure permits removal.",
+        "removal": "This report does not authorize deletion or change retention."
+      }
+    },
+    {
       "id": "workspace",
       "location": {
         "path": "",

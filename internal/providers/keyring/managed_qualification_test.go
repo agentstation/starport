@@ -1,6 +1,7 @@
 package keyring
 
 import (
+	"context"
 	"encoding/json/v2"
 	"fmt"
 	"testing"
@@ -79,7 +80,8 @@ func TestManagedMaterialCachePreservesCiphertextAndRedaction(t *testing.T) {
 
 func TestManagedMaterialOwnerAndEncryptionManagerIsolation(t *testing.T) {
 	provider := syntheticCredentialProvider()
-	manager := newSyntheticProviderKeys(t, provider).(*keyManager)
+	limits := unhurriedMaterialLimits()
+	manager := newSyntheticProviderKeys(t, provider, limits).(*keyManager)
 	defer manager.materials.close()
 	for _, owner := range []string{"a", "b"} {
 		_, err := manager.AddKey(t.Context(), AccountScope(owner), string(provider.ID), map[string]string{"api-key": "secret-" + owner}, nil, false, 0)
@@ -93,9 +95,10 @@ func TestManagedMaterialOwnerAndEncryptionManagerIsolation(t *testing.T) {
 	}
 	otherMaster, err := credentials.GenerateMasterKey()
 	require.NoError(t, err)
-	other, err := NewProviderKeys(manager.repository, otherMaster, manager.validator)
+	other, err := NewProviderKeys(manager.repository, otherMaster, manager.validator, limits)
 	require.NoError(t, err)
 	defer other.(*keyManager).materials.close()
 	_, err = other.ResolveStoredMaterial(t.Context(), AccountScope("a"), provider)
 	require.Error(t, err, "another encryption manager must not reuse decrypted material")
+	require.NotErrorIs(t, err, context.DeadlineExceeded, "the refusal comes from the key, not from the load deadline")
 }

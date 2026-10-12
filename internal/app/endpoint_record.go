@@ -2,16 +2,37 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/endpoint"
+	"github.com/agentstation/starport/internal/localauth"
 )
+
+// guardStateRoot takes the state root's gateway seat before storage opens, so
+// one gateway serves one state root whatever storage it selects. The seat is
+// released after the endpoint record goes, because ownership closes in
+// reverse order. A scratch root has no record and no seat.
+func (b *runtimeBuilder) guardStateRoot() error {
+	path := b.config.EndpointRecordFile()
+	if path == "" {
+		return nil
+	}
+	lock, err := endpoint.LockRecord(path)
+	if err != nil {
+		if running := b.runningGateway(); running != "" && errors.Is(err, endpoint.ErrRecordHeld) {
+			return fmt.Errorf("%s: %w", running, err)
+		}
+		return fmt.Errorf("guard state root: %w", err)
+	}
+	b.application.own("state root guard", func(context.Context) error { return lock.Close() })
+	return nil
+}
 
 // ownEndpointRecord removes the endpoint record when the application closes.
 // The lifecycle closes in reverse order, so the record goes before the HTTP
@@ -25,8 +46,10 @@ func (b *runtimeBuilder) ownEndpointRecord() {
 }
 
 // runningGateway names another gateway that serves this state root, from its
-// live endpoint record, or returns "". The local setup guard refuses a second
-// gateway on one root, and its own error does not say which gateway holds it.
+// live endpoint record, or returns "". The seat and the local setup guard
+// refuse a second gateway on one root, and their own errors do not say which
+// gateway holds it. An unspecified bind host reads as loopback, which is
+// where the operator reaches it.
 func (b *runtimeBuilder) runningGateway() string {
 	path := b.config.EndpointRecordFile()
 	if path == "" {
@@ -36,7 +59,7 @@ func (b *runtimeBuilder) runningGateway() string {
 	if err != nil || !live || record.PID == os.Getpid() {
 		return ""
 	}
-	url := record.Scheme + "://" + net.JoinHostPort(record.Host, strconv.Itoa(record.Port))
+	url := localauth.BrowsableBase(record.Host, record.Port, record.Scheme == "https")
 	return fmt.Sprintf("another gateway (PID %d) serves this state root at %s; stop it before you start a second gateway", record.PID, url)
 }
 

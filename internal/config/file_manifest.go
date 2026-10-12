@@ -39,6 +39,7 @@ const (
 	fileRoleLocalToken      = "local-token"
 	fileRoleWelcome         = "welcome-stamp"
 	fileRoleEndpoint        = "gateway-endpoint"
+	fileRoleEndpointLock    = "gateway-endpoint-lock"
 	fileRoleRuntimeEvidence = "runtime-evidence"
 	fileRoleTLSCertificate  = "tls-certificate"
 	fileRoleTLSKey          = "tls-key"
@@ -185,6 +186,9 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 	endpointRecord := c.EndpointRecordFile()
 	add(fileRoleEndpoint, endpointRecord, fileKindRegular, selectedAvailability(endpointRecord != ""), policy.OwnerOnly,
 		"A running gateway records its bound address and removes the record on close.", "Do not restore this record. The next gateway writes its own record.", "STARPORT_STATE_ROOT")
+	endpointLock := c.EndpointLockFile()
+	add(fileRoleEndpointLock, endpointLock, fileKindRegular, selectedAvailability(endpointLock != ""), policy.OwnerOnly,
+		"A running gateway holds this lock from before storage opens until it removes its record, so one gateway serves the state root.", "Do not restore this lock. The operating system releases it when the gateway exits.", "STARPORT_STATE_ROOT")
 	workspaceFiles, err := productpaths.WorkspaceFiles(manifestPath(p, fileRoleWorkspace, c.Catalog.WorkspacePath), "STARPORT_CATALOG_WORKSPACE_PATH")
 	if err != nil {
 		return productpaths.FileManifest{}, err
@@ -281,7 +285,7 @@ func childPath(parent string, parts ...string) string {
 func manifestPath(paths Paths, role, path string) productpaths.Path {
 	originRole := role
 	switch role {
-	case fileRoleAcquisitionPolicy, fileRoleInferencePolicy, fileRoleEndpoint:
+	case fileRoleAcquisitionPolicy, fileRoleInferencePolicy, fileRoleEndpoint, fileRoleEndpointLock:
 		originRole = "state"
 	case fileRoleBaselineRecovery:
 		originRole = pathRoleBaseline

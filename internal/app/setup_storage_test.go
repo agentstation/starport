@@ -66,7 +66,9 @@ func TestGatewayHoldsSetupGuardUntilStorageCloses(t *testing.T) {
 
 // TestSecondGatewayNamesTheRunningGateway refuses a gateway on a state root
 // that another gateway holds, and names the URL and the process ID from the
-// live endpoint record.
+// live endpoint record. The seat guards the root before storage opens, so the
+// refusal does not depend on the selected storage. A gateway that binds every
+// address is named at loopback, where the operator reaches it.
 func TestSecondGatewayNamesTheRunningGateway(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "gateway")
 	loader := config.NewLoader().WithEnvironment(map[string]string{
@@ -80,24 +82,41 @@ func TestSecondGatewayNamesTheRunningGateway(t *testing.T) {
 	cfg, err = loader.WithEnvFiles(paths.ConfigFile).Load(t.Context())
 	require.NoError(t, err)
 
-	// The other gateway holds the setup guard, listens, and records its
-	// address. The parent process stands in for it, because it is alive and
-	// is not this process.
-	guard, err := setup.GuardLocalStorage(t.Context(), paths)
+	// The other gateway holds the seat, listens on every address, and records
+	// its address. The parent process stands in for it, because it is not
+	// this process.
+	seat, err := endpoint.LockRecord(cfg.EndpointRecordFile())
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = guard.Close() })
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	t.Cleanup(func() { _ = seat.Close() })
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "0.0.0.0:0")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = listener.Close() })
 	port := endpoint.Port(listener.Addr())
 	require.NoError(t, endpoint.WriteRecord(cfg.EndpointRecordFile(), endpoint.Record{
-		SchemaVersion: endpoint.RecordSchemaVersion, Scheme: "http", Host: "127.0.0.1", Port: port,
+		SchemaVersion: endpoint.RecordSchemaVersion, Scheme: "http", Host: "0.0.0.0", Port: port,
 		PID: os.Getppid(), StartedAt: time.Now().UTC(),
 	}))
 
 	application, err := New(cfg)
-	require.ErrorIs(t, err, setup.ErrPartialState)
+	require.ErrorIs(t, err, endpoint.ErrRecordHeld)
 	require.Nil(t, application)
 	require.ErrorContains(t, err, "another gateway (PID "+strconv.Itoa(os.Getppid())+")")
 	require.ErrorContains(t, err, "http://127.0.0.1:"+strconv.Itoa(port))
+
+	// A gateway from a release before the seat holds only the local setup
+	// guard. This gateway takes the seat, and the guard still names it.
+	require.NoError(t, seat.Close())
+	guard, err := setup.GuardLocalStorage(t.Context(), paths)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = guard.Close() })
+	application, err = New(cfg)
+	require.ErrorIs(t, err, setup.ErrPartialState)
+	require.Nil(t, application)
+	require.ErrorContains(t, err, "another gateway (PID "+strconv.Itoa(os.Getppid())+")")
+	require.NoError(t, guard.Close())
+
+	// The failed gateway released the seat, so the next gateway takes it.
+	application, err = New(cfg)
+	require.NoError(t, err)
+	require.NoError(t, application.Close(t.Context()))
 }
