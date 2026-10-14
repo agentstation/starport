@@ -139,7 +139,7 @@ jobs:
 
       - name: Retain native test evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-catalog-${{ matrix.runner }}
           path: native-catalog/
@@ -179,7 +179,7 @@ jobs:
         run: python scripts/app_shards.py run --index ${{ matrix.shard }} --output native-app
       - name: Retain raw application shard evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-catalog-app-windows-2025-${{ matrix.shard }}
           path: native-app/
@@ -238,7 +238,7 @@ jobs:
         run: python scripts/app_shards.py run --package recovery --index ${{ matrix.shard }} ${{ matrix.flags }} --output native-recovery
       - name: Retain raw recovery shard evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-catalog-recovery-${{ matrix.runner }}-${{ matrix.shard }}
           path: native-recovery/
@@ -321,7 +321,7 @@ jobs:
         run: go test -json -race -count=1 -timeout 2m ./internal/cache ./internal/app -run '^TestSharedCache' > shared-cache.jsonl
       - name: Retain shared startup evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: shared-storage-startup
           path: |
@@ -410,7 +410,7 @@ jobs:
             -run '^(TestSettledJobRequiresOriginalSharedApproval|TestProductionBudgetBackendOperations)$' >> fleet-budget.jsonl
       - name: Retain catalog fleet evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: catalog-fleet-recovery
           path: |
@@ -509,7 +509,7 @@ jobs:
           python scripts/recovery_application.py verify-legacy --results backup-application.jsonl
       - name: Retain durable work evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: durable-work-recovery
           path: |
@@ -615,7 +615,7 @@ jobs:
             --output "$RUNNER_TEMP/application-recovery"
       - name: Retain original application recovery evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: application-recovery-${{ matrix.group }}-${{ matrix.mode }}
           path: ${{ runner.temp }}/application-recovery/
@@ -623,7 +623,7 @@ jobs:
           if-no-files-found: error
       - name: Retain native object storage evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: application-objectstore-${{ matrix.group }}-${{ matrix.mode }}
           path: |
@@ -677,7 +677,7 @@ jobs:
         run: make --silent test-catalog-capacity
       - name: Retain capacity evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: authorization-capacity
           path: |
@@ -714,7 +714,7 @@ jobs:
         run: go test -json -race -count=1 -timeout 5m ./internal/config -run '^Test(ComposeStorageRecipes|ContainerRecipePersistence|ContainerRecipeReadOnlyMounts)$' > storage-recipes.jsonl
       - name: Retain recipe evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: storage-recipes
           path: storage-recipes.jsonl
@@ -787,7 +787,7 @@ jobs:
         run: go run github.com/securego/gosec/v2/cmd/gosec@v2.29.1-0.20261005092323-d2b649ec0182 -fmt sarif -out gosec-results.sarif ./...
 
       - name: Upload gosec results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: gosec-results
@@ -877,7 +877,7 @@ jobs:
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
 
@@ -908,7 +908,7 @@ jobs:
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
 
@@ -921,7 +921,7 @@ jobs:
           syft-version: v1.51.0
 
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@e99025eb970cfa124b8284a35463d87426917478 # 2026.09.28.1
+        uses: Homebrew/actions/setup-homebrew@eb02c69dbabdb66ff183c614f4ce7ab3c077592c # 2026.10.12.1
 
       - name: Build release snapshot
         id: goreleaser
@@ -939,7 +939,7 @@ jobs:
           scripts/audit-homebrew-cask.sh dist/homebrew/Casks/starport.rb
 
       - name: Upload artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: starport-release-snapshot
           path: |
@@ -998,7 +998,7 @@ jobs:
             --output native-install/result.json
       - name: Retain native install evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-catalog-install-${{ matrix.runner }}
           path: native-install/result.json
