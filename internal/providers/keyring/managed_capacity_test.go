@@ -50,7 +50,8 @@ func TestManagedMaterialSecretByteLimitAndReclamation(t *testing.T) {
 }
 
 func TestManagedMaterialIdleEvictionRevokesOldHandles(t *testing.T) {
-	manager := newSyntheticProviderKeys(t, syntheticCredentialProvider()).(*keyManager)
+	// The test proves idle eviction, not load timing, so it widens the stored load deadline.
+	manager := newSyntheticProviderKeys(t, syntheticCredentialProvider(), unhurriedMaterialLimits()).(*keyManager)
 	now := time.Now()
 	manager.materials.now = func() time.Time { return now }
 	provider := syntheticCredentialProvider()
