@@ -1,4 +1,9 @@
-FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS console
+# The build stages pull docker.io/library/node:24-alpine and
+# docker.io/library/golang:1.27.2-alpine from the organization registry. The
+# Starmap Fixture Images workflow copies each image by digest, so the pins
+# below are the Docker Hub manifests. Hosted runners share one unauthenticated
+# Docker Hub rate limit.
+FROM --platform=$BUILDPLATFORM ghcr.io/agentstation/fixtures/node@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS console
 
 WORKDIR /src
 RUN npm install -g pnpm@11.22.0
@@ -12,7 +17,7 @@ ARG COMMIT=unknown
 RUN if [ "$COMMIT" != unknown ]; then export STARPORT_DOCS_COMMIT="$COMMIT"; fi \
     && STARPORT_DOCS_RELEASE="$VERSION" pnpm -C console build
 
-FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673 AS build
+FROM --platform=$BUILDPLATFORM ghcr.io/agentstation/fixtures/golang@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673 AS build
 
 ENV GOTOOLCHAIN=go1.27.2
 
