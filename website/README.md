@@ -66,13 +66,16 @@ The `Site` workflow in `.github/workflows/site.yaml` has two jobs:
 
 1. The `Site` job runs for pull requests and pushes to `main`. It runs the
    checks, builds the site, and uploads `out/` as an artifact.
-2. The `Deploy` job runs only when a maintainer starts the workflow by hand.
-   The maintainer gives a git reference. The job builds the site at that
-   reference. Then it runs `wrangler deploy` in the `starport-site`
-   environment.
+2. The `Deploy` job runs after a `Release` run that a tag push started
+   completes with success. The job builds the site at the released commit
+   and names the release from the version tag at that commit. Then it runs
+   `wrangler deploy` in the `starport-site` environment. A maintainer can
+   also start the workflow by hand with a git reference. A `Release` run
+   that a maintainer started by hand deploys nothing; start the `Site`
+   workflow with the tag.
 
 The environment must have the secrets `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID`. To roll back, start the workflow again with an
+`CLOUDFLARE_ACCOUNT_ID`. To roll back, start the workflow by hand with an
 earlier reference.
 
 `wrangler.jsonc` binds the Worker to the custom domain

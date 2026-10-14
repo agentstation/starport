@@ -4,14 +4,18 @@
 # the site or its content. It checks, tests, and builds the site, and uploads
 # the static files as an artifact. It deploys nothing.
 #
-# The Deploy job runs only when a maintainer starts the workflow by hand with
-# a git reference. It builds the site at that reference and deploys the static
-# files to the starport-site Worker. Before the first run, a maintainer
-# creates the starport-site environment with required reviewers and the
-# CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets.
+# The Deploy job runs after a Release run that a tag push started completes
+# with success. It builds the site at the released commit, names the release
+# from the version tag at that commit, and deploys the static files to the
+# starport-site Worker. The Release workflow publishes with GITHUB_TOKEN, so a
+# release event never starts this workflow; the completed run does. A
+# maintainer can also start the workflow by hand with a git reference, for
+# example after a recovered release or for a rollback. Before the first
+# deploy, a maintainer creates the starport-site environment with required
+# reviewers and the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets.
 #
-# A failed run leaves the last deployment in place. Rollback is a new run with
-# an earlier reference.
+# A failed run leaves the last deployment in place. Rollback is a run by hand
+# with an earlier reference.
 name: Site
 
 on:
@@ -38,6 +42,9 @@ on:
       - "README.md"
       - "go.mod"
       - ".github/workflows/site.yaml"
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
     inputs:
       ref:
@@ -49,13 +56,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: site-${{ github.event_name == 'workflow_dispatch' && 'deploy' || github.ref }}
+  group: site-${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run') && 'deploy' || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   site:
     name: Site
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -93,7 +100,14 @@ jobs:
 
   deploy:
     name: Deploy
-    if: github.event_name == 'workflow_dispatch'
+    # A Release run that a maintainer started by hand recovers an existing
+    # release at the main head, not at the tag. It deploys nothing here; the
+    # maintainer starts this workflow with the tag.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: starport-site
@@ -101,17 +115,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || github.event.workflow_run.head_sha }}
+          fetch-tags: true
           persist-credentials: false
 
       # GITHUB_SHA and GITHUB_REF_NAME name the reference that started the
-      # run, not the input reference. Set the release and the link commit from
-      # the checkout so the manifest and the repository links name the
-      # deployed source.
+      # run, not the deployed reference. Set the release and the link commit
+      # from the checkout so the manifest and the repository links name the
+      # deployed source. After a Release run, the checkout is the released
+      # commit and the one version tag at that commit names the release.
       - name: Set release facts
         env:
+          EVENT: ${{ github.event_name }}
           REF: ${{ inputs.ref }}
         run: |
+          if [[ "$EVENT" == workflow_run ]]; then
+            TAGS=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' || true)
+            COUNT=$(printf '%s' "$TAGS" | grep -c . || true)
+            if [[ "$COUNT" != 1 ]]; then
+              printf '::error::expected one version tag at %s, found %s: %s\n' "$(git rev-parse HEAD)" "$COUNT" "${TAGS:-none}" | tr '\n' ' '
+              echo
+              exit 1
+            fi
+            REF=$TAGS
+          fi
           if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
             printf 'STARPORT_DOCS_RELEASE=%s\n' "$REF" >> "$GITHUB_ENV"
           else
