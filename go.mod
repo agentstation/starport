@@ -19,7 +19,7 @@ require (
 	github.com/aws/smithy-go v1.28.5
 	github.com/dgraph-io/badger/v4 v4.9.6
 	github.com/dgraph-io/ristretto/v2 v2.4.2
-	github.com/go-chi/chi/v5 v5.3.2
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/go-chi/cors v1.2.2
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/gofrs/flock v0.13.1
