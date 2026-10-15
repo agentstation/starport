@@ -50,7 +50,8 @@ live_site_current() {
 		! printf '%s' "$body" | grep -q 'Temporary by default' &&
 		! printf '%s' "$body" | grep -qi 'temporary gateway' &&
 		printf '%s' "$body" | grep -q 'og:image' &&
-		test "$(curl -s -o /dev/null -w '%{http_code}' "$site/sitemap.xml")" = 200
+		test "$(curl -s -o /dev/null -w '%{http_code}' "$site/sitemap.xml")" = 200 &&
+		curl -s "$site/.well-known/security.txt" | grep -q 'Contact: mailto:security@agentstation.ai'
 }
 # The latest release is newer than v1.3.0, and the tap cask carries its version.
 latest_release_after_v130() {
@@ -78,7 +79,7 @@ check "repository secrets hold the five macOS signing names" signing_secrets
 check "a tag ruleset protects release tags" tag_ruleset
 check "http redirects to https" http_redirects
 check "https sends HSTS" hsts
-check "the live site serves the latest release copy, social image, and sitemap" live_site_current
+check "the live site serves the latest release copy, social image, sitemap, and security.txt" live_site_current
 check "the latest release is newer than v1.3.0 and the cask matches it" latest_release_after_v130
 check "go.mod pins a tagged Starmap release" starmap_pin_tagged
 check "the latest completed main CI run is green" main_ci_green
