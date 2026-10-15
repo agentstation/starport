@@ -46,6 +46,13 @@ describe('site build', () => {
     }
   });
 
+  it('exports the exact security contact at the RFC 9116 path', () => {
+    const source = readFileSync(path.join(websiteDir, 'well-known', 'security.txt'));
+    const exported = readFileSync(path.join(outDir, '.well-known', 'security.txt'));
+    expect(exported.equals(source)).toBe(true);
+    expect(source.toString('utf8')).toContain('Contact: mailto:security@agentstation.ai\n');
+  });
+
   it('writes the splash page, the docs home, the start page, and the 404 page', () => {
     for (const file of ['index.html', 'docs.html', 'docs/start.html', '404.html']) {
       expect(existsSync(path.join(outDir, file)), file).toBe(true);

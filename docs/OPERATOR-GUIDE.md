@@ -97,7 +97,7 @@ each run. See [Development scratch recovery](#development-scratch-recovery).
 ## Deployment recovery
 
 Use [Coordinated deployment recovery](RECOVERY.md) for stopped deployment backups, activation, and exact retries.
-Keep all writers fenced through fresh gateway readiness. Production qualification remains open under CSP13.
+Keep all writers fenced through fresh gateway readiness. No production test qualifies deployment recovery yet.
 
 ## Development scratch recovery
 
@@ -1793,7 +1793,7 @@ Missing or invalid accounting state refuses new uploads. Do not delete quota
 keys to restore capacity.
 
 File schema 5, batch schema 5, and byte-accounting schema 2 require
-coordinated migration. CSP13 owns that qualification.
+coordinated migration. That migration is not yet qualified.
 
 File bytes use immutable publication in the `retained-v1` blob namespace.
 An exact retry verifies existing content. Cleanup replaces live content with a
@@ -1807,7 +1807,7 @@ writer to recreate content.
 
 File payload quotas exclude marker overhead,
 filesystem staging, incomplete multipart uploads, and noncurrent object versions.
-Budget and monitor these backend costs separately. CSP13 owns marker reclamation.
+Budget and monitor these backend costs separately. Marker reclamation is not yet available.
 A time limit alone does not prove that an old writer cannot resume.
 
 The shared backend requires conditional creation on both `PutObject` and
@@ -1995,8 +1995,8 @@ It does not treat unknown usage as free work.
 
 The current admission check uses a minimum page charge where available.
 That check does not reserve the full cost of a token-billed request.
-CSP12.2 owns atomic reservations for recognition and chat against the selected route.
-Production budget qualification remains incomplete until that task passes.
+Atomic reservations for recognition and chat against the selected route are not yet available.
+Production budget qualification remains incomplete until they are.
 
 ### What a reader sees
 
@@ -2206,7 +2206,7 @@ The job reports `asset_status: "pending"` until Starport verifies the stored byt
 All video receipts and assets use immutable publication in `retained-v1`.
 Expiry confirms backend retirement before marking cleanup complete.
 Delayed writers cannot recreate retired content. Backups must preserve retirement markers.
-Job schema 5 requires coordinated migration under CSP13.
+Job schema 5 requires coordinated migration.
 Native platform, storage-readiness, staging-cleanup, and restore qualification remain open.
 
 A generated video is an answer a caller collects.
@@ -2434,7 +2434,7 @@ preserves the volumes. `docker compose down --volumes` deletes them.
 This recipe requires fresh storage. Earlier Compose versions used Valkey for KV
 records and different local path defaults. Changing the storage mode does not
 migrate those records. Retain the prior configuration and volumes until the operator verifies an
-explicit migration. CSP13 owns that migration procedure.
+explicit migration. This guide does not yet describe how to migrate them.
 
 Do not scale the local recipe to multiple processes. The separate
 [fleet recipe](FLEET_INITIALIZATION.md#container-recipe) requires shared Valkey,

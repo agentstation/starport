@@ -165,7 +165,7 @@ STARPORT_RECIPE_IMAGE=starport-storage-recipe:local go test ./internal/config -r
 
 ### Recovery
 
-The T2 backup procedure applies. The CSP13 tests prove a backup, a restore, and an activation from one local process to a fresh local process. The recipe image test proves a cold backup that restores into fresh volumes.
+The T2 backup procedure applies. The recovery tests prove a backup, a restore, and an activation from one local process to a fresh local process. The recipe image test proves a cold backup that restores into fresh volumes.
 
 These limits apply:
 

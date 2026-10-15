@@ -106,42 +106,26 @@ If `--legacy` lists a path, set explicit paths to keep the earlier locations. A 
 
 Each release attaches the documentation site as `starport-docs-<tag>.tar.gz`. The `checksums.txt` file of the release lists its digest. The gateway serves the same build at `/docs/`.
 
-The public host is not yet enabled. GitHub Pages stays off for the repository. The `Docs Pages` workflow in `.github/workflows/docs-pages.yaml` is ready, and only a maintainer can start it.
+The public documentation host is <https://starport.agentstation.ai/docs>. The `Site` workflow in `.github/workflows/site.yaml` builds it from `docs/site/` and deploys it. The host serves one release at a time. To read an earlier release, use its documentation archive or the `/docs/` path of a gateway at that release.
 
-### Version paths
-
-| Path | Content |
-| --- | --- |
-| `/<tag>/` | The documentation archive of that release, unchanged |
-| `/latest/` | A copy of the release that the `latest` input names |
-| `/` | A redirect to `/latest/` with a list of the versions |
-| `/manifest.json` | Each version with its archive digest and its embedded manifest |
-
-Each version directory keeps its own `manifest.json`. That file names the release, the Starmap module version, and the content revision. It also lists the SHA-256 digest of each file. The root manifest entry for a version equals that file. To compare the public site with a gateway, compare the entry with `/docs/manifest.json` on the gateway.
-
-A deployment replaces the whole site. Each run downloads every release that has a documentation archive and builds the site again. The workflow checks each archive against `checksums.txt` and each file against its manifest. A failed check stops the run before the deployment. A prerelease joins the site only when `tag` or `latest` names it.
-
-### Before the first run
-
-- Set the GitHub Pages source of the repository to GitHub Actions.
-- Create the `github-pages` environment with required reviewers.
+`/docs/manifest.json` on the host names the release, the Starmap module version, and the content revision. To compare the public site with a gateway, compare the `content_revision` values of the two manifests.
 
 ### Publish a release
 
-1. Start the workflow with the release tag in `tag`.
-2. Leave `latest` empty to serve the same release at `/latest/`.
-3. Approve the deployment in the `github-pages` environment.
+The `Deploy` job of the `Site` workflow starts after a `Release` run that a tag push started completes with success. It builds the site at the released commit and names the release from the version tag at that commit.
+
+A `Release` run that a maintainer started by hand deploys nothing. In that case, start the `Site` workflow with the tag:
 
 ```bash
-gh workflow run docs-pages.yaml -f tag=v1.4.0
+gh workflow run site.yaml -f ref=v1.4.0
 ```
 
 ### Roll back
 
-Start the workflow again with an earlier release in `latest`. Keep the newest release in `tag`. The run keeps every version path and moves `/latest/` to the earlier release.
+Start the `Site` workflow with an earlier release tag:
 
 ```bash
-gh workflow run docs-pages.yaml -f tag=v1.4.0 -f latest=v1.3.0
+gh workflow run site.yaml -f ref=v1.3.0
 ```
 
-A failed run leaves the last deployment in place. The deploy step runs only after the assembly and the artifact upload succeed.
+A failed run leaves the last deployment in place. The deploy step runs only after the build succeeds.
