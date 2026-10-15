@@ -65,9 +65,14 @@ func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
 
 // newSyntheticProviderKeys builds a manager whose validator knows exactly one
 // synthetic provider, so shared-credential resolution runs the real
-// catalog-contract path. An optional limit profile replaces the default one.
+// catalog-contract path. An optional limit profile replaces the unhurried
+// one, which keeps a loaded runner from failing a test about another
+// property at the load deadline.
 func newSyntheticProviderKeys(t *testing.T, provider catalogs.Provider, limits ...credentials.MaterialLimits) ProviderKeys {
 	t.Helper()
+	if len(limits) == 0 {
+		limits = []credentials.MaterialLimits{unhurriedMaterialLimits()}
+	}
 	store := storage.NewMockStore()
 	repository, err := credentials.Open(store)
 	require.NoError(t, err)

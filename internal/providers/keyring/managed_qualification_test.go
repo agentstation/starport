@@ -15,7 +15,10 @@ import (
 func TestManagedMaterialRefreshServesOldestScopesWithoutStarvation(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		provider := syntheticCredentialProvider()
-		reader := newSyntheticProviderKeys(t, provider).(*keyManager)
+		// The clock advances below assume the default validity window. The
+		// bubble's fake clock cannot run during a key derivation, so the default
+		// load deadline stays safe here.
+		reader := newSyntheticProviderKeys(t, provider, credentials.DefaultMaterialLimits()).(*keyManager)
 		defer reader.materials.close()
 		writer := *reader
 		writer.materials = newManagedMaterials()
