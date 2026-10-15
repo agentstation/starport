@@ -86,7 +86,7 @@ func TestManagedMaterialRefreshRejectsExternalGrantWithdrawal(t *testing.T) {
 	record.Key.Shared[0].Grants = []string{"b"}
 	_, err = manager.repository.Update(t.Context(), record.Key, record.Revision)
 	require.NoError(t, err)
-	now = now.Add(credentials.DefaultMaterialLimits().Validity / 2)
+	now = now.Add(manager.materials.limits.Validity / 2)
 	manager.refreshMaterials(t.Context())
 	_, err = manager.ResolveSharedMaterial(t.Context(), "a", provider)
 	require.ErrorIs(t, err, ErrKeyNotFound)
