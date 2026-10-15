@@ -34,7 +34,7 @@ func TestManagedMaterialValkeyOutageAndRecovery(t *testing.T) {
 	require.NoError(t, err)
 	master, err := credentials.GenerateMasterKey()
 	require.NoError(t, err)
-	keys, err := NewProviderKeys(repo, master, validator)
+	keys, err := NewProviderKeys(repo, master, validator, unhurriedMaterialLimits())
 	require.NoError(t, err)
 	manager := keys.(*keyManager)
 	defer manager.materials.close()
