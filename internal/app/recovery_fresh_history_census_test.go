@@ -219,7 +219,7 @@ func censusFreshHistoryFiles(t *testing.T, cfg *config.Config, request RecoveryA
 				return nil
 			}
 			require.Less(t, len(result), freshHistoryMaximumRecords)
-			info, err := entry.Info()
+			info, err := openedFileInfo(path)
 			if err != nil {
 				return err
 			}

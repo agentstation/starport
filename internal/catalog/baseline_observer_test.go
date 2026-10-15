@@ -67,7 +67,7 @@ func directorySnapshot(t *testing.T, root string) map[string]string {
 		if err != nil {
 			return err
 		}
-		info, err := entry.Info()
+		info, err := openedFileInfo(path)
 		if err != nil {
 			return err
 		}
@@ -86,6 +86,21 @@ func directorySnapshot(t *testing.T, root string) map[string]string {
 		return nil
 	}))
 	return entries
+}
+
+// openedFileInfo stats path through an open handle. A directory listing on
+// Windows reports the directory entry, which NTFS updates lazily, so a
+// snapshot built from entry.Info() can change without a write.
+func openedFileInfo(path string) (fs.FileInfo, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	info, err := file.Stat()
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	return info, err
 }
 
 func TestBaselineObserverReadsWithoutTheLease(t *testing.T) {
