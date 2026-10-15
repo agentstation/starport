@@ -156,7 +156,9 @@ func requireBoundary(t *testing.T, sample boundarySample, boundary string) {
 }
 
 // requireBoundaryBelow is requireBoundary with a caller-selected ceiling for
-// the named milestone.
+// the named milestone. The ceiling is inclusive. A caller can measure it with
+// the same coarse clock as the milestone, and on Windows both then round to
+// the same value.
 func requireBoundaryBelow(t *testing.T, sample boundarySample, boundary string, ceiling time.Duration) {
 	t.Helper()
 	require.Contains(t, sample.milestones, boundary)
@@ -164,7 +166,7 @@ func requireBoundaryBelow(t *testing.T, sample boundarySample, boundary string, 
 	for name, value := range sample.milestones {
 		if name == boundary {
 			require.GreaterOrEqual(t, value, boundaryDelay/2, "%s did not carry the injected delay: %v", name, sample.milestones)
-			require.Less(t, value, ceiling, "%s carried more than its ceiling %s: %v", name, ceiling, sample.milestones)
+			require.LessOrEqual(t, value, ceiling, "%s carried more than its ceiling %s: %v", name, ceiling, sample.milestones)
 			continue
 		}
 		require.Less(t, value, boundaryDelay/2, "%s absorbed the %s delay: %v", name, boundary, sample.milestones)

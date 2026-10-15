@@ -27,5 +27,5 @@ func newTestProviderKeys(store storage.KVStore, masterKey []byte) (ProviderKeys,
 	if err != nil {
 		return nil, err
 	}
-	return NewProviderKeys(repository, masterKey, validator)
+	return NewProviderKeys(repository, masterKey, validator, unhurriedMaterialLimits())
 }

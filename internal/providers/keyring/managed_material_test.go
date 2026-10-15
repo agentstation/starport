@@ -38,7 +38,7 @@ func TestManagedMaterialWarmRequestsDoNotReadRepository(t *testing.T) {
 			require.NoError(t, err)
 			master, err := credentials.GenerateMasterKey()
 			require.NoError(t, err)
-			manager, err := NewProviderKeys(counted, master, validator)
+			manager, err := NewProviderKeys(counted, master, validator, unhurriedMaterialLimits())
 			require.NoError(t, err)
 			if shared {
 				_, err = manager.AddSharedCredential(t.Context(), string(provider.ID), map[string]string{"api-key": "fixture-secret"}, nil, SharedCredentialParams{})
