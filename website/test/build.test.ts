@@ -5,9 +5,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { contentRevision, listFiles, repoRoot, siteDir } from '../scripts/release-facts.mjs';
 import { docsUrl } from '../src/lib/docs-routes';
+import { SOCIAL_CARD } from '../src/lib/social-card';
 
 const websiteDir = path.join(repoRoot, 'website');
 const outDir = path.join(websiteDir, 'out');
+const siteUrl = 'https://starport.agentstation.ai';
 
 // outputFile is the exported HTML file of a site URL. With trailingSlash
 // false, Next writes /docs as docs.html and /docs/start as docs/start.html.
@@ -78,6 +80,31 @@ describe('site build', () => {
     expect(manifest.files['index.html']).toMatch(/^[0-9a-f]{64}$/);
     expect(manifest.files['docs/search.json']).toMatch(/^[0-9a-f]{64}$/);
     expect(manifest.files['docs/manifest.json']).toBeUndefined();
+  });
+
+  it('writes a sitemap of the splash page and each docs page, and robots.txt names it', () => {
+    const sitemap = readFileSync(path.join(outDir, 'sitemap.xml'), 'utf8');
+    const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, loc]) => loc).sort();
+    const expected = ['/', ...pageUrls()].map((url) => new URL(url, siteUrl).href).sort();
+    expect(locs).toEqual(expected);
+    expect(readFileSync(path.join(outDir, 'robots.txt'), 'utf8')).toContain(`Sitemap: ${siteUrl}/sitemap.xml`);
+  });
+
+  it('gives each page a social card with its own title and URL', () => {
+    const png = readFileSync(path.join(outDir, SOCIAL_CARD.url.slice(1)));
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([SOCIAL_CARD.width, SOCIAL_CARD.height]);
+    const image = `${siteUrl}${SOCIAL_CARD.url}`;
+    for (const [url, title, ogUrl] of [
+      ['/', 'Starport', siteUrl],
+      ['/docs/start', 'Start · Starport', `${siteUrl}/docs/start`],
+    ]) {
+      const html = readFileSync(outputFile(url), 'utf8');
+      expect(html, url).toContain(`<meta property="og:title" content="${title}"/>`);
+      expect(html, url).toContain(`<meta property="og:url" content="${ogUrl}"/>`);
+      expect(html, url).toContain(`<meta property="og:image" content="${image}"/>`);
+      expect(html, url).toContain('<meta name="twitter:card" content="summary_large_image"/>');
+      expect(html, url).toContain(`<meta name="twitter:image" content="${image}"/>`);
+    }
   });
 
   it('gives every page one h1', () => {

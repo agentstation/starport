@@ -3,6 +3,10 @@ import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 
 export const GITHUB_URL = 'https://github.com/agentstation/starport';
 
+// SITE_URL is the public origin. The metadata, the sitemap, and robots.txt
+// make their absolute URLs from it.
+export const SITE_URL = 'https://starport.agentstation.ai';
+
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
