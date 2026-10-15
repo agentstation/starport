@@ -583,7 +583,7 @@ func TestReadmePerformanceClaimsAreQualified(t *testing.T) {
 	performance := document.section(t, "Performance")
 	requireLink(t, performance.Text(), "docs/performance-targets-v1.json")
 	requireLink(t, performance.Text(), "docs/PERFORMANCE.md")
-	requireContains(t, performance.Text(), "The profile marks these targets UNVERIFIED.", "CSP22 owns their qualification")
+	requireContains(t, performance.Text(), "The profile marks these targets UNVERIFIED.", "Dedicated runners have not yet qualified these targets.")
 
 	targets := readPerformanceTargets(t)
 	if targets.Qualification != "UNVERIFIED" || targets.Runner.QualificationOwner != "CSP22" {

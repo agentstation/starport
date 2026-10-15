@@ -124,8 +124,8 @@ func TestRecipeSingleRegionBoundary(t *testing.T) {
 }
 
 // TestRecipeLatencyProfiles proves that the recipe latency profiles state the
-// engineering targets exactly, keep the UNVERIFIED label, and name CSP22 as the
-// qualifier.
+// engineering targets exactly, keep the UNVERIFIED label, and state that dedicated
+// runners have not yet qualified them.
 func TestRecipeLatencyProfiles(t *testing.T) {
 	t.Parallel()
 
@@ -152,7 +152,7 @@ func TestRecipeLatencyProfiles(t *testing.T) {
 	profileSection := sections[0]
 	require.Equal(t, "Latency profiles", profileSection.Heading)
 	require.Contains(t, profileSection.Text(), "UNVERIFIED")
-	require.Contains(t, profileSection.Text(), "CSP22")
+	require.Contains(t, profileSection.Text(), "Dedicated runners have not yet qualified these targets.")
 	require.Contains(t, profileSection.Text(), "`docs/performance-targets-v1.json`")
 
 	rows := map[string][]string{}
@@ -222,7 +222,7 @@ func TestRecipeLatencyProfiles(t *testing.T) {
 		require.True(t, found, "%s has no latency section", id)
 		text := latency.Text()
 		require.Contains(t, text, "UNVERIFIED", id)
-		require.Contains(t, text, "CSP22", id)
+		require.Contains(t, text, "Dedicated runners have not yet qualified these targets.", id)
 		require.Contains(t, text, "[Latency profiles](#latency-profiles)", id)
 		if expected[id] == nil {
 			require.NotRegexp(t, "uses the `(local|fleet)` profile", text, id)

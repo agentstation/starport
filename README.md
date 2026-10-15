@@ -574,7 +574,7 @@ Version 1 includes:
 
 The [performance profile](docs/performance-targets-v1.json) defines the
 latency targets for the planned production release. The profile marks these
-targets UNVERIFIED. CSP22 owns their qualification on dedicated runners.
+targets UNVERIFIED. Dedicated runners have not yet qualified these targets.
 [Gateway overhead](docs/PERFORMANCE.md) gives the measurement boundaries.
 
 The current overhead benchmark guards one part of chat request processing.
