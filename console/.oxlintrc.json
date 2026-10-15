@@ -27,7 +27,15 @@
           // LoadingStatus is a live region wrapper; the caller lays out its children.
           { "pattern": "^LoadingStatus$", "allow": ["layout", "spacing"] },
           // A Skeleton takes the shape of the content it stands in for.
-          { "pattern": "^Skeleton$", "allow": ["layout", "shape"] }
+          { "pattern": "^Skeleton$", "allow": ["layout", "shape"] },
+          // TooltipTrigger and PopoverTrigger are bare Base UI triggers with
+          // no classes of their own: the element in their render prop is the
+          // styled control, and the caller styles it. @shadcn/lint 0.2.1
+          // judges that element's classes by the trigger (shadcn-ui/lint#84).
+          {
+            "pattern": "^(TooltipTrigger|PopoverTrigger)$",
+            "allow": ["layout", "spacing", "shape", "motion", "color", "typography"]
+          }
         ]
       }
     ],
