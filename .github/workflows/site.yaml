@@ -8,14 +8,20 @@
 # with success. It builds the site at the released commit, names the release
 # from the version tag at that commit, and deploys the static files to the
 # starport-site Worker. The Release workflow publishes with GITHUB_TOKEN, so a
-# release event never starts this workflow; the completed run does. A
-# maintainer can also start the workflow by hand with a git reference, for
-# example after a recovered release or for a rollback. Before the first
-# deploy, a maintainer creates the starport-site environment with required
-# reviewers and the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets.
+# release event never starts this workflow; the completed run does. A Release
+# run that completed before this trigger existed, for example v1.3.0, never
+# starts a deploy. A maintainer can also start the workflow by hand with a git
+# reference, for example after a recovered release.
 #
-# A failed run leaves the last deployment in place. Rollback is a run by hand
-# with an earlier reference.
+# Before the first deploy, a maintainer creates the starport-site environment
+# with required reviewers and the CLOUDFLARE_API_TOKEN and
+# CLOUDFLARE_ACCOUNT_ID secrets. Without these secrets, the Deploy job runs
+# and fails. It is not skipped. The first deploy step names each missing
+# secret.
+#
+# A run by hand builds the site as of the reference that it gets. An earlier
+# reference deploys the site as of that reference. This is a rollback of the
+# live site, not a refresh. A failed run leaves the last deployment in place.
 name: Site
 
 on:
@@ -112,6 +118,21 @@ jobs:
     timeout-minutes: 20
     environment: starport-site
     steps:
+      # Stop before the build when the environment lacks a deploy secret, so
+      # the failure names the secret and not a wrangler error.
+      - name: Require Cloudflare secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          MISSING=()
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then MISSING+=(CLOUDFLARE_API_TOKEN); fi
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then MISSING+=(CLOUDFLARE_ACCOUNT_ID); fi
+          if [ "${#MISSING[@]}" -gt 0 ]; then
+            echo "::error::the starport-site environment is missing ${MISSING[*]}; add the secrets and run the workflow again"
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

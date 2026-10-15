@@ -186,6 +186,30 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # GoReleaser signs and notarizes the macOS binary only when all five
+      # Apple secrets are set. Report the state so an unsigned release is
+      # visible in the run. This step never fails the job.
+      - name: Report macOS signing material
+        shell: bash
+        env:
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          MISSING=()
+          for NAME in MACOS_SIGN_P12 MACOS_SIGN_PASSWORD MACOS_NOTARY_KEY MACOS_NOTARY_KEY_ID MACOS_NOTARY_ISSUER_ID; do
+            if [ -z "${!NAME}" ]; then MISSING+=("$NAME"); fi
+          done
+          if [ "${#MISSING[@]}" -gt 0 ]; then
+            MESSAGE="macOS signing is off: missing ${MISSING[*]}; the darwin binary ships ad-hoc signed"
+            echo "::warning::$MESSAGE"
+            echo "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "macOS signing is on" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Assemble draft release archives
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
