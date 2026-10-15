@@ -15,7 +15,7 @@ on:
       tag:
         description: Published Starport release to verify
         required: true
-        default: v1.2.0
+        default: v1.3.0
         type: string
 
 permissions:
@@ -83,7 +83,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag || 'v1.2.0' }}
+          RELEASE_TAG: ${{ inputs.tag || 'v1.3.0' }}
         run: python scripts/verify-native-release.py --expected-os ${{ matrix.os }} --expected-arch ${{ matrix.arch }} --output native-evidence/result.json
       - name: Retain native verification evidence
         if: always() && github.event_name == 'workflow_dispatch'

@@ -1,8 +1,9 @@
 # Docs Pages publishes the versioned documentation site to GitHub Pages.
 #
-# This workflow is prepared and not enabled. Pages stays off for the
-# repository, and no event starts this workflow. A maintainer starts it by
-# hand.
+# The canonical documentation host is https://starport.agentstation.ai/docs.
+# The Site workflow deploys it. This workflow is a prepared alternative only.
+# It is not enabled. Pages stays off for the repository, and no event starts
+# this workflow. A maintainer starts it by hand.
 #
 # Before the first run, a maintainer creates the github-pages environment
 # with required reviewers. Each run then waits for a reviewer.

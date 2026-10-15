@@ -88,7 +88,7 @@ homebrew_casks:
       name: agentstation-release
       email: releases@agentstation.ai
     commit_msg_template: "Update starport to v{{ .Version }}"
-    homepage: https://github.com/agentstation/starport
+    homepage: https://starport.agentstation.ai
     description: OpenAI- and OpenRouter-compatible LLM inference gateway
     skip_upload: true
     binaries:
