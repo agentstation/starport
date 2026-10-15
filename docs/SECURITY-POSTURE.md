@@ -131,8 +131,19 @@ suite holds the Postgres and MySQL peers. Evidence:
 
 ## Data flows
 
-Nothing leaves the process unless the operator configures a
-destination. Starport sends no telemetry and phones no home. The
+Starport sends no telemetry and phones no home. With the default
+configuration, Starport makes two kinds of outbound connection before a
+client sends a request:
+
+- The default `public` catalog source polls the public Starmap catalog
+  channel on GitHub each hour. Set `STARPORT_CATALOG_SOURCE=embedded` to
+  use the catalog in the binary, or `file` to read a local catalog file.
+  Both kinds make no catalog connection.
+- The status-page poller reads the status page of each routable
+  provider whose catalog record declares one, once each minute. No
+  separate setting turns it off.
+
+Every other destination stays off until the operator configures it. The
 Starmap catalog supplies every provider endpoint, and the
 `verify-starmap-ownership.sh` gate refuses a hardcoded provider URL.
 
@@ -147,11 +158,14 @@ The outbound surfaces are:
    identifiers and states only, never key material or prompt content.
    Evidence: `TestDispatcherDeliversSignedEvents` and
    `TestKeyLifecycleEmitsNamedEvents`.
-3. Provider status-page polling, only for providers whose catalog
-   record declares a health URL.
-4. A remote Starmap catalog, usage export sink, and OTLP trace
-   endpoint, each empty by default.
-5. Identity providers and external secret managers, only when
+3. Provider status-page polling, on by default for providers whose
+   catalog record declares a health URL.
+4. The Starmap catalog source. The default `public` kind polls the
+   GitHub channel each hour. The `github` and `starmap` kinds read the
+   repository or server that the operator names.
+5. A usage export sink and an OTLP trace endpoint, each empty by
+   default.
+6. Identity providers and external secret managers, only when
    configured.
 
 Inbound, `GET /metrics` serves Prometheus text whose labels stop at

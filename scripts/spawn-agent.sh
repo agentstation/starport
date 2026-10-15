@@ -422,7 +422,7 @@ setup_workspace() {
 
 # Main script
 if [ -z "$1" ]; then
-    echo "Usage: ./spawn-agent.sh <TASK-ID>"
+    echo "Usage: scripts/spawn-agent.sh <TASK-ID>"
     echo ""
     echo "This script will:"
     echo "  1. Create a separate clone for the agent (avoids Git conflicts)"
