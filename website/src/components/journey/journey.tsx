@@ -968,7 +968,7 @@ function Demo({ poster }: { poster: Poster }) {
           src="/demo/poster.png"
           width={poster.width}
           height={poster.height}
-          alt="A terminal installs Starport, reads the catalog, starts a temporary gateway, and streams an OpenAI answer. Select the preview to play the recording."
+          alt="A terminal installs Starport, reads the catalog, starts a gateway, and streams an OpenAI answer. Select the preview to play the recording."
         />
       </a>
       <figcaption>
