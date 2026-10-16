@@ -26,8 +26,16 @@ env_secrets() {
 env_reviewers() {
 	test "$(gh api "repos/$repo/environments/starport-site" --jq '[.protection_rules[]? | select(.type=="required_reviewers")] | length' 2>/dev/null)" -ge 1
 }
+# CodeQL default setup is configured, and at least one analysis has completed.
+codeql_active() {
+	api_true "repos/$repo/code-scanning/default-setup" '.state' configured &&
+		test "$(gh api "repos/$repo/code-scanning/analyses?per_page=1" --jq 'length' 2>/dev/null)" -ge 1
+}
+# The five signing names exist, or the main README keeps the quarantine
+# paragraph that tells macOS users the binary is not yet notarized (D12).
 signing_secrets() {
-	test "$(gh api "repos/$repo/actions/secrets" --jq '[.secrets[].name] as $n | ["MACOS_SIGN_P12","MACOS_SIGN_PASSWORD","MACOS_NOTARY_KEY","MACOS_NOTARY_KEY_ID","MACOS_NOTARY_ISSUER_ID"] | all(. as $s | $n | index($s) != null)' 2>/dev/null)" = true
+	test "$(gh api "repos/$repo/actions/secrets" --jq '[.secrets[].name] as $n | ["MACOS_SIGN_P12","MACOS_SIGN_PASSWORD","MACOS_NOTARY_KEY","MACOS_NOTARY_KEY_ID","MACOS_NOTARY_ISSUER_ID"] | all(. as $s | $n | index($s) != null)' 2>/dev/null)" = true ||
+		gh api "repos/$repo/contents/README.md" --jq .content 2>/dev/null | base64 -d | grep -q 'not yet notarized'
 }
 tag_ruleset() {
 	test "$(gh api "repos/$repo/rulesets" --jq '[.[] | select(.target=="tag")] | length' 2>/dev/null)" -ge 1
@@ -73,9 +81,9 @@ check "secret scanning is enabled" api_true "repos/$repo" '.security_and_analysi
 check "push protection is enabled" api_true "repos/$repo" '.security_and_analysis.secret_scanning_push_protection.status' enabled
 check "Dependabot security updates are enabled" api_true "repos/$repo" '.security_and_analysis.dependabot_security_updates.status' enabled
 check "private vulnerability reporting is enabled" api_true "repos/$repo/private-vulnerability-reporting" '.enabled' true
-check "CodeQL default setup is configured" api_true "repos/$repo/code-scanning/default-setup" '.state' configured
+check "CodeQL default setup is configured and has one analysis" codeql_active
 check "repository topics are set" bash -c "test \"\$(gh api repos/$repo --jq '.topics | length')\" -ge 3"
-check "repository secrets hold the five macOS signing names" signing_secrets
+check "repository secrets hold the five macOS signing names, or README keeps the quarantine paragraph" signing_secrets
 check "a tag ruleset protects release tags" tag_ruleset
 check "http redirects to https" http_redirects
 check "https sends HSTS" hsts

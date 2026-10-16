@@ -166,15 +166,15 @@
 
   <section id="current-resume-state">
     <h2>Current resume state</h2>
-    <p>Updated: 2026-10-16 02:55 UTC.</p>
+    <p>Updated: 2026-10-16 03:20 UTC.</p>
     <table>
       <thead><tr><th>Field</th><th>Current state</th></tr></thead>
       <tbody>
-        <tr><td>In progress</td><td><a href="#LR0">LR0</a>: orchestrator session, worktree <code>/private/tmp/starport-launch</code>, branch <code>codex/launch-readiness-2</code> from main 2af4a0ed. <a href="#LR1">LR1</a>: agent impl-LR1, worktree <code>/private/tmp/starport-launch-LR1</code>, branch <code>codex/launch-LR1</code>, draft PR #466 at dfda8354, rebased onto 2af4a0ed. <a href="#LR6">LR6</a>: critique pass 1 received, findings applied.</td></tr>
-        <tr><td>Next action</td><td>PRs #464, #465, and #467 are merged. The plan now lives on main at 2af4a0ed. Merge #466 at its exact head dfda8354. PR #466 needs the plan file from #467, so it merges last. Critique pass 1 (<a href="#LR6">LR6</a>) is applied. PR #466 carries the critique 1 extension (LR1 steps 7 to 9). Pass 2 runs after #466 merges. verify.sh on the #466 tree prints 14 passed.</td></tr>
-        <tr><td>Worktree</td><td>Plan worktree <code>/private/tmp/starport-launch</code> at b310cad7. Dirty files: this plan and <code>docs/plans/proof/launch-readiness/</code> (LR0). Each task worktree started clean at b310cad7.</td></tr>
-        <tr><td>Verification</td><td>Baseline on 2026-10-15: <code>verify.sh</code> 0 passed, 14 failed (<a href="proof/launch-readiness/lr0-verify-baseline.txt">lr0-verify-baseline.txt</a>). <code>verify-launch-state.sh</code> 0 passed, 16 failed (<a href="proof/launch-readiness/lr0-launch-state-baseline.txt">lr0-launch-state-baseline.txt</a>). After LR5 and the critique 1 verifier edits on 2026-10-15: verify.sh 0 passed, verify-launch-state.sh 1 passed (condition 16).</td></tr>
-        <tr><td>Running processes</td><td>Check pollers for #464, #465, #466, and #467 in the orchestrator scratchpad. No agent runs. Safe status command: <code>gh pr list -R agentstation/starport --json number,headRefOid,mergeStateStatus</code>.</td></tr>
+        <tr><td>In progress</td><td><a href="#LR1">LR1</a>: agent impl-LR1, worktree <code>/private/tmp/starport-launch-LR1</code>, branch <code>codex/launch-LR1</code>, draft PR #466 at dfda8354, rebased onto 2af4a0ed, checks in progress. <a href="#LR6">LR6</a>: orchestrator session, worktree <code>/private/tmp/starport-launch</code>, branch <code>codex/launch-readiness-2</code> from main 2af4a0ed. Pass 2 received and applied in this commit.</td></tr>
+        <tr><td>Next action</td><td>PRs #464, #465, and #467 are merged. Merge #466 at its exact head dfda8354 when its checks pass. Then rebase <code>codex/launch-readiness-2</code> onto that merge, open the <a href="#LR6">LR6</a> pass 2 pull request (this plan, the verifier fold, the journey alt text, D11 to D13), and merge it. After both merges, every agent task is terminal, and the owner checklist starts at row 1.</td></tr>
+        <tr><td>Worktree</td><td>Plan worktree <code>/private/tmp/starport-launch</code> on <code>codex/launch-readiness-2</code> from main 2af4a0ed. LR1 worktree <code>/private/tmp/starport-launch-LR1</code> at dfda8354. Both are clean after each commit. Each task worktree started clean from the main of its day.</td></tr>
+        <tr><td>Verification</td><td>Baseline on 2026-10-15: <code>verify.sh</code> 0 passed, 14 failed (<a href="proof/launch-readiness/lr0-verify-baseline.txt">lr0-verify-baseline.txt</a>). <code>verify-launch-state.sh</code> 0 passed, 16 failed (<a href="proof/launch-readiness/lr0-launch-state-baseline.txt">lr0-launch-state-baseline.txt</a>). After LR5 and the critique 1 verifier edits on 2026-10-15: verify.sh 0 passed, verify-launch-state.sh 1 passed (condition 16). On 2026-10-16 at main 2af4a0ed: verify.sh 6 passed. On the #466 tree dfda8354: verify.sh 14 passed. verify-launch-state.sh 1 passed (condition 16).</td></tr>
+        <tr><td>Running processes</td><td>A check poller for #466 and a Starmap scheduled-run watcher in the orchestrator scratchpad. No agent runs. Safe status command: <code>gh pr list -R agentstation/starport --json number,headRefOid,mergeStateStatus</code>.</td></tr>
         <tr><td>Required reads</td><td>This plan. <a href="proof/launch-readiness/repo-audit.md">repo-audit.md</a>. <a href="proof/launch-readiness/infra-audit.md">infra-audit.md</a>. The task contract of each in-progress row.</td></tr>
         <tr><td>Unresolved</td><td>Owner-only items LR7 through LR14 stay blocked until the owner acts. No agent could inspect the Cloudflare dashboard: the Codex browser profile is not logged in, and the Chrome extension is not connected (<a href="proof/launch-readiness/cloudflare-check.md">cloudflare-check.md</a>).</td></tr>
       </tbody>
@@ -318,8 +318,8 @@
         <tr><td>F24</td><td>should, medium</td><td>The issue chooser links the private advisory form, which is off until LR11. Critique 1, finding 15.</td><td><a href="#LR1">LR1</a>, <a href="#LR11">LR11</a></td></tr>
         <tr><td>F25</td><td>nice, low</td><td>The site has no <code>/.well-known/security.txt</code>. Critique 1, finding 31. Condition 13 checks the live path after the deploy.</td><td><a href="#LR1">LR1</a></td></tr>
         <tr><td>F26</td><td>should, high</td><td>The published docs still carry plan identifiers (<code>docs/site/architecture/recipes.md:168</code> CSP13, six in OPERATOR-GUIDE). Critique 1, finding 17.</td><td><a href="#LR1">LR1</a></td></tr>
-        <tr><td>F27</td><td>should, medium</td><td>Four different Go tests timed out with <code>context deadline exceeded</code> on windows-2025 in two runs on 2026-10-15 (runs 38798760184 and 38798759579), on changes to plan and website files only. Each flake costs one CI cycle before a merge.</td><td><a href="#LR17">LR17</a> (follow-up issue)</td></tr>
         <tr><td>F20</td><td>nice, medium</td><td>On windows-2025, <code>TestComposeStorageRecipes</code> fails when the <code>docker compose version</code> probe passes its 30 second timeout. Run 38785132653, job 116595061927, PR #466. One occurrence in this plan.</td><td>Rerun. The maintainer owns a longer probe timeout as a follow-up ticket if it recurs.</td></tr>
+        <tr><td>F27</td><td>should, medium</td><td>Four different Go tests timed out with <code>context deadline exceeded</code> on windows-2025 in two runs on 2026-10-15 (runs 38798760184 and 38798759579), on changes to plan and website files only. Main run 38798627903 at aa36a7ec failed Test (windows-2025) and Test (ubuntu-24.04-arm), the ARM job on <code>TestDevelopmentCatalogAcceptsUnchangedDerivedPublication</code>. Six of the last 14 completed main runs failed on 2026-10-16. Each flake costs one CI cycle before a merge, and condition 16 reads the last completed main run.</td><td><a href="#LR17">LR17</a> (follow-up issue), <a href="#LR13">LR13</a> step 1 (rerun rule)</td></tr>
       </tbody>
     </table>
   </section>
@@ -334,11 +334,14 @@
         <tr><td>D3 (2026-10-15)</td><td>CODEOWNERS names the two admin collaborators.</td><td>The only team, <code>founders</code>, has read permission, so a team entry requests no review.</td><td>Re-open when a maintainers team with write permission exists.</td></tr>
         <tr><td>D4 (2026-10-15)</td><td><code>docs-pages.yaml</code> stays, with a header that names <code>starport.agentstation.ai/docs</code> as canonical.</td><td>Pages is off, so there is no conflict today. The workflow is a tested fallback.</td><td>Re-open if a second docs host appears.</td></tr>
         <tr><td>D5 (2026-10-15)</td><td>Subscription-plan credentials are out of scope for launch. Starport does not import or vendor cliproxyapi. A successor plan builds a native OAuth grant source and supports only an official provider path, OpenAI first.</td><td>The LR4 assessment, sections 3, 6, and 7. The first pull request is the <code>internal/credentials/oauthgrant</code> package with fake-server tests. Phase 0 reads the official OpenAI terms first.</td><td>Re-open after launch, or when a provider publishes an official third-party subscription path.</td></tr>
+        <tr><td>D6 (2026-10-15)</td><td>The plan rejects a hand deploy of ref v1.3.0.</td><td>That deploy rolls the live page back to the pre-#427 splash.</td><td>The live site updates through the v1.4.0 tag chain (LR13).</td></tr>
         <tr><td>D7 (2026-10-15)</td><td>LR1 replaces the CSP22 sentence in the README and the two performance documents, and updates the two test assertions that require that exact text.</td><td><code>cmd/starport/readme_test.go:586</code> and <code>internal/config/recipe_docs_test.go</code> pin the sentence. The JSON value in <code>docs/performance-targets-v1.json</code> stays.</td><td>The tests still require the new sentence. Re-open if the owner wants the plan identifier in public documents.</td></tr>
         <tr><td>D8 (2026-10-15)</td><td>LR8 is an announce gate. The v1.4.0 recording comes from the v1.4.0 archive. After the LR8 pull request merges, the owner tags v1.4.1 on that merge commit, and the Site workflow deploys the new recording. The team announces after the v1.4.1 Site run succeeds.</td><td>The recording prints the release version six times (<code>events.json</code> of v1.3.0), so a release candidate recording would show <code>rc</code> in the README. The site deploys only from a successful Release push run.</td><td>Re-open if the recording script learns to record from an untagged build.</td></tr>
         <tr><td>D9 (2026-10-15)</td><td>LR1 carries the release notes header, the site <code>security.txt</code>, and the docs/site jargon removal.</td><td>PRs #464 and #465 are in their final CI runs. PR #466 gets a rebase after them, so an extra commit costs no extra CI cycle.</td><td>None.</td></tr>
         <tr><td>D10 (2026-10-15)</td><td>The verifier terminal counts stay 14 and 16. New checks from critique 1 fold into conditions 4, 5, 13, 14, and 16, or into the LR15 record.</td><td>The goal block names the counts, and the goal block is fixed.</td><td>None.</td></tr>
-        <tr><td>D6 (2026-10-15)</td><td>The plan rejects a hand deploy of ref v1.3.0.</td><td>That deploy rolls the live page back to the pre-#427 splash.</td><td>The live site updates through the v1.4.0 tag chain (LR13).</td></tr>
+        <tr><td>D11 (2026-10-16)</td><td>The LR6 pass 2 pull request removes "temporary gateway" from the journey alt text (<code>website/src/components/journey/journey.tsx:971</code>) before the v1.4.0 tag, so condition 13 can pass at v1.4.0. LR13 keeps conditions 13 and 14 as its acceptance.</td><td>Critique 2, finding 1. Condition 13 rejects that phrase on the live page, and the home page renders the journey. PR #466 does not touch the file, so the fix costs no extra CI cycle there.</td><td>Re-open if the recording caption needs the word again. LR8 rewrites the alt text for the v1.4.0 recording.</td></tr>
+        <tr><td>D12 (2026-10-16)</td><td>Two verifier folds keep the count at 16. Condition 7 also requires at least one CodeQL analysis. Condition 9 passes when the five signing names exist, or when the main README keeps the "not yet notarized" paragraph. LR10 stays optional before the tag and before the announcement.</td><td>Critique 2, findings 4 and 10. Without the fold, row 9 of the owner checklist could never reach 16 passed when the owner skips LR10. The analyses API returns 404 until the first CodeQL run.</td><td>Re-open if the owner makes notarization a launch requirement; then LR10 moves before row 7 and the README fold goes away.</td></tr>
+        <tr><td>D13 (2026-10-16)</td><td>LR17 runs before LR16, and its daily rows live in a GitHub issue named "Launch watch" instead of the proof root. LR16 starts when LR17 is terminal and the final pull request has merged. The goal block keeps its text.</td><td>Critique 2, finding 5. LR16 deletes the proof root, so a watch file there could not outlive the cleanup. The goal block is fixed, and "LR16 waits only on the final merge" still holds once LR17 is terminal.</td><td>None.</td></tr>
       </tbody>
     </table>
   </section>
@@ -349,7 +352,7 @@
       <thead><tr><th>Script</th><th>Conditions</th><th>Baseline</th><th>Expected</th><th>Terminal</th></tr></thead>
       <tbody>
         <tr><td><code>proof/launch-readiness/verify.sh</code></td><td>14 repository-file conditions. Output ends with <code>Summary: N passed, M failed</code>. Condition 4 accepts the v1.4.0 section after the release rename. Condition 5 covers README, CHANGELOG, and docs/site.</td><td>0 passed</td><td>14 passed after LR1, LR2, and LR3 merge, and again at the tag commit</td><td>14 passed</td></tr>
-        <tr><td><code>proof/launch-readiness/verify-launch-state.sh</code></td><td>16 GitHub, release, and edge conditions, read-only. Condition 13 requires the latest tag, port 7827, the social image, the sitemap, and security.txt on the live site. Condition 14 requires the cask version to match the latest release. Condition 16 reads completed runs only.</td><td>0 passed</td><td>1 passed after LR5. 16 passed after LR7 and LR9 through LR13.</td><td>16 passed</td></tr>
+        <tr><td><code>proof/launch-readiness/verify-launch-state.sh</code></td><td>16 GitHub, release, and edge conditions, read-only. Condition 7 requires the configured CodeQL setup and one analysis. Condition 9 accepts the README quarantine paragraph in place of the five signing names (D12). Condition 13 requires the latest tag, port 7827, the social image, the sitemap, and security.txt on the live site. Condition 14 requires the cask version to match the latest release. Condition 16 reads completed runs only.</td><td>0 passed</td><td>1 passed after LR5. 16 passed after LR7 and LR9 through LR13.</td><td>16 passed</td></tr>
       </tbody>
     </table>
   </section>
@@ -361,15 +364,15 @@
         <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
       </thead>
       <tbody>
-        <tr id="LR0" data-status="in_progress"><td>LR0</td><td>Baseline: pin b310cad7, create the proof root, author both verifiers red, record the audits.</td><td><code>in_progress</code></td><td>Orchestrator session, worktree <code>/private/tmp/starport-launch</code>, branch <code>codex/launch-readiness</code>. verify.sh 0/14, verify-launch-state.sh 0/16 on 2026-10-15.</td></tr>
+        <tr id="LR0" data-status="done"><td>LR0</td><td>Baseline: pin b310cad7, create the proof root, author both verifiers red, record the audits.</td><td><code>done</code></td><td>PR #467 merged 2026-10-16 as 2af4a0ed7f5904298aaeba91c75d7a8b92c0b763 at exact head e85ca045, signature valid, 47 checks green. Baseline verify.sh 0/14, verify-launch-state.sh 0/16 on 2026-10-15.</td></tr>
         <tr id="LR1" data-status="in_progress"><td>LR1</td><td>Public docs and community entry points: issue chooser, templates, CODEOWNERS, CONTRIBUTING, CHANGELOG Unreleased, README notes, security posture egress, TASKS.md, finished plan removal, launcher move, question template, docs/site jargon, upgrades host, security.txt, release notes header.</td><td><code>in_progress</code></td><td>Agent impl-LR1, worktree <code>/private/tmp/starport-launch-LR1</code>, branch <code>codex/launch-LR1</code>, draft PR #466 at dfda8354, rebased onto 2af4a0ed.</td></tr>
         <tr id="LR2" data-status="done"><td>LR2</td><td>Workflow and release configuration: site.yaml header and fail-fast secret check, docs-pages canonical note, Dependabot website entry, native-release default tag, release signing report, cask homepage.</td><td><code>done</code></td><td>PR #464 merged 2026-10-15 as aa36a7ec85ad066d73a63bc8eefeb5403064b1c7, signature valid, 53 checks green. Branch and worktree removed.</td></tr>
         <tr id="LR3" data-status="done"><td>LR3</td><td>Site sitemap and social card metadata.</td><td><code>done</code></td><td>PR #465 merged 2026-10-16 as dbd1fa1ab396ee4bb6d69ffd45f722b6337bf249, signature valid, 49 checks green after one windows-2025 rerun. Branch and worktree removed.</td></tr>
         <tr id="LR4" data-status="done"><td>LR4</td><td>cliproxyapi assessment for subscription-plan credentials.</td><td><code>done</code></td><td><a href="proof/launch-readiness/cliproxyapi-assessment.md">cliproxyapi-assessment.md</a> on 2026-10-15 by agent cliproxy-review, read-only. Verdict in F19 and D5. Unverified claims carry a <code>[U]</code> mark in the file.</td></tr>
         <tr id="LR5" data-status="done"><td>LR5</td><td>Main CI green: rerun the outage-failed jobs of run 38744546899 and confirm the README badge.</td><td><code>done</code></td><td>Rerun of run 38744546899 (head b310cad7) completed with conclusion success on 2026-10-15. The first failure was a sum.golang.org stream error in "Build the pinned recovery object store" (infrastructure, not code).</td></tr>
-        <tr id="LR6" data-status="in_progress"><td>LR6</td><td>Two critique passes on this plan by fresh reviewers. Apply the accepted findings.</td><td><code>in_progress</code></td><td>Pass 1: <a href="proof/launch-readiness/lr6-critique-1.md">lr6-critique-1.md</a>, 32 findings, all accepted, three with a changed remedy (D8, D10, F24). Pass 2 runs after the four merges.</td></tr>
+        <tr id="LR6" data-status="in_progress"><td>LR6</td><td>Two critique passes on this plan by fresh reviewers. Apply the accepted findings.</td><td><code>in_progress</code></td><td>Pass 1: <a href="proof/launch-readiness/lr6-critique-1.md">lr6-critique-1.md</a>, 32 findings, all accepted, three with a changed remedy (D8, D10, F24). Pass 2: <a href="proof/launch-readiness/lr6-critique-2.md">lr6-critique-2.md</a>, 12 findings (0 blocker, 10 should, 2 nice), all accepted, three with a changed remedy (D11 to D13). The row turns done when the pass 2 pull request merges.</td></tr>
         <tr id="LR7" data-status="blocked"><td>LR7</td><td>Pin a tagged Starmap release in go.mod before the v1.4.0 tag.</td><td><code>blocked(owner: tag Starmap v0.17.1)</code></td><td>go.mod:11 pins v0.17.1-0.20261009150341-120a49889009. Starmap main is 67 commits past v0.17.0. The tag goes exactly on 120a49889009, so the bump changes only the version name.</td></tr>
-        <tr id="LR8" data-status="blocked"><td>LR8</td><td>Announce gate: re-record the README first-use demo from the v1.4.0 release archive, update every v1.3.0 media pin, then tag v1.4.1 (D8).</td><td><code>blocked(owner: v1.4.0 tag and paid provider recording)</code></td><td><code>scripts/record-readme-demo.sh --release v1.4.0</code> needs the published archive and a real provider key. Depends on LR13.</td></tr>
+        <tr id="LR8" data-status="blocked"><td>LR8</td><td>Announce gate: re-record the README first-use demo from the v1.4.0 release archive, update every v1.3.0 media pin, add the v1.4.1 changelog section, then tag v1.4.1 under a merge freeze (D8).</td><td><code>blocked(owner: v1.4.0 tag and paid provider recording)</code></td><td><code>scripts/record-readme-demo.sh --release v1.4.0</code> needs the published archive and a real provider key. Depends on LR13.</td></tr>
         <tr id="LR9" data-status="blocked"><td>LR9</td><td>Owner: add the Cloudflare secrets and required reviewers to the <code>starport-site</code> environment.</td><td><code>blocked(owner)</code></td><td>Environment has 0 secrets, no reviewers (infra-audit R6).</td></tr>
         <tr id="LR10" data-status="blocked"><td>LR10</td><td>Owner: add the macOS Developer ID signing secrets.</td><td><code>blocked(owner)</code></td><td>Missing MACOS_SIGN_P12, MACOS_SIGN_PASSWORD, MACOS_NOTARY_ISSUER_ID (infra-audit R6, R13).</td></tr>
         <tr id="LR11" data-status="blocked"><td>LR11</td><td>Owner: enable the repository security features, set topics and description, create the tag ruleset, decide on Discussions.</td><td><code>blocked(owner)</code></td><td>infra-audit R1, R3 to R5.</td></tr>
@@ -377,8 +380,8 @@
         <tr id="LR13" data-status="blocked"><td>LR13</td><td>Owner: tag v1.4.0 from main after the pre-tag pull requests merge. The tag chains Release then Site deploy. Verify the live site and the release assets.</td><td><code>blocked(owner: release tag)</code></td><td>Depends on LR1, LR2, LR3, LR7, LR9, and LR14. LR10 is optional (step 1).</td></tr>
         <tr id="LR14" data-status="blocked"><td>LR14</td><td>Owner decision: license identity (AGPL-3.0-only or or-later) and one project notice.</td><td><code>blocked(owner decision)</code></td><td>repo-audit S3.</td></tr>
         <tr id="LR15" data-status="todo"><td>LR15</td><td>Launch verification: both verifiers at their terminal counts, recorded in the closeout proof.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="LR16" data-status="todo"><td>LR16</td><td>Cleanup after the final pull request merges: delete this plan, its proof root, its index entry, and its TASKS.md link.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="LR17" data-status="todo"><td>LR17</td><td>Post-launch watch: seven days of issue triage, catalog channel freshness, and the live-state verifier.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="LR17" data-status="todo"><td>LR17</td><td>Post-launch watch: seven days of issue triage, catalog channel freshness, and the live-state verifier, recorded in a GitHub issue (D13).</td><td><code>todo</code></td><td></td></tr>
+        <tr id="LR16" data-status="todo"><td>LR16</td><td>Cleanup after LR17 is terminal and the final pull request merges: delete this plan, its proof root, its index entry, and its TASKS.md link.</td><td><code>todo</code></td><td></td></tr>
       </tbody>
     </table>
   </section>
@@ -498,9 +501,14 @@
     <p><strong>Owning paths:</strong> <code>go.mod</code> and <code>go.sum</code>. The Starmap release belongs to the owner.</p>
     <p><strong>Steps:</strong></p>
     <ol>
-      <li>Owner: tag Starmap v0.17.1 exactly at 120a49889009. A later commit pulls unreviewed Starmap changes into launch week.</li>
-      <li>Agent: run <code>go get github.com/agentstation/starmap@v0.17.1 &amp;&amp; go mod tidy</code>.</li>
-      <li>Agent: build, run <code>go test ./...</code>, change the CHANGELOG dependency line to name v0.17.1, and open a pull request.</li>
+      <li>Owner: <code>git -C ~/src/github.com/agentstation/starmap fetch origin &amp;&amp; git -C ~/src/github.com/agentstation/starmap tag -s v0.17.1 120a49889009 -m 'Starmap v0.17.1' &amp;&amp; git -C ~/src/github.com/agentstation/starmap push origin v0.17.1</code>. The tag goes exactly on 120a49889009, because a later commit pulls unreviewed Starmap changes into launch week.</li>
+      <li>Owner: watch the Starmap Release run to success. It checks that the tag is an ancestor of main, runs <code>make verify</code> and <code>make release-check</code>, and signs the checksums.</li>
+      <li>Owner: the Starmap <code>CHANGELOG.md</code> Unreleased section is empty at that commit. Accept the generated release notes, or add a v0.17.1 entry on main first and tag that commit instead.</li>
+    </ol>
+    <p><strong>Agent steps:</strong></p>
+    <ol start="4">
+      <li>Run <code>go get github.com/agentstation/starmap@v0.17.1 &amp;&amp; go mod tidy</code>.</li>
+      <li>Build, run <code>go test ./...</code>, change the CHANGELOG dependency line to name v0.17.1, and open a pull request.</li>
     </ol>
     <p><strong>Acceptance:</strong> verify-launch-state.sh condition 15 passes after the merge.</p>
     <p><strong>Fail-before:</strong> condition 15 failed at the baseline.</p>
@@ -508,16 +516,22 @@
 
     <h3 id="task-LR8">LR8 Re-record the first-use demo</h3>
     <p><strong>Problem:</strong> F2.</p>
-    <p><strong>Owning paths:</strong> <code>docs/assets/first-use-v1.4.0/</code>, <code>README.md:12-16,36</code>, <code>website/scripts/copy-assets.mjs</code>, <code>website/src/lib/splash.ts</code>, <code>website/src/components/journey/journey.tsx</code>, <code>docs/assets/starport-demo.json</code>, <code>website/README.md</code>, the <code>site.yaml</code> path filters, and the CHANGELOG recording line.</p>
+    <p><strong>Owning paths:</strong> <code>docs/assets/first-use-v1.4.0/</code>, <code>README.md:12-16,36</code>, <code>website/scripts/copy-assets.mjs</code>, <code>website/src/lib/splash.ts</code>, <code>website/src/components/journey/journey.tsx</code>, <code>docs/assets/starport-demo.json</code>, <code>website/README.md</code>, the <code>site.yaml</code> path filters, the CHANGELOG recording line and v1.4.1 section, and the <code>docs/site/operate-starport/upgrades.md</code> rollback example.</p>
+    <p><strong>Prerequisites:</strong> a macOS ARM64 Mac where <code>python3 -c 'import PIL'</code> exits 0 and <code>gh auth status</code> shows a login.</p>
     <p><strong>Steps:</strong></p>
     <ol>
-      <li>After the v1.4.0 release is public, the owner runs <code>OPENAI_API_KEY=... scripts/record-readme-demo.sh --release v1.4.0 --output docs/assets/first-use-v1.4.0</code> on macOS ARM64, then <code>--review</code>.</li>
-      <li>Update the README embed, every pin in the owning paths, the journey copy without "temporary gateway", and the CHANGELOG recording line.</li>
+      <li>After the v1.4.0 release is public, the owner runs <code>OPENAI_API_KEY=... scripts/record-readme-demo.sh --release v1.4.0 --output docs/assets/first-use-v1.4.0</code>.</li>
+      <li>The owner reviews it: <code>scripts/record-readme-demo.sh --review docs/assets/first-use-v1.4.0 --reviewer &lt;owner&gt; --pacing-verdict PASS</code>.</li>
+      <li>Update the README embed, every pin in the owning paths, the journey alt text, the CHANGELOG recording line, and the upgrades.md rollback example (<code>ref=v1.4.0</code>).</li>
+      <li>Add a <code>## v1.4.1</code> CHANGELOG section above the empty Unreleased heading: "Documentation: first-request recording from the attested v1.4.0 archive."</li>
+    </ol>
+    <p><strong>Publish:</strong></p>
+    <ol start="5">
       <li>Remove <code>docs/assets/first-use-v1.3.0/</code> and the superseded v1.2.0 media after a reference check.</li>
       <li>Open a pull request, and confirm that the Site check renders the new poster.</li>
-      <li>After the merge, the owner tags v1.4.1 on the merge commit (LR13 step 8) to deploy the recording.</li>
+      <li>Freeze merges to main from this merge until the v1.4.1 Site run succeeds. The owner then tags v1.4.1 on the merge commit (LR13 step 8) to deploy the recording.</li>
     </ol>
-    <p><strong>Acceptance:</strong> <code>grep -c 'starport init' docs/assets/first-use-v1.4.0/events.json</code> equals 0. README names v1.4.0. The site build passes. The v1.4.1 Site run succeeds.</p>
+    <p><strong>Acceptance:</strong> <code>grep -c 'starport init' docs/assets/first-use-v1.4.0/events.json</code> equals 0. README names v1.4.0. CHANGELOG has a v1.4.1 section. The site build passes. The v1.4.1 Site run succeeds.</p>
     <p><strong>Fail-before:</strong> <code>events.json:191</code> of the v1.3.0 recording shows <code>starport init</code>.</p>
     <p><strong>Verification:</strong> the acceptance grep. <code>go test ./cmd/starport/ -run README</code>. The Site check, then the v1.4.1 Site run.</p>
 
@@ -550,7 +564,7 @@
     <ol start="6">
       <li>Agent: remove the "not yet notarized" README paragraph before the tag. Without LR10, keep the paragraph, and LR13 step 6 skips the spctl check.</li>
     </ol>
-    <p><strong>Acceptance:</strong> verify-launch-state.sh condition 9 passes. After the next release, <code>codesign -dv starport</code> shows a Developer ID authority, and <code>spctl --assess --type execute starport</code> accepts.</p>
+    <p><strong>Acceptance:</strong> the five signing names exist, so condition 9 passes through the names and not through the README fold (D12). After the next release, <code>codesign -dv starport</code> shows a Developer ID authority, and <code>spctl --assess --type execute starport</code> accepts.</p>
     <p><strong>Fail-before:</strong> v1.3.0 darwin binary: Signature=adhoc, spctl rejected (infra-audit R13).</p>
     <p><strong>Verification:</strong> the codesign and spctl commands on the v1.4.0 archive.</p>
 
@@ -566,8 +580,9 @@
       <li><code>gh repo edit agentstation/starport --description "Self-hosted gateway for LLM providers with one OpenAI-compatible endpoint, catalog-driven routing, and local key control"</code></li>
       <li>Settings, Rules, Rulesets, New tag ruleset: target <code>v*</code>, restrict create, update, and delete. Add the Repository admin role to the bypass list with mode Always. Then decide on Discussions, and if enabled, restore the chooser link (D2).</li>
       <li>After step 2, an agent adds the advisory form link to <code>SECURITY.md</code> and the issue chooser (F24).</li>
+      <li>From an outside address, send a test mail to <code>security@agentstation.ai</code>, and record the receipt time in the LR11 evidence. The address is the only report channel until step 2 (critique 2, finding 9).</li>
     </ol>
-    <p><strong>Acceptance:</strong> verify-launch-state.sh conditions 3 to 8 and 10 pass.</p>
+    <p><strong>Acceptance:</strong> verify-launch-state.sh conditions 3 to 8 and 10 pass. Condition 7 needs one completed CodeQL analysis after step 3 (D12). The evidence cell records the test mail receipt time.</p>
     <p><strong>Fail-before:</strong> all seven failed at the baseline.</p>
     <p><strong>Verification:</strong> <code>bash docs/plans/proof/launch-readiness/verify-launch-state.sh</code>.</p>
 
@@ -590,7 +605,7 @@
     <p><strong>Owning paths:</strong> git tag <code>v1.4.0</code>, <code>release.yaml</code>, <code>site.yaml</code>, and the live site.</p>
     <p><strong>Steps:</strong></p>
     <ol>
-      <li>Wait for LR1, LR2, LR3, LR7, and LR14 to merge. Confirm that verify-launch-state.sh conditions 1 and 2 pass, and condition 9 when LR10 is in. Confirm that main CI is green.</li>
+      <li>Wait for LR1, LR2, LR3, LR7, and LR14 to merge. Confirm that verify-launch-state.sh conditions 1 and 2 pass, condition 9 when LR10 is in, and a green main CI. On an F27 flake, re-run the failed jobs once and record both run IDs. A second failure stops the launch until a test fix merges.</li>
       <li>In the CHANGELOG, rename <code>## Unreleased</code> to <code>## v1.4.0</code> and add an empty Unreleased heading (a one-line pull request that an agent can open). Run verify.sh at that commit.</li>
     </ol>
     <p><strong>Tag day:</strong></p>
@@ -603,9 +618,15 @@
     <ol start="6">
       <li>Verify: <code>curl -s https://starport.agentstation.ai/ | grep -c 7827</code> is at least 1, <code>grep -c 8080</code> is 0, and <code>brew update &amp;&amp; brew upgrade --cask agentstation/tap/starport &amp;&amp; starport --version</code> prints 1.4.0. The darwin binary passes spctl when LR10 is in. Test a fresh install on a second Mac.</li>
       <li><code>gh workflow run native-release.yaml -R agentstation/starport -f tag=v1.4.0</code>. Its conclusion is success.</li>
-      <li>After the LR8 pull request merges, tag v1.4.1 on that merge commit with the step 4 commands, and watch Release and Site again.</li>
     </ol>
-    <p><strong>Recovery:</strong> if a job fails after the Release Gate, use "Re-run failed jobs". If the Site run does not start, run <code>gh workflow run site.yaml -R agentstation/starport -f ref=v1.4.0</code>.</p>
+    <p><strong>v1.4.1:</strong></p>
+    <ol start="8">
+      <li>After the LR8 pull request merges, keep the freeze and confirm that <code>git rev-parse origin/main</code> equals the LR8 merge commit. Tag v1.4.1 on it with the step 4 commands, and watch Release and Site again. The freeze ends when the v1.4.1 Site run succeeds.</li>
+    </ol>
+    <p><strong>Recovery before the publish:</strong> a job that fails before the release publish can rerun with "Re-run failed jobs". After the publish, a rerun fails the single-draft check.</p>
+
+    <p><strong>Recovery after the publish:</strong> within 7 days of the failed run, start the recovery path: <code>gh workflow run release.yaml -R agentstation/starport -f tag=v1.4.0 -f source_run_id=&lt;failed run id&gt;</code>. It reuses the <code>release-dist</code> artifact and skips the publish. A dispatched run deploys no site, so then run <code>gh workflow run site.yaml -R agentstation/starport -f ref=v1.4.0</code>. Keep the freeze until both runs succeed, because the gate requires the tag to equal origin/main.</p>
+
     <p>Releases are immutable, so a bad release rolls forward to the next patch tag on a new commit. A bad cask rolls back with a revert in agentstation/homebrew-tap.</p>
 
     <p><strong>Acceptance:</strong> verify-launch-state.sh conditions 13 and 14 pass. README install steps succeed on the released cask. The native-release run succeeds.</p>
@@ -621,7 +642,7 @@
       <li>Agent: restore the verbatim license appendix, add one project notice line to README ("Copyright 2025-2026 AgentStation, AGPL-3.0-only"), and align the labels.</li>
       <li>Agent: adjust <code>update-copyright-year.yml</code> so that it edits the notice line it owns.</li>
     </ol>
-    <p><strong>Acceptance:</strong> <code>diff</code> of LICENSE against the upstream AGPL-3.0 text is empty. Dockerfile, SKILL.md, and README name the same SPDX identifier. LR15 records the grep.</p>
+    <p><strong>Acceptance:</strong> <code>diff</code> of LICENSE against <code>https://www.gnu.org/licenses/agpl-3.0.txt</code> shows only the filled-in appendix and the http to https scheme change on three lines. Dockerfile, SKILL.md, and README name the same SPDX identifier. LR15 records the grep.</p>
     <p><strong>Fail-before:</strong> the labels disagree today.</p>
     <p><strong>Verification:</strong> <code>grep -ohE 'AGPL-3.0-(only|or-later)' Dockerfile skills/starport/SKILL.md README.md | sort -u | wc -l</code> prints 1.</p>
 
@@ -639,12 +660,25 @@
     <p><strong>Fail-before:</strong> 0 and 0 at the baseline.</p>
     <p><strong>Verification:</strong> both scripts.</p>
 
+    <h3 id="task-LR17">LR17 Post-launch watch</h3>
+    <p><strong>Problem:</strong> the first week after the announcement has no owner.</p>
+    <p><strong>Owning paths:</strong> a GitHub issue named "Launch watch" in agentstation/starport (D13).</p>
+    <p><strong>Steps:</strong></p>
+    <ol>
+      <li>For seven days after the announcement, triage each new issue the same day.</li>
+      <li>Run <code>verify-launch-state.sh</code>, and check the catalog channel date from LR15 step 3.</li>
+      <li>Record each day in one row of the issue. Open one issue for the windows-2025 and ARM test flakes (F27) with the run numbers.</li>
+      <li>Open one issue "Renew website/well-known/security.txt before 2027-09-15", because the file expires on 2027-10-15.</li>
+    </ol>
+    <p><strong>Acceptance:</strong> seven rows in the issue. Each defect found has an issue or a pull request. The flake issue and the renewal issue exist.</p>
+    <p><strong>Fail-before:</strong> not applicable (watch).</p>
+    <p><strong>Verification:</strong> the issue.</p>
     <h3 id="task-LR16">LR16 Cleanup</h3>
     <p><strong>Problem:</strong> a merged plan must not stay as a stale control plane.</p>
 
     <p><strong>Owning paths:</strong> this plan file, its proof root, <code>docs/plans/README.md</code>, and the plan link in <code>docs/TASKS.md</code>.</p>
 
-    <p><strong>Steps:</strong> confirm the merge of the final pull request (the LR8 media pull request or the LR15 closeout). Then delete the plan, the proof root, the index entry, and the TASKS.md link in one pull request.</p>
+    <p><strong>Steps:</strong> confirm that LR17 is terminal and that the final pull request (the LR8 media pull request or the LR15 closeout) merged (D13). Then delete the plan, the proof root, the index entry, and the TASKS.md link in one pull request.</p>
 
     <p><strong>Acceptance:</strong> <code>git grep launch-readiness</code> finds nothing.</p>
 
@@ -652,18 +686,6 @@
 
     <p><strong>Verification:</strong> <code>git grep -n launch-readiness</code>.</p>
 
-    <h3 id="task-LR17">LR17 Post-launch watch</h3>
-    <p><strong>Problem:</strong> the first week after the announcement has no owner.</p>
-    <p><strong>Owning paths:</strong> <code>proof/launch-readiness/lr17-watch.md</code>.</p>
-    <p><strong>Steps:</strong></p>
-    <ol>
-      <li>For seven days after the announcement, triage each new issue the same day.</li>
-      <li>Run <code>verify-launch-state.sh</code>, and check the catalog channel date from LR15 step 3.</li>
-      <li>Record each day in one row. Open one issue for the windows-2025 test timeouts (F27) with the run numbers.</li>
-    </ol>
-    <p><strong>Acceptance:</strong> seven rows. Each defect found has an issue or a pull request.</p>
-    <p><strong>Fail-before:</strong> not applicable (watch).</p>
-    <p><strong>Verification:</strong> the watch file.</p>
   </section>
 
   <section id="owner-checklist">
@@ -672,14 +694,14 @@
     <table>
       <thead><tr><th>Order</th><th>Task</th><th>Action</th><th>Proof</th></tr></thead>
       <tbody>
-        <tr><td>1</td><td><a href="#LR7">LR7</a></td><td>Tag Starmap v0.17.1 at 120a49889009. An agent then bumps go.mod. Start this row first, because an agent pull request follows it.</td><td>Condition 15</td></tr>
+        <tr><td>1</td><td><a href="#LR7">LR7</a></td><td><code>git -C ~/src/github.com/agentstation/starmap fetch origin &amp;&amp; git -C ~/src/github.com/agentstation/starmap tag -s v0.17.1 120a49889009 -m 'Starmap v0.17.1' &amp;&amp; git -C ~/src/github.com/agentstation/starmap push origin v0.17.1</code>. Watch the Starmap Release run to success. Accept the generated notes, or add a v0.17.1 CHANGELOG entry first (LR7 step 3). An agent then bumps go.mod. Start this row first, because an agent pull request follows it.</td><td>Condition 15</td></tr>
         <tr><td>2</td><td><a href="#LR14">LR14</a></td><td>License identity decision. An agent then aligns the files. Start this row with row 1.</td><td>LR14 grep prints 1</td></tr>
-        <tr><td>3</td><td><a href="#LR11">LR11</a></td><td>Security features, topics, description, tag ruleset, Discussions decision. An agent then adds the advisory form link.</td><td>Conditions 3 to 8 and 10</td></tr>
+        <tr><td>3</td><td><a href="#LR11">LR11</a></td><td>Security features, topics, description, tag ruleset, Discussions decision. An agent then adds the advisory form link. Send a test mail to security@agentstation.ai from an outside address and record the receipt time.</td><td>Conditions 3 to 8 and 10</td></tr>
         <tr><td>4</td><td><a href="#LR9">LR9</a></td><td>Cloudflare token and account ID into the <code>starport-site</code> environment. Required reviewer.</td><td>Conditions 1 and 2</td></tr>
-        <tr><td>5</td><td><a href="#LR10">LR10</a></td><td>Three macOS signing secrets from team 244SS6JJ8Q. Optional before the tag. An agent then removes the README quarantine paragraph.</td><td>Condition 9</td></tr>
+        <tr><td>5</td><td><a href="#LR10">LR10</a></td><td>Three macOS signing secrets from team 244SS6JJ8Q. Optional before the tag and before the announcement (D12). An agent then removes the README quarantine paragraph.</td><td>Condition 9</td></tr>
         <tr><td>6</td><td><a href="#LR12">LR12</a></td><td>Always Use HTTPS and HSTS. Dashboard confirmation.</td><td>Conditions 11 and 12</td></tr>
         <tr><td>7</td><td><a href="#LR13">LR13</a></td><td>Tag v1.4.0 after rows 1 to 4 and the pull requests merge. Approve the site deployment. Verify the live site and the native-release run.</td><td>Conditions 13 and 14</td></tr>
-        <tr><td>8</td><td><a href="#LR8">LR8</a></td><td>Record the v1.4.0 first-use demo with a real provider key. An agent then updates README and the site. Tag v1.4.1 on the merge commit. This row is the announce gate (D8).</td><td>v1.4.1 Site run green</td></tr>
+        <tr><td>8</td><td><a href="#LR8">LR8</a></td><td>On macOS ARM64 with Pillow and a gh login: <code>OPENAI_API_KEY=... scripts/record-readme-demo.sh --release v1.4.0 --output docs/assets/first-use-v1.4.0</code>, then <code>scripts/record-readme-demo.sh --review docs/assets/first-use-v1.4.0 --reviewer &lt;owner&gt; --pacing-verdict PASS</code>. An agent then updates README, the site, and the v1.4.1 changelog section. Freeze main, confirm that origin/main is the LR8 merge, and tag v1.4.1 on it. This row is the announce gate (D8).</td><td>v1.4.1 Site run green</td></tr>
         <tr><td>9</td><td><a href="#LR15">LR15</a></td><td>Announce only after <code>verify-launch-state.sh</code> prints <code>Summary: 16 passed, 0 failed</code> on the v1.4.1 site.</td><td>Closeout proof</td></tr>
       </tbody>
     </table>
@@ -745,6 +767,8 @@ only on the final merge.</code></pre>
         <tr><td>2026-10-15</td><td>LR5</td><td>done</td><td>Failed jobs of main run 38744546899 rerun at 18:11 UTC after a sum.golang.org stream error. The rerun completed with conclusion success.</td></tr>
         <tr><td>2026-10-16</td><td>LR3</td><td>done</td><td>PR #465 merged as dbd1fa1a at exact head f3286f8d after the windows-2025 rerun passed. #467 rebased onto dbd1fa1a.</td></tr>
         <tr><td>2026-10-16</td><td>LR0</td><td>plan merged</td><td>PR #467 merged as 2af4a0ed at exact head e85ca045, 47 checks green. #466 rebased onto 2af4a0ed without a conflict; verify.sh on that tree prints 14 passed.</td></tr>
+        <tr><td>2026-10-16</td><td>LR0</td><td>done</td><td>Acceptance met by the #467 merge at 2af4a0ed. The ledger row records the merge.</td></tr>
+        <tr><td>2026-10-16</td><td>LR6</td><td>pass 2 applied</td><td>Critique pass 2 by agent critique-2, read-only, Opus 5.5 high: 12 findings (0 blocker, 10 should, 2 nice), all accepted. Changed remedies: finding 1 fixes the journey alt text in the pass 2 pull request (D11), findings 4 and 10 fold into conditions 7 and 9 (D12), finding 5 moves LR17 before LR16 with a GitHub issue as its record (D13). Finding 12 assigns the upgrades.md rollback example to LR8. Edits: verify-launch-state.sh conditions 7 and 9, journey.tsx:971, F27, D6 order, D11 to D13, the verifier contract, LR0, LR6, LR7, LR8, LR10, LR11, LR13, LR14, LR16, LR17, the owner checklist, and the resume state.</td></tr>
       </tbody>
     </table>
   </section>
