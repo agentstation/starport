@@ -1,0 +1,6 @@
+# Cloudflare static asset headers for the starport-site Worker. The build
+# copies this file to public/_headers, and the deploy serves it from out/.
+# HSTS for six months without subdomains or preload (launch plan LR12). The
+# http to https redirect stays a zone setting (Always Use HTTPS).
+/*
+  Strict-Transport-Security: max-age=15552000
