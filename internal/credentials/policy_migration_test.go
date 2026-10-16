@@ -220,7 +220,8 @@ func TestInferenceSourceSnapshotRejectsMixedVersions(t *testing.T) {
 	}
 }
 
-// A held native publication lock must exhaust the existing write deadline.
+// A held native publication lock must exhaust the writer wait, or the caller's
+// deadline when it comes first.
 func TestInferencePolicyPublicationDeadline(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "policy")
@@ -236,8 +237,15 @@ func TestInferencePolicyPublicationDeadline(t *testing.T) {
 		}
 		start := time.Now()
 		err = store.Accept(t.Context(), "openai")
-		if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) != selectionPolicyWriteTimeout {
+		if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) != selectionPolicyWriterWait {
 			t.Fatalf("publication deadline: elapsed=%v, error=%v", time.Since(start), err)
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		defer cancel()
+		start = time.Now()
+		err = store.Accept(ctx, "openai")
+		if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) != time.Second {
+			t.Fatalf("caller deadline: elapsed=%v, error=%v", time.Since(start), err)
 		}
 		policy, err := store.Policy(t.Context(), "openai")
 		if err != nil || policy != InferencePolicyLegacy {

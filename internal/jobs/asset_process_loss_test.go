@@ -1,11 +1,9 @@
 package jobs_test
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -79,32 +77,7 @@ func TestVideoBytesSurviveProcessLoss(t *testing.T) {
 	for _, mode := range []string{"native-receipt", "native-asset", "provider-asset"} {
 		t.Run(mode, func(t *testing.T) {
 			root := t.TempDir()
-			command := exec.Command(os.Args[0], "-test.run=^TestVideoBytesSurviveProcessLoss$", "-test.timeout=20s")
-			command.Env = append(os.Environ(), childRoot+"="+root, childMode+"="+mode)
-			var output bytes.Buffer
-			command.Stdout = &output
-			command.Stderr = &output
-			require.NoError(t, command.Start())
-			t.Cleanup(func() {
-				if command.ProcessState == nil {
-					_ = command.Process.Kill()
-					_ = command.Wait()
-				}
-			})
-			ready := false
-			deadline := time.Now().Add(10 * time.Second)
-			for time.Now().Before(deadline) {
-				if _, err := os.Stat(filepath.Join(root, "marker")); err == nil {
-					ready = true
-					break
-				}
-				time.Sleep(5 * time.Millisecond)
-			}
-			require.NoError(t, command.Process.Kill())
-			require.Error(t, command.Wait())
-			require.True(t, ready, "child did not reach publication: %s", output.String())
-			key, err := os.ReadFile(filepath.Join(root, "marker"))
-			require.NoError(t, err)
+			key := startLossChild(t, "TestVideoBytesSurviveProcessLoss", childRoot+"="+root, childMode+"="+mode).killAtMarker(t, filepath.Join(root, "marker"))
 			records, medium := open(t, root)
 			// No runner or external downloader exists in this recovery process.
 			service, err := jobs.NewService(records, jobs.WithAssetStore(medium), jobs.WithClock(func() time.Time { return submitted }))
