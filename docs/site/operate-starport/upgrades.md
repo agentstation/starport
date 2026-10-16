@@ -106,7 +106,7 @@ If `--legacy` lists a path, set explicit paths to keep the earlier locations. A 
 
 Each release attaches the documentation site as `starport-docs-<tag>.tar.gz`. The `checksums.txt` file of the release lists its digest. The gateway serves the same build at `/docs/`.
 
-The public documentation host is <https://starport.agentstation.ai/docs>. The `Site` workflow in `.github/workflows/site.yaml` builds it from `docs/site/` and deploys it. The host serves one release at a time. To read an earlier release, use its documentation archive or the `/docs/` path of a gateway at that release.
+The public documentation host is `https://starport.agentstation.ai/docs`. The `Site` workflow in `.github/workflows/site.yaml` builds it from `docs/site/` and deploys it. The host serves one release at a time. To read an earlier release, use its documentation archive or the `/docs/` path of a gateway at that release.
 
 `/docs/manifest.json` on the host names the release, the Starmap module version, and the content revision. To compare the public site with a gateway, compare the `content_revision` values of the two manifests.
 
