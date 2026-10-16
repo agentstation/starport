@@ -23,10 +23,11 @@ jobs:
       id: year
       run: echo "YEAR=$(date +%Y)" >> "$GITHUB_OUTPUT"
     
-    - name: Update copyright year in LICENSE
+    - name: Update the copyright range in LICENSE and README.md
       run: |
-        # Update the copyright year in the LICENSE file
-        sed -i "s/Copyright (C) [0-9]\{4\} AgentStation/Copyright (C) ${{ steps.year.outputs.YEAR }} AgentStation/g" LICENSE
+        # The LICENSE appendix and the README notice line own the range 2025-<current year>.
+        sed -i "s/Copyright (C) 2025-[0-9]\{4\}  AgentStation/Copyright (C) 2025-${{ steps.year.outputs.YEAR }}  AgentStation/" LICENSE
+        sed -i "s/Copyright 2025-[0-9]\{4\} AgentStation, AGPL-3.0-only/Copyright 2025-${{ steps.year.outputs.YEAR }} AgentStation, AGPL-3.0-only/" README.md
     
     - name: Check if changes were made
       id: changes
@@ -47,7 +48,7 @@ jobs:
         body: |
           ## Automated Copyright Year Update
           
-          This PR automatically updates the copyright year in the LICENSE file to ${{ steps.year.outputs.YEAR }}.
+          This PR automatically updates the copyright range in LICENSE and README.md to ${{ steps.year.outputs.YEAR }}.
           
           ### Changes
           - Updated copyright year from previous year to ${{ steps.year.outputs.YEAR }}
