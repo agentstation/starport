@@ -166,7 +166,7 @@
 
   <section id="current-resume-state">
     <h2>Current resume state</h2>
-    <p>Updated: 2026-10-16 06:05 UTC.</p>
+    <p>Updated: 2026-10-16 08:05 UTC.</p>
     <table>
       <thead><tr><th>Field</th><th>Current state</th></tr></thead>
       <tbody>
@@ -319,7 +319,7 @@
         <tr><td>F25</td><td>nice, low</td><td>The site has no <code>/.well-known/security.txt</code>. Critique 1, finding 31. Condition 13 checks the live path after the deploy.</td><td><a href="#LR1">LR1</a></td></tr>
         <tr><td>F26</td><td>should, high</td><td>The published docs still carry plan identifiers (<code>docs/site/architecture/recipes.md:168</code> CSP13, six in OPERATOR-GUIDE). Critique 1, finding 17.</td><td><a href="#LR1">LR1</a></td></tr>
         <tr><td>F20</td><td>nice, medium</td><td>On windows-2025, <code>TestComposeStorageRecipes</code> fails when the <code>docker compose version</code> probe passes its 30 second timeout. Run 38785132653, job 116595061927, PR #466. One occurrence in this plan.</td><td>Rerun. The maintainer owns a longer probe timeout as a follow-up ticket if it recurs.</td></tr>
-        <tr><td>F27</td><td>should, medium</td><td>Four different Go tests timed out with <code>context deadline exceeded</code> on windows-2025 in two runs on 2026-10-15 (runs 38798760184 and 38798759579), on changes to plan and website files only. Main run 38798627903 at aa36a7ec failed Test (windows-2025) and Test (ubuntu-24.04-arm), the ARM job on <code>TestDevelopmentCatalogAcceptsUnchangedDerivedPublication</code>. Six of the last 14 completed main runs failed on 2026-10-16. On #466 run 38852870587, <code>TestCompletedBatchResultSurvivesProcessLoss</code> missed its 10 second child-process deadline on windows-2025. Each flake costs one CI cycle before a merge, and condition 16 reads the last completed main run.</td><td><a href="#LR17">LR17</a> (follow-up issue), <a href="#LR13">LR13</a> step 1 (rerun rule)</td></tr>
+        <tr><td>F27</td><td>should, medium</td><td>Four different Go tests timed out with <code>context deadline exceeded</code> on windows-2025 in two runs on 2026-10-15 (runs 38798760184 and 38798759579), on changes to plan and website files only. Main run 38798627903 at aa36a7ec failed Test (windows-2025) and Test (ubuntu-24.04-arm), the ARM job on <code>TestDevelopmentCatalogAcceptsUnchangedDerivedPublication</code>. Six of the last 14 completed main runs failed on 2026-10-16. On #466 run 38852870587, <code>TestCompletedBatchResultSurvivesProcessLoss</code> missed its 10 second child-process deadline on windows-2025. Attempt 2 of the same run failed <code>TestDevPersistsAcrossRuns</code> on windows-2025: the catalog credential policy store did not open within 10 seconds. Each flake costs one CI cycle before a merge, and condition 16 reads the last completed main run.</td><td><a href="#LR17">LR17</a> (follow-up issue), <a href="#LR13">LR13</a> step 1 (rerun rule)</td></tr>
       </tbody>
     </table>
   </section>
@@ -771,6 +771,7 @@ only on the final merge.</code></pre>
         <tr><td>2026-10-16</td><td>LR6</td><td>pass 2 applied</td><td>Critique pass 2 by agent critique-2, read-only, Opus 5.5 high: 12 findings (0 blocker, 10 should, 2 nice), all accepted. Changed remedies: finding 1 fixes the journey alt text in the pass 2 pull request (D11), findings 4 and 10 fold into conditions 7 and 9 (D12), finding 5 moves LR17 before LR16 with a GitHub issue as its record (D13). Finding 12 assigns the upgrades.md rollback example to LR8. Edits: verify-launch-state.sh conditions 7 and 9, journey.tsx:971, F27, D6 order, D11 to D13, the verifier contract, LR0, LR6, LR7, LR8, LR10, LR11, LR13, LR14, LR16, LR17, the owner checklist, and the resume state.</td></tr>
         <tr><td>2026-10-16</td><td>LR1</td><td>defect fixed</td><td>#466 run 38842084396 Build failed: <code>console/src/docs/site.test.ts</code> rejects the absolute autolink to the public docs host in upgrades.md. Commit b0fa7601 renders the host as inline code. The console site test prints 12 passed. Autoreview of the commit: 0 findings (1.0). The branch gate refuses the binary deletions of the finished plan, so the commit mode reviewed the fix.</td></tr>
         <tr><td>2026-10-16</td><td>LR1</td><td>flake</td><td>#466 run 38852870587 Test (windows-2025): <code>TestCompletedBatchResultSurvivesProcessLoss</code> failed because the child process did not open its store within 10 seconds (<code>internal/jobs/batch_result_loss_test.go:84</code>). The branch changes no file under internal/jobs. Failed jobs rerun once per the LR13 step 1 rule.</td></tr>
+        <tr><td>2026-10-16</td><td>LR1</td><td>flake</td><td>Attempt 2 failed a different windows-2025 test, <code>TestDevPersistsAcrossRuns</code> (<code>cmd/starport/dev_test.go:42</code>): "open catalog credential policy: context deadline exceeded" 10 seconds after file storage was ready. The branch changes no Go source outside one test assertion. Attempt 3 requested at 07:59 UTC because the pull request is documentation only. The LR13 rule applies to main on launch day.</td></tr>
       </tbody>
     </table>
   </section>
