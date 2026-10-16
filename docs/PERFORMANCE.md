@@ -127,7 +127,7 @@ They do not qualify complete HTTP request overhead.
 
 The versioned [performance profile](performance-targets-v1.json) defines targets for the planned production release.
 Current results do not qualify these limits.
-CSP22 owns release qualification on identified, dedicated runners.
+Dedicated runners have not yet qualified these targets.
 
 | Warm request limit | Local Badger and SQLite | Three-replica Valkey and PostgreSQL |
 |---|---:|---:|
@@ -239,7 +239,7 @@ cache. Each local cache has a two MiB cost limit. It checks both fill queues
 during load, verifies store costs after draining, and verifies shutdown.
 It reports retained heap after collection and total allocation volume.
 Those measurements cover this synthetic workload, not default-size or full
-gateway capacity. Production heap and RSS qualification remains in CSP22.
+gateway capacity. Dedicated runners have not yet qualified production heap and RSS.
 
 ## Stream completion
 

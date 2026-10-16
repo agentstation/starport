@@ -1,0 +1,5 @@
+Contact: mailto:security@agentstation.ai
+Policy: https://github.com/agentstation/starport/blob/main/SECURITY.md
+Preferred-Languages: en
+Expires: 2027-10-15T00:00:00.000Z
+Canonical: https://starport.agentstation.ai/.well-known/security.txt

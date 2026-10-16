@@ -23,8 +23,8 @@ const option = (name, fallback) => {
 };
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const binary = path.resolve(option('--binary', path.join(root, 'starport')));
-const starmapBinary = path.resolve(option('--starmap-binary', path.join(root, '../starmap-product-demos/starmap')));
-const starmapSource = path.resolve(option('--starmap-source', path.join(root, '../starmap-product-demos')));
+const starmapBinary = path.resolve(option('--starmap-binary', path.join(root, '../starmap/starmap')));
+const starmapSource = path.resolve(option('--starmap-source', path.join(root, '../starmap')));
 const catalogInputPaths = ['internal/embedded/catalog/generation.json', 'internal/embedded/catalog/generation-manifest.json',
   'internal/embedded/catalog/authors/openai/models/gpt-6.1-sol.yaml', 'internal/embedded/catalog/providers/openai/models/gpt-6.1-sol.yaml'];
 const catalogInputs = Object.fromEntries(catalogInputPaths.map((relative) => {

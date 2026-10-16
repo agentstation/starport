@@ -179,6 +179,8 @@ release:
 
     See the README and operator guide before deployment. Verify downloaded
     archives with `checksums.txt` and GitHub artifact attestations.
+
+    Read the [changelog](https://github.com/agentstation/starport/blob/{{ .Tag }}/CHANGELOG.md) before you upgrade. It lists the breaking changes and the upgrade notes of each release.
   footer: |
     **Full changelog:** https://github.com/agentstation/starport/compare/{{ .PreviousTag }}...{{ .Tag }}
   draft: true

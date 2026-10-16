@@ -17,6 +17,8 @@ export const ASSETS = [
     `demo/console/${file}`, `docs/assets/console-demo/${file}`,
   ]),
   ["favicon.svg", "console/src/favicon.svg"],
+  // The RFC 9116 security contact.
+  [".well-known/security.txt", "website/well-known/security.txt"],
   // The splash page uses the console fonts and ships their license.
   ...[
     "Geist-Regular.woff2",

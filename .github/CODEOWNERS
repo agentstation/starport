@@ -3,15 +3,15 @@
 # and will be automatically requested for review on pull requests
 
 # Default owners for everything in the repo
-* @agentstation/maintainers
+* @jackspirou @savkat
 
 # Go module dependencies
-go.mod @agentstation/maintainers
-go.sum @agentstation/maintainers
+go.mod @jackspirou @savkat
+go.sum @jackspirou @savkat
 
 # GitHub Actions workflows
-.github/workflows/ @agentstation/maintainers
+.github/workflows/ @jackspirou @savkat
 
 # Documentation
-*.md @agentstation/maintainers
-docs/ @agentstation/maintainers
+*.md @jackspirou @savkat
+docs/ @jackspirou @savkat
