@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/agentstation/starport)](https://github.com/agentstation/starport/releases)
 [![CI](https://github.com/agentstation/starport/actions/workflows/ci.yml/badge.svg)](https://github.com/agentstation/starport/actions/workflows/ci.yml)
-[![License: AGPLv3](https://img.shields.io/github/license/agentstation/starport)](LICENSE)
+[![License: AGPL-3.0-only](https://img.shields.io/github/license/agentstation/starport)](LICENSE)
 
 Starport is a self-hosted LLM inference gateway in one binary. It serves the
 OpenAI-compatible API at `/v1` and the OpenRouter-compatible API at `/api/v1`.
@@ -608,7 +608,7 @@ See the [development guide](DEVELOPMENT.md) and
 
 ## License and security
 
-Starport uses the GNU AGPLv3 license. See [LICENSE](LICENSE).
+Copyright 2025-2026 AgentStation, AGPL-3.0-only. See [LICENSE](LICENSE).
 
 Starport sends no telemetry. The default `public` catalog source polls the
 Starmap catalog channel on GitHub each hour. Set
