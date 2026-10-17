@@ -5,11 +5,9 @@ import (
 	"context"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/files"
@@ -74,25 +72,7 @@ func TestCompletedBatchResultSurvivesProcessLoss(t *testing.T) {
 		select {}
 	}
 	root := t.TempDir()
-	var output bytes.Buffer
-	command := exec.Command(os.Args[0], "-test.run=^TestCompletedBatchResultSurvivesProcessLoss$", "-test.timeout=20s")
-	command.Env = append(os.Environ(), childKey+"="+root)
-	command.Stdout = &output
-	command.Stderr = &output
-	require.NoError(t, command.Start())
-	t.Cleanup(func() { _ = command.Process.Kill() })
-	deadline := time.Now().Add(10 * time.Second)
-	ready := false
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(filepath.Join(root, "marker")); err == nil {
-			ready = true
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	require.NoError(t, command.Process.Kill())
-	require.Error(t, command.Wait())
-	require.True(t, ready, "child did not reach second line: %s", output.String())
+	startLossChild(t, "TestCompletedBatchResultSurvivesProcessLoss", childKey+"="+root).killAtMarker(t, filepath.Join(root, "marker"))
 	store, service, records := open(t, root)
 	batches, err := jobs.OpenBatchRepository(store)
 	require.NoError(t, err)

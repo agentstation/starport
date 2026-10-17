@@ -1,7 +1,6 @@
 package jobs_test
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -9,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -417,24 +415,7 @@ func TestBatchAggregateSurvivesProcessLoss(t *testing.T) {
 	for _, stage := range []string{"publication", "metadata"} {
 		t.Run(stage, func(t *testing.T) {
 			root := t.TempDir()
-			var output bytes.Buffer
-			command := exec.Command(os.Args[0], "-test.run=^TestBatchAggregateSurvivesProcessLoss$", "-test.timeout=25s")
-			command.Env = append(os.Environ(), childKey+"="+root, stageKey+"="+stage)
-			command.Stdout, command.Stderr = &output, &output
-			require.NoError(t, command.Start())
-			t.Cleanup(func() { _ = command.Process.Kill() })
-			var original []byte
-			deadline := time.Now().Add(15 * time.Second)
-			for time.Now().Before(deadline) {
-				original, _ = os.ReadFile(filepath.Join(root, "marker"))
-				if len(original) != 0 {
-					break
-				}
-				time.Sleep(5 * time.Millisecond)
-			}
-			require.NoError(t, command.Process.Kill())
-			require.Error(t, command.Wait())
-			require.NotEmpty(t, original, "child never reached boundary: %s", output.String())
+			original := startLossChild(t, "TestBatchAggregateSurvivesProcessLoss", childKey+"="+root, stageKey+"="+stage).killAtMarker(t, filepath.Join(root, "marker"))
 			kv := openKV(t, root)
 			r, err := jobs.OpenBatchRepository(kv)
 			require.NoError(t, err)
