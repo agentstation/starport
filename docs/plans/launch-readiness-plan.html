@@ -166,7 +166,7 @@
 
   <section id="current-resume-state">
     <h2>Current resume state</h2>
-    <p>Updated: 2026-10-17 03:00 UTC.</p>
+    <p>Updated: 2026-10-17 07:09 UTC.</p>
     <table>
       <thead><tr><th>Field</th><th>Current state</th></tr></thead>
       <tbody>
@@ -383,7 +383,7 @@
         <tr id="LR13" data-status="blocked"><td>LR13</td><td>Owner: tag v1.4.0 from main after the pre-tag pull requests merge. The tag chains Release then Site deploy. Verify the live site and the release assets.</td><td><code>blocked(owner: release tag)</code></td><td>Depends on LR1, LR2, LR3, LR7, LR9, and LR14. LR10 is optional (step 1).</td></tr>
         <tr id="LR14" data-status="done"><td>LR14</td><td>Owner decision: license identity (AGPL-3.0-only or or-later) and one project notice.</td><td><code>done</code></td><td>repo-audit S3. D14 chose AGPL-3.0-only. PR #476 squash-merged at e5f9c9b4 (head 4e7715c6 after a rebase onto d1ae66d7, signature valid). The LR14 grep prints 1. The LICENSE diff against agpl-3.0.txt shows only the two appendix lines.</td></tr>
         <tr id="LR15" data-status="todo"><td>LR15</td><td>Launch verification: both verifiers at their terminal counts, recorded in the closeout proof.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="LR17" data-status="todo"><td>LR17</td><td>Post-launch watch: seven days of issue triage, catalog channel freshness, and the live-state verifier, recorded in a GitHub issue (D13).</td><td><code>todo</code></td><td>Issues #473 (F27 flakes), #474 (security.txt renewal), and #475 (Launch watch) exist since 2026-10-16. PR #478 merged at 5639dbbc fixes the Starport side of F27 (#473 stays open for the Starmap side). The daily rows start after the announcement.</td></tr>
+        <tr id="LR17" data-status="todo"><td>LR17</td><td>Post-launch watch: seven days of issue triage, catalog channel freshness, and the live-state verifier, recorded in a GitHub issue (D13).</td><td><code>todo</code></td><td>Issues #473 (F27 flakes), #474 (security.txt renewal), and #475 (Launch watch) exist since 2026-10-16. PR #478 merged at 5639dbbc and PR #480 merged at b35a52e5 fix the Starport side of F27 (#473 stays open for the Starmap side, starmap#286). The daily rows start after the announcement.</td></tr>
         <tr id="LR16" data-status="todo"><td>LR16</td><td>Cleanup after LR17 is terminal and the final pull request merges: delete this plan, its proof root, its index entry, and its TASKS.md link.</td><td><code>todo</code></td><td></td></tr>
       </tbody>
     </table>
@@ -787,6 +787,10 @@ only on the final merge.</code></pre>
         <tr><td>2026-10-16</td><td>LR12</td><td>header merged</td><td>PR #477 from <code>codex/launch-LR12</code> merged at d1ae66d7 (head 1a4c34ef, signature valid). <code>website/_headers</code> sends Strict-Transport-Security max-age 15552000 through the static Worker. Autoreview Sol 6.1 high: clean, 0.99. The header goes live at the next Site deploy.</td></tr>
         <tr><td>2026-10-16</td><td>F27</td><td>fix opened</td><td>Implementer agent f27-fix (Opus 5.5 high) opened draft PR #478 from <code>codex/fix-F27</code>, head 2665c449. Root causes: <code>internal/credentials/policy_store.go</code> bounded the publication itself with 5 s, and four <code>internal/jobs</code> process-loss tests gave the child a fixed 10 s or 15 s. The fix bounds only writer contention and waits on the child marker or exit. go test -race -count=3 on jobs, credentials, config, and cmd/starport: 0 failures. Autoreview Sol 6.1 high: clean, 0.99. The Starmap <code>policyWriteTimeout</code> change stays in #473.</td></tr>
         <tr><td>2026-10-16</td><td>F27</td><td>fix merged</td><td>PR #478 merged at 5639dbbc (signature valid). Windows and ARM evidence is its own CI run. The Starmap fix is draft PR agentstation/starmap#286 (D16).</td></tr>
+        <tr><td>2026-10-17</td><td>Plan</td><td>flake</td><td>#479 run 38997212455 Test (windows-2025): <code>TestStartServesTLSWithoutPlaintextFallback</code> failed after 4.14 s, because a 1 s client timeout expired during the TLS handshake and a fixed 3 s wait then ended the readiness loop. First failure of this test. The pull request changes no Go file. Failed jobs rerun once.</td></tr>
+        <tr><td>2026-10-17</td><td>F27</td><td>fix opened</td><td>Draft PR #480 from <code>codex/fix-tls-readiness</code>, head 2e09d7f0: <code>internal/server/tls_test.go</code> derives the readiness wait and both client timeouts from half of the test deadline. go test -race -count=3 on the test: ok. Autoreview Sol 6.1 high: clean, 0.99.</td></tr>
+        <tr><td>2026-10-17</td><td>F27</td><td>flake</td><td>#480 run 39000993745 Test (windows-2025): <code>TestDevPersistsAcrossRuns</code> returned upload status 503 (the Starmap policy store cause, starmap#286). The TLS test passed on that run in 0.23 s. Failed jobs rerun once.</td></tr>
+        <tr><td>2026-10-17</td><td>F27</td><td>fix merged</td><td>PR #480 merged at b35a52e5 (signature valid). The Starport F27 members that remain are the ones that the Starmap pin fixes (LR7).</td></tr>
       </tbody>
     </table>
   </section>
