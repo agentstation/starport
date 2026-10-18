@@ -1,11 +1,9 @@
 package reservation
 
 import (
-	"bytes"
 	"context"
 	"encoding/json/v2"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -106,24 +104,7 @@ func TestCorrectionSurvivesProcessLoss(t *testing.T) {
 	for _, stage := range []string{"before", "after"} {
 		t.Run(stage, func(t *testing.T) {
 			root := t.TempDir()
-			var output bytes.Buffer
-			command := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestCorrectionSurvivesProcessLoss$", "-test.timeout=25s")
-			command.Env = append(os.Environ(), childKey+"="+root, stageKey+"="+stage)
-			command.Stdout, command.Stderr = &output, &output
-			require.NoError(t, command.Start())
-			t.Cleanup(func() { _ = command.Process.Kill() })
-			ready := false
-			deadline := time.Now().Add(15 * time.Second)
-			for time.Now().Before(deadline) {
-				if _, err := os.Stat(filepath.Join(root, "ready")); err == nil {
-					ready = true
-					break
-				}
-				time.Sleep(5 * time.Millisecond)
-			}
-			require.NoError(t, command.Process.Kill())
-			require.Error(t, command.Wait())
-			require.True(t, ready, "child did not reach correction boundary: %s", output.String())
+			startLossChild(t, "TestCorrectionSurvivesProcessLoss", childKey+"="+root, stageKey+"="+stage).killAtMarker(t, filepath.Join(root, "ready"))
 			encoded, err := os.ReadFile(filepath.Join(root, "input.json"))
 			require.NoError(t, err)
 			var config input
