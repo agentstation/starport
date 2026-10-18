@@ -50,8 +50,13 @@ func TestStartServesTLSWithoutPlaintextFallback(t *testing.T) {
 	})
 	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}
 	t.Cleanup(transport.CloseIdleConnections)
-	client := &http.Client{Transport: transport, Timeout: time.Second}
-	deadline := time.Now().Add(3 * time.Second)
+	// A fixed 3 s wait flaked on windows-2025 under the race detector (#473),
+	// so readiness waits until half of the test deadline.
+	deadline := time.Now().Add(30 * time.Second)
+	if testDeadline, ok := t.Deadline(); ok {
+		deadline = time.Now().Add(time.Until(testDeadline) / 2)
+	}
+	client := &http.Client{Transport: transport, Timeout: time.Until(deadline)}
 	for {
 		response, requestErr := client.Get("https://" + address + "/health/live")
 		if requestErr == nil {
@@ -66,7 +71,7 @@ func TestStartServesTLSWithoutPlaintextFallback(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	plain := &http.Client{Timeout: time.Second}
+	plain := &http.Client{Timeout: time.Until(deadline)}
 	response, err := plain.Get("http://" + address + "/health/live")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, response.StatusCode)
