@@ -160,7 +160,9 @@ func TestRecoveryTopologyActualPersistentBackupSealsAndReopens(t *testing.T) {
 	t.Run("changed retained file", func(t *testing.T) {
 		var selected recovery.BackupFile
 		for _, file := range f.inventory.Files {
-			if strings.Contains(file.Relative, "generation-inputs/") {
+			// Starmap v0.17.1 also retains a zero-byte owner lock under
+			// generation-inputs, so select a retained input payload.
+			if strings.Contains(file.Relative, "generation-inputs/") && strings.HasSuffix(file.Relative, ".json.gz") {
 				selected = file
 				break
 			}
