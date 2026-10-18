@@ -798,6 +798,7 @@ only on the final merge.</code></pre>
         <tr><td>2026-10-18</td><td>LR11</td><td>step 7 merged</td><td>PR #481 merged at 65def10f (signature valid), 52/52 with no rerun.</td></tr>
         <tr><td>2026-10-18</td><td>LR7</td><td>owner steps</td><td>With explicit owner permission the agent merged agentstation/starmap#286 at c50b8e83 (signature valid), tagged v0.17.1 on it, and pushed the tag. Starmap release run 39095455447. The tag ruleset 25330167 was created, and <code>go clean -modcache</code> freed 27 GiB (41 GiB free).</td></tr>
         <tr><td>2026-10-18</td><td>LR7</td><td>go.mod bump</td><td>go get github.com/agentstation/starmap@v0.17.1 and go mod tidy (go-winio v0.6.2 to v0.6.3 follows). go build ./... ok. Test evidence is in the pull request body.</td></tr>
+<tr><td>2026-10-18</td><td>LR7</td><td>Pull request #482 failed once in Durable Work Recovery: <code>TestRelationalGuardExactClosedPosition/mysql/native-migration-ownership</code> received <code>driver: bad connection</code> without the deadline error. The MySQL driver reports a closed connection instead of the context error when the deadline ends a round trip. <code>acquireMigrationOwner</code> and <code>migrationOwner.transaction</code> now join the context error, so every caller keeps <code>errors.Is</code> on the deadline. The sqlstore package tests pass locally.</td></tr>
       </tbody>
     </table>
   </section>
