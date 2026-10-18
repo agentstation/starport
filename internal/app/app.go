@@ -336,7 +336,7 @@ func (b *runtimeBuilder) openSQLStore() error {
 	}
 	b.sqlDB = db
 	b.application.own("relational storage", func(context.Context) error { return db.Close() })
-	migrateCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	migrateCtx, cancel := context.WithTimeout(context.Background(), relationalStartupTimeout)
 	defer cancel()
 	if err := db.Migrate(migrateCtx); err != nil {
 		return fmt.Errorf("migrate relational storage: %w", err)
