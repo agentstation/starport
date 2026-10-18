@@ -51,7 +51,7 @@ func newFillQueue(store ResponseStore) *fillQueue {
 	return q
 }
 
-// enqueue drops optional work when capacity or the short admission lock is unavailable.
+// enqueue drops optional work when capacity is unavailable.
 func (q *fillQueue) enqueue(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	return q.enqueueTo(ctx, q.store, key, value, ttl)
 }
@@ -82,10 +82,12 @@ func (q *fillQueue) admit(ctx context.Context, store ResponseStore, key string, 
 		return nil
 	}
 	cost := int64(len(key)+valueCost) + 96
-	if !q.mu.TryLock() {
-		q.dropped.Add(1)
-		return nil
-	}
+	// The lock only guards the counters. No holder does I/O under it, so
+	// waiting for it costs a few instructions. A try-lock here dropped about
+	// one fill in a hundred when it landed on a worker's bookkeeping, which
+	// is how a semantic vector followed its exact entry into the queue and
+	// silently never arrived.
+	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.closed {
 		return ErrCacheClosed
