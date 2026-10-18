@@ -26,7 +26,7 @@ release_notes_present() {
 	awk '/^## Unreleased/{u=1; r=0; next} /^## v1\.4\.0/{r=1; u=0; next} /^## /{u=0; r=0} u && /^- /{n++} r && /^### Breaking changes/{b=1} r && b && /^- /{m++} END{exit !(n>0 || m>0)}' CHANGELOG.md
 }
 
-check "issue chooser has no Discussions link" no_match '/discussions' .github/ISSUE_TEMPLATE/config.yml
+check "issue chooser links Discussions (enabled 2026-10-17, D2)" grep -q '/discussions' .github/ISSUE_TEMPLATE/config.yml
 check "issue chooser routes security reports to the policy address" grep -Eq 'security@agentstation\.ai|security/advisories' .github/ISSUE_TEMPLATE/config.yml
 check "CODEOWNERS names no missing team" no_match '@agentstation/maintainers' .github/CODEOWNERS
 check "CHANGELOG lists the changes since v1.3.0 under Unreleased or v1.4.0" release_notes_present

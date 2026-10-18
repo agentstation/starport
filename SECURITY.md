@@ -7,8 +7,10 @@ and older releases do not receive separate security support.
 
 ## Report a Vulnerability
 
-Email security reports to `security@agentstation.ai`. Do not open a public
-issue for a suspected vulnerability.
+Report a vulnerability through the private advisory form at
+<https://github.com/agentstation/starport/security/advisories/new>, or email
+`security@agentstation.ai`. Do not open a public issue for a suspected
+vulnerability.
 
 Include the affected version or commit, the deployment mode, reproduction
 steps, the security effect, and any proposed remediation. Remove provider
