@@ -21,6 +21,13 @@ const (
 	authorizationRevisionInterval   = time.Second
 	authorizationRevisionTimeout    = time.Second
 	authorizationPermissionLifetime = 60 * time.Second
+	// authorizationLoadTimeout bounds one cold policy load. It sits well inside
+	// the permission lifetime, because the permission's validity starts when
+	// the load starts, and well above one second, because a cold local store on
+	// a loaded machine took ten seconds to answer the reads of one load, and a
+	// one-second bound refused every request with 503 until the machine
+	// recovered.
+	authorizationLoadTimeout = authorizationPermissionLifetime / 4
 )
 
 // authorizationOwner holds this replica's independent policy fences and revision monitor.
@@ -107,7 +114,7 @@ func (b *runtimeBuilder) openAuthorizationCache() error {
 		return err
 	}
 	owner.cache, err = authorization.NewCache(source, owner.authorities, authorization.CacheLimits{
-		Entries: 1024, Bytes: 16 << 20, BundleBytes: 64 << 10, ConcurrentLoads: 16, TenantLoads: 4, LoadTimeout: time.Second, PermissionLifetime: authorizationPermissionLifetime,
+		Entries: 1024, Bytes: 16 << 20, BundleBytes: 64 << 10, ConcurrentLoads: 16, TenantLoads: 4, LoadTimeout: authorizationLoadTimeout, PermissionLifetime: authorizationPermissionLifetime,
 	}, owner.clock, hostclock.Elapsed)
 	if err != nil {
 		return err
