@@ -21,7 +21,7 @@ No production qualification or latency improvement follows from this interface c
 
 Response and model fills share two lifecycle-owned workers. The queue limits queued and active work to 1,024 entries and 4 MiB of charged bytes.
 The byte charge includes copied keys, copied payloads, and 96 bytes per job. It does not measure total process or transport memory.
-Admission drops optional work when capacity or the admission lock is unavailable.
+Admission drops optional work when capacity is unavailable. The admission lock guards only the counters, so a fill never waits on a write.
 `SetResponse` does not confirm persistence or a subsequent cache hit.
 
 Writes have a 500 ms context deadline. Cache-only adapters must honor cancellation for blocking work.
