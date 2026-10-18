@@ -1,7 +1,6 @@
 package jobs_test
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/json/v2"
@@ -100,30 +99,17 @@ func TestBatchAggregateSharedProcessRecovery(t *testing.T) {
 				require.NoError(t, err)
 				require.NoError(t, kv.BatchDelete(ctx, keys))
 			})
-			commandFor := func(config aggregateSharedConfig) *exec.Cmd {
+			childEnv := func(config aggregateSharedConfig) string {
 				data, err := json.Marshal(config)
 				require.NoError(t, err)
+				return aggregateSharedChild + "=" + string(data)
+			}
+			commandFor := func(config aggregateSharedConfig) *exec.Cmd {
 				command := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestBatchAggregateSharedProcessRecovery$", "-test.timeout=30s")
-				command.Env = append(os.Environ(), aggregateSharedChild+"="+string(data))
+				command.Env = append(os.Environ(), childEnv(config))
 				return command
 			}
-			command := commandFor(cfg)
-			var log bytes.Buffer
-			command.Stdout, command.Stderr = &log, &log
-			require.NoError(t, command.Start())
-			t.Cleanup(func() { _ = command.Process.Kill() })
-			var original []byte
-			deadline := time.Now().Add(15 * time.Second)
-			for time.Now().Before(deadline) {
-				original, _ = os.ReadFile(cfg.Marker)
-				if len(original) != 0 {
-					break
-				}
-				time.Sleep(5 * time.Millisecond)
-			}
-			require.NoError(t, command.Process.Kill())
-			require.Error(t, command.Wait())
-			require.NotEmpty(t, original, "child missed interruption boundary: %s", log.String())
+			original := startLossChild(t, "TestBatchAggregateSharedProcessRecovery", childEnv(cfg)).killAtMarker(t, cfg.Marker)
 			cfg.Stage = "recover"
 			type outcome struct {
 				log []byte
