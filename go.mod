@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/auth v0.24.1
 	cloud.google.com/go/secretmanager v1.22.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.3
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.1
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.15.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.5.0
 	github.com/agentstation/starmap v0.17.1
 	github.com/agentstation/uuidkey v1.2.0
@@ -19,7 +19,7 @@ require (
 	github.com/aws/smithy-go v1.28.5
 	github.com/dgraph-io/badger/v4 v4.9.6
 	github.com/dgraph-io/ristretto/v2 v2.4.2
-	github.com/go-chi/chi/v5 v5.3.2
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/gofrs/flock v0.13.1
@@ -40,8 +40,8 @@ require (
 	github.com/tiktoken-go/tokenizer v0.8.1
 	github.com/urfave/cli-docs/v3 v3.1.0
 	github.com/urfave/cli/v3 v3.14.0
-	github.com/valkey-io/valkey-go v1.0.78
-	github.com/valkey-io/valkey-go/mock v1.0.78
+	github.com/valkey-io/valkey-go v1.0.79
+	github.com/valkey-io/valkey-go/mock v1.0.79
 	github.com/workos/workos-go/v10 v10.5.0
 	github.com/yuin/goldmark v1.8.6
 	go.opentelemetry.io/otel v1.47.0
@@ -64,7 +64,7 @@ require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.13.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.2.0 // indirect
-	github.com/AzureAD/microsoft-authentication-library-for-go v1.8.0 // indirect
+	github.com/AzureAD/microsoft-authentication-library-for-go v1.10.1 // indirect
 	github.com/Microsoft/go-winio v0.6.3 // indirect
 	github.com/agentstation/utc v0.2.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
