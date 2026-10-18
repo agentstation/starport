@@ -17,6 +17,9 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: ["src/test/setup.ts"],
+    // setup.ts gives each Testing Library wait four seconds, so a test with
+    // several waits on a loaded runner still finishes inside the ceiling.
+    testTimeout: 15_000,
     // The contrast tests read the token source and the docs stylesheet,
     // and the runner empties every other stylesheet.
     css: { include: [/styles\/tokens\.css/, /docs\/site\.css/] },
