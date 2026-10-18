@@ -177,5 +177,5 @@ repository glossary defines project terms such as Starmap, Valkey, and BYOK.
 
 ## Ask for help
 
-Use a GitHub issue or discussion for design questions. Include the smallest
+Use a GitHub issue for design questions. Include the smallest
 reproduction, the exact command, the exit status, and redacted output.

@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/agentstation/starport)](https://github.com/agentstation/starport/releases)
 [![CI](https://github.com/agentstation/starport/actions/workflows/ci.yml/badge.svg)](https://github.com/agentstation/starport/actions/workflows/ci.yml)
-[![License: AGPLv3](https://img.shields.io/github/license/agentstation/starport)](LICENSE)
+[![License: AGPL-3.0-only](https://img.shields.io/github/license/agentstation/starport)](LICENSE)
 
 Starport is a self-hosted LLM inference gateway in one binary. It serves the
 OpenAI-compatible API at `/v1` and the OpenRouter-compatible API at `/api/v1`.
@@ -26,7 +26,7 @@ Starport serves individual developers, startups, and enterprises:
 
 ## CLI and Console
 
-The recordings below use current source and show catalog inspection and a temporary gateway.
+The recordings below use current source and show catalog inspection and a scratch gateway.
 The CLI uses the reviewed local Starmap catalog embedded in its source build.
 The Console reads that generation from a local Starmap server.
 Neither recording uses provider inference credentials.
@@ -82,6 +82,14 @@ brew upgrade --cask agentstation/tap/starport
 The current public release also contains checksummed archives for macOS,
 Linux, and Windows. Download an archive from
 [GitHub Releases](https://github.com/agentstation/starport/releases).
+
+The macOS release binary is not yet notarized. After you extract a macOS
+archive, remove the quarantine attribute before the first run. The Homebrew
+cask does this step for you.
+
+```bash
+xattr -d com.apple.quarantine ./starport
+```
 
 CI tests each candidate archive on a native runner for each supported target.
 The job checks the checksum and the version and runs the two catalog commands below.
@@ -566,7 +574,7 @@ Version 1 includes:
 
 The [performance profile](docs/performance-targets-v1.json) defines the
 latency targets for the planned production release. The profile marks these
-targets UNVERIFIED. CSP22 owns their qualification on dedicated runners.
+targets UNVERIFIED. Dedicated runners have not yet qualified these targets.
 [Gateway overhead](docs/PERFORMANCE.md) gives the measurement boundaries.
 
 The current overhead benchmark guards one part of chat request processing.
@@ -600,7 +608,13 @@ See the [development guide](DEVELOPMENT.md) and
 
 ## License and security
 
-Starport uses the GNU AGPLv3 license. See [LICENSE](LICENSE).
+Copyright 2025-2026 AgentStation, AGPL-3.0-only. See [LICENSE](LICENSE).
+
+Starport sends no telemetry. The default `public` catalog source polls the
+Starmap catalog channel on GitHub each hour. Set
+`STARPORT_CATALOG_SOURCE=embedded` to use the catalog in the binary instead.
+The [security posture](docs/SECURITY-POSTURE.md#data-flows) lists every
+outbound connection.
 
 Report vulnerabilities through the process in [SECURITY.md](SECURITY.md).
 For credential handling, encryption, and data flows, read the

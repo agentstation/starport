@@ -18,7 +18,7 @@ import (
 
 const (
 	selectionPolicyRecordLimit   = 4096
-	selectionPolicyWriteTimeout  = 5 * time.Second
+	selectionPolicyWriterWait    = 5 * time.Second
 	selectionPolicyRetryInterval = 10 * time.Millisecond
 )
 
@@ -162,10 +162,11 @@ func (s *FileSelectionPolicyStore) create(ctx context.Context, name string, reco
 	if len(data) > selectionPolicyRecordLimit {
 		return fmt.Errorf("inference policy exceeds its size limit")
 	}
-	writeCtx, cancel := context.WithTimeout(ctx, selectionPolicyWriteTimeout)
-	defer cancel()
+	// The wait bounds contention with another writer. A publication runs under
+	// the caller's context, so slow storage does not abandon a write in progress.
+	var contended time.Time
 	for {
-		err = s.directory.CompareAndPublish(writeCtx, name, nil, data)
+		err = s.directory.CompareAndPublish(ctx, name, nil, data)
 		if _, uncertain := errors.AsType[*starmaperrors.PublicationError](err); uncertain {
 			return err
 		}
@@ -183,11 +184,16 @@ func (s *FileSelectionPolicyStore) create(ctx context.Context, name string, reco
 			}
 			return err
 		}
+		if contended.IsZero() {
+			contended = time.Now()
+		} else if time.Since(contended) >= selectionPolicyWriterWait {
+			return context.DeadlineExceeded
+		}
 		timer := time.NewTimer(selectionPolicyRetryInterval)
 		select {
-		case <-writeCtx.Done():
+		case <-ctx.Done():
 			timer.Stop()
-			return writeCtx.Err()
+			return ctx.Err()
 		case <-timer.C:
 		}
 	}

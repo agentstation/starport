@@ -1,27 +1,25 @@
-## Task: [TASK-ID] Task Title
+## Summary
 
-### Summary
-Brief description of what was implemented
+Describe the problem and the change in a few sentences.
 
-### Changes
-- List key changes made
-- File structures created
-- Features implemented
+## Changes
 
-### Implementation Checklist
-From TASKS.md acceptance criteria:
-- [ ] Criteria 1
-- [ ] Criteria 2
-- [ ] Criteria 3
+- List the main changes.
 
-### Testing
-- [ ] Tests added/updated
-- [ ] All tests passing
-- [ ] Coverage meets requirements
+## Tests
 
-### Dependencies
-- [ ] Prerequisites were verified complete
-- [ ] No blocking issues for dependent tasks
+List each command that you ran and its result.
 
-### Notes
-Any issues, TODOs, or handoff notes for next tasks
+## Documentation
+
+Name the documents that you updated, or state why no update is necessary.
+
+## Breaking changes
+
+State yes or no. For yes, give the migration steps.
+
+## Checklist
+
+- [ ] `gofmt -l` prints nothing, and `go vet ./...` passes.
+- [ ] The documentation matches the change.
+- [ ] The change contains no secrets, keys, or tokens.

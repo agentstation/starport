@@ -11,7 +11,7 @@ The status line of each recipe is the same as the status in the target table. A 
 
 ## Latency profiles
 
-The latency values come from the engineering targets in `docs/performance-targets-v1.json`. They have the status UNVERIFIED. No measurement in this release satisfies or qualifies them. CSP22 owns their qualification on identified, dedicated runners. Each latency value is in milliseconds.
+The latency values come from the engineering targets in `docs/performance-targets-v1.json`. They have the status UNVERIFIED. No measurement in this release satisfies or qualifies them. Dedicated runners have not yet qualified these targets. Each latency value is in milliseconds.
 
 | Measure | `local` profile | `fleet` profile |
 | --- | --- | --- |
@@ -48,7 +48,7 @@ T1 serves catalog data. It sends no inference request, so it has no budget admis
 
 ### Latency targets
 
-No Starport latency profile applies to T1, because T1 sends no inference request. The UNVERIFIED engineering targets in [Latency profiles](#latency-profiles) cover Starport gateways only. CSP22 qualifies those targets.
+No Starport latency profile applies to T1, because T1 sends no inference request. The UNVERIFIED engineering targets in [Latency profiles](#latency-profiles) cover Starport gateways only. Dedicated runners have not yet qualified these targets.
 
 ### Runnable checks
 
@@ -105,7 +105,7 @@ In T2, Badger holds the reservation ledger.
 
 ### Latency targets
 
-T2 uses the `local` profile in [Latency profiles](#latency-profiles). The profile holds UNVERIFIED engineering targets. CSP22 qualifies them. This release has no measured value for this recipe.
+T2 uses the `local` profile in [Latency profiles](#latency-profiles). The profile holds UNVERIFIED engineering targets. Dedicated runners have not yet qualified these targets. This release has no measured value for this recipe.
 
 ### Runnable checks
 
@@ -150,7 +150,7 @@ The admission operations are the same as in [T2](#t2-persistent-local-starport).
 
 ### Latency targets
 
-T3 uses the `local` profile in [Latency profiles](#latency-profiles). The profile holds UNVERIFIED engineering targets. CSP22 qualifies them. This release has no measured value for this recipe.
+T3 uses the `local` profile in [Latency profiles](#latency-profiles). The profile holds UNVERIFIED engineering targets. Dedicated runners have not yet qualified these targets. This release has no measured value for this recipe.
 
 ### Runnable checks
 
@@ -165,7 +165,7 @@ STARPORT_RECIPE_IMAGE=starport-storage-recipe:local go test ./internal/config -r
 
 ### Recovery
 
-The T2 backup procedure applies. The CSP13 tests prove a backup, a restore, and an activation from one local process to a fresh local process. The recipe image test proves a cold backup that restores into fresh volumes.
+The T2 backup procedure applies. The recovery tests prove a backup, a restore, and an activation from one local process to a fresh local process. The recipe image test proves a cold backup that restores into fresh volumes.
 
 These limits apply:
 
@@ -204,7 +204,7 @@ The admission operations are the same as in [T2](#t2-persistent-local-starport).
 
 ### Latency targets
 
-T4 uses the `fleet` profile in [Latency profiles](#latency-profiles). The profile assumes three replicas and a store round trip p99 of 0.5 milliseconds or less. The profile holds UNVERIFIED engineering targets. CSP22 qualifies them. This release has no measured value for this recipe.
+T4 uses the `fleet` profile in [Latency profiles](#latency-profiles). The profile assumes three replicas and a store round trip p99 of 0.5 milliseconds or less. The profile holds UNVERIFIED engineering targets. Dedicated runners have not yet qualified these targets. This release has no measured value for this recipe.
 
 ### Runnable checks
 
@@ -252,7 +252,7 @@ The admission operations of the gateway recipe apply. The source API key is a ca
 
 ### Latency targets
 
-A gateway with one process uses the `local` profile. A fleet uses the `fleet` profile. Refer to [Latency profiles](#latency-profiles). The profile holds UNVERIFIED engineering targets. CSP22 qualifies them. This release has no measured value for this recipe.
+A gateway with one process uses the `local` profile. A fleet uses the `fleet` profile. Refer to [Latency profiles](#latency-profiles). The profile holds UNVERIFIED engineering targets. Dedicated runners have not yet qualified these targets. This release has no measured value for this recipe.
 
 ### Runnable checks
 
@@ -287,7 +287,7 @@ The admission operations of the gateway recipe apply.
 
 ### Latency targets
 
-A gateway with one process uses the `local` profile. A fleet uses the `fleet` profile. Refer to [Latency profiles](#latency-profiles). The profile holds UNVERIFIED engineering targets. CSP22 qualifies them. This release has no measured value for this recipe.
+A gateway with one process uses the `local` profile. A fleet uses the `fleet` profile. Refer to [Latency profiles](#latency-profiles). The profile holds UNVERIFIED engineering targets. Dedicated runners have not yet qualified these targets. This release has no measured value for this recipe.
 
 ### Runnable checks
 
@@ -321,7 +321,7 @@ The admission operations are the same as in [T2](#t2-persistent-local-starport).
 
 ### Latency targets
 
-T7 has no latency profile. The UNVERIFIED engineering targets in [Latency profiles](#latency-profiles) do not cover development mode. CSP22 qualifies the `local` and `fleet` profiles only.
+T7 has no latency profile. The UNVERIFIED engineering targets in [Latency profiles](#latency-profiles) do not cover development mode. Dedicated runners have not yet qualified these targets.
 
 ### Runnable checks
 

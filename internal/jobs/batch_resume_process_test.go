@@ -1,15 +1,12 @@
 package jobs_test
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/files"
@@ -49,25 +46,7 @@ func TestBatchResumeAfterProcessLoss(t *testing.T) {
 		select {}
 	}
 	root := t.TempDir()
-	var output bytes.Buffer
-	command := exec.Command(os.Args[0], "-test.run=^TestBatchResumeAfterProcessLoss$", "-test.timeout=30s")
-	command.Env = append(os.Environ(), childKey+"="+root)
-	command.Stdout = &output
-	command.Stderr = &output
-	require.NoError(t, command.Start())
-	t.Cleanup(func() { _ = command.Process.Kill() })
-	ready := false
-	deadline := time.Now().Add(15 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(filepath.Join(root, "marker")); err == nil {
-			ready = true
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	require.NoError(t, command.Process.Kill())
-	require.Error(t, command.Wait())
-	require.True(t, ready, "child did not reach uncertain second line: %s", output.String())
+	startLossChild(t, "TestBatchResumeAfterProcessLoss", childKey+"="+root).killAtMarker(t, filepath.Join(root, "marker"))
 	_, records, fileIO := openStore(root)
 	first, err := records.ReadLine(t.Context(), "account", "resume-process", 1)
 	require.NoError(t, err)

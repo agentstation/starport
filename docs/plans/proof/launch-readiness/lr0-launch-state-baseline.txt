@@ -1,0 +1,17 @@
+FAIL starport-site environment holds the Cloudflare secrets
+FAIL starport-site environment requires reviewers
+FAIL secret scanning is enabled
+FAIL push protection is enabled
+FAIL Dependabot security updates are enabled
+FAIL private vulnerability reporting is enabled
+FAIL CodeQL default setup is configured
+FAIL repository topics are set
+FAIL macOS signing secrets are present
+FAIL a tag ruleset protects release tags
+FAIL http redirects to https
+FAIL https sends HSTS
+FAIL the live site serves the current copy
+FAIL the latest release is newer than v1.3.0
+FAIL go.mod pins a tagged Starmap release
+FAIL the latest main CI run is green
+Summary: 0 passed, 16 failed

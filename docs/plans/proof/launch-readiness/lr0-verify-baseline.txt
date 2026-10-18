@@ -1,0 +1,15 @@
+FAIL issue chooser has no Discussions link
+FAIL issue chooser routes security reports to the policy address
+FAIL CODEOWNERS names no missing team
+FAIL CHANGELOG Unreleased lists the changes since v1.3.0
+FAIL README and CHANGELOG carry no plan jargon
+FAIL security posture names the catalog egress opt-out
+FAIL site ships a sitemap route
+FAIL site layout declares Open Graph metadata
+FAIL Dependabot covers the website package
+FAIL docs-pages names the canonical documentation host
+FAIL native-release verifies a current release by default
+FAIL no agent launcher at the repository root
+FAIL the completed product-demos plan is removed
+FAIL release reports missing macOS signing material
+Summary: 0 passed, 14 failed

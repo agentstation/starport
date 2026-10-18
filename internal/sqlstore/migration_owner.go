@@ -39,9 +39,19 @@ func (db *DB) acquireMigrationOwner(ctx context.Context) (*migrationOwner, error
 	if err := owner.acquire(ctx); err != nil {
 		// A canceled reply cannot prove that the server did not grant the lock.
 		owner.discard()
-		return nil, fmt.Errorf("acquire migration ownership: %w", err)
+		return nil, fmt.Errorf("acquire migration ownership: %w", withContextCause(ctx, err))
 	}
 	return owner, nil
+}
+
+// withContextCause keeps the context error in the chain. The MySQL driver
+// reports a closed connection instead of the deadline or cancellation that
+// closed it when the context ends during a round trip.
+func withContextCause(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	return errors.Join(err, ctx.Err())
 }
 
 func (o *migrationOwner) acquire(ctx context.Context) error {
@@ -130,7 +140,7 @@ func (o *migrationOwner) transaction(ctx context.Context, apply func() error) (e
 			break
 		}
 		if o.dialect != TypeSQLite || !sqliteMigrationBusy(err) {
-			return err
+			return withContextCause(ctx, err)
 		}
 		if err = waitMigrationRetry(ctx); err != nil {
 			return err
@@ -153,7 +163,7 @@ func (o *migrationOwner) transaction(ctx context.Context, apply func() error) (e
 	}
 	_, err = o.conn.ExecContext(ctx, "COMMIT")
 	committed = err == nil
-	return err
+	return withContextCause(ctx, err)
 }
 
 func sqliteMigrationBusy(err error) bool {

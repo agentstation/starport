@@ -7,6 +7,8 @@ assignees: ''
 
 ---
 
+> Remove provider keys, gateway keys, master keys, tokens, and other secrets from every log, configuration, and screenshot. Report a vulnerability through [SECURITY.md](https://github.com/agentstation/starport/blob/main/SECURITY.md), not in an issue.
+
 **Describe the bug**
 A clear and concise description of what the bug is.
 
@@ -30,11 +32,10 @@ Paste relevant logs here
 ```
 
 **Environment (please complete the following information):**
- - OS: [e.g. Ubuntu 22.04]
- - Go Version: [e.g. 1.27.2]
- - Starport Version: [e.g. v0.1.0 or commit hash]
- - Storage Backend: [e.g. Badger/Valkey]
- - Deployment: [e.g. Docker/Binary]
+ - Starport version: [output of `starport --version`]
+ - Install method: [e.g. Homebrew cask, release archive, container image, source build]
+ - OS and architecture: [e.g. macOS 26 on Apple silicon, Ubuntu 24.04 on x86-64]
+ - Storage backend: [e.g. Badger, SQLite, Valkey, PostgreSQL]
 
 **Configuration**
 Relevant configuration (remove sensitive data):

@@ -1,8 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Community Support
+  - name: Documentation
+    url: https://starport.agentstation.ai/docs
+    about: Read the documentation before you open an issue.
+  - name: Questions and Discussions
     url: https://github.com/agentstation/starport/discussions
-    about: Please ask and answer questions here.
+    about: Ask a question or propose an idea in Discussions.
   - name: Security Issues
-    url: mailto:support@agentstation.ai
-    about: Please report security vulnerabilities via email.
+    url: https://github.com/agentstation/starport/security/advisories/new
+    about: Report a vulnerability through the private advisory form or email security@agentstation.ai. Do not open a public issue.
