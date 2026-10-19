@@ -17,9 +17,14 @@ type MaterialLimits struct {
 	RefreshInterval       time.Duration
 }
 
-// DefaultMaterialLimits returns the initial managed credential profile.
+// DefaultMaterialLimits returns the initial managed credential profile. The
+// load bound takes most of the validity window, because a cold load pays one
+// Argon2id derivation of 64 MiB, and concurrent derivations on a loaded
+// machine took close to two seconds each. Validity starts when the load
+// starts, so a load that ends inside the bound still publishes valid material.
 func DefaultMaterialLimits() MaterialLimits {
-	return MaterialLimits{Entries: 1024, SecretBytes: 16 << 20, ConcurrentLoads: 4, TenantConcurrentLoads: 2, Validity: 5 * time.Second, LoadTimeout: time.Second, Idle: time.Minute, RefreshInterval: time.Second}
+	const validity = 5 * time.Second
+	return MaterialLimits{Entries: 1024, SecretBytes: 16 << 20, ConcurrentLoads: 4, TenantConcurrentLoads: 2, Validity: validity, LoadTimeout: validity * 4 / 5, Idle: time.Minute, RefreshInterval: time.Second}
 }
 
 // Validate checks resource bounds and the maximum permission-validity window.

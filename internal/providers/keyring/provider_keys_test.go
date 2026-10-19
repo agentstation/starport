@@ -89,8 +89,8 @@ func newSyntheticProviderKeys(t *testing.T, provider catalogs.Provider, limits .
 
 // unhurriedMaterialLimits widens the default load deadline for a test that
 // proves a property other than timing. A stored load derives a key with
-// Argon2, and under the race detector on a loaded runner that takes longer
-// than the one-second default.
+// Argon2, and under the race detector on a loaded runner that can take most
+// of the default bound.
 func unhurriedMaterialLimits() credentials.MaterialLimits {
 	limits := credentials.DefaultMaterialLimits()
 	limits.Validity, limits.LoadTimeout, limits.Idle = 5*time.Minute, time.Minute, 5*time.Minute
