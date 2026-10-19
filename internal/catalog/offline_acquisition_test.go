@@ -181,7 +181,9 @@ func TestGenerationPinBlocksAcquisitionAcrossRestart(t *testing.T) {
 	settings.Source = "file"
 	settings.SourceURL = filepath.Join(root, "catalog.json")
 	settings.SourceStartupPolicy = "require_source"
-	settings.SourcePollInterval = 10 * time.Millisecond
+	// An explicit source refresh joins a scheduled read already in flight, and
+	// that read can predate the file rewrite, so the unpinned runtime does not poll.
+	settings.SourcePollInterval = 0
 	settings.Values = map[string]string{catalogconfig.AcquisitionSources: string(sources.ProvidersID), catalogconfig.StartupSpread: "0s"}
 	payload, err := catalogs.EncodeCatalogPayload(acquisitionLifecycleCatalog(t, server.URL))
 	require.NoError(t, err)
@@ -202,6 +204,7 @@ func TestGenerationPinBlocksAcquisitionAcrossRestart(t *testing.T) {
 	require.NoError(t, initial.Close(t.Context()))
 	require.NoError(t, store.Close())
 	settings.Values[catalogconfig.GenerationPin] = selected.State.GenerationID
+	settings.SourcePollInterval = 10 * time.Millisecond
 	settings.AcquisitionEnabled = true
 	settings.AcquisitionInterval = 10 * time.Millisecond
 	require.NoError(t, os.WriteFile(settings.SourceURL, bytes.ReplaceAll(payload, []byte("fixture-chat"), []byte("fixture-next")), 0600))
