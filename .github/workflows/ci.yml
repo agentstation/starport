@@ -10,6 +10,14 @@ permissions:
   contents: read
   pull-requests: read
 
+# A new push to a pull request supersedes the run on its earlier head. The
+# macOS runners are the shared bottleneck, so the superseded run stops at
+# once. A push to main keeps every run, because each merge commit needs its
+# own record.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   GOTOOLCHAIN: go1.27.2
 
