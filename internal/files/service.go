@@ -436,18 +436,29 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 	if s.meter != nil {
 		failures = s.meter.RecoverPending(ctx)
 	}
+	caller := ctx
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	now := s.now().UTC()
 	abandonedBefore := now.Add(-s.pendingGrace)
 	var result SweepResult
 	processed := 0
+	// The time bound ends a pass the way the write bound does: with the work
+	// so far and no error, because slow storage that retires fewer records in
+	// 30 s has not failed. Only the caller's own context ends a pass with an
+	// error, and the record under way stays queued for the next pass.
+	ended := func() (SweepResult, error) {
+		return result, errors.Join(failures, caller.Err())
+	}
 	for {
-		if err := ctx.Err(); err != nil {
-			return result, errors.Join(failures, err)
+		if ctx.Err() != nil {
+			return ended()
 		}
 		if !s.sweepLoaded {
 			page, err := s.records.Page(ctx, "", s.sweepCursor)
+			if err != nil && ctx.Err() != nil {
+				return ended()
+			}
 			if err != nil && failures == nil {
 				failures = err
 			}
@@ -457,13 +468,16 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 			s.sweepPending, s.sweepNext, s.sweepLoaded = page.Records, page.Next, true
 		}
 		for len(s.sweepPending) > 0 {
-			if err := ctx.Err(); err != nil {
-				return result, errors.Join(failures, err)
+			if ctx.Err() != nil {
+				return ended()
 			}
 			file := s.sweepPending[0]
 			counter := s.sweepReason(file, now, abandonedBefore, &result)
 			if counter != nil {
 				if err := s.retire(ctx, file); err != nil {
+					if ctx.Err() != nil {
+						return ended()
+					}
 					if !errors.Is(err, ErrFileNotFound) && failures == nil {
 						failures = fmt.Errorf("files: sweep %s: %w", file.ID, err)
 					}
