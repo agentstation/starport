@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 func TestManagedMaterialEnvironmentBounds(t *testing.T) {
@@ -15,6 +17,16 @@ func TestManagedMaterialEnvironmentBounds(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 32, cfg.CredentialSources.Managed.Limits().Entries)
 	require.Equal(t, 10*time.Second, cfg.CredentialSources.Managed.Limits().Validity)
+}
+
+// TestManagedMaterialEnvironmentDefaultsMatchCredentialDefaults keeps the
+// environment defaults on the credential-owned profile, so an operator who
+// sets one variable does not move the others away from it.
+func TestManagedMaterialEnvironmentDefaultsMatchCredentialDefaults(t *testing.T) {
+	cfg, err := NewLoader().WithPaths(PathsForConfigDir(t.TempDir())).WithEnvironment(map[string]string{}).WithEnvFiles().Load(t.Context())
+	require.NoError(t, err)
+	require.NotZero(t, cfg.CredentialSources.Managed, "the environment defaults fill the profile")
+	require.Equal(t, credentials.DefaultMaterialLimits(), cfg.CredentialSources.Managed.Limits())
 }
 
 func TestManagedMaterialEnvironmentRejectsUnsafeBounds(t *testing.T) {

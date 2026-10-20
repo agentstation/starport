@@ -138,7 +138,7 @@ The `env` tags of the Starport configuration define these settings. The `starpor
 | `STARPORT_CREDENTIAL_SOURCES_MANAGED_CONCURRENT_LOADS` | `int` | `4` | No |
 | `STARPORT_CREDENTIAL_SOURCES_MANAGED_TENANT_CONCURRENT_LOADS` | `int` | `2` | No |
 | `STARPORT_CREDENTIAL_SOURCES_MANAGED_VALIDITY` | `time.Duration` | `5s` | No |
-| `STARPORT_CREDENTIAL_SOURCES_MANAGED_LOAD_TIMEOUT` | `time.Duration` | `1s` | No |
+| `STARPORT_CREDENTIAL_SOURCES_MANAGED_LOAD_TIMEOUT` | `time.Duration` | `4s` | No |
 | `STARPORT_CREDENTIAL_SOURCES_MANAGED_IDLE` | `time.Duration` | `1m` | No |
 | `STARPORT_CREDENTIAL_SOURCES_MANAGED_REFRESH_INTERVAL` | `time.Duration` | `1s` | No |
 | `STARPORT_CREDENTIAL_SOURCES_ALLOW_STARMAP_FALLBACK` | `bool` | `false` | No |

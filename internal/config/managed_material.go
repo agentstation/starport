@@ -12,7 +12,7 @@ type ManagedMaterialConfig struct {
 	ConcurrentLoads       int           `env:"CONCURRENT_LOADS,default=4"`
 	TenantConcurrentLoads int           `env:"TENANT_CONCURRENT_LOADS,default=2"`
 	Validity              time.Duration `env:"VALIDITY,default=5s"`
-	LoadTimeout           time.Duration `env:"LOAD_TIMEOUT,default=1s"`
+	LoadTimeout           time.Duration `env:"LOAD_TIMEOUT,default=4s"`
 	Idle                  time.Duration `env:"IDLE,default=1m"`
 	RefreshInterval       time.Duration `env:"REFRESH_INTERVAL,default=1s"`
 }

@@ -1086,7 +1086,7 @@ Configure these limits with the `STARPORT_CREDENTIAL_SOURCES_MANAGED_` prefix:
 | `CONCURRENT_LOADS` | `4` | Maximum simultaneous source loads |
 | `TENANT_CONCURRENT_LOADS` | `2` | Maximum simultaneous loads per account scope |
 | `VALIDITY` | `5s` | Maximum age of a validated record snapshot |
-| `LOAD_TIMEOUT` | `1s` | Deadline for one source load |
+| `LOAD_TIMEOUT` | `4s` | Deadline for one source load, including key derivation |
 | `IDLE` | `1m` | Retention limit for unused selections |
 | `REFRESH_INTERVAL` | `1s` | Background refresh scan period |
 

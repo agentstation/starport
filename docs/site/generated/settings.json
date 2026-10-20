@@ -1145,7 +1145,7 @@
       "section": "credential_sources",
       "field": "CredentialSources.Managed.LoadTimeout",
       "type": "time.Duration",
-      "default": "1s",
+      "default": "4s",
       "default_source": "tag",
       "secret": false
     },
