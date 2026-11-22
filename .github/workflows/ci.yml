@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  GOTOOLCHAIN: go1.27.2
+  GOTOOLCHAIN: go1.27.4
 
 jobs:
   lint:
@@ -32,7 +32,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
 
       - name: Run golangci-lint
@@ -60,7 +60,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
 
       - name: Download dependencies
@@ -180,7 +180,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
       - name: Run complete application shard
         shell: bash
@@ -239,7 +239,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
       - name: Run complete recovery shard
         shell: bash
@@ -307,7 +307,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
       - name: Verify shared startup and restart
         env:
@@ -383,7 +383,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
       - name: Verify native catalog publication and recovery
         env:
@@ -475,7 +475,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
       - name: Build the pinned recovery object store
         # Official RELEASE.2025-09-07T16-13-09Z source. Public images are unavailable.
@@ -586,7 +586,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
       - name: Test required application recovery evidence
         run: python scripts/test-recovery-application.py
@@ -677,7 +677,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
       - name: Measure authorization capacity
         run: make --silent test-authorization-capacity > authorization-capacity.jsonl
@@ -704,7 +704,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
       - name: Set up container builder
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -740,7 +740,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
 
       - name: Check console workspace
@@ -785,11 +785,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
 
       - name: Run Gosec Security Scanner
-        # gosec v2.29.0 pins x/tools v0.49.0, which cannot read Go 1.27.2 export
+        # gosec v2.29.0 pins x/tools v0.49.0, which cannot read Go 1.27.4 export
         # data. This master commit (2026-10-05) pins x/tools v0.51.0. Move back
         # to a tagged release when gosec publishes one after v2.29.0.
         run: go run github.com/securego/gosec/v2/cmd/gosec@v2.29.1-0.20261005092323-d2b649ec0182 -fmt sarif -out gosec-results.sarif ./...
@@ -814,7 +814,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
 
       - name: Resolve verified published Starmap source
@@ -881,7 +881,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
 
       - name: Set up Node.js
@@ -912,7 +912,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
           cache: true
 
       - name: Set up Node.js
@@ -959,7 +959,7 @@ jobs:
 
   candidate-install:
     name: Candidate install (${{ matrix.runner }})
-    timeout-minutes: 15
+    timeout-minutes: 45
     runs-on: ${{ matrix.runner }}
     needs: [release-snapshot]
     if: github.event_name == 'pull_request'

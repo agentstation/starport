@@ -15,7 +15,7 @@ import recovery_application as recovery
 SOURCE = "a" * 40
 HEAD = "b" * 40
 PRODUCER = {"Path": "github.com/agentstation/starmap", "Version": "v0.16.6-0.20260930115749-2bb995712275",
-            "GoVersion": "1.27.2", "Sum": "h1:source", "GoModSum": "h1:module"}
+            "GoVersion": "1.27.4", "Sum": "h1:source", "GoModSum": "h1:module"}
 
 
 def event(action, name=None):
@@ -35,13 +35,13 @@ def events(group):
 def roster(group, mode, sources):
     return {"version": 1, "package": recovery.PACKAGE, "group": group, "mode": mode, "source": SOURCE,
             "workflow_head": HEAD, "owners": list(recovery.GROUPS[group]), "owner_sources": sources,
-            "toolchain": {"GOVERSION": "go1.27.2", "GOOS": "linux", "GOARCH": "amd64", "GOHOSTOS": "linux",
+            "toolchain": {"GOVERSION": "go1.27.4", "GOOS": "linux", "GOARCH": "amd64", "GOHOSTOS": "linux",
                           "GOHOSTARCH": "amd64", "CGO_ENABLED": "1" if mode == "race" else "0", "GOWORK": "off"},
             "producer": dict(PRODUCER)}
 
 
 def binary_metadata(path, mode):
-    return (str(path) + ": go1.27.2\n\tpath\tgithub.com/agentstation/starport/cmd/starport\n" +
+    return (str(path) + ": go1.27.4\n\tpath\tgithub.com/agentstation/starport/cmd/starport\n" +
             "".join("\tbuild\t" + setting + "\n" for setting in (
                 "vcs.revision=" + SOURCE, "vcs.modified=false", "GOOS=linux", "GOARCH=amd64",
                 "CGO_ENABLED=" + ("1" if mode == "race" else "0"))) +
@@ -155,7 +155,7 @@ class ApplicationRecoveryTests(unittest.TestCase):
             for mode in recovery.MODES:
                 metadata = binary_metadata(binary, mode)
                 recovery.validate_binary(binary, metadata, SOURCE, mode, checksum)
-                for old, new in (("go1.27.2", "go1.27.20"), (SOURCE, "c" * 40), ("vcs.modified=false", "vcs.modified=true"),
+                for old, new in (("go1.27.4", "go1.27.40"), (SOURCE, "c" * 40), ("vcs.modified=false", "vcs.modified=true"),
                                  ("GOOS=linux", "GOOS=darwin"), ("GOARCH=amd64", "GOARCH=arm64"),
                                  ("cmd/starport", "cmd/foreign"), ("CGO_ENABLED=" + ("1" if mode == "race" else "0"), "CGO_ENABLED=2")):
                     with self.subTest(mode=mode, field=old), self.assertRaises(ValueError):
@@ -255,7 +255,7 @@ class ApplicationRecoveryTests(unittest.TestCase):
             self.assertIn(group, application)
         self.assertIn("mode: [pure, race]", application)
         self.assertIn("max-parallel: 2", application)
-        self.assertIn("go-version: \"1.27.2\"", application)
+        self.assertIn("go-version: \"1.27.4\"", application)
         self.assertIn("application-recovery-evidence, authorization-capacity", workflow)
         for runner in ("ubuntu-24.04", "ubuntu-24.04-arm", "macos-15", "windows-2025", "windows-11-arm"):
             self.assertIn("runner: " + runner, workflow)

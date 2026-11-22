@@ -26,7 +26,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GOTOOLCHAIN: go1.27.2
+  GOTOOLCHAIN: go1.27.4
 
 jobs:
   native-archive:
@@ -60,7 +60,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.4"
       - name: Set up Node for the candidate console
         if: github.event_name == 'pull_request'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
