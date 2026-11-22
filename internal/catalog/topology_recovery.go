@@ -1,6 +1,8 @@
 package catalog
 
 import (
+	"context"
+
 	"github.com/agentstation/starmap/acquisition"
 	catalogconfig "github.com/agentstation/starmap/pkg/catalogs/config"
 	"github.com/agentstation/starmap/runtime"
@@ -28,4 +30,14 @@ func (s Settings) RecoveryTopologyTarget() (TopologyRuntimeTarget, []runtime.Opt
 	}
 	options := append(parsed.Options(), runtime.WithDirectoryOwner(owner), runtime.WithAcquirer(providers), runtime.WithSourceAcquirer(metadata))
 	return TopologyRuntimeTarget{Directory: parsed.StateDirectory, Owner: owner, SchedulerIdentity: parsed.SchedulerIdentity}, options, nil
+}
+
+// PrepareRecoveryTopologyDirectory establishes stopped native owner state before the host seals activation.
+// It reads no external catalog and issues no permission. Sealed restart paths must use passive inspection.
+func (s Settings) PrepareRecoveryTopologyDirectory(ctx context.Context) error {
+	target, _, err := s.RecoveryTopologyTarget()
+	if err != nil {
+		return err
+	}
+	return runtime.PrepareCatalogRecoveryDirectory(ctx, target.Directory, target.Owner, target.SchedulerIdentity)
 }
