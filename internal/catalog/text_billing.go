@@ -16,9 +16,7 @@ const requestBillingUnit = "request"
 // The caller must enforce the text-chat request scope before dispatch.
 func TextChatValuation(offering catalogs.ProviderOffering, at time.Time) (reservation.Valuation, error) {
 	billing, pricing := offering.Billing, offering.Pricing
-	if billing == nil || billing.TextChat == nil || billing.Validate() != nil || pricing == nil ||
-		pricing.Validate() != nil || pricing.Currency != catalogs.ModelPricingCurrencyUSD ||
-		!pricing.IsEffectiveAt(at) || len(pricing.Tiers) != 0 || pricing.Tokens == nil {
+	if billing == nil || billing.TextChat == nil || billing.Validate() != nil || !validFlatUSDPricing(pricing, at) || pricing.Tokens == nil {
 		return reservation.Valuation{}, reservation.ErrValuation
 	}
 	result := reservation.Valuation{Version: reservation.ArithmeticVersion}
@@ -32,14 +30,14 @@ func TextChatValuation(offering catalogs.ProviderOffering, at time.Time) (reserv
 		}
 	}
 	if *billing.TextChat.RequestCharge {
-		if pricing.Operations == nil || pricing.Operations.Request == nil {
+		if pricing.Operations == nil {
 			return reservation.Valuation{}, reservation.ErrValuation
 		}
-		value := *pricing.Operations.Request
-		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+		component, ok := unitPriceComponent(requestBillingUnit, pricing.Operations.Request)
+		if !ok {
 			return reservation.Valuation{}, reservation.ErrValuation
 		}
-		result.Components = append(result.Components, reservation.Component{Unit: requestBillingUnit, Price: reservation.Price{USD: strconv.FormatFloat(value, 'g', -1, 64), PerUnits: 1}})
+		result.Components = append(result.Components, component)
 	}
 	return result, nil
 }
