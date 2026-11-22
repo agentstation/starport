@@ -73,7 +73,7 @@ describe('remarkDocsLinks', () => {
   });
 
   it('pins a repository directory link as a tree', () => {
-    expect(firstUrl('[Proof](../../proof)')).toBe(`https://github.com/agentstation/starport/tree/${REF}/docs/proof`);
+    expect(firstUrl('[Assets](../../assets)')).toBe(`https://github.com/agentstation/starport/tree/${REF}/docs/assets`);
   });
 
   it('keeps the text of a repository link when no reference exists', () => {
