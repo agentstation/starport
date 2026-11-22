@@ -11,8 +11,9 @@ import subprocess
 import sys
 
 PACKAGE = "github.com/agentstation/starport/internal/app"
+CATALOG_PACKAGE = "github.com/agentstation/starport/internal/catalog"
 RECOVERY_PACKAGE = "github.com/agentstation/starport/internal/recovery"
-PACKAGES = {"app": PACKAGE, "recovery": RECOVERY_PACKAGE}
+PACKAGES = {"app": PACKAGE, "catalog": CATALOG_PACKAGE, "recovery": RECOVERY_PACKAGE}
 SHARDS = 4
 OWNER = re.compile(r"(?:Test|Example|Fuzz)\w*")
 
@@ -77,11 +78,12 @@ def verify_shards(load, *, expected_source=None, expected_head=None, package=PAC
     return combined, toolchain
 
 
-def run(root, output, index, package=PACKAGE, race=True):
+def run(root, output, index, package=PACKAGE, race=True, coverprofile=None):
     if package not in PACKAGES.values() or type(race) is not bool:
         raise ValueError("Native package selection or race mode is invalid.")
     path = "./" + package.removeprefix("github.com/agentstation/starport/")
     race_flags = ["-race"] if race else []
+    cover_flags = [f"-coverprofile={coverprofile}", "-covermode=atomic"] if coverprofile else []
     output.mkdir(parents=True, exist_ok=False)
     def command(args, timeout=60):
         return subprocess.check_output(args, cwd=root, encoding="utf-8", timeout=timeout)
@@ -103,7 +105,7 @@ def run(root, output, index, package=PACKAGE, race=True):
     # about twenty-two minutes, so each allowance keeps a margin above its
     # shard on a slower runner. Individual contract deadlines remain unchanged.
     timeout = "30m" if package == RECOVERY_PACKAGE else "35m"
-    args = ["go", "test", "-json", *race_flags, "-count=1", "-timeout", timeout, "-run", expression, path]
+    args = ["go", "test", "-json", *race_flags, *cover_flags, "-count=1", "-timeout", timeout, "-run", expression, path]
     with (output / "tests.jsonl").open("w", encoding="utf-8") as stream:
         result = subprocess.run(args, cwd=root, stdout=stream, timeout=2280, check=False)
     # Keep the native Go exit status. Validation cannot turn a failed run green.
@@ -123,13 +125,14 @@ if __name__ == "__main__":
     execute.add_argument("--output", required=True, type=Path)
     execute.add_argument("--package", choices=PACKAGES, default="app")
     execute.add_argument("--no-race", action="store_true")
+    execute.add_argument("--coverprofile", type=Path)
     verify = commands.add_parser("verify")
     verify.add_argument("--directory", required=True, type=Path)
     verify.add_argument("--package", choices=PACKAGES, default="app")
     verify.add_argument("--runner", choices=("windows-2025", "windows-11-arm"), default="windows-2025")
     args = parser.parse_args()
     if args.command == "run":
-        sys.exit(run(Path(__file__).resolve().parents[1], args.output.resolve(), args.index, PACKAGES[args.package], not args.no_race))
+        sys.exit(run(Path(__file__).resolve().parents[1], args.output.resolve(), args.index, PACKAGES[args.package], not args.no_race, args.coverprofile.resolve() if args.coverprofile else None))
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], encoding="utf-8", timeout=60).strip()
     events, _ = verify_shards(lambda index, name: (args.directory / f"native-catalog-{args.package}-{args.runner}-{index}" / name).read_text(encoding="utf-8"),
                              expected_source=source, expected_head=os.environ.get("STARPORT_TEST_HEAD_SHA", source), package=PACKAGES[args.package])
