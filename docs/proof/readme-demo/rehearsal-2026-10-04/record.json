@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "kind": "rehearsal",
+  "qualifies_release_cases": false,
+  "captured_at": "2026-10-05T02:36:36Z",
+  "candidate": {
+    "source": "ci-run",
+    "run_id": "37255309275",
+    "pull_request": 418,
+    "head_commit": "b64d3682f11cfa30abc5e589a3015055ccf77b33",
+    "snapshot_version": "starport version 1.2.2-next",
+    "archive_name": "starport_1.2.2-next_darwin_arm64.tar.gz",
+    "archive_sha256": "a3417f22b74ad57071c98470eb27d6bbf32f56794f512a50863ac885c19d4644",
+    "binary_sha256": "8888b75e72834ba913c99dba5b8598d54b9ac6bc97a43cc982b9520aa8a99042",
+    "release_tag": null
+  },
+  "fixtures": [
+    {
+      "name": "fixture_upstream",
+      "role": "openai-compatible upstream",
+      "model": "gpt-4o-mini-rehearsal-fixture",
+      "answer_text": "Rehearsal fixture: Hello from Starport!",
+      "credential": "generated throwaway token, disclosed as a fixture, value not recorded"
+    }
+  ],
+  "scenes": [
+    {
+      "name": "install",
+      "start_event": 0,
+      "end_event": 5,
+      "start_seconds": 0.009287,
+      "end_seconds": 1.629948
+    },
+    {
+      "name": "catalog",
+      "start_event": 6,
+      "end_event": 9,
+      "start_seconds": 2.635226,
+      "end_seconds": 3.514084
+    },
+    {
+      "name": "setup",
+      "start_event": 10,
+      "end_event": 18,
+      "start_seconds": 4.775879,
+      "end_seconds": 7.33341
+    },
+    {
+      "name": "answer",
+      "start_event": 19,
+      "end_event": 31,
+      "start_seconds": 8.343823,
+      "end_seconds": 9.102533
+    },
+    {
+      "name": "next",
+      "start_event": 32,
+      "end_event": 37,
+      "start_seconds": 10.107591,
+      "end_seconds": 10.107704
+    }
+  ],
+  "inference_interval": {
+    "start_event": 25,
+    "end_event": 28,
+    "start_seconds": 8.344575,
+    "end_seconds": 9.102068
+  },
+  "cuts": [
+    {
+      "boundary": "install/catalog",
+      "before_event": 6,
+      "original_seconds": 1.005278,
+      "rendered_seconds": 6.0
+    },
+    {
+      "boundary": "catalog/setup",
+      "before_event": 10,
+      "original_seconds": 1.261795,
+      "rendered_seconds": 8.0
+    },
+    {
+      "boundary": "setup/answer",
+      "before_event": 19,
+      "original_seconds": 1.010413,
+      "rendered_seconds": 6.0
+    },
+    {
+      "boundary": "answer/next",
+      "before_event": 32,
+      "original_seconds": 1.005058,
+      "rendered_seconds": 7.0
+    }
+  ],
+  "outputs": {
+    "first-use.gif": {
+      "sha256": "90eaed497c22294067836d83ccf5fac2772378d766027fe508ab10583d0ac5d0",
+      "bytes": 611816,
+      "width": 1280,
+      "height": 800,
+      "duration_seconds": 40.82,
+      "frames": 16
+    },
+    "poster.png": {
+      "sha256": "0809ad947c8656ce04ef4fafe856679b8d092ef1877ed09f56606f775108d296",
+      "bytes": 77243,
+      "width": 1280,
+      "height": 800
+    },
+    "events.json": {
+      "sha256": "86046796f2745d5c3552ba0d28489ae47edcbd5442182c600bd5f62943529de3",
+      "bytes": 8148
+    },
+    "render.json": {
+      "sha256": "3f2bac58bacd161067b53e413774693a92c193965233ccf71f6169ce7b9a8cc0",
+      "bytes": 1577
+    },
+    "TRANSCRIPT.md": {
+      "sha256": "88d9c3d71d5b8da2e279edb5b7b8adc391dbede1d7a2e03dfcb4607119b9d803",
+      "bytes": 2796
+    }
+  },
+  "uncut": {
+    "path": "first-use-uncut.gif",
+    "sha256": "7bfc4c5d4a14ca44aa2979729cb313efb83efff676a0e54b917c9f4d7062ddf4",
+    "bytes": 566938,
+    "duration_seconds": 15.1,
+    "frames": 15
+  },
+  "render": {
+    "font": "Menlo",
+    "font_path": "/System/Library/Fonts/Menlo.ttc",
+    "font_size": 26,
+    "effective_font_at_900px": 18.28125
+  },
+  "discovery": {
+    "starport_version": "starport version 1.2.2-next",
+    "catalog_generation": "whisper-operation-correction-47190c7a5b1d6b75ecf4efe75eab2cea58b8b7fdc753485d4e769e85747a10b9",
+    "provider_path": "openai",
+    "base_url_mechanism": "STARPORT_OPENAI_INFERENCE_BASE_URL",
+    "catalog_environment_has_provider_key": false,
+    "persistent_selectors_present": false,
+    "leftover_home_files": [],
+    "clean_shutdown": true,
+    "answer_stream": {
+      "status": 200,
+      "done_event": true,
+      "content_length": 39
+    }
+  },
+  "human_review": {
+    "reviewer": "Fable 5.1 lead agent (plan orchestrator review, not a human review)",
+    "date": "2026-10-04",
+    "pacing_verdict": "PASS",
+    "notes": "Held frames legible, all lines fit, fixture notice visible, no credential value, 40.8 s edited run under the 45 s target, answer stream at original timing."
+  }
+}
