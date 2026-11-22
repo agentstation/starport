@@ -1,15 +1,11 @@
 package controllers
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/url"
-	"sync"
 
 	"github.com/go-chi/chi/v5"
 
-	runtimecatalog "github.com/agentstation/starport/internal/catalog"
-	"github.com/agentstation/starport/internal/catalog/disclosure"
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/protocol/openrouter"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -17,19 +13,9 @@ import (
 	"github.com/agentstation/starport/internal/server/dto"
 )
 
-const maxEncodedModelScopes = 16
-
-type encodedModelsEntry struct {
-	payload     []byte
-	cacheHeader bool
-}
-
 // ModelsController handles model-related endpoints
 type ModelsController struct {
 	*BaseHandler
-	mu       sync.RWMutex
-	snapshot *runtimecatalog.RoutableSnapshot
-	encoded  map[string]encodedModelsEntry
 }
 
 // NewModelsController creates a new models controller
@@ -52,24 +38,6 @@ func newModelsController(service proxy.Proxy, protocol Protocol) *ModelsControll
 func (h *ModelsController) List(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var snapshot *runtimecatalog.RoutableSnapshot
-	var scope string
-	if lease := connectors.RuntimeLeaseFromContext(ctx); lease != nil {
-		snapshot = lease.Snapshot()
-		scope = disclosure.CacheScope(ctx)
-		if entry, ok := h.cachedModelsPayload(snapshot, scope); ok {
-			if entry.cacheHeader {
-				w.Header().Set("X-Cache", "HIT")
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			if _, err := w.Write(entry.payload); err != nil {
-				h.logError(ctx, err, "failed to write response")
-			}
-			return
-		}
-	}
-
 	// Get models from service
 	resp, err := h.service.ListModels(ctx)
 	if err != nil {
@@ -83,46 +51,9 @@ func (h *ModelsController) List(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Cache", resp.CacheStatus)
 	}
 
-	payload, err := h.marshalModels(resp.Data)
-	if err != nil {
-		h.logError(ctx, err, "failed to marshal response")
-		h.writeError(w, err)
-		return
-	}
-	if snapshot != nil && resp.CacheStatus != "" {
-		h.storeModelsPayload(snapshot, scope, encodedModelsEntry{
-			payload:     payload,
-			cacheHeader: true,
-		})
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(payload); err != nil {
+	if err := h.writeModels(w, resp.Data); err != nil {
 		h.logError(ctx, err, "failed to write response")
 	}
-}
-
-func (h *ModelsController) cachedModelsPayload(snapshot *runtimecatalog.RoutableSnapshot, scope string) (encodedModelsEntry, bool) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	if h.snapshot != snapshot || h.encoded == nil {
-		return encodedModelsEntry{}, false
-	}
-	entry, ok := h.encoded[scope]
-	return entry, ok
-}
-
-func (h *ModelsController) storeModelsPayload(snapshot *runtimecatalog.RoutableSnapshot, scope string, entry encodedModelsEntry) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.snapshot != snapshot || h.encoded == nil {
-		h.snapshot = snapshot
-		h.encoded = make(map[string]encodedModelsEntry, 4)
-	}
-	if len(h.encoded) >= maxEncodedModelScopes {
-		return
-	}
-	h.encoded[scope] = entry
 }
 
 // Get handles GET /v1/models/{model} and /api/v1/models/{model}
@@ -205,13 +136,13 @@ func (h *ModelsController) GetEndpoints(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (h *ModelsController) marshalModels(models []proxy.ModelInfo) ([]byte, error) {
+func (h *ModelsController) writeModels(w http.ResponseWriter, models []proxy.ModelInfo) error {
 	if h.protocol == ProtocolOpenRouter {
 		converted := make([]openrouter.Model, len(models))
 		for index := range models {
 			converted[index] = openRouterModel(models[index])
 		}
-		return json.Marshal(openrouter.ModelList{
+		return openrouter.WriteJSON(w, http.StatusOK, openrouter.ModelList{
 			Data: converted, TotalCount: len(converted), Links: openrouter.ModelLinks{Next: nil},
 		})
 	}
@@ -219,7 +150,7 @@ func (h *ModelsController) marshalModels(models []proxy.ModelInfo) ([]byte, erro
 	for index, model := range models {
 		converted[index] = openAIModel(model)
 	}
-	return json.Marshal(openai.ModelList{Object: "list", Data: converted})
+	return openai.WriteJSON(w, http.StatusOK, openai.ModelList{Object: "list", Data: converted})
 }
 
 func (h *ModelsController) writeModel(w http.ResponseWriter, model proxy.ModelInfo) error {
