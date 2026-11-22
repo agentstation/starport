@@ -1,5 +1,5 @@
 # The build stages pull docker.io/library/node:24-alpine and
-# docker.io/library/golang:1.27.2-alpine from the organization registry. The
+# docker.io/library/golang:1.27.4-alpine from the organization registry. The
 # Starmap Fixture Images workflow copies each image by digest, so the pins
 # below are the Docker Hub manifests. Hosted runners share one unauthenticated
 # Docker Hub rate limit.
@@ -19,7 +19,7 @@ RUN if [ "$COMMIT" != unknown ]; then export STARPORT_DOCS_COMMIT="$COMMIT"; fi 
 
 FROM --platform=$BUILDPLATFORM ghcr.io/agentstation/fixtures/golang@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673 AS build
 
-ENV GOTOOLCHAIN=go1.27.2
+ENV GOTOOLCHAIN=go1.27.4
 
 ARG TARGETOS
 ARG TARGETARCH

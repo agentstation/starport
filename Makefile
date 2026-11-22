@@ -1,4 +1,4 @@
-export GOTOOLCHAIN := go1.27.2
+export GOTOOLCHAIN := go1.27.4
 
 # Starport Makefile
 MAKEFLAGS += --no-print-directory

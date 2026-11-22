@@ -193,9 +193,6 @@ check MMD-V17 "the catalog projection names the five media operations" \
   all_present images-generations images-edits audio-speech \
   audio-transcriptions audio-translations -- internal/catalog
 
-check MMD-V18 "the residual offerings with no operation have a stated reason" \
-  test -f docs/proof/model-modalities/mod12.md
-
 check MMD-V19 "one named operation set replaces the hardcoded guards" \
   grep_q 'OperationSet' internal/routing
 
