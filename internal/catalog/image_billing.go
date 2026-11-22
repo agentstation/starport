@@ -19,7 +19,7 @@ const (
 // ImageValuation projects complete catalog image charges for one operation.
 func ImageValuation(offering catalogs.ProviderOffering, operation catalogs.ProviderOperation, at time.Time) (reservation.Valuation, error) {
 	billing, pricing := offering.Billing, offering.Pricing
-	if billing == nil || billing.Images == nil || billing.Validate() != nil || !slices.Contains(billing.Images.Operations, operation) || pricing == nil || pricing.Validate() != nil || pricing.Currency != catalogs.ModelPricingCurrencyUSD || !pricing.IsEffectiveAt(at) || len(pricing.Tiers) != 0 || pricing.Operations == nil || pricing.Operations.ImageUnit == nil {
+	if billing == nil || billing.Images == nil || billing.Validate() != nil || !slices.Contains(billing.Images.Operations, operation) || !validFlatUSDPricing(pricing, at) || pricing.Operations == nil {
 		return reservation.Valuation{}, reservation.ErrValuation
 	}
 	unit, per := imageCountUnit, int64(1)
@@ -31,12 +31,18 @@ func ImageValuation(offering catalogs.ProviderOffering, operation catalogs.Provi
 			return reservation.Valuation{}, err
 		}
 	}
-	v := reservation.Valuation{Version: reservation.ArithmeticVersion, Components: []reservation.Component{{Unit: unit, Price: reservation.Price{USD: strconv.FormatFloat(*pricing.Operations.ImageUnit, 'g', -1, 64), PerUnits: per}}}}
+	imageComponent, ok := unitPriceComponent(unit, pricing.Operations.ImageUnit)
+	if !ok {
+		return reservation.Valuation{}, reservation.ErrValuation
+	}
+	imageComponent.Price.PerUnits = per
+	v := reservation.Valuation{Version: reservation.ArithmeticVersion, Components: []reservation.Component{imageComponent}}
 	if *billing.Images.RequestCharge {
-		if pricing.Operations.Request == nil {
+		reqComponent, ok := unitPriceComponent(requestBillingUnit, pricing.Operations.Request)
+		if !ok {
 			return reservation.Valuation{}, reservation.ErrValuation
 		}
-		v.Components = append(v.Components, reservation.Component{Unit: requestBillingUnit, Price: reservation.Price{USD: strconv.FormatFloat(*pricing.Operations.Request, 'g', -1, 64), PerUnits: 1}})
+		v.Components = append(v.Components, reqComponent)
 	}
 	return v, nil
 }
