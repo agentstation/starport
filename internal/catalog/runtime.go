@@ -11,6 +11,7 @@ import (
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/acquisition"
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starmap/pkg/catalogs/permission"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/remote"
 	"github.com/agentstation/starmap/runtime"
@@ -526,6 +527,18 @@ func stateIdentity(state starmap.CatalogState) catalogStateIdentity {
 		generationID:    state.GenerationID,
 		payloadChecksum: state.PayloadChecksum,
 	}
+}
+
+// ErrRuntimeGenerationCapacity defers activation until retained requests finish.
+var ErrRuntimeGenerationCapacity = errors.New("runtime generation capacity is exhausted")
+
+// PermissionClock shares the connected runtime's qualified cached time with its host.
+// It reads no storage and calls no native clock API.
+func (r *Runtime) PermissionClock() permission.ClockReading {
+	if r == nil {
+		return permission.ClockReading{}
+	}
+	return r.runtime.PermissionClock()
 }
 
 // notFound reports whether an error names an absent record.
