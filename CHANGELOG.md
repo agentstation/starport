@@ -4,6 +4,8 @@ This file carries the summary for each tagged version. The GitHub release for a 
 
 ## Unreleased
 
+## v1.4.0
+
 ### Breaking changes
 
 - The default port is 7827. Set `STARPORT_SERVER_PORT=8080` to keep the old port. Compose users set `STARPORT_PORT=8080` (#443).
@@ -38,11 +40,13 @@ This file carries the summary for each tagged version. The GitHub release for a 
 ### Build and CI
 
 - Go 1.27.2 and `golang.org/x/net` v0.60.0 fix GO-2026-6613 and GO-2026-6617 (#438).
-- The Starmap dependency moves from v0.17.0 to main commit `120a49889009` (#436).
+- Starport pins Starmap v0.17.3.
 - CI fixtures and the Dockerfile base images come from `ghcr.io/agentstation/fixtures` (#440, #459).
 - The site deploys after a successful tag release (#458).
 - Dependency group updates (#420, #421, #422, #455, #456, #457).
 - Test and CI stability fixes (#428, #450, #454, #460, #461, #462, #463).
+- Development, CI, and releases use Go 1.27.4 (#513).
+- Pull request CI runs Linux catalog and application race tests in parallel (#515, #521).
 
 ### Upgrade notes
 
