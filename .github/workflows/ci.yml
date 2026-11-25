@@ -539,13 +539,10 @@ jobs:
           go-version: "1.27.4"
           cache: true
       - name: Build the pinned recovery object store
-        # Official RELEASE.2025-09-07T16-13-09Z source. Public images are unavailable.
+        timeout-minutes: 25
         env:
           GOBIN: ${{ runner.temp }}/recovery-objectstore-bin
-          GOSUMDB: sum.golang.org
-        run: |
-          go install github.com/minio/minio@v0.0.0-20250907161309-07c3a429bfed
-          go version -m "$GOBIN/minio" > recovery-objectstore-build.txt
+        run: bash scripts/build-recovery-object-store.sh recovery-objectstore-build.txt
       - name: Verify durable work and complete backup storage
         shell: bash
         env:
@@ -653,12 +650,10 @@ jobs:
       - name: Test required application recovery evidence
         run: python scripts/test-recovery-application.py
       - name: Build the pinned recovery object store
+        timeout-minutes: 25
         env:
           GOBIN: ${{ runner.temp }}/recovery-objectstore-bin
-          GOSUMDB: sum.golang.org
-        run: |
-          go install github.com/minio/minio@v0.0.0-20250907161309-07c3a429bfed
-          go version -m "$GOBIN/minio" > "$RUNNER_TEMP/recovery-objectstore-build.txt"
+        run: bash scripts/build-recovery-object-store.sh "$RUNNER_TEMP/recovery-objectstore-build.txt"
       - name: Qualify named application recovery against native owners
         shell: bash
         env:
@@ -922,6 +917,7 @@ jobs:
           bash scripts/verify-readme-quickstart.sh
           bash scripts/verify-v1-release.sh
           bash scripts/verify-release-workflow.sh
+          bash scripts/test-recovery-object-store-build.sh
           bash scripts/verify-developer-experience.sh
           bash scripts/verify-doc-links.sh
           bash scripts/test-doc-link-verifier.sh
