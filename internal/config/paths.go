@@ -13,6 +13,7 @@ import (
 
 const pathOriginGoOption = "go-option"
 const pathOriginDefault = "default"
+const pathOriginPlatformDefault = "platform-default"
 const pathRoleConfiguration = "configuration"
 
 const pathRoleSQLite = "sqlite"
@@ -22,6 +23,9 @@ const pathRoleBaseline = "baseline"
 const pathRoleRuntime = "runtime"
 const configDirectoryEnvironment = "STARPORT_CONFIG_DIR"
 const dataDirectoryEnvironment = "STARPORT_DATA_DIR"
+
+const defaultInstanceID = "default"
+const defaultDeploymentID = "local"
 
 // Paths contains resolved files, roots, and their selection origins.
 type Paths struct {
@@ -91,11 +95,11 @@ func pathsFromRoots(roots productpaths.Roots) Paths {
 	return Paths{
 		ConfigDir: configDir, ConfigFile: filepath.Join(configDir, "config.env"),
 		DataDir: dataDir, StateDir: stateDir, CacheDir: roots[productpaths.Cache].Path,
-		RuntimeDir:  filepath.Join(stateDir, "catalog", "runtime", "default"),
+		RuntimeDir:  filepath.Join(stateDir, "catalog", "runtime", defaultInstanceID),
 		BaselineDir: filepath.Join(dataDir, "catalog", "baseline"),
 		BadgerDir:   filepath.Join(dataDir, "badger"), SQLiteFile: filepath.Join(dataDir, "sqlite", "starport.db"),
 		FilesDir: filepath.Join(dataDir, "files"), LocalTokenFile: filepath.Join(dataDir, "local-admin-token.json"),
-		WelcomeStampFile: filepath.Join(dataDir, "welcomed"), InstanceID: "default", DeploymentID: "local", Origins: origins,
+		WelcomeStampFile: filepath.Join(dataDir, "welcomed"), InstanceID: defaultInstanceID, DeploymentID: defaultDeploymentID, Origins: origins,
 	}
 }
 

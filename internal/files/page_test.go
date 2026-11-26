@@ -1,6 +1,7 @@
 package files
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -54,14 +55,17 @@ func TestFilePagesReachPublicFilesAndExpiredPreparations(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, listed)
 		now = now.Add(2 * time.Hour)
+		sweepContext, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+		defer cancel()
 		expired := 0
-		for range 5 {
-			swept, err := service.Sweep(t.Context())
+		// Slow disks can reach the sweep deadline before the write limit.
+		for expired < len(fixtures) {
+			swept, err := service.Sweep(sweepContext)
 			require.NoError(t, err)
 			require.LessOrEqual(t, swept.Total(), 256, "a cleanup pass must bound durable work")
 			expired += swept.Expired
 		}
-		require.Equal(t, 1030, expired)
+		require.Equal(t, len(fixtures), expired)
 		for i := range 1030 {
 			key := fmt.Sprintf("checkpoint-%04d", i)
 			_, err := blobs.Publish(t.Context(), key, strings.NewReader("late"))
