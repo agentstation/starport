@@ -20,10 +20,12 @@ import (
 )
 
 func TestProductionAdministratorVideoReconciliation(t *testing.T) {
+	price := nativeVideoCost(t, 5)
+	correctedPrice := nativeVideoCost(t, 2)
 	for _, disposition := range []string{"no_charge", "usage"} {
 		t.Run(disposition, func(t *testing.T) {
 			fixture := newPerformanceFixtureForProviders(t, 0, nil, true,
-				&limits.Limits{Spend: &limits.Budget{Limit: 375000000, Interval: limits.IntervalDay}},
+				&limits.Limits{Spend: &limits.Budget{Limit: price, Interval: limits.IntervalDay}},
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					http.Error(w, "provider response unavailable", http.StatusBadGateway)
 				}),
@@ -104,7 +106,7 @@ func TestProductionAdministratorVideoReconciliation(t *testing.T) {
 			require.NoError(t, json.Unmarshal(data, &attempt))
 			require.Equal(t, reservation.Settled, attempt.State)
 			require.Equal(t, disposition == "no_charge", attempt.Evidence.NoCharge)
-			expectedCost := int64(375000000)
+			expectedCost := price
 			if disposition == "no_charge" {
 				expectedCost = 0
 			}
@@ -135,7 +137,7 @@ func TestProductionAdministratorVideoReconciliation(t *testing.T) {
 			require.Equal(t, http.StatusOK, code, string(body))
 			revisedRecord, err := fixture.application.budget.ledger.Inspect(t.Context(), attempt.Attempt.ID)
 			require.NoError(t, err)
-			require.EqualValues(t, 150000000, *revisedRecord.NanoUSD)
+			require.EqualValues(t, correctedPrice, *revisedRecord.NanoUSD)
 			code, body = call(http.MethodGet, path+"/corrections/correction-42", "")
 			require.Equal(t, http.StatusOK, code, string(body))
 			require.Contains(t, string(body), "private-correction-invoice")
@@ -160,6 +162,7 @@ func TestProductionAdministratorVideoReconciliation(t *testing.T) {
 }
 
 func TestLateNativeResponseBlocksDisputedBudget(t *testing.T) {
+	price := nativeVideoCost(t, 5)
 	release := make(chan struct{})
 	entered := make(chan struct{})
 	released := false
@@ -169,7 +172,7 @@ func TestLateNativeResponseBlocksDisputedBudget(t *testing.T) {
 		}
 	}()
 	fixture := newPerformanceFixtureForProviders(t, 0, nil, true,
-		&limits.Limits{Spend: &limits.Budget{Limit: 375000000, Interval: limits.IntervalDay}},
+		&limits.Limits{Spend: &limits.Budget{Limit: price, Interval: limits.IntervalDay}},
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			close(entered)
 			select {
@@ -253,7 +256,7 @@ func TestLateNativeResponseBlocksDisputedBudget(t *testing.T) {
 	corrected, err := fixture.application.budget.ledger.Inspect(t.Context(), view.ReservationID)
 	require.NoError(t, err)
 	require.Empty(t, corrected.DisputeID)
-	require.EqualValues(t, 375000000, *corrected.NanoUSD)
+	require.EqualValues(t, price, *corrected.NanoUSD)
 	_, err = service.CorrectAdministrator(t.Context(), "default", object.ID, "key:admin", correction)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, fixture.calls.Load())
