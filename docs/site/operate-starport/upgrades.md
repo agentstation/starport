@@ -42,7 +42,7 @@ The architecture check must report `Summary: 12 passed, 0 failed`. The raw HTTP 
 
 The upgrade procedure below is for a single gateway with local storage. Do not upgrade an existing shared deployment without a coordinated recovery plan. Refer to [the recovery document](../../RECOVERY.md) and [Initialize and run a fleet](fleet.md).
 
-A new version can change a default path. Startup refuses a conflict with an earlier default path and keeps the old files. Startup does not move the files.
+A new version can change a default path. Starport can move verified local paths on macOS. If the paths conflict, startup stops and preserves the old files. Refer to [Locations of earlier releases](../configure/paths.md#locations-of-earlier-releases).
 
 ## Upgrade a single gateway
 

@@ -625,11 +625,13 @@ The report records the configuration access policy selected before the loader re
 This prevents a value inside the file from changing its reported access requirement.
 
 Before an upgrade, run `starport config paths --legacy --json` to inspect previous default locations.
-The report lists existing paths that the new defaults would abandon. It reads metadata without opening databases or reading their contents.
+The report lists existing paths that the selected locations would leave behind. It reads metadata without opening databases or reading their contents.
 Startup and local initialization refuse these conflicts before creating replacement stores. They preserve the old files, including conflicting or incomplete state.
 
 Older versions keep local data under `<previous-config>/data/` and catalog runtime state under the XDG state root.
 On macOS, the default primary configuration moves from `starport/config.env` to `starport/config/config.env` under Application Support.
+Starport can move the earlier configuration and catalog runtime for an existing local installation.
+Refer to [Locations of earlier releases](site/configure/paths.md#locations-of-earlier-releases) for the conditions.
 The report names the exact old path, selected path, and configuration selector.
 
 Set explicit paths to retain the previous locations while preparing a verified migration. Changing a selector does not copy files or prove migration completion.

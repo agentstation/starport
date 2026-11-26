@@ -46,6 +46,45 @@ func (m RuntimeMigration) request(settings Settings) runtime.DirectoryMigrationR
 	return runtime.DirectoryMigrationRequest{OperationID: m.OperationID, SourceDirectory: m.SourceDirectory, TargetDirectory: m.TargetDirectory, JournalRoot: m.JournalRoot, SourceIdentity: m.SourceIdentity, Owner: settings.directoryOwner()}
 }
 
+// InspectUpgradeSource checks that the original runtime records the selected owner.
+func (s Settings) InspectUpgradeSource(ctx context.Context) error {
+	status, err := runtime.InspectDirectoryOwnerRecord(ctx, s.StateDirectory, s.directoryOwner(), s.Values[catalogconfig.SchedulerIdentity])
+	if err != nil {
+		return err
+	}
+	if status != runtime.OwnerRecordMatches {
+		return fmt.Errorf("catalog runtime ownership is %s at %q. Verify the original identity before migrating the runtime", status, s.StateDirectory)
+	}
+	return nil
+}
+
+// ReadUpgradeSourceIdentity reads the identity of an owned, stopped runtime offline.
+func (s Settings) ReadUpgradeSourceIdentity(ctx context.Context, store storage.KVStore) (string, error) {
+	if err := s.InspectUpgradeSource(ctx); err != nil {
+		return "", err
+	}
+	if identity := s.Values[catalogconfig.SchedulerIdentity]; identity != "" {
+		return identity, nil
+	}
+	connected, err := openRuntime(ctx, store, s.offlineMigrationSettings(), runtimeCollectors{})
+	if err != nil {
+		return "", err
+	}
+	identity := connected.Status().InstanceIdentity
+	return identity, connected.Close(ctx)
+}
+
+func (s Settings) offlineMigrationSettings() Settings {
+	s.Values = maps.Clone(s.Values)
+	if s.Values == nil {
+		s.Values = make(map[string]string)
+	}
+	s.Values[catalogconfig.NetworkMode] = "offline"
+	s.AcquisitionEnabled = false
+	s.SourcePollInterval = 0
+	return s
+}
+
 // Prepare inventories source files without creating the target directory.
 func (m RuntimeMigration) Prepare(ctx context.Context, store storage.KVStore, settings Settings) (RuntimeMigrationResult, error) {
 	result, err := runtime.PrepareDirectoryMigration(ctx, m.request(settings))
@@ -91,13 +130,7 @@ func (m RuntimeMigration) OpenReplacement(ctx context.Context, store storage.KVS
 	if err := m.verifyStore(ctx, store, settings); err != nil {
 		return nil, err
 	}
-	settings.Values = maps.Clone(settings.Values)
-	if settings.Values == nil {
-		settings.Values = make(map[string]string)
-	}
-	settings.Values[catalogconfig.NetworkMode] = "offline"
-	settings.AcquisitionEnabled = false
-	settings.SourcePollInterval = 0
+	settings = settings.offlineMigrationSettings()
 	fleet, err := openRecoveryFleet(ctx, store, m.recoveryDB, settings.DeploymentID)
 	if err != nil {
 		return nil, err

@@ -87,6 +87,13 @@ func initializeGateway(
 	load func(context.Context) (*config.Config, error),
 	deliver starportcli.CredentialDelivery,
 ) (*config.Config, error) {
+	cfg, err := app.UpgradeLocalPaths(ctx, cfg, load)
+	if err != nil {
+		return nil, fmt.Errorf("upgrade local paths: %w", err)
+	}
+	if err := cfg.CheckLegacyPaths(ctx); err != nil {
+		return nil, err
+	}
 	firstRun, err := initializeFirstRun(ctx, cfg, deliver)
 	if err != nil {
 		return nil, err

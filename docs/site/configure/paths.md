@@ -18,6 +18,8 @@ Starport keeps its files in four root directories. Each platform has its own def
 
 On Linux, Starport uses `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, and `XDG_CACHE_HOME` when the environment defines them. Each XDG value must be an absolute path. Other operating systems need explicit roots.
 
+On macOS, the `config` directory keeps the configuration file and its journals separate from the `data` and `state` directories.
+
 ## Root overrides
 
 | Setting | Effect |
@@ -103,7 +105,20 @@ Earlier releases kept data in other directories. Before an upgrade, run this com
 starport config paths --legacy --json
 ```
 
-The report lists earlier paths that the new defaults leave behind. Startup refuses such a conflict and keeps the old files. A change of a path setting does not copy files. Refer to [Upgrade and shut down](../operate-starport/upgrades.md).
+On macOS, `starport dev` and `starport serve` can move the earlier `starport/config.env` to the current default.
+The current configuration directory must be absent. The old file must save the master key and use the default local stores.
+If an earlier catalog runtime exists, Starport verifies its ownership and moves it to the current runtime path.
+The current runtime path must be absent. A restart resumes an interrupted move.
+
+Starport keeps a private copy of the original file in `<data>/.starport-path-upgrade/original.env`.
+Startup stops if paths conflict or if the previous catalog runtime lacks an ownership record.
+Use `starport config paths --json` to see the selected paths. Before startup, `legacy-default` identifies an earlier path.
+
+If the catalog runtime lacks an ownership record, recover its original scheduler identity before you run the manual runtime migration.
+Some old provider observations lack evidence receipts. Keep a private copy of any such observation before you remove it from the runtime.
+The current catalog can use a new observation after acquisition records its evidence receipt.
+Refer to [Move the catalog runtime directory](../storage/migration.md#move-the-catalog-runtime-directory).
+Refer to [Upgrade and shut down](../operate-starport/upgrades.md).
 
 ## The catalog workspace
 

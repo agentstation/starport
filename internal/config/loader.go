@@ -137,8 +137,7 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 	if err != nil {
 		return nil, newLoadFailure("configuration paths could not be resolved", err)
 	}
-
-	lookuper, err := l.sourceLookuper(ctx, paths)
+	lookuper, err := l.sourceLookuper(ctx, &paths)
 	if err != nil {
 		return nil, newLoadFailure("configuration sources could not be read", err)
 	}
@@ -225,8 +224,8 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 		paths.DataDir, paths.StateDir, paths.CacheDir, paths.BaselineDir = "", "", "", ""
 	}
 
-	if err := resolveConfiguredPaths(cfg, &paths, base, pathOrigins); err != nil {
-		return nil, newLoadFailure("configured paths could not be resolved", err)
+	if err := resolveConfiguredPaths(ctx, cfg, &paths, base, pathOrigins); err != nil {
+		return nil, err
 	}
 	if err := validateLoadedConfiguration(cfg, &paths, development); err != nil {
 		return nil, err
@@ -277,7 +276,10 @@ func defaultConfig(paths Paths) *Config {
 	}
 }
 
-func (l *Loader) sourceLookuper(ctx context.Context, paths Paths) (envconfig.Lookuper, error) {
+func (l *Loader) sourceLookuper(ctx context.Context, paths *Paths) (envconfig.Lookuper, error) {
+	if err := l.reuseLegacyConfiguration(paths); err != nil {
+		return nil, err
+	}
 	files := l.envFiles
 	primary := files == nil
 	if primary {
@@ -316,7 +318,7 @@ func (l *Loader) sourceLookuper(ctx context.Context, paths Paths) (envconfig.Loo
 			data, err = productpaths.ReadDotenv(ctx, selected.Path, 1<<20)
 		}
 		if err != nil {
-			if primary && !paths.configExplicit && errors.Is(err, fs.ErrNotExist) {
+			if primary && !paths.configExplicit && input.location.Origin != pathOriginLegacyDefault && errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
 			return nil, fmt.Errorf("read configuration file %q: %w", selected.Path, err)
@@ -340,7 +342,8 @@ func (l *Loader) sourceLookuper(ctx context.Context, paths Paths) (envconfig.Loo
 	return selected, nil
 }
 
-func resolveConfiguredPaths(cfg *Config, paths *Paths, base string, origins map[string]pathSelectionOrigin) error {
+func resolveConfiguredPaths(ctx context.Context, cfg *Config, paths *Paths, base string, origins map[string]pathSelectionOrigin) error {
+	defaults := *paths
 	for _, selection := range pathSelections(cfg) {
 		loaded, known := origins[selection.name]
 		origin := loaded.origin
@@ -355,13 +358,19 @@ func resolveConfiguredPaths(cfg *Config, paths *Paths, base string, origins map[
 		}
 		path, err := selectedLeaf(paths.ConfigDir, *selection.value, origin, base)
 		if err != nil {
-			return fmt.Errorf("%s path: %w", selection.name, err)
+			return newLoadFailure("configured paths could not be resolved", fmt.Errorf("%s path: %w", selection.name, err))
 		}
 		*selection.value = path.Path
 		paths.Origins[selection.name] = path
 	}
 	paths.BadgerDir, paths.SQLiteFile, paths.FilesDir = cfg.Storage.Badger.Path, cfg.Storage.SQL.SQLite.Path, cfg.Files.Path
 	paths.RuntimeDir, paths.LocalTokenFile = cfg.Catalog.StateDirectory, cfg.Security.LocalTokenPath
+	if err := cfg.reuseLegacyRuntime(ctx, paths, defaults); err != nil {
+		if errors.Is(err, ErrLegacyPaths) {
+			return newLoadFailure(err.Error(), err)
+		}
+		return newLoadFailure("previous catalog runtime path could not be inspected", err)
+	}
 	return nil
 }
 

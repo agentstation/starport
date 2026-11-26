@@ -4,6 +4,11 @@ This file carries the summary for each tagged version. The GitHub release for a 
 
 ## Unreleased
 
+## v1.4.1
+
+- On macOS, `dev` and `serve` move verified local configuration and catalog runtime state to the current defaults.
+- An interrupted move resumes at startup. The original configuration stays in a private backup.
+
 ## v1.4.0
 
 ### Breaking changes

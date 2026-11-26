@@ -30,6 +30,10 @@ func MigrateRuntime(ctx context.Context, cfg *config.Config, phase string, migra
 	default:
 		return result, fmt.Errorf("unknown runtime migration phase %q", phase)
 	}
+	return runRuntimeMigration(ctx, cfg, phase, migration)
+}
+
+func runRuntimeMigration(ctx context.Context, cfg *config.Config, phase string, migration catalog.RuntimeMigration) (result catalog.RuntimeMigrationResult, err error) {
 	migration.StoreSelection, err = cfg.Storage.MigrationStorageSelection()
 	if err != nil {
 		return result, err

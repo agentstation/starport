@@ -75,7 +75,9 @@ This command does not move Badger, SQLite, a SQL service, uploaded files, or the
 
 ## Paths of an earlier release
 
-Before an upgrade, run `starport config paths --legacy --json`. The report lists old paths that the new defaults leave behind. Startup refuses such a conflict and keeps the old files. Set explicit paths to keep the old locations. Refer to [Files and paths](../configure/paths.md#locations-of-earlier-releases).
+Before an upgrade, run `starport config paths --legacy --json`. The report lists old paths that the selected locations leave behind.
+Startup refuses such conflicts. Set explicit paths to keep the old locations.
+Refer to [Files and paths](../configure/paths.md#locations-of-earlier-releases) for the conditions for an automatic move on macOS.
 
 ## Configuration authority
 
