@@ -2,16 +2,18 @@ package app
 
 import (
 	"encoding/json/v2"
-	"github.com/agentstation/starport/internal/config"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/limits/reservation"
@@ -19,6 +21,7 @@ import (
 )
 
 func TestProductionNativeVideoBudget(t *testing.T) {
+	price := nativeVideoCost(t, 5)
 	for _, tc := range []struct {
 		name, response string
 		limit          int64
@@ -26,10 +29,10 @@ func TestProductionNativeVideoBudget(t *testing.T) {
 		jobState       jobs.JobState
 		status         int
 	}{
-		{"measured", `{"request_id":"private-native","inference_status":{"output_length":5,"cost":0.99},"video_url":"data:video/mp4;base64,dmlkZW8="}`, 375000000, reservation.Settled, jobs.JobStateCompleted, 200},
-		{"missing usage", `{"request_id":"private-native","video_url":"data:video/mp4;base64,dmlkZW8="}`, 375000000, reservation.Uncertain, jobs.JobStateCompleted, 200},
-		{"failed with usage", `{"request_id":"private-native","inference_status":{"status":"failed","output_length":5}}`, 375000000, reservation.Settled, jobs.JobStateFailed, 200},
-		{"insufficient", `{}`, 374999999, "", "", 402},
+		{"measured", `{"request_id":"private-native","inference_status":{"output_length":5,"cost":0.99},"video_url":"data:video/mp4;base64,dmlkZW8="}`, price, reservation.Settled, jobs.JobStateCompleted, 200},
+		{"missing usage", `{"request_id":"private-native","video_url":"data:video/mp4;base64,dmlkZW8="}`, price, reservation.Uncertain, jobs.JobStateCompleted, 200},
+		{"failed with usage", `{"request_id":"private-native","inference_status":{"status":"failed","output_length":5}}`, price, reservation.Settled, jobs.JobStateFailed, 200},
+		{"insufficient", `{}`, price - 1, "", "", 402},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			release := make(chan struct{})
@@ -119,7 +122,7 @@ func TestProductionNativeVideoBudget(t *testing.T) {
 			require.False(t, job.HasProviderJob())
 			require.Equal(t, tc.state == reservation.Settled, job.Accounted())
 			require.NotNil(t, attempt.NanoUSD)
-			require.EqualValues(t, 375000000, *attempt.NanoUSD, "estimated provider cost must not replace pinned duration price")
+			require.EqualValues(t, price, *attempt.NanoUSD, "estimated provider cost must not replace pinned duration price")
 			require.EqualValues(t, 1, fixture.calls.Load())
 			if tc.jobState == jobs.JobStateCompleted {
 				_, reader, err := fixture.application.jobs.Open(t.Context(), job.Account, job.ID)
@@ -134,6 +137,7 @@ func TestProductionNativeVideoBudget(t *testing.T) {
 }
 
 func TestProductionNativeExternalVideoAsset(t *testing.T) {
+	price := nativeVideoCost(t, 5)
 	for _, allowed := range []bool{false, true} {
 		name := "blocked"
 		if allowed {
@@ -151,7 +155,7 @@ func TestProductionNativeExternalVideoAsset(t *testing.T) {
 			}))
 			defer assets.Close()
 			fixture := newPerformanceFixtureForProviders(t, 0, nil, true,
-				&limits.Limits{Spend: &limits.Budget{Limit: 375000000, Interval: limits.IntervalDay}},
+				&limits.Limits{Spend: &limits.Budget{Limit: price, Interval: limits.IntervalDay}},
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					// The asset reference never carries the inference credential.
 					w.Header().Set("Content-Type", "application/json")
@@ -274,7 +278,33 @@ func TestProductionNativeExternalVideoAsset(t *testing.T) {
 			var attempt reservation.Record
 			require.NoError(t, json.Unmarshal(raw, &attempt))
 			require.Equal(t, reservation.Settled, attempt.State)
-			require.EqualValues(t, 375000000, *attempt.NanoUSD)
+			require.EqualValues(t, price, *attempt.NanoUSD)
 		})
 	}
+}
+
+// nativeVideoCost reads the bundled offering directly so the gateway must
+// apply its price to the measured duration and preserve it through settlement.
+func nativeVideoCost(t *testing.T, seconds int64) int64 {
+	t.Helper()
+	bundled, err := runtimecatalog.Bundled()
+	require.NoError(t, err)
+	offering, err := bundled.Offering(catalogs.ProviderIDDeepInfra, "Wan-AI/Wan2.2-T2V-A14B")
+	require.NoError(t, err)
+	require.NotNil(t, offering.Pricing)
+	require.NotNil(t, offering.Pricing.Operations)
+	require.NotNil(t, offering.Pricing.Operations.OutputSecond)
+
+	const unit = "video_output_seconds"
+	valuation := reservation.Valuation{
+		Version: reservation.ArithmeticVersion,
+		Components: []reservation.Component{{
+			Unit:  unit,
+			Price: reservation.Price{USD: strconv.FormatFloat(*offering.Pricing.Operations.OutputSecond, 'g', -1, 64), PerUnits: 1},
+		}},
+	}
+	cost, err := valuation.NanoUSD(reservation.Quantities{unit: seconds})
+	require.NoError(t, err)
+	require.Positive(t, cost)
+	return cost
 }

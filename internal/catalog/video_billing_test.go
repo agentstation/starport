@@ -4,18 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starport/internal/limits/reservation"
 	"github.com/stretchr/testify/require"
 )
 
 func TestVideoValuationUsesPinnedMeasuredSeconds(t *testing.T) {
-	client, err := starmap.New()
-	require.NoError(t, err)
-	offering, err := client.Catalog().Offering("deepinfra", "Wan-AI/Wan2.2-T2V-A14B")
-	require.NoError(t, err)
-	require.NotNil(t, offering.Billing)
+	offering := videoBillingOffering()
 	valuation, err := VideoValuation(offering, time.Now())
 	require.NoError(t, err)
 	bound, err := VideoRequestQuantities(offering.Billing.Videos, 0, "")
@@ -50,10 +45,6 @@ func TestVideoValuationUsesPinnedMeasuredSeconds(t *testing.T) {
 }
 
 func TestVideoValuationRefusesUnknownAdditionalCharges(t *testing.T) {
-	client, err := starmap.New()
-	require.NoError(t, err)
-	source, err := client.Catalog().Offering("deepinfra", "Wan-AI/Wan2.2-T2V-A14B")
-	require.NoError(t, err)
 	for _, change := range []func(*catalogs.ProviderOffering){
 		func(o *catalogs.ProviderOffering) { o.Billing = nil },
 		func(o *catalogs.ProviderOffering) { o.Pricing.Operations.OutputSecond = nil },
@@ -62,16 +53,16 @@ func TestVideoValuationRefusesUnknownAdditionalCharges(t *testing.T) {
 		func(o *catalogs.ProviderOffering) { rate := 0.5; o.Pricing.Operations.Request = &rate },
 		func(o *catalogs.ProviderOffering) { o.Pricing.Currency = "EUR" },
 	} {
-		copy, err := client.Catalog().Offering("deepinfra", "Wan-AI/Wan2.2-T2V-A14B")
-		require.NoError(t, err)
-		change(&copy)
-		_, err = VideoValuation(copy, time.Now())
+		offering := videoBillingOffering()
+		change(&offering)
+		_, err := VideoValuation(offering, time.Now())
 		require.ErrorIs(t, err, reservation.ErrValuation)
 	}
+	source := videoBillingOffering()
 	billing := source.Billing.Videos
 	charge := true
 	billing.RequestCharge = &charge
-	_, err = VideoValuation(source, time.Now())
+	_, err := VideoValuation(source, time.Now())
 	require.ErrorIs(t, err, reservation.ErrValuation)
 	rate := 0.01
 	source.Pricing.Operations.Request = &rate
@@ -82,4 +73,23 @@ func TestVideoValuationRefusesUnknownAdditionalCharges(t *testing.T) {
 	amount, err := valuation.NanoUSD(measured)
 	require.NoError(t, err)
 	require.Equal(t, int64(10000000), amount)
+}
+
+func videoBillingOffering() catalogs.ProviderOffering {
+	return catalogs.ProviderOffering{
+		Billing: &catalogs.ModelBilling{
+			Videos: &catalogs.VideoBilling{
+				Basis:          catalogs.VideoBillingOutputSeconds,
+				DefaultSeconds: 5,
+				Seconds:        []int64{5},
+				DefaultSize:    "1280x720",
+				Sizes:          []string{"1280x720"},
+				RequestCharge:  new(false),
+			},
+		},
+		Pricing: &catalogs.ModelPricing{
+			Currency:   catalogs.ModelPricingCurrencyUSD,
+			Operations: &catalogs.ModelOperationPricing{OutputSecond: new(0.075)},
+		},
+	}
 }
