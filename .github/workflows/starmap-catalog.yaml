@@ -1,0 +1,118 @@
+name: Sync Starmap catalog
+
+on:
+  schedule:
+    - cron: '41 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: sync-starmap-catalog
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'agentstation/starport' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check catalog App configuration
+        id: configuration
+        env:
+          APP_CONFIGURED: ${{ vars.CATALOG_APP_CLIENT_ID != '' && secrets.CATALOG_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [[ "$APP_CONFIGURED" != true ]]; then
+            printf '::notice::Configure the catalog GitHub App to enable baseline updates.\n'
+            if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+              exit 1
+            fi
+            exit 0
+          fi
+          printf 'ready=true\n' >> "$GITHUB_OUTPUT"
+
+      - name: Check for an active catalog update
+        if: steps.configuration.outputs.ready == 'true'
+        id: pending
+        run: |
+          gh api --paginate 'repos/agentstation/starport/pulls?state=open&base=main&per_page=100' \
+            --jq '.[] | select(.head.repo.full_name == "agentstation/starport" and (.head.ref | startswith("automation/starmap-catalog/"))) | .number' > pending
+          if [[ -s pending ]]; then
+            printf 'number=%s\n' "$(head -n 1 pending)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out Starport main
+        if: steps.configuration.outputs.ready == 'true' && steps.pending.outputs.number == ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set up Go
+        if: steps.configuration.outputs.ready == 'true' && steps.pending.outputs.number == ''
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.4"
+          cache: false
+
+      - name: Pin the verified publication
+        if: steps.configuration.outputs.ready == 'true' && steps.pending.outputs.number == ''
+        id: update
+        run: scripts/sync-starmap-catalog.sh
+
+      - name: Create catalog update installation token
+        if: steps.pending.outputs.number != '' || steps.update.outputs.generation != ''
+        id: catalog_app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.CATALOG_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CATALOG_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Open catalog update pull request
+        if: steps.update.outputs.generation != ''
+        id: pull
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.catalog_app.outputs.token }}
+          base: main
+          branch: automation/starmap-catalog/update
+          add-paths: |
+            go.mod
+            go.sum
+          commit-message: 'deps: sync Starmap catalog'
+          title: 'deps: sync Starmap catalog'
+          body: |
+            Pin Starmap ${{ steps.update.outputs.version }} with verified catalog generation ${{ steps.update.outputs.generation }}.
+
+      - name: Enable squash merge after required checks
+        if: steps.pending.outputs.number != '' || steps.pull.outputs.pull-request-number != ''
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.catalog_app.outputs.token }}
+          PULL_NUMBER: ${{ steps.pull.outputs.pull-request-number || steps.pending.outputs.number }}
+          APP_SLUG: ${{ steps.catalog_app.outputs.app-slug }}
+        run: |
+          pull=$(gh api "repos/$GH_REPO/pulls/$PULL_NUMBER")
+          jq -e --arg bot "${APP_SLUG}[bot]" --arg repo "$GH_REPO" '
+            .user.login == $bot and .base.ref == "main" and .head.repo.full_name == $repo
+            and (.head.ref | startswith("automation/starmap-catalog/"))
+          ' <<<"$pull" >/dev/null
+          if [[ $(jq -r '.state' <<<"$pull") != open ]]; then
+            exit 0
+          fi
+
+          head=$(jq -er '.head.sha' <<<"$pull")
+          if [[ $(jq -r '.mergeable_state' <<<"$pull") == behind ]]; then
+            gh api --method PUT "repos/$GH_REPO/pulls/$PULL_NUMBER/update-branch" -f "expected_head_sha=$head"
+            exit 0
+          fi
+          if jq -e '.auto_merge != null' <<<"$pull" >/dev/null; then
+            exit 0
+          fi
+          gh pr merge "$PULL_NUMBER" --auto --squash --match-head-commit "$head"

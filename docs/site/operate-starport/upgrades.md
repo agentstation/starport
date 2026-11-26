@@ -38,6 +38,14 @@ bash scripts/smoke-openrouter-sdks.sh
 
 The architecture check must report `Summary: 12 passed, 0 failed`. The raw HTTP smoke checks must pass. An optional SDK check can be `UNVERIFIED`. Do not report an unverified SDK as compatible. The full command list, with the race tests, is in [the operator guide](../../OPERATOR-GUIDE.md#release-gate).
 
+## Sync the bundled catalog before a release
+
+The Sync Starmap catalog workflow checks Starmap's signed publication channel every hour. It pins the Go module at the promoted commit after checking its embedded generation. A GitHub App opens one update pull request at a time. GitHub squash-merges the pull request when the required checks pass.
+
+Before you tag a release, run Sync Starmap catalog on `main`. If the workflow opens a pull request, wait for it to merge before you tag. The release builds the Starmap module version recorded at the tag.
+
+To set up the automation, install a GitHub App on Starport with Contents and Pull requests write access. Set the `CATALOG_APP_CLIENT_ID` Actions variable and the `CATALOG_APP_PRIVATE_KEY` Actions secret. Enable Allow auto-merge in the Starport repository settings. Keep the required checks on `main`.
+
 ## Upgrade limits
 
 The upgrade procedure below is for a single gateway with local storage. Do not upgrade an existing shared deployment without a coordinated recovery plan. Refer to [the recovery document](../../RECOVERY.md) and [Initialize and run a fleet](fleet.md).
