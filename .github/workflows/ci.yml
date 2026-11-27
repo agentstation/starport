@@ -110,7 +110,7 @@ jobs:
           fi
           # The complete recovery package exceeds Go's default ten-minute
           # package allowance. Individual contract deadlines remain unchanged.
-          go test -json -count=1 -timeout 30m $STARPORT_RACE "${coverage[@]}" "${storage[@]}" | tee native-catalog/tests.jsonl
+          go test -json -count=1 -timeout 30m ${STARPORT_RACE:+"$STARPORT_RACE"} "${coverage[@]}" "${storage[@]}" | tee native-catalog/tests.jsonl
           if [[ "$STARPORT_SPLIT_LINUX_RACE" != "1" ]]; then
             coverage=()
             if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
@@ -122,7 +122,7 @@ jobs:
             # measured 2,437 s and 2,450 s on macOS and Windows and then exceeded
             # 2,700 s on a slower macOS runner, so the budget is sixty minutes.
             # Individual contract deadlines remain unchanged.
-            go test -json -count=1 -timeout 60m $STARPORT_RACE "${coverage[@]}" ./internal/catalog | tee -a native-catalog/tests.jsonl
+            go test -json -count=1 -timeout 60m ${STARPORT_RACE:+"$STARPORT_RACE"} "${coverage[@]}" ./internal/catalog | tee -a native-catalog/tests.jsonl
             coverage=()
             if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
               coverage=(-coverprofile=native-catalog/app.coverage.txt -covermode=atomic)
@@ -131,14 +131,16 @@ jobs:
             # package allowance. The recovery application layer grew it past
             # thirty minutes on macOS. Individual contract deadlines remain unchanged.
             if [[ "${{ matrix.runner }}" != "windows-2025" ]]; then
-              go test -json -count=1 -timeout 60m $STARPORT_RACE "${coverage[@]}" ./internal/app | tee -a native-catalog/tests.jsonl
+              go test -json -count=1 -timeout 60m ${STARPORT_RACE:+"$STARPORT_RACE"} "${coverage[@]}" ./internal/app | tee -a native-catalog/tests.jsonl
             fi
           fi
           coverage=()
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             coverage=(-coverprofile=native-catalog/remaining.coverage.txt -covermode=atomic)
           fi
-          go test -json -count=1 $STARPORT_RACE "${coverage[@]}" "${remaining[@]}" | tee -a native-catalog/tests.jsonl
+          # The CLI package starts the gateway repeatedly and can exceed ten
+          # minutes on macOS with the race detector. Keep test deadlines unchanged.
+          go test -json -count=1 -timeout 30m ${STARPORT_RACE:+"$STARPORT_RACE"} "${coverage[@]}" "${remaining[@]}" | tee -a native-catalog/tests.jsonl
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             {
               cat native-catalog/storage.coverage.txt
