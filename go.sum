@@ -44,6 +44,8 @@ github.com/agentstation/starmap v0.17.3 h1:iHK07tgSxApA7s2tXXpVt738hOtaim80aGSE7
 github.com/agentstation/starmap v0.17.3/go.mod h1:gTuxFZrbGvy2SvKUULNF0dp3LCXNV6kQUBVXcxqIr2M=
 github.com/agentstation/starmap v0.17.4-0.20261126015756-dcc92c898e66 h1:aUUCk/v7YtI/gqZhtWQ31gaxHwy6unpOBZl68AMRXO4=
 github.com/agentstation/starmap v0.17.4-0.20261126015756-dcc92c898e66/go.mod h1:9ZvchdqhgFbWUEmZPdgWIDiWdEGUVxT6ZtI3KK0o5lk=
+github.com/agentstation/starmap v0.17.4-0.20261127012934-6b676aa60984 h1:0j8NGII4xlKUJ2GjdMoKHgeGD12ZpFkMyFDG1An7w7o=
+github.com/agentstation/starmap v0.17.4-0.20261127012934-6b676aa60984/go.mod h1:9ZvchdqhgFbWUEmZPdgWIDiWdEGUVxT6ZtI3KK0o5lk=
 github.com/agentstation/utc v0.2.0 h1:zKeYoUA65am9lL9k70iKDci17hXlt9l+N9OCAJvD/Wk=
 github.com/agentstation/utc v0.2.0/go.mod h1:6/sYtnBRR4MhH8Oj9JTG9buSeBgWA9c1ppctsY1nFa8=
 github.com/agentstation/uuidkey v1.2.0 h1:kR6oaO5irgmo3Nbp0/y68SFFAGSzObLY6x44m5/ff24=
