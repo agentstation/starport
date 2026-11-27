@@ -44,6 +44,7 @@ jobs:
   test:
     name: Test (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.runner == 'windows-2025' && 120 || 360 }}
     env:
       CGO_ENABLED: ${{ matrix.cgo }}
       STARPORT_REQUIRE_COMPOSE: ${{ matrix.runner == 'windows-2025' && '1' || '0' }}
@@ -90,6 +91,21 @@ jobs:
       - name: Run native tests
         shell: bash
         run: |
+          run_native_tests() {
+            local group=$1 result
+            shift
+            printf 'Running native tests for %s\n' "$group"
+            if go test -json -count=1 ${STARPORT_RACE:+"$STARPORT_RACE"} "$@" >> native-catalog/tests.jsonl; then
+              return 0
+            else
+              result=$?
+              tail -n 80 native-catalog/tests.jsonl || true
+              return "$result"
+            fi
+          }
+
+          # Keep complete test events in the artifact and limit live output.
+          : > native-catalog/tests.jsonl
           # Run storage recovery first so publication failures precede full runtime startup.
           # Catalog and application contracts then run alone to bound peak memory.
           go list ./... > native-catalog/packages.txt
@@ -110,7 +126,7 @@ jobs:
           fi
           # The complete recovery package exceeds Go's default ten-minute
           # package allowance. Individual contract deadlines remain unchanged.
-          go test -json -count=1 -timeout 30m ${STARPORT_RACE:+"$STARPORT_RACE"} "${coverage[@]}" "${storage[@]}" | tee native-catalog/tests.jsonl
+          run_native_tests storage -timeout 30m "${coverage[@]}" "${storage[@]}"
           if [[ "$STARPORT_SPLIT_LINUX_RACE" != "1" ]]; then
             coverage=()
             if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
@@ -122,7 +138,7 @@ jobs:
             # measured 2,437 s and 2,450 s on macOS and Windows and then exceeded
             # 2,700 s on a slower macOS runner, so the budget is sixty minutes.
             # Individual contract deadlines remain unchanged.
-            go test -json -count=1 -timeout 60m ${STARPORT_RACE:+"$STARPORT_RACE"} "${coverage[@]}" ./internal/catalog | tee -a native-catalog/tests.jsonl
+            run_native_tests catalog -timeout 60m "${coverage[@]}" ./internal/catalog
             coverage=()
             if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
               coverage=(-coverprofile=native-catalog/app.coverage.txt -covermode=atomic)
@@ -131,7 +147,7 @@ jobs:
             # package allowance. The recovery application layer grew it past
             # thirty minutes on macOS. Individual contract deadlines remain unchanged.
             if [[ "${{ matrix.runner }}" != "windows-2025" ]]; then
-              go test -json -count=1 -timeout 60m ${STARPORT_RACE:+"$STARPORT_RACE"} "${coverage[@]}" ./internal/app | tee -a native-catalog/tests.jsonl
+              run_native_tests app -timeout 60m "${coverage[@]}" ./internal/app
             fi
           fi
           coverage=()
@@ -140,7 +156,7 @@ jobs:
           fi
           # The CLI package starts the gateway repeatedly and can exceed ten
           # minutes on macOS with the race detector. Keep test deadlines unchanged.
-          go test -json -count=1 -timeout 30m ${STARPORT_RACE:+"$STARPORT_RACE"} "${coverage[@]}" "${remaining[@]}" | tee -a native-catalog/tests.jsonl
+          run_native_tests remaining -timeout 30m "${coverage[@]}" "${remaining[@]}"
           if [[ "${{ matrix.runner }}" == "ubuntu-24.04" ]]; then
             {
               cat native-catalog/storage.coverage.txt
